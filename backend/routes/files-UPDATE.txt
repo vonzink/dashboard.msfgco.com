@@ -1,0 +1,19 @@
+UPDATE THIS FILE ON EC2:
+File: ~/msfg-backend/routes/files.js
+
+Replace lines 8-14 with:
+
+const s3Config = {
+  region: process.env.AWS_REGION || 'us-east-1',
+};
+
+// Only add credentials if they're explicitly provided (otherwise use IAM role)
+if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+  s3Config.credentials = {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  };
+}
+
+const s3Client = new S3Client(s3Config);
+

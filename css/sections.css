@@ -1,0 +1,473 @@
+/* ============================================
+   MSFG Dashboard - Section Styles
+   News, tasks, goals specific components
+   ============================================ */
+
+/* ========================================
+   NEWS & ANNOUNCEMENTS
+======================================== */
+.news-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: var(--spacing-lg);
+}
+
+.news-feed {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.news-item {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    border-left: 4px solid var(--green-bright);
+    transition: all var(--transition-fast);
+}
+
+.news-item:hover {
+    transform: translateX(4px);
+    border-left-color: var(--green-teal);
+}
+
+.news-icon {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-brand);
+    color: white;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.news-content {
+    flex: 1;
+    position: relative;
+}
+
+.news-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    margin-bottom: 0.25rem;
+}
+
+.news-content h4 {
+    font-size: 0.95rem;
+    margin: 0;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.news-delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition-fast);
+    opacity: 0;
+    font-size: 0.85rem;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.news-item:hover .news-delete-btn {
+    opacity: 1;
+}
+
+.news-delete-btn:hover {
+    background: var(--status-danger);
+    color: white;
+    transform: scale(1.1);
+}
+
+.news-content p {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 0;
+}
+
+.news-meta {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-sm);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.news-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+/* Quick Links */
+.quick-links h4 {
+    font-size: 0.9rem;
+    margin-bottom: var(--spacing-md);
+    color: var(--text-secondary);
+}
+
+.quick-links-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.quick-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    transition: all var(--transition-fast);
+}
+
+.quick-link:hover {
+    background: var(--green-bright);
+    color: white;
+    transform: translateX(4px);
+}
+
+.quick-link i {
+    width: 20px;
+    text-align: center;
+}
+
+/* ========================================
+   TASKS SECTION
+======================================== */
+.tasks-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+}
+
+.task-column {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+}
+
+.task-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.task-column-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.task-count {
+    background: var(--green-bright);
+    color: white;
+    padding: 0.15rem var(--spacing-sm);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.task-item {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    border-left: 3px solid var(--green-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.task-item:hover {
+    transform: translateX(4px);
+    box-shadow: var(--shadow-sm);
+}
+
+.task-item.priority-high {
+    border-left-color: var(--status-danger);
+}
+
+.task-item.priority-medium {
+    border-left-color: var(--status-warning);
+}
+
+.task-item.priority-low {
+    border-left-color: var(--status-success);
+}
+
+.task-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+}
+
+.task-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.task-due {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.task-due.overdue {
+    color: var(--status-danger);
+}
+
+/* ========================================
+   GOALS SECTION
+======================================== */
+.goals-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--spacing-lg);
+}
+
+.goal-card {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    padding: 1.25rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.goal-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: var(--gradient-brand);
+}
+
+.goal-icon {
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--spacing-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-secondary);
+    border-radius: 50%;
+    font-size: 1.5rem;
+    color: var(--green-bright);
+}
+
+.goal-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: var(--spacing-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.goal-value-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-bottom: 0.25rem;
+    position: relative;
+}
+
+.goal-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.goal-edit-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all var(--transition-fast);
+    opacity: 0;
+    transform: scale(0.8);
+}
+
+.goal-card:hover .goal-edit-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.goal-edit-btn:hover {
+    background: var(--green-bright);
+    border-color: var(--green-bright);
+    color: white;
+    transform: scale(1.1);
+}
+
+.goal-target {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+}
+
+.goal-progress-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+/* ========================================
+   GOAL SLIDERS
+======================================== */
+.goal-slider-container {
+    margin: var(--spacing-md) 0;
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.goal-slider {
+    width: 100%;
+    height: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    margin-bottom: var(--spacing-sm);
+}
+
+.goal-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--green-bright);
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all var(--transition-fast);
+}
+
+.goal-slider::-webkit-slider-thumb:hover {
+    background: var(--green-forest);
+    transform: scale(1.2);
+}
+
+.goal-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--green-bright);
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transition: all var(--transition-fast);
+}
+
+.goal-slider::-moz-range-thumb:hover {
+    background: var(--green-forest);
+    transform: scale(1.2);
+}
+
+.goal-slider::-webkit-slider-runnable-track {
+    height: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.goal-slider::-moz-range-track {
+    height: 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+}
+
+.slider-value-display {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--green-forest);
+    margin-top: var(--spacing-sm);
+}
+
+.slider-value {
+    color: var(--text-primary);
+}
+
+/* Period Selector */
+.goal-period-select {
+    min-width: 150px;
+    font-weight: 500;
+}
+
+/* LO Goals Table */
+.lo-goals-table {
+    margin-top: var(--spacing-lg);
+}
+
+.lo-goals-table h4 {
+    margin: var(--spacing-lg) 0 var(--spacing-md);
+    color: var(--text-secondary);
+}
+
+.lo-goals-table .data-table td:first-child {
+    font-weight: 600;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+======================================== */
+@media (max-width: 1400px) {
+    .goals-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 1200px) {
+    .news-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .tasks-container {
+        grid-template-columns: 1fr;
+    }
+}

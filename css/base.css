@@ -1,0 +1,153 @@
+/* ============================================
+   MSFG Dashboard - Base Styles
+   Reset, typography, and foundational styles
+   ============================================ */
+
+/* ========================================
+   CSS RESET
+======================================== */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ========================================
+   TYPOGRAPHY
+======================================== */
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', sans-serif;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-primary);
+}
+
+h1 { font-size: 2rem; }
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.25rem; }
+h4 { font-size: 1.1rem; }
+h5 { font-size: 1rem; }
+h6 { font-size: 0.875rem; }
+
+p {
+    margin-bottom: var(--spacing-md);
+}
+
+strong {
+    font-weight: 600;
+}
+
+/* ========================================
+   LINKS
+======================================== */
+a {
+    text-decoration: none;
+    color: inherit;
+    transition: color var(--transition-fast);
+}
+
+a:hover {
+    color: var(--green-bright);
+}
+
+/* ========================================
+   BUTTONS (Reset)
+======================================== */
+button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    font-size: inherit;
+}
+
+button:focus {
+    outline: none;
+}
+
+/* ========================================
+   FORM ELEMENTS (Reset)
+======================================== */
+input, select, textarea {
+    font-family: inherit;
+    font-size: inherit;
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+}
+
+/* ========================================
+   LISTS
+======================================== */
+ul, ol {
+    list-style: none;
+}
+
+/* ========================================
+   IMAGES
+======================================== */
+img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* ========================================
+   SCROLLBAR STYLES
+======================================== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--green-forest);
+    border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--green-medium);
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--green-forest) var(--bg-tertiary);
+}
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  color: #000;
+  z-index: 9999;
+  border-radius: 0.5rem;
+}
+
+.skip-link:focus {
+  left: 1rem;
+  top: 1rem;
+  outline: 2px solid currentColor;
+}

@@ -1,0 +1,23 @@
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Node / build
+node_modules/
+dist/
+build/
+.cache/
+*.log
+
+# Secrets / configs
+.env
+.env.*
+*secret*
+*private*
+*.pem
+*.key
+
+# AWS/IAM policy docs are fine, but avoid local creds
+.aws/

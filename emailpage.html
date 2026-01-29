@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSFG Email Viewer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1376.0.min.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+  <div class="max-w-6xl mx-auto my-10 bg-white shadow-lg rounded-xl overflow-hidden flex h-[80vh] border border-gray-200">
+    <!-- Sidebar -->
+    <div class="w-1/3 border-r bg-gray-100 flex flex-col">
+      <div class="p-4 flex items-center justify-between border-b bg-white sticky top-0">
+        <h2 class="text-lg font-bold text-green-700 flex items-center gap-2">📥 Inbox</h2>
+        <button id="refresh" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Refresh</button>
+      </div>
+      <ul id="emailList" class="flex-1 overflow-y-auto divide-y divide-gray-200"></ul>
+    </div>
+
+    <!-- Main content -->
+    <div class="w-2/3 flex flex-col">
+      <div class="p-5 border-b bg-white sticky top-0">
+        <h2 class="text-xl font-bold text-gray-700">Email Content</h2>
+      </div>
+      <div id="emailContent" class="p-5 flex-1 overflow-y-auto prose prose-sm max-w-none text-gray-700">
+        <p class="text-gray-400 text-sm">Select an email to view its details.</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    AWS.config.region = "us-east-1";
+    AWS.config.credentials = new AWS.CognitoIdentityCredentials({
+      IdentityPoolId: "us-east-1:6964ca9a-396e-49ea-a957-4a1273df8f25"
+    });
+
+    const s3 = new AWS.S3();
+    const BUCKET = "msfginfo-emails";
+    const PREFIX = "info_emails/";
+
+    function parseHeaders(raw) {
+      const header = raw.split(/\r?\n\r?\n/)[0];
+      const get = (name) => (header.match(new RegExp(`^${name}:\\s*(.*)`, "mi")) || [,""])[1].trim();
+      return {
+        from: get("From") || "Unknown",
+        to: get("To") || "Unknown",
+        subject: get("Subject") || "(No subject)",
+        date: get("Date") || ""
+      };
+    }
+
+    function decodeQuotedPrintable(str) {
+      if (!str) return "";
+      return str
+        .replace(/=\r?\n/g, "") // Remove soft line breaks
+        .replace(/=([A-Fa-f0-9]{2})/g, (_, hex) =>
+          String.fromCharCode(parseInt(hex, 16))
+        );
+    }
+
+    function fetchEmailHeaders(key) {
+      return new Promise((resolve) => {
+        s3.getObject({ Bucket: BUCKET, Key: key, Range: "bytes=0-8191" }, function (err, data) {
+          if (err || !data || !data.Body) return resolve({ key, from: "Unknown", to: "Unknown", subject: "(No subject)", date: "" });
+          const text = new TextDecoder().decode(data.Body);
+          resolve({ key, ...parseHeaders(text) });
+        });
+      });
+    }
+
+    async function listEmails() {
+      const list = document.getElementById("emailList");
+      list.innerHTML = "<p class='p-3 text-gray-500 text-sm'>Loading emails...</p>";
+
+      s3.listObjectsV2({ Bucket: BUCKET, Prefix: PREFIX }, async function (err, data) {
+        if (err) {
+          console.error("Error listing emails:", err);
+          list.innerHTML = "<p class='p-3 text-red-500 text-sm'>Failed to load emails.</p>";
+          return;
+        }
+
+        const items = (data.Contents || [])
+          .filter(o => o.Key !== PREFIX)
+          .sort((a,b) => new Date(b.LastModified) - new Date(a.LastModified));
+
+        const meta = await Promise.all(items.map(i => fetchEmailHeaders(i.Key)));
+
+        list.innerHTML = "";
+        meta.forEach(m => {
+          const li = document.createElement("li");
+          li.innerHTML = `
+            <button class="w-full text-left hover:bg-green-50 p-3">
+              <p class="font-semibold text-sm truncate text-gray-800">${m.subject}</p>
+              <p class="text-xs text-gray-600 truncate">From: ${m.from}</p>
+              <p class="text-xs text-gray-600 truncate">To: ${m.to}</p>
+              <p class="text-[11px] text-gray-400 mt-1">${new Date(items.find(i => i.Key === m.key).LastModified).toLocaleString()}</p>
+            </button>`;
+          li.onclick = () => viewEmail(s3, m.key);
+          list.appendChild(li);
+        });
+
+        if (!meta.length) list.innerHTML = "<p class='text-gray-400 text-sm text-center mt-4'>No emails found.</p>";
+      });
+    }
+
+    // 📧 Quoted-printable–aware email viewer
+    function viewEmail(s3, key) {
+      const emailContent = document.getElementById("emailContent");
+      emailContent.innerHTML = "<p class='text-gray-400 text-sm'>Loading...</p>";
+
+      s3.getObject({ Bucket: BUCKET, Key: key }, function (err, data) {
+        if (err) {
+          console.error("Error fetching email:", err);
+          emailContent.innerHTML = "<p class='text-red-500 text-sm'>Failed to load email.</p>";
+          return;
+        }
+
+        let raw = new TextDecoder().decode(data.Body);
+        raw = decodeQuotedPrintable(raw);
+
+        const [headerPart, ...bodyParts] = raw.split(/\r?\n\r?\n/);
+        const headers = parseHeaders(headerPart);
+        const fullBody = bodyParts.join("\n\n");
+
+        emailContent.innerHTML = `
+          <div class="mb-4 border-b pb-2 text-sm">
+            <p><b>From:</b> ${headers.from}</p>
+            <p><b>To:</b> ${headers.to}</p>
+            <p><b>Subject:</b> ${headers.subject}</p>
+            <p class="text-xs text-gray-500">${headers.date}</p>
+          </div>
+          <div class="whitespace-pre-wrap bg-gray-50 p-4 rounded leading-relaxed">${fullBody}</div>
+        `;
+      });
+    }
+
+    document.getElementById("refresh").addEventListener("click", listEmails);
+    listEmails();
+  </script>
+
+  <div class="text-center my-6">
+    <button
+      onclick="window.open('https://loansifternow.optimalblue.com/', '_blank');"
+      class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg shadow font-semibold"
+    >
+      🔗 Open Optimal Blue Portal
+    </button>
+  </div>
+</body>
+</html>

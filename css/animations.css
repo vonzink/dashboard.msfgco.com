@@ -1,0 +1,172 @@
+/* ============================================
+   MSFG Dashboard - Animations
+   Keyframes and animation utilities
+   ============================================ */
+
+/* ========================================
+   KEYFRAME ANIMATIONS
+======================================== */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ========================================
+   ANIMATION CLASSES
+======================================== */
+.animate-in {
+    animation: fadeInUp 0.5s ease forwards;
+}
+
+.animate-fade {
+    animation: fadeIn 0.3s ease forwards;
+}
+
+.animate-slide-left {
+    animation: slideInLeft 0.4s ease forwards;
+}
+
+.animate-slide-right {
+    animation: slideInRight 0.4s ease forwards;
+}
+
+.animate-scale {
+    animation: scaleIn 0.3s ease forwards;
+}
+
+/* Loading States */
+.loading {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.loading-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* ========================================
+   STAGGERED ANIMATION DELAYS
+======================================== */
+.section-card:nth-child(1) { animation-delay: 0.1s; }
+.section-card:nth-child(2) { animation-delay: 0.2s; }
+.section-card:nth-child(3) { animation-delay: 0.3s; }
+.section-card:nth-child(4) { animation-delay: 0.4s; }
+.section-card:nth-child(5) { animation-delay: 0.5s; }
+.section-card:nth-child(6) { animation-delay: 0.6s; }
+
+/* For list items */
+.stagger-item:nth-child(1) { animation-delay: 0.05s; }
+.stagger-item:nth-child(2) { animation-delay: 0.1s; }
+.stagger-item:nth-child(3) { animation-delay: 0.15s; }
+.stagger-item:nth-child(4) { animation-delay: 0.2s; }
+.stagger-item:nth-child(5) { animation-delay: 0.25s; }
+.stagger-item:nth-child(6) { animation-delay: 0.3s; }
+.stagger-item:nth-child(7) { animation-delay: 0.35s; }
+.stagger-item:nth-child(8) { animation-delay: 0.4s; }
+.stagger-item:nth-child(9) { animation-delay: 0.45s; }
+.stagger-item:nth-child(10) { animation-delay: 0.5s; }
+
+/* ========================================
+   TRANSITION UTILITIES
+======================================== */
+.transition-none { transition: none !important; }
+.transition-fast { transition: all var(--transition-fast); }
+.transition-normal { transition: all var(--transition-normal); }
+.transition-slow { transition: all var(--transition-slow); }
+
+/* ========================================
+   HOVER EFFECTS
+======================================== */
+.hover-lift {
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.hover-scale {
+    transition: transform var(--transition-fast);
+}
+
+.hover-scale:hover {
+    transform: scale(1.02);
+}
+
+.hover-glow {
+    transition: box-shadow var(--transition-fast);
+}
+
+.hover-glow:hover {
+    box-shadow: 0 0 20px rgba(140, 198, 62, 0.3);
+}

@@ -1,0 +1,183 @@
+/* ============================================
+   MSFG Dashboard - Chat Styles
+   Company chat interface
+   ============================================ */
+
+/* ========================================
+   CHAT CONTAINER
+======================================== */
+.chat-container {
+    display: flex;
+    flex-direction: column;
+    height: 400px;
+}
+
+/* ========================================
+   CHAT MESSAGES AREA
+======================================== */
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* ========================================
+   CHAT MESSAGE
+======================================== */
+.chat-message {
+    display: flex;
+    gap: 0.75rem;
+    max-width: 80%;
+}
+
+.chat-message.own {
+    flex-direction: row-reverse;
+    margin-left: auto;
+}
+
+/* Chat Avatar */
+.chat-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--gradient-brand);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+/* Chat Bubble */
+.chat-bubble {
+    background: var(--bg-tertiary);
+    padding: 0.75rem var(--spacing-md);
+    border-radius: var(--radius-xl);
+    border-top-left-radius: var(--radius-sm);
+}
+
+.chat-message.own .chat-bubble {
+    background: var(--green-bright);
+    color: white;
+    border-radius: var(--radius-xl);
+    border-top-right-radius: var(--radius-sm);
+}
+
+/* Chat Sender Name */
+.chat-sender {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    color: var(--text-secondary);
+}
+
+.chat-message.own .chat-sender {
+    color: rgba(255,255,255,0.8);
+}
+
+/* Chat Text */
+.chat-text {
+    font-size: 0.9rem;
+    line-height: 1.4;
+}
+
+/* Chat Timestamp */
+.chat-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.chat-message.own .chat-time {
+    color: rgba(255,255,255,0.7);
+}
+
+/* ========================================
+   CHAT INPUT AREA
+======================================== */
+.chat-input-container {
+    display: flex;
+    gap: 0.75rem;
+    padding: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+}
+
+.chat-input {
+    flex: 1;
+    padding: 0.75rem var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+}
+
+.chat-input:focus {
+    border-color: var(--green-bright);
+    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.2);
+}
+
+.chat-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Send Button */
+.chat-send {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: var(--gradient-brand);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+}
+
+.chat-send:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(140, 198, 62, 0.4);
+}
+
+/* ========================================
+   CHAT TYPING INDICATOR (Future)
+======================================== */
+.chat-typing {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.typing-dots {
+    display: flex;
+    gap: 3px;
+}
+
+.typing-dots span {
+    width: 6px;
+    height: 6px;
+    background: var(--text-muted);
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(1) { animation-delay: 0s; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
+}

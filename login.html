@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Login</title>
+</head>
+<body>
+<script>
+  const domain = "https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com";
+  const clientId = "2t9edrhu5crf8vq3ivigv6jopf";
+  const redirectUri = "https://dashboard.msfgco.com/login-callback.html";
+
+  function base64urlencode(a) {
+    return btoa(String.fromCharCode.apply(null, new Uint8Array(a)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  async function sha256(plain) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(plain);
+    return await crypto.subtle.digest('SHA-256', data);
+  }
+
+  function randomString(length = 64) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const array = new Uint8Array(length);
+    crypto.getRandomValues(array);
+    return Array.from(array).map(x => chars[x % chars.length]).join('');
+  }
+
+  (async () => {
+    const verifier = randomString();
+    localStorage.setItem("pkce_verifier", verifier);
+
+    const challenge = base64urlencode(await sha256(verifier));
+
+    const authUrl = new URL(domain + "/oauth2/authorize");
+    authUrl.searchParams.set("client_id", clientId);
+    authUrl.searchParams.set("response_type", "code");
+    authUrl.searchParams.set("scope", "openid email");
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("code_challenge_method", "S256");
+    authUrl.searchParams.set("code_challenge", challenge);
+
+    window.location.href = authUrl.toString();
+  })();
+</script>
+</body>
+</html>

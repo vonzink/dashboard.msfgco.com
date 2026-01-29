@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <!-- AUTH GATE (must be first script in head) -->
+  <script src="js/auth-gate.js"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSFG Dashboard | Mountain State Financial Group</title>
+
+  <!-- CloudFront owns CSP + other security headers now.
+       Do NOT put CSP meta in HTML (frame-ancestors is ignored in meta CSP). -->
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+
+  <!-- Icons -->
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/tables.css" />
+  <link rel="stylesheet" href="css/sections.css" />
+  <link rel="stylesheet" href="css/chat.css" />
+  <link rel="stylesheet" href="css/animations.css" />
+</head>
+
+<body>
+  <!-- Skip link for keyboard users -->
+  <a href="#mainContent" class="skip-link">Skip to content</a>
+
+  <header class="header">
+    <div class="header-top">
+      <div class="logo-container">
+        <img
+          src="https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG+Home+Loans/MSFG+Clear+backdrop.png"
+          alt="MSFG Logo"
+          class="logo"
+        />
+      </div>
+
+      <div class="header-right">
+        <div class="user-info">
+          <div class="user-avatar" id="userAvatar">ZB</div>
+          <div>
+            <div class="user-name" id="userName">Zachary</div>
+            <div class="user-role" id="userRole">Loan Officer</div>
+          </div>
+        </div>
+
+        <button type="button" class="theme-toggle" id="themeToggle" title="Toggle Dark Mode">
+          <i class="fas fa-moon"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav-container" aria-label="Primary">
+      <ul class="main-nav">
+
+        <!-- HR -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-users"></i>
+            HR
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Human Resources</div>
+
+            <a data-link-key="payroll_new" class="dropdown-item">
+              <i class="fas fa-file-invoice-dollar"></i> View Paycheck
+            </a>
+
+            <button type="button" class="dropdown-item" data-action="open-401k">
+              <i class="fas fa-piggy-bank"></i> 401K
+            </button>
+            <button type="button" class="dropdown-item" data-action="open-handbook">
+              <i class="fas fa-book"></i> Handbook
+            </button>
+            <button type="button" class="dropdown-item" data-action="open-company-contacts">
+              <i class="fas fa-address-book"></i> Contacts
+            </button>
+            <button type="button" class="dropdown-item" data-action="open-training">
+              <i class="fas fa-graduation-cap"></i> Training
+            </button>
+          </div>
+        </li>
+
+        <!-- Systems -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-laptop-code"></i>
+            Systems
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Core Systems</div>
+
+            <a data-link-key="gohighlevel" class="dropdown-item"><i class="fas fa-rocket"></i> Go High Level</a>
+            <a data-link-key="lendingpad" class="dropdown-item"><i class="fas fa-file-contract"></i> LendingPad</a>
+            <a data-link-key="monday" class="dropdown-item"><i class="fas fa-columns"></i> Monday.com</a>
+
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-header">Tools & Services</div>
+
+            <a data-link-key="mmi" class="dropdown-item"><i class="fas fa-chart-line"></i> MMI</a>
+            <a data-link-key="listreports" class="dropdown-item"><i class="fas fa-list-alt"></i> List Reports</a>
+            <button type="button" class="dropdown-item" data-action="open-valuecheck"><i class="fas fa-check-circle"></i> ValueCheck</button>
+            <a data-link-key="passport" class="dropdown-item"><i class="fas fa-passport"></i> Passport</a>
+            <a data-link-key="flueid" class="dropdown-item"><i class="fas fa-water"></i> Flueid</a>
+
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-header">Storage & Credit</div>
+
+            <a data-link-key="dropbox" class="dropdown-item"><i class="fab fa-dropbox"></i> Dropbox</a>
+            <a data-link-key="advantage_credit" class="dropdown-item"><i class="fas fa-credit-card"></i> Advantage Credit</a>
+            <a data-link-key="microsoft" class="dropdown-item"><i class="fab fa-microsoft"></i> Microsoft</a>
+          </div>
+        </li>
+
+        <!-- Schedule -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-calendar-alt"></i>
+            Schedule
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Scheduling</div>
+            <button type="button" class="dropdown-item" data-action="open-company-calendar"><i class="fas fa-calendar"></i> Company Calendar</button>
+            <button type="button" class="dropdown-item" data-action="open-timeoff-requests"><i class="fas fa-clock"></i> Time Off Requests</button>
+            <a data-link-key="teams" class="dropdown-item"><i class="fas fa-video"></i> Meeting Rooms (Teams)</a>
+          </div>
+        </li>
+
+        <!-- Marketing -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-bullhorn"></i>
+            Marketing
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Brand Assets</div>
+            <a data-link-key="logos_s3" class="dropdown-item"><i class="fas fa-image"></i> Logos</a>
+            <button type="button" class="dropdown-item" data-action="open-brand-guidelines"><i class="fas fa-palette"></i> Brand Guidelines</button>
+
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-header">Social</div>
+            <a data-link-key="facebook" class="dropdown-item"><i class="fab fa-facebook"></i> Facebook</a>
+            <a data-link-key="instagram" class="dropdown-item"><i class="fab fa-instagram"></i> Instagram</a>
+            <button type="button" class="dropdown-item" data-action="open-linkedin"><i class="fab fa-linkedin"></i> LinkedIn</button>
+          </div>
+        </li>
+
+        <!-- Programs -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-th-large"></i>
+            Programs
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Loan Programs</div>
+            <button type="button" class="dropdown-item" data-action="open-program-conventional"><i class="fas fa-home"></i> Conventional</button>
+            <button type="button" class="dropdown-item" data-action="open-program-fha"><i class="fas fa-flag-usa"></i> FHA</button>
+            <button type="button" class="dropdown-item" data-action="open-program-va"><i class="fas fa-medal"></i> VA</button>
+            <button type="button" class="dropdown-item" data-action="open-program-usda"><i class="fas fa-tractor"></i> USDA</button>
+            <button type="button" class="dropdown-item" data-action="open-program-jumbo"><i class="fas fa-building"></i> Jumbo</button>
+            <button type="button" class="dropdown-item" data-action="open-program-refi"><i class="fas fa-sync-alt"></i> Refinance</button>
+          </div>
+        </li>
+
+        <!-- Investors -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-handshake"></i>
+            Investors
+            <i class="fas fa-chevron-down"></i>
+          </button>
+
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Wholesale Partners</div>
+
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="uwm"><i class="fas fa-university"></i> UWM</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="newrez"><i class="fas fa-building"></i> NewRez</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="keystone"><i class="fas fa-key"></i> Keystone</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="arc"><i class="fas fa-landmark"></i> ARC</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="epm"><i class="fas fa-landmark"></i> EPM</button>
+
+            <div class="dropdown-divider"></div>
+
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="orion"><i class="fas fa-star"></i> Orion</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="mutual-of-omaha"><i class="fas fa-shield-alt"></i> Mutual of Omaha</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="windsor"><i class="fas fa-crown"></i> Windsor</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="e2"><i class="fas fa-bolt"></i> E2</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="flagstar"><i class="fas fa-flag"></i> Flagstar</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="plaza"><i class="fas fa-building"></i> Plaza</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="homepoint"><i class="fas fa-home"></i> Homepoint</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="freedom"><i class="fas fa-dove"></i> Freedom</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="kirkwood"><i class="fas fa-tree"></i> Kirkwood</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="towne"><i class="fas fa-city"></i> Towne</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="jet-mortgage"><i class="fas fa-plane"></i> Jet Mortgage</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="cardinal"><i class="fas fa-feather"></i> Cardinal</button>
+            <button type="button" class="dropdown-item" data-action="open-investor" data-investor="amerihome"><i class="fas fa-home"></i> AmeriHome</button>
+          </div>
+        </li>
+
+        <!-- Tools -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-tools"></i>
+            Tools
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Calculators</div>
+            <button type="button" class="dropdown-item" data-action="open-mortgage-calculator"><i class="fas fa-calculator"></i> Mortgage Calculator</button>
+            <button type="button" class="dropdown-item" data-action="open-apr-calculator"><i class="fas fa-percentage"></i> APR Calculator</button>
+            <button type="button" class="dropdown-item" data-action="open-dti-calculator"><i class="fas fa-balance-scale"></i> DTI Calculator</button>
+            <button type="button" class="dropdown-item" data-action="open-affordability"><i class="fas fa-chart-pie"></i> Affordability</button>
+
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-header">Resources</div>
+            <button type="button" class="dropdown-item" data-action="open-guidelines"><i class="fas fa-book-open"></i> Guidelines</button>
+            <button type="button" class="dropdown-item" data-action="open-checklists"><i class="fas fa-tasks"></i> Checklists</button>
+            <button type="button" class="dropdown-item" data-action="open-forms-library"><i class="fas fa-file-pdf"></i> Forms Library</button>
+          </div>
+        </li>
+
+      </ul>
+    </nav>
+  </header>
+
+  <main class="main-content" id="mainContent" tabindex="-1">
+
+    <!-- News + Quick Links -->
+    <section class="section-card animate-in">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-newspaper"></i> Daily News & Announcements</h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-secondary" data-action="open-add-announcement">
+            <i class="fas fa-plus"></i> Add Announcement
+          </button>
+        </div>
+      </div>
+
+      <div class="section-body">
+        <div class="news-grid">
+          <div class="news-feed" id="newsFeed"></div>
+
+          <div class="quick-links">
+            <h4><i class="fas fa-link"></i> Quick Links</h4>
+            <div class="quick-links-list">
+              <a data-link-key="ratesheet" class="quick-link"><i class="fas fa-chart-bar"></i> Today's Rate Sheet</a>
+              <button type="button" class="quick-link" data-action="open-lock-desk"><i class="fas fa-file-alt"></i> Lock Desk</button>
+              <button type="button" class="quick-link" data-action="open-support-ticket"><i class="fas fa-headset"></i> Support Ticket</button>
+              <button type="button" class="quick-link" data-action="open-notifications"><i class="fas fa-bell"></i> Notifications</button>
+              <button type="button" class="quick-link" data-action="open-settings"><i class="fas fa-cog"></i> Settings</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Goals -->
+    <section class="section-card animate-in">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-trophy"></i> Performance & Goals</h2>
+        <div class="section-actions">
+          <select class="filter-select goal-period-select" id="goalPeriodSelect">
+            <option value="weekly">Weekly</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-body">
+        <div class="goals-grid" id="goalsGrid">
+          <div class="goal-card" data-goal="loans-closed">
+            <div class="goal-icon"><i class="fas fa-file-signature"></i></div>
+            <div class="goal-label">Loans Closed</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="loansClosedValue">0</div>
+              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="loans-closed"><i class="fas fa-edit"></i></button>
+            </div>
+            <div class="goal-target">of <span class="goal-target-value" id="loansClosedTarget">0</span> target</div>
+            <div class="goal-slider-container u-hidden">
+              <input type="range" class="goal-slider" id="loansClosedSlider" min="0" max="100" value="0" step="1" />
+              <div class="slider-value-display"><span class="slider-value">0</span></div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="loansClosedProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="loansClosedProgressText">0% complete</div>
+          </div>
+
+          <div class="goal-card" data-goal="pull-through">
+            <div class="goal-icon"><i class="fas fa-percentage"></i></div>
+            <div class="goal-label">Pull-Through</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="pullThroughValue">0%</div>
+              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="pull-through"><i class="fas fa-edit"></i></button>
+            </div>
+            <div class="goal-target">of <span class="goal-target-value" id="pullThroughTarget">0</span>% target</div>
+            <div class="goal-slider-container u-hidden">
+              <input type="range" class="goal-slider" id="pullThroughSlider" min="0" max="100" value="0" step="1" />
+              <div class="slider-value-display"><span class="slider-value">0</span>%</div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="pullThroughProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="pullThroughProgressText">0% complete</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chat -->
+    <section class="section-card animate-in" id="chatSection">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-comments"></i> Team Chat</h2>
+      </div>
+      <div class="section-body">
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+          <form class="chat-input-row" id="chatForm">
+            <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." maxlength="1000" autocomplete="off" />
+            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================
+         MODALS
+    ========================== -->
+
+    <!-- Investor Modal (required by investors.js) -->
+    <div id="investorModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content">
+        <button type="button" class="modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <img class="investor-logo" alt="Investor Logo" />
+            <h2 class="investor-name">Investor</h2>
+          </div>
+
+          <button type="button" class="investor-settings-btn" aria-label="Investor settings">
+            <i class="fas fa-gear"></i>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="investor-info-grid">
+            <div class="info-section account-executive" data-section="accountExecutive"></div>
+            <div class="info-section investor-team" data-section="team"></div>
+            <div class="info-section lender-ids" data-section="lenderIds"></div>
+            <div class="info-section mortgagee-clause" data-section="mortgageeClause"></div>
+            <div class="info-section investor-links" data-section="links"></div>
+
+            <div class="info-section investor-notes u-grid-span-all" data-section="notes">
+              <h4><i class="fas fa-note-sticky"></i> Notes</h4>
+              <div class="notes-content empty" contenteditable="true"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Company Contacts Modal (required by investors.js open-company-contacts) -->
+    <div id="companyContactsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content">
+        <button type="button" class="modal-close contacts-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name">Company Contacts</h2>
+          </div>
+        </div>
+
+        <div class="modal-body">
+          <div class="investor-info-grid">
+            <div class="info-section u-grid-span-all">
+              <h4><i class="fas fa-address-book"></i> Contacts</h4>
+              <p class="tbd">Add your contacts list here (or wire to API).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support Ticket Modal -->
+    <div id="supportTicketModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content">
+        <button type="button" class="modal-close support-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name">Support Contact</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="investor-info-grid">
+            <div class="info-section u-grid-span-all">
+              <h4><i class="fas fa-user-circle"></i> Contact Information</h4>
+              <div class="contact-info">
+                <div><strong>Zachary Zink</strong></div>
+                <div><i class="fas fa-envelope"></i> <a href="mailto:zachary.zink@msfg.us">zachary.zink@msfg.us</a></div>
+                <div><i class="fas fa-phone"></i> <a href="tel:3038706518">(303) 870-6518</a></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notifications Modal -->
+    <div id="notificationsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content">
+        <button type="button" class="modal-close notifications-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name">Notifications</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <form id="notificationForm" class="form">
+            <div class="form-row">
+              <label for="notificationDate">Date</label>
+              <input type="date" id="notificationDate" required />
+            </div>
+            <div class="form-row">
+              <label for="notificationTime">Time</label>
+              <input type="time" id="notificationTime" required />
+            </div>
+            <div class="form-row">
+              <label for="notificationNote">Note</label>
+              <textarea id="notificationNote" rows="3" maxlength="1000" required></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary notifications-modal-close">Cancel</button>
+              <button type="submit" class="btn btn-primary">Save Reminder</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Announcement Modal -->
+    <div id="addAnnouncementModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content">
+        <button type="button" class="modal-close announcement-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name">Add Announcement</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <form id="announcementForm" class="form">
+            <div class="form-row">
+              <label for="announcementTitle">Title</label>
+              <input type="text" id="announcementTitle" maxlength="120" required />
+            </div>
+            <div class="form-row">
+              <label for="announcementContent">Content</label>
+              <textarea id="announcementContent" rows="4" maxlength="2000" required></textarea>
+            </div>
+            <div class="form-row">
+              <label for="announcementLink">Optional Link</label>
+              <input type="url" id="announcementLink" placeholder="https://..." />
+            </div>
+            <div class="form-row">
+              <label for="announcementIcon">Icon</label>
+              <select id="announcementIcon">
+                <option value="fa-bullhorn" selected>Announcement</option>
+                <option value="fa-star">Star</option>
+                <option value="fa-triangle-exclamation">Alert</option>
+                <option value="fa-circle-info">Info</option>
+                <option value="fa-graduation-cap">Training</option>
+                <option value="fa-handshake">Partner</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <label for="announcementFile">Optional File</label>
+              <div class="file-input-wrapper">
+                <input type="file" id="announcementFile" />
+                <span class="file-input-label">Choose file or drag and drop</span>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary announcement-modal-close">Cancel</button>
+              <button type="submit" class="btn btn-primary">Publish</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <footer class="footer">
+    <p>
+      © 2024 Mountain State Financial Group. All rights reserved. |
+      <button type="button" class="link-item" data-action="open-privacy">Privacy Policy</button> |
+      <button type="button" class="link-item" data-action="open-terms">Terms of Service</button> |
+      <button type="button" class="link-item" data-action="open-support">Support</button>
+    </p>
+  </footer>
+
+  <!-- Scripts (load order matters) -->
+  <script src="js/config.js?v=20260128-1"></script>
+  <script src="js/link-init.js"></script>
+  <script src="js/action-dispatcher.js"></script>
+
+  <script src="js/api-server.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/theme.js?v=20260128-1"></script>
+  <script src="js/tables.js"></script>
+  <script src="js/chat.js?v=20260128-1"></script>
+  <script src="js/api.js"></script>
+  <script src="js/investors.js"></script>
+  <script src="js/goals.js"></script>
+  <script src="js/modals.js"></script>
+
+  <!-- Accessibility -->
+  <script src="js/a11y.js"></script>
+
+  <!-- CSP-friendly progress widths -->
+  <script src="js/progress-init.js"></script>
+
+  <script src="js/app.js?v=20260128-1"></script>
+</body>
+</html>

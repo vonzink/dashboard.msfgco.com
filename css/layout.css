@@ -1,0 +1,238 @@
+/* ============================================
+   MSFG Dashboard - Layout Styles
+   Header, navigation, main content, footer
+   ============================================ */
+
+/* ========================================
+   HEADER
+======================================== */
+.header {
+    background: var(--gradient-header);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: var(--shadow-lg);
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem var(--spacing-xl);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.logo-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.logo {
+    height: 50px;
+    width: auto;
+    filter: brightness(1.1);
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+}
+
+/* User Info */
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: white;
+}
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.user-name {
+    font-weight: 500;
+}
+
+.user-role {
+    font-size: 0.75rem;
+    opacity: 0.8;
+}
+
+/* Theme Toggle */
+.theme-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-lg);
+    background: rgba(255,255,255,0.15);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    transition: all var(--transition-fast);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.theme-toggle:hover {
+    background: rgba(255,255,255,0.25);
+    transform: scale(1.05);
+}
+
+/* ========================================
+   NAVIGATION
+======================================== */
+.nav-container {
+    padding: 0 var(--spacing-xl);
+}
+
+.main-nav {
+    display: flex;
+    gap: var(--spacing-xs);
+}
+
+.nav-item {
+    position: relative;
+}
+
+.nav-button {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) 1.25rem;
+    color: rgba(255,255,255,0.9);
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.nav-button:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+}
+
+.nav-button i {
+    font-size: 0.85rem;
+    opacity: 0.8;
+}
+
+.nav-button .fa-chevron-down {
+    font-size: 0.65rem;
+    transition: transform var(--transition-fast);
+}
+
+.nav-item:hover .fa-chevron-down {
+    transform: rotate(180deg);
+}
+
+/* ========================================
+   DROPDOWN MENUS
+======================================== */
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 220px;
+    background: var(--bg-secondary);
+    border-radius: 0 var(--radius-lg) var(--radius-lg) var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all var(--transition-normal);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    z-index: 100;
+}
+
+.nav-item:hover .dropdown-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-header {
+    padding: 0.75rem var(--spacing-md);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem var(--spacing-md);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+}
+
+.dropdown-item:hover {
+    background: var(--green-bright);
+    color: white;
+}
+
+.dropdown-item i {
+    width: 20px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background: var(--border-color);
+    margin: var(--spacing-sm) 0;
+}
+
+/* ========================================
+   MAIN CONTENT
+======================================== */
+.main-content {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: var(--spacing-xl);
+    display: grid;
+    gap: var(--spacing-lg);
+}
+
+@media (min-width: 1800px) {
+    .main-content {
+        max-width: 1800px;
+    }
+}
+
+/* ========================================
+   FOOTER
+======================================== */
+.footer {
+    text-align: center;
+    padding: var(--spacing-xl);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border-color);
+    margin-top: var(--spacing-xl);
+}
+
+.footer a {
+    color: var(--green-bright);
+}
+
+.footer a:hover {
+    text-decoration: underline;
+}
