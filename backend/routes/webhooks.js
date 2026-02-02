@@ -9,6 +9,128 @@ router.use(validateApiKey);
 router.use(logWebhookCall);
 
 // ========================================
+// TERMINAL STATUS CONSTANTS
+// ========================================
+const TERMINAL_STATUSES = {
+  FUNDED: 'funded',
+  WITHDRAWN: 'withdrawn',
+  INCOMPLETE: 'incomplete',
+  DENIED: 'denied',
+  NOT_ACCEPTED: 'not accepted'
+};
+
+// Statuses that trigger deletion (no archive)
+const DELETE_STATUSES = [
+  TERMINAL_STATUSES.WITHDRAWN,
+  TERMINAL_STATUSES.INCOMPLETE,
+  TERMINAL_STATUSES.DENIED,
+  TERMINAL_STATUSES.NOT_ACCEPTED
+];
+
+/**
+ * Check if a status is terminal (funded or delete-worthy)
+ */
+function isTerminalStatus(status) {
+  if (!status) return false;
+  const normalized = status.toLowerCase().trim();
+  return normalized === TERMINAL_STATUSES.FUNDED || DELETE_STATUSES.includes(normalized);
+}
+
+/**
+ * Check if status should trigger deletion
+ */
+function isDeleteStatus(status) {
+  if (!status) return false;
+  const normalized = status.toLowerCase().trim();
+  return DELETE_STATUSES.includes(normalized);
+}
+
+/**
+ * Check if status is funded
+ */
+function isFundedStatus(status) {
+  if (!status) return false;
+  return status.toLowerCase().trim() === TERMINAL_STATUSES.FUNDED;
+}
+
+/**
+ * Move a pipeline loan to funded_loans table
+ */
+async function moveLoanToFunded(pipelineId, fundedDate = null) {
+  // Get the pipeline record
+  const [loans] = await db.query('SELECT * FROM pipeline WHERE id = ?', [pipelineId]);
+  
+  if (loans.length === 0) {
+    throw new Error('Pipeline loan not found');
+  }
+  
+  const loan = loans[0];
+  
+  // Insert into funded_loans
+  const [result] = await db.query(
+    `INSERT INTO funded_loans 
+     (client_name, loan_amount, loan_type, funded_date, assigned_lo_id, assigned_lo_name, 
+      assigned_processor_id, investor, investor_id, property_address, notes, 
+      original_pipeline_id, source_system, external_loan_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      loan.client_name,
+      loan.loan_amount,
+      loan.loan_type,
+      fundedDate || new Date().toISOString().split('T')[0], // Use provided date or today
+      loan.assigned_lo_id,
+      loan.assigned_lo_name,
+      null, // assigned_processor_id - we'll look this up
+      loan.investor,
+      loan.investor_id,
+      null, // property_address - not in current pipeline schema
+      loan.notes,
+      loan.id,
+      loan.source_system || 'Zapier',
+      loan.external_loan_id
+    ]
+  );
+  
+  // If LO has an assigned processor, update the funded_loan record
+  if (loan.assigned_lo_id) {
+    const [assignments] = await db.query(
+      'SELECT processor_user_id FROM processor_lo_assignments WHERE lo_user_id = ?',
+      [loan.assigned_lo_id]
+    );
+    
+    if (assignments.length > 0) {
+      await db.query(
+        'UPDATE funded_loans SET assigned_processor_id = ? WHERE id = ?',
+        [assignments[0].processor_user_id, result.insertId]
+      );
+    }
+  }
+  
+  // Delete from pipeline
+  await db.query('DELETE FROM pipeline WHERE id = ?', [pipelineId]);
+  
+  // Return the funded loan record
+  const [fundedLoans] = await db.query('SELECT * FROM funded_loans WHERE id = ?', [result.insertId]);
+  return fundedLoans[0];
+}
+
+/**
+ * Delete a pipeline loan (for withdrawn, incomplete, denied, not accepted)
+ */
+async function deletePipelineLoan(pipelineId) {
+  const [loans] = await db.query('SELECT * FROM pipeline WHERE id = ?', [pipelineId]);
+  
+  if (loans.length === 0) {
+    return null;
+  }
+  
+  const loan = loans[0];
+  await db.query('DELETE FROM pipeline WHERE id = ?', [pipelineId]);
+  
+  return loan;
+}
+
+// ========================================
 // TASK WEBHOOKS
 // ========================================
 
@@ -153,38 +275,256 @@ router.put('/pre-approvals/:id', async (req, res, next) => {
 // PIPELINE WEBHOOKS
 // ========================================
 
-// POST /api/webhooks/pipeline - Create pipeline item via webhook
+// POST /api/webhooks/pipeline - Create or update pipeline item via webhook
+// Handles terminal statuses: Funded → move to funded_loans, others → delete
 router.post('/pipeline', async (req, res, next) => {
   try {
-    const { client_name, loan_amount, loan_type, stage, target_close_date, investor, investor_id, status, notes } = req.body;
+    const { 
+      client_name, 
+      loan_amount, 
+      loan_type, 
+      stage, 
+      target_close_date, 
+      investor, 
+      investor_id, 
+      status, 
+      notes,
+      assigned_lo,
+      loan_number,
+      occupancy,
+      external_loan_id,
+      source_system,
+      funded_date
+    } = req.body;
     
     if (!client_name || !loan_amount || !stage) {
       return res.status(400).json({ error: 'client_name, loan_amount, and stage are required' });
     }
     
-    // Pipeline item is automatically assigned to the user who owns the API key
-    const assignedLoId = req.user ? req.user.id : null;
-    const assignedLoName = req.user ? req.user.name : null;
+    // Look up LO by name if provided, otherwise use API key owner
+    let assignedLoId = req.user ? req.user.id : null;
+    let assignedLoName = req.user ? req.user.name : null;
     
-    const [result] = await db.query(
-      `INSERT INTO pipeline 
-       (client_name, loan_amount, loan_type, stage, target_close_date, assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [client_name, loan_amount, loan_type || null, stage, target_close_date || null, assignedLoId, assignedLoName, investor || null, investor_id || null, status || 'On Track', notes || null]
-    );
+    if (assigned_lo) {
+      const [users] = await db.query(
+        'SELECT id, name FROM users WHERE LOWER(name) = LOWER(?)',
+        [assigned_lo.trim()]
+      );
+      
+      if (users.length > 0) {
+        assignedLoId = users[0].id;
+        assignedLoName = users[0].name;
+      } else {
+        console.warn('No user found matching "' + assigned_lo + '", using API key owner');
+        assignedLoName = assigned_lo;
+      }
+    }
     
-    const [pipeline] = await db.query('SELECT * FROM pipeline WHERE id = ?', [result.insertId]);
-    res.status(201).json({ success: true, data: pipeline[0] });
+    // Check if pipeline item already exists (by external_loan_id or client_name)
+    let existing = [];
+    
+    if (external_loan_id) {
+      [existing] = await db.query(
+        'SELECT id FROM pipeline WHERE external_loan_id = ? LIMIT 1',
+        [external_loan_id]
+      );
+    }
+    
+    if (existing.length === 0) {
+      [existing] = await db.query(
+        'SELECT id FROM pipeline WHERE client_name = ? ORDER BY created_at DESC LIMIT 1',
+        [client_name]
+      );
+    }
+    
+    // ========================================
+    // HANDLE TERMINAL STATUSES
+    // ========================================
+    
+    // Check if this is a terminal status (funded, withdrawn, etc.)
+    if (isTerminalStatus(status)) {
+      
+      // If FUNDED: move to funded_loans
+      if (isFundedStatus(status)) {
+        if (existing.length > 0) {
+          // Existing loan → move to funded
+          const fundedLoan = await moveLoanToFunded(existing[0].id, funded_date);
+          return res.json({ 
+            success: true, 
+            data: fundedLoan, 
+            action: 'funded',
+            message: 'Loan moved to funded_loans table'
+          });
+        } else {
+          // New loan coming in as already funded → insert directly to funded_loans
+          const [result] = await db.query(
+            `INSERT INTO funded_loans 
+             (client_name, loan_amount, loan_type, funded_date, assigned_lo_id, assigned_lo_name, 
+              investor, investor_id, notes, source_system, external_loan_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              client_name,
+              loan_amount,
+              loan_type || null,
+              funded_date || new Date().toISOString().split('T')[0],
+              assignedLoId,
+              assignedLoName,
+              investor || null,
+              investor_id || null,
+              notes || null,
+              source_system || 'Zapier',
+              external_loan_id || null
+            ]
+          );
+          
+          const [fundedLoans] = await db.query('SELECT * FROM funded_loans WHERE id = ?', [result.insertId]);
+          return res.status(201).json({ 
+            success: true, 
+            data: fundedLoans[0], 
+            action: 'funded',
+            message: 'Loan created directly in funded_loans table'
+          });
+        }
+      }
+      
+      // If DELETE STATUS (withdrawn, incomplete, denied, not accepted): delete from pipeline
+      if (isDeleteStatus(status)) {
+        if (existing.length > 0) {
+          const deletedLoan = await deletePipelineLoan(existing[0].id);
+          return res.json({ 
+            success: true, 
+            data: deletedLoan, 
+            action: 'deleted',
+            message: `Loan deleted due to status: ${status}`
+          });
+        } else {
+          // Loan doesn't exist, nothing to delete
+          return res.json({ 
+            success: true, 
+            data: null, 
+            action: 'skipped',
+            message: `No existing loan found to delete for status: ${status}`
+          });
+        }
+      }
+    }
+    
+    // ========================================
+    // NORMAL CREATE/UPDATE FLOW
+    // ========================================
+    
+    let pipeline;
+    
+    if (existing.length > 0) {
+      // UPDATE existing pipeline item
+      const updates = [];
+      const values = [];
+      
+      if (loan_amount !== undefined) { updates.push('loan_amount = ?'); values.push(loan_amount); }
+      if (loan_type !== undefined) { updates.push('loan_type = ?'); values.push(loan_type); }
+      if (stage !== undefined) { updates.push('stage = ?'); values.push(stage); }
+      if (target_close_date !== undefined) { updates.push('target_close_date = ?'); values.push(target_close_date); }
+      if (investor !== undefined) { updates.push('investor = ?'); values.push(investor); }
+      if (investor_id !== undefined) { updates.push('investor_id = ?'); values.push(investor_id); }
+      if (status !== undefined) { updates.push('status = ?'); values.push(status); }
+      if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
+      if (loan_number !== undefined) { updates.push('loan_number = ?'); values.push(loan_number); }
+      if (occupancy !== undefined) { updates.push('occupancy = ?'); values.push(occupancy); }
+      if (external_loan_id !== undefined) { updates.push('external_loan_id = ?'); values.push(external_loan_id); }
+      if (source_system !== undefined) { updates.push('source_system = ?'); values.push(source_system); }
+      
+      updates.push('assigned_lo_id = ?');
+      values.push(assignedLoId);
+      updates.push('assigned_lo_name = ?');
+      values.push(assignedLoName);
+      
+      values.push(existing[0].id);
+      
+      await db.query(
+        'UPDATE pipeline SET ' + updates.join(', ') + ', updated_at = NOW() WHERE id = ?',
+        values
+      );
+      
+      const [updated] = await db.query('SELECT * FROM pipeline WHERE id = ?', [existing[0].id]);
+      pipeline = updated[0];
+      
+      res.json({ success: true, data: pipeline, action: 'updated' });
+    } else {
+      // CREATE new pipeline item
+      const [result] = await db.query(
+        `INSERT INTO pipeline 
+         (client_name, loan_number, loan_amount, loan_type, occupancy, stage, target_close_date, 
+          assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes, external_loan_id, source_system) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          client_name, 
+          loan_number || null, 
+          loan_amount, 
+          loan_type || null, 
+          occupancy || null, 
+          stage, 
+          target_close_date || null, 
+          assignedLoId, 
+          assignedLoName, 
+          investor || null, 
+          investor_id || null, 
+          status || 'Active', 
+          notes || null,
+          external_loan_id || null,
+          source_system || 'Zapier'
+        ]
+      );
+      
+      const [created] = await db.query('SELECT * FROM pipeline WHERE id = ?', [result.insertId]);
+      pipeline = created[0];
+      
+      res.status(201).json({ success: true, data: pipeline, action: 'created' });
+    }
   } catch (error) {
     next(error);
   }
 });
 
 // PUT /api/webhooks/pipeline/:id - Update pipeline item via webhook
+// Also handles terminal statuses
 router.put('/pipeline/:id', async (req, res, next) => {
   try {
-    const { client_name, loan_amount, loan_type, stage, target_close_date, assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes } = req.body;
+    const { 
+      client_name, loan_amount, loan_type, stage, target_close_date, 
+      assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes,
+      funded_date
+    } = req.body;
     
+    // Check if this is a terminal status update
+    if (isTerminalStatus(status)) {
+      
+      if (isFundedStatus(status)) {
+        // Move to funded_loans
+        const fundedLoan = await moveLoanToFunded(req.params.id, funded_date);
+        return res.json({ 
+          success: true, 
+          data: fundedLoan, 
+          action: 'funded',
+          message: 'Loan moved to funded_loans table'
+        });
+      }
+      
+      if (isDeleteStatus(status)) {
+        // Delete from pipeline
+        const deletedLoan = await deletePipelineLoan(req.params.id);
+        if (!deletedLoan) {
+          return res.status(404).json({ error: 'Pipeline item not found' });
+        }
+        return res.json({ 
+          success: true, 
+          data: deletedLoan, 
+          action: 'deleted',
+          message: `Loan deleted due to status: ${status}`
+        });
+      }
+    }
+    
+    // Normal update flow
     const updates = [];
     const values = [];
     
@@ -263,4 +603,3 @@ router.post('/bulk/tasks', async (req, res, next) => {
 });
 
 module.exports = router;
-
