@@ -129,6 +129,8 @@
       facebook: "https://www.facebook.com/MSFGhomeloans",
       instagram: "https://www.instagram.com/msfg.us/",
 
+      keyword_explorer: "https://keywords.msfgco.com",
+
       ratesheet: "https://loansifternow.optimalblue.com"
     }
   };
