@@ -21,6 +21,14 @@ const preApprovalsRoutes = require('./routes/preApprovals');
 const pipelineRoutes = require('./routes/pipeline');
 const webhooksRoutes = require('./routes/webhooks');
 
+// Content Engine routes
+const integrationsRoutes = require('./routes/integrations');
+const contentTemplatesRoutes = require('./routes/contentTemplates');
+const contentSearchRoutes = require('./routes/contentSearch');
+const contentGenerateRoutes = require('./routes/contentGenerate');
+const contentItemsRoutes = require('./routes/contentItems');
+const contentPublishRoutes = require('./routes/contentPublish');
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -34,7 +42,7 @@ app.use(helmet());
 // CORS - restrict to your frontend domain
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['https://dashboard.msfgco.com'];
+  : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
 
 app.use(cors({
   origin: function(origin, callback) {
@@ -86,6 +94,14 @@ app.use('/api/files', authenticate, filesRoutes);
 app.use('/api/tasks', authenticate, tasksRoutes);
 app.use('/api/pre-approvals', authenticate, preApprovalsRoutes);
 app.use('/api/pipeline', authenticate, pipelineRoutes);
+
+// Content Engine (all require JWT auth)
+app.use('/api/integrations', authenticate, integrationsRoutes);
+app.use('/api/content/templates', authenticate, contentTemplatesRoutes);
+app.use('/api/content/search', authenticate, contentSearchRoutes);
+app.use('/api/content/generate', authenticate, contentGenerateRoutes);
+app.use('/api/content/items', authenticate, contentItemsRoutes);
+app.use('/api/content/publish', authenticate, contentPublishRoutes);
 
 // ======================
 // ERROR HANDLING
