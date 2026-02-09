@@ -36,6 +36,9 @@ const PORT = process.env.PORT || 8080;
 // SECURITY MIDDLEWARE
 // ======================
 
+// Trust first proxy (ALB / nginx / CloudFront in front of EC2)
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
