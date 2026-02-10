@@ -353,10 +353,16 @@ router.post('/sync', async (req, res, next) => {
     // Upsert each item into pipeline
     let created = 0;
     let updated = 0;
+    let deleted = 0;
+
+    // Collect all Monday.com item IDs we sync'd
+    const syncedMondayIds = new Set();
 
     for (const item of allItems) {
       const row = mapItemToRow(item, columnMap, userNameMap);
       if (!row.client_name) continue; // skip items with no name
+
+      syncedMondayIds.add(String(item.id));
 
       try {
         // Check if this monday item already exists
@@ -401,6 +407,22 @@ router.post('/sync', async (req, res, next) => {
       }
     }
 
+    // Delete pipeline rows that came from Monday.com but are no longer on the board
+    try {
+      const [mondayRows] = await db.query(
+        "SELECT id, monday_item_id FROM pipeline WHERE source_system = 'monday' AND monday_item_id IS NOT NULL"
+      );
+
+      const toDelete = mondayRows.filter(r => !syncedMondayIds.has(String(r.monday_item_id)));
+      if (toDelete.length > 0) {
+        const deleteIds = toDelete.map(r => r.id);
+        await db.query('DELETE FROM pipeline WHERE id IN (?)', [deleteIds]);
+        deleted = toDelete.length;
+      }
+    } catch (delErr) {
+      console.error('Monday sync: error cleaning up removed items:', delErr.message);
+    }
+
     // Update sync log
     await db.query(
       `UPDATE monday_sync_log 
@@ -414,6 +436,7 @@ router.post('/sync', async (req, res, next) => {
       itemsFetched: allItems.length,
       created,
       updated,
+      deleted,
       syncLogId,
     });
   } catch (error) {

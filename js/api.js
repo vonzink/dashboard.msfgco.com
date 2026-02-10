@@ -225,7 +225,7 @@ const API = {
         if (!tbody) return;
 
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="19" class="empty-state">
+            tbody.innerHTML = `<tr><td colspan="12" class="empty-state">
                 <i class="fas fa-database"></i>
                 <p>No pipeline data yet. Sync from Monday.com to populate.</p>
             </td></tr>`;
@@ -233,32 +233,24 @@ const API = {
         }
 
         tbody.innerHTML = data.map(item => {
-            const statusClass = (item.loan_status || '').toLowerCase().replace(/[^a-z]/g, '') || 'default';
             return `
-                <tr data-id="${item.id}">
+                <tr data-id="${item.id}" data-lo="${Utils.escapeHtml(item.assigned_lo_name || '')}">
                     <td><strong>${Utils.escapeHtml(item.client_name || '')}</strong></td>
                     <td>${Utils.escapeHtml(item.loan_number || '')}</td>
-                    <td><span class="status-badge ${statusClass}">${Utils.escapeHtml(item.loan_status || '')}</span></td>
-                    <td>${Utils.escapeHtml(item.lender || item.investor || '')}</td>
-                    <td class="nowrap">${Utils.escapeHtml(item.subject_property || '')}</td>
                     <td>
                         <div class="lo-cell">
                             <span class="lo-avatar">${Utils.getInitials(item.assigned_lo_name)}</span>
                             ${Utils.escapeHtml(item.assigned_lo_name || 'Unassigned')}
                         </div>
                     </td>
+                    <td class="nowrap">${Utils.escapeHtml(item.subject_property || '')}</td>
                     <td class="currency">${item.loan_amount ? Utils.formatCurrency(item.loan_amount) : ''}</td>
                     <td>${Utils.escapeHtml(item.rate || '')}</td>
-                    <td>${Utils.escapeHtml(item.loan_type || '')}</td>
-                    <td>${Utils.escapeHtml(item.loan_purpose || '')}</td>
                     <td>${Utils.escapeHtml(item.appraisal_status || '')}</td>
-                    <td>${Utils.escapeHtml(item.title_status || '')}</td>
-                    <td>${Utils.escapeHtml(item.hoi_status || '')}</td>
                     <td>${Utils.escapeHtml(item.occupancy || '')}</td>
-                    <td>${Utils.escapeHtml(item.loan_estimate || '')}</td>
                     <td class="nowrap">${Utils.formatDate(item.application_date, 'short')}</td>
-                    <td class="nowrap">${Utils.formatDate(item.lock_expiration_date, 'short')}</td>
                     <td class="nowrap">${Utils.formatDate(item.closing_date, 'short')}</td>
+                    <td class="nowrap">${Utils.formatDate(item.lock_expiration_date, 'short')}</td>
                     <td class="nowrap">${Utils.formatDate(item.funding_date, 'short')}</td>
                 </tr>
             `;
@@ -268,24 +260,14 @@ const API = {
     populatePipelineFilters(data) {
         if (!data?.length) return;
 
-        // Populate stage filter
-        const stageSelect = document.getElementById('pipelineStage');
-        if (stageSelect) {
-            const stages = [...new Set(data.map(d => d.stage).filter(Boolean))].sort();
-            const currentVal = stageSelect.value;
-            stageSelect.innerHTML = '<option value="">All Stages</option>' +
-                stages.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');
-            stageSelect.value = currentVal;
-        }
-
-        // Populate loan status filter
-        const statusSelect = document.getElementById('pipelineLoanStatus');
-        if (statusSelect) {
-            const statuses = [...new Set(data.map(d => d.loan_status).filter(Boolean))].sort();
-            const currentVal = statusSelect.value;
-            statusSelect.innerHTML = '<option value="">All Statuses</option>' +
-                statuses.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');
-            statusSelect.value = currentVal;
+        // Populate Loan Officer filter
+        const loSelect = document.getElementById('pipelineLO');
+        if (loSelect) {
+            const los = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
+            const currentVal = loSelect.value;
+            loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
+                los.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');
+            loSelect.value = currentVal;
         }
     },
 
@@ -405,8 +387,7 @@ const MondaySettings = {
         document.getElementById('mondayRunSyncBtn')?.addEventListener('click', () => this.runSync());
 
         // Pipeline filter handlers
-        document.getElementById('pipelineStage')?.addEventListener('change', () => this.filterPipeline());
-        document.getElementById('pipelineLoanStatus')?.addEventListener('change', () => this.filterPipeline());
+        document.getElementById('pipelineLO')?.addEventListener('change', () => this.filterPipeline());
     },
 
     show() {
@@ -646,21 +627,15 @@ const MondaySettings = {
     },
 
     filterPipeline() {
-        const stageVal = (document.getElementById('pipelineStage')?.value || '').toLowerCase();
-        const statusVal = (document.getElementById('pipelineLoanStatus')?.value || '').toLowerCase();
+        const loVal = (document.getElementById('pipelineLO')?.value || '').toLowerCase();
         const rows = document.querySelectorAll('#pipelineTable tbody tr');
 
         rows.forEach(row => {
             if (row.querySelector('.empty-state')) return;
-            const cells = row.querySelectorAll('td');
-            // Stage is not directly in the table anymore; loan_status is col index 2
-            const loanStatus = (cells[2]?.textContent || '').toLowerCase();
-            // Use row text for stage matching (from data attribute or broader match)
-            const rowText = row.textContent.toLowerCase();
+            const rowLO = (row.getAttribute('data-lo') || '').toLowerCase();
 
             let show = true;
-            if (stageVal && !rowText.includes(stageVal)) show = false;
-            if (statusVal && !loanStatus.includes(statusVal)) show = false;
+            if (loVal && rowLO !== loVal) show = false;
             row.style.display = show ? '' : 'none';
         });
     },

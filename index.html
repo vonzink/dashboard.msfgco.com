@@ -330,11 +330,8 @@
         <h2 class="section-title"><i class="fas fa-chart-line"></i> Loan Pipeline</h2>
         <div class="section-actions">
           <input type="text" id="pipelineSearch" class="search-input" placeholder="Search pipeline..." />
-          <select class="filter-select" id="pipelineStage">
-            <option value="">All Stages</option>
-          </select>
-          <select class="filter-select" id="pipelineLoanStatus">
-            <option value="">All Statuses</option>
+          <select class="filter-select" id="pipelineLO">
+            <option value="">All Loan Officers</option>
           </select>
           <button type="button" class="btn btn-secondary btn-sm" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
@@ -357,28 +354,21 @@
               <tr>
                 <th class="sortable">Client Name</th>
                 <th class="sortable">Loan #</th>
-                <th class="sortable">Loan Status</th>
-                <th class="sortable">Lender</th>
-                <th class="sortable">Subject Property</th>
                 <th class="sortable">Loan Officer</th>
+                <th class="sortable">Subject Property</th>
                 <th class="sortable">Loan Amount</th>
                 <th class="sortable">Rate</th>
-                <th class="sortable">Loan Type</th>
-                <th class="sortable">Loan Purpose</th>
                 <th class="sortable">Appraisal</th>
-                <th class="sortable">Title</th>
-                <th class="sortable">HOI</th>
                 <th class="sortable">Occupancy</th>
-                <th class="sortable">Loan Estimate</th>
                 <th class="sortable">App Date</th>
-                <th class="sortable">Lock Exp</th>
                 <th class="sortable">Closing Date</th>
+                <th class="sortable">Lock Exp</th>
                 <th class="sortable">Funding Date</th>
               </tr>
             </thead>
             <tbody id="pipelineBody">
               <tr>
-                <td colspan="19" class="empty-state">
+                <td colspan="12" class="empty-state">
                   <i class="fas fa-database"></i>
                   <p>No pipeline data yet. Sync from Monday.com to populate.</p>
                 </td>
