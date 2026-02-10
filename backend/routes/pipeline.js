@@ -96,7 +96,14 @@ router.post('/', async (req, res, next) => {
 // PUT /api/pipeline/:id - Update pipeline item
 router.put('/:id', async (req, res, next) => {
   try {
-    const { client_name, loan_amount, loan_type, stage, target_close_date, assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes } = req.body;
+    const {
+      client_name, loan_amount, loan_type, stage, target_close_date,
+      assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes,
+      // Monday.com-synced fields (also editable locally)
+      loan_number, loan_status, lender, subject_property, rate,
+      appraisal_status, loan_purpose, occupancy, title_status, hoi_status,
+      loan_estimate, application_date, lock_expiration_date, closing_date, funding_date,
+    } = req.body;
     
     const updates = [];
     const values = [];
@@ -119,6 +126,22 @@ router.put('/:id', async (req, res, next) => {
     if (investor_id !== undefined) { updates.push('investor_id = ?'); values.push(investor_id); }
     if (status !== undefined) { updates.push('status = ?'); values.push(status); }
     if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
+    // Monday.com fields
+    if (loan_number !== undefined) { updates.push('loan_number = ?'); values.push(loan_number); }
+    if (loan_status !== undefined) { updates.push('loan_status = ?'); values.push(loan_status); }
+    if (lender !== undefined) { updates.push('lender = ?'); values.push(lender); }
+    if (subject_property !== undefined) { updates.push('subject_property = ?'); values.push(subject_property); }
+    if (rate !== undefined) { updates.push('rate = ?'); values.push(rate); }
+    if (appraisal_status !== undefined) { updates.push('appraisal_status = ?'); values.push(appraisal_status); }
+    if (loan_purpose !== undefined) { updates.push('loan_purpose = ?'); values.push(loan_purpose); }
+    if (occupancy !== undefined) { updates.push('occupancy = ?'); values.push(occupancy); }
+    if (title_status !== undefined) { updates.push('title_status = ?'); values.push(title_status); }
+    if (hoi_status !== undefined) { updates.push('hoi_status = ?'); values.push(hoi_status); }
+    if (loan_estimate !== undefined) { updates.push('loan_estimate = ?'); values.push(loan_estimate); }
+    if (application_date !== undefined) { updates.push('application_date = ?'); values.push(application_date); }
+    if (lock_expiration_date !== undefined) { updates.push('lock_expiration_date = ?'); values.push(lock_expiration_date); }
+    if (closing_date !== undefined) { updates.push('closing_date = ?'); values.push(closing_date); }
+    if (funding_date !== undefined) { updates.push('funding_date = ?'); values.push(funding_date); }
     
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });

@@ -114,11 +114,11 @@ const ServerAPI = {
                         return retryResponse.json();
                     }
                 }
-                // Refresh failed or retry failed — clear everything and redirect
-                console.warn("401 Unauthorized — clearing auth and redirecting to login");
+                // Refresh failed or retry failed — clear tokens but DON'T redirect.
+                // Let the page stay loaded so the user sees error messages instead of looping.
+                console.warn("401 Unauthorized — clearing auth tokens");
                 this.clearAuth();
-                window.location.href = "/login.html";
-                throw new Error("Unauthorized");
+                throw new Error("Session expired. Please refresh and log in again.");
             }
 
             if (!response.ok) {
@@ -258,6 +258,39 @@ const ServerAPI = {
             throw new Error("Upload failed");
         }
         return true;
+    },
+    // ========================================
+    // MONDAY.COM INTEGRATION
+    // ========================================
+
+    /** Fetch board columns from Monday.com (admin) */
+    getMondayColumns() {
+        return this.get('/monday/columns');
+    },
+
+    /** Get saved column mappings (admin) */
+    getMondayMappings() {
+        return this.get('/monday/mappings');
+    },
+
+    /** Save column mappings (admin) — mappings: [{ mondayColumnId, mondayColumnTitle, pipelineField }] */
+    saveMondayMappings(mappings) {
+        return this.post('/monday/mappings', { mappings });
+    },
+
+    /** Trigger a read-only sync from Monday.com → pipeline (admin) */
+    syncMonday() {
+        return this.post('/monday/sync', {});
+    },
+
+    /** Get last sync status */
+    getMondaySyncStatus() {
+        return this.get('/monday/sync/status');
+    },
+
+    /** Get sync history (admin) */
+    getMondaySyncLog() {
+        return this.get('/monday/sync/log');
     },
 };
 

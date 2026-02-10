@@ -17,7 +17,7 @@ router.use(requireDbUser);
 
 const VALID_SERVICES = [
   'openai', 'canva', 'elevenlabs', 'midjourney', 'sora',
-  'n8n', 'zapier',
+  'n8n', 'zapier', 'monday',
   'facebook', 'instagram', 'twitter', 'linkedin', 'tiktok',
 ];
 
@@ -142,6 +142,8 @@ router.post('/:service/test', async (req, res, next) => {
       testResult = await testLinkedIn(plaintext);
     } else if (service === 'twitter') {
       testResult = await testTwitter(plaintext);
+    } else if (service === 'monday') {
+      testResult = await testMonday(plaintext);
     } else {
       testResult = { success: plaintext.length > 10, message: plaintext.length > 10 ? 'Credential looks valid (format check only)' : 'Credential seems too short' };
     }
@@ -287,6 +289,28 @@ async function testTwitter(bearerToken) {
     }
     const err = await response.json().catch(() => ({}));
     return { success: false, message: err.detail || `Twitter returned HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testMonday(apiToken) {
+  try {
+    const response = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': apiToken,
+      },
+      body: JSON.stringify({ query: 'query { me { name email } }' }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const name = data.data?.me?.name || 'Monday.com user';
+      return { success: true, message: `Connected as ${name}` };
+    }
+    return { success: false, message: `Monday.com returned HTTP ${response.status}` };
   } catch (error) {
     return { success: false, message: error.message || 'Connection failed' };
   }

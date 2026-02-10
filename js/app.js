@@ -17,6 +17,7 @@ const App = {
         this.initInvestors();
         this.initGoals();
         this.initModals();
+        this.initMondaySettings();
         this.initProgressBars();
         
         // Load data from API
@@ -56,6 +57,12 @@ const App = {
 
     initModals() {
         ModalsManager.init();
+    },
+
+    initMondaySettings() {
+        if (typeof MondaySettings !== 'undefined') {
+            MondaySettings.init();
+        }
     },
 
     initProgressBars() {

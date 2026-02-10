@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <!-- AUTH GATE (must be first script in head) -->
-  <script src="js/auth-gate.js"></script>
+  <script src="js/auth-gate.js?v=20260210-2"></script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -324,6 +324,71 @@
       </div>
     </section>
 
+    <!-- Pipeline (Monday.com Sync) -->
+    <section class="section-card animate-in" id="pipelineSection">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-chart-line"></i> Loan Pipeline</h2>
+        <div class="section-actions">
+          <input type="text" id="pipelineSearch" class="search-input" placeholder="Search pipeline..." />
+          <select class="filter-select" id="pipelineStage">
+            <option value="">All Stages</option>
+          </select>
+          <select class="filter-select" id="pipelineLoanStatus">
+            <option value="">All Statuses</option>
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
+            <i class="fas fa-sync-alt"></i> Sync
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="monday-settings" title="Monday.com Settings">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="section-body">
+        <div class="sync-status-bar" id="syncStatusBar" style="display:none;">
+          <i class="fas fa-info-circle"></i>
+          <span id="syncStatusText">Last synced: Never</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="pipelineTable">
+            <thead>
+              <tr>
+                <th class="sortable">Client Name</th>
+                <th class="sortable">Loan #</th>
+                <th class="sortable">Loan Status</th>
+                <th class="sortable">Lender</th>
+                <th class="sortable">Subject Property</th>
+                <th class="sortable">Loan Officer</th>
+                <th class="sortable">Loan Amount</th>
+                <th class="sortable">Rate</th>
+                <th class="sortable">Loan Type</th>
+                <th class="sortable">Loan Purpose</th>
+                <th class="sortable">Appraisal</th>
+                <th class="sortable">Title</th>
+                <th class="sortable">HOI</th>
+                <th class="sortable">Occupancy</th>
+                <th class="sortable">Loan Estimate</th>
+                <th class="sortable">App Date</th>
+                <th class="sortable">Lock Exp</th>
+                <th class="sortable">Closing Date</th>
+                <th class="sortable">Funding Date</th>
+              </tr>
+            </thead>
+            <tbody id="pipelineBody">
+              <tr>
+                <td colspan="19" class="empty-state">
+                  <i class="fas fa-database"></i>
+                  <p>No pipeline data yet. Sync from Monday.com to populate.</p>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- Chat -->
     <section class="section-card animate-in" id="chatSection">
       <div class="section-header">
@@ -455,6 +520,66 @@
       </div>
     </div>
 
+    <!-- Monday.com Settings Modal -->
+    <div id="mondaySettingsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content" style="max-width: 720px;">
+        <button type="button" class="modal-close monday-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name"><i class="fas fa-columns"></i> Monday.com Integration</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <!-- API Token Status -->
+          <div class="info-section" style="margin-bottom: 1.5rem;">
+            <h4><i class="fas fa-key"></i> API Token</h4>
+            <p id="mondayTokenStatus" class="tbd">Checking...</p>
+            <div style="margin-top: 0.5rem;">
+              <input type="password" id="mondayTokenInput" placeholder="Paste your Monday.com API token" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 6px; font-size: 0.875rem;" />
+              <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                <button type="button" class="btn btn-primary btn-sm" id="mondaySaveTokenBtn">Save Token</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="mondayTestTokenBtn">Test Connection</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column Mappings -->
+          <div class="info-section" style="margin-bottom: 1.5rem;">
+            <h4><i class="fas fa-arrows-alt-h"></i> Column Mappings</h4>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              Map your Monday.com board columns to pipeline fields. Click "Load Columns" to fetch your board structure.
+            </p>
+            <button type="button" class="btn btn-secondary btn-sm" id="mondayLoadColumnsBtn">
+              <i class="fas fa-download"></i> Load Columns from Board
+            </button>
+            <div id="mondayMappingsContainer" style="margin-top: 1rem;"></div>
+            <button type="button" class="btn btn-primary btn-sm" id="mondaySaveMappingsBtn" style="display:none; margin-top: 0.75rem;">
+              <i class="fas fa-save"></i> Save Mappings
+            </button>
+          </div>
+
+          <!-- Sync Controls -->
+          <div class="info-section" style="margin-bottom: 1.5rem;">
+            <h4><i class="fas fa-sync-alt"></i> Sync</h4>
+            <div id="mondaySyncInfo" style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+              No syncs have been run yet.
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="mondayRunSyncBtn">
+              <i class="fas fa-play"></i> Run Sync Now
+            </button>
+          </div>
+
+          <!-- Sync History -->
+          <div class="info-section">
+            <h4><i class="fas fa-history"></i> Sync History</h4>
+            <div id="mondaySyncHistory" style="font-size: 0.85rem; color: var(--text-muted);">
+              Loading...
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Add Announcement Modal -->
     <div id="addAnnouncementModal" class="investor-modal" aria-hidden="true">
       <div class="modal-content">
@@ -517,26 +642,26 @@
   </footer>
 
   <!-- Scripts (load order matters) -->
-  <script src="js/config.js?v=20260128-1"></script>
-  <script src="js/link-init.js"></script>
-  <script src="js/action-dispatcher.js"></script>
+  <script src="js/config.js?v=20260210-2"></script>
+  <script src="js/link-init.js?v=20260210-2"></script>
+  <script src="js/action-dispatcher.js?v=20260210-2"></script>
 
-  <script src="js/api-server.js"></script>
-  <script src="js/utils.js"></script>
-  <script src="js/theme.js?v=20260128-1"></script>
-  <script src="js/tables.js"></script>
-  <script src="js/chat.js?v=20260128-1"></script>
-  <script src="js/api.js"></script>
-  <script src="js/investors.js"></script>
-  <script src="js/goals.js"></script>
-  <script src="js/modals.js"></script>
+  <script src="js/api-server.js?v=20260210-2"></script>
+  <script src="js/utils.js?v=20260210-2"></script>
+  <script src="js/theme.js?v=20260210-2"></script>
+  <script src="js/tables.js?v=20260210-2"></script>
+  <script src="js/chat.js?v=20260210-2"></script>
+  <script src="js/api.js?v=20260210-2"></script>
+  <script src="js/investors.js?v=20260210-2"></script>
+  <script src="js/goals.js?v=20260210-2"></script>
+  <script src="js/modals.js?v=20260210-2"></script>
 
   <!-- Accessibility -->
-  <script src="js/a11y.js"></script>
+  <script src="js/a11y.js?v=20260210-2"></script>
 
   <!-- CSP-friendly progress widths -->
-  <script src="js/progress-init.js"></script>
+  <script src="js/progress-init.js?v=20260210-2"></script>
 
-  <script src="js/app.js?v=20260128-1"></script>
+  <script src="js/app.js?v=20260210-2"></script>
 </body>
 </html>

@@ -64,6 +64,16 @@
     // Tools
     // =====================
     'open-settings': () => console.log('Open settings'),
+
+    // =====================
+    // Monday.com Integration
+    // =====================
+    'monday-settings': () => {
+      if (typeof MondaySettings !== 'undefined') MondaySettings.show();
+    },
+    'monday-sync': () => {
+      if (typeof MondaySettings !== 'undefined') MondaySettings.triggerSyncFromToolbar();
+    },
   };
 
   document.addEventListener('click', (e) => {

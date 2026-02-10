@@ -106,6 +106,87 @@
 }
 
 /* ========================================
+   TABLE RESPONSIVE WRAPPER
+======================================== */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: var(--radius-md, 8px);
+}
+
+/* No-wrap helper for date cells */
+.nowrap {
+    white-space: nowrap;
+}
+
+/* Currency alignment */
+.currency {
+    font-variant-numeric: tabular-nums;
+}
+
+/* Empty state inside tables */
+.empty-state {
+    text-align: center;
+    padding: 2rem !important;
+    color: var(--text-muted);
+}
+
+.empty-state i {
+    font-size: 2rem;
+    margin-bottom: 0.5rem;
+    display: block;
+    opacity: 0.4;
+}
+
+/* ========================================
+   SYNC STATUS BAR
+======================================== */
+.sync-status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.sync-status-bar i {
+    color: var(--green-bright, #22c55e);
+}
+
+/* ========================================
+   PIPELINE SECTION ACTIONS
+======================================== */
+#pipelineSection .section-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+#pipelineSection .search-input {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    font-size: 0.8rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    width: 180px;
+}
+
+#pipelineSection .search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.btn-sm {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+}
+
+/* ========================================
    RESPONSIVE TABLE
 ======================================== */
 @media (max-width: 1200px) {

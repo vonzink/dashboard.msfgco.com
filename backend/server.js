@@ -28,6 +28,7 @@ const contentSearchRoutes = require('./routes/contentSearch');
 const contentGenerateRoutes = require('./routes/contentGenerate');
 const contentItemsRoutes = require('./routes/contentItems');
 const contentPublishRoutes = require('./routes/contentPublish');
+const mondayRoutes = require('./routes/monday');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -109,6 +110,9 @@ app.use('/api/content/search', authenticate, contentSearchRoutes);
 app.use('/api/content/generate', authenticate, contentGenerateRoutes);
 app.use('/api/content/items', authenticate, contentItemsRoutes);
 app.use('/api/content/publish', authenticate, contentPublishRoutes);
+
+// Monday.com integration (read-only sync)
+app.use('/api/monday', authenticate, mondayRoutes);
 
 // ======================
 // ERROR HANDLING
