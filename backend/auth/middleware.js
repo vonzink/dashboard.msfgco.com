@@ -59,6 +59,8 @@ async function verifyCognitoJwt(token) {
 
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: ISSUER,
+    // Allow 30 seconds of clock skew between Cognito and this server
+    clockTolerance: 30,
     // Note: Cognito access tokens use "client_id" not "aud",
     // so we skip the audience check here and verify manually.
   });
@@ -105,7 +107,31 @@ function requireAuth(options = {}) {
 
       return next();
     } catch (err) {
-      console.error("Auth error:", err?.message || err);
+      const msg = err?.message || String(err);
+      console.error("Auth error:", msg);
+
+      // Debug: if it's an exp error, decode the token to see what we got
+      if (msg.includes("exp") && token) {
+        try {
+          const parts = token.split(".");
+          if (parts.length === 3) {
+            const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+            const now = Math.floor(Date.now() / 1000);
+            console.error("Token debug:", {
+              token_use: payload.token_use,
+              exp: payload.exp,
+              iat: payload.iat,
+              now,
+              expired_by_seconds: now - payload.exp,
+              issuer: payload.iss,
+              expected_issuer: ISSUER,
+              client_id: payload.client_id,
+              sub: payload.sub?.substring(0, 8) + "...",
+            });
+          }
+        } catch (e) { /* ignore decode errors */ }
+      }
+
       return res.status(401).json({ error: "Unauthorized" });
     }
   };
