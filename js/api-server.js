@@ -77,10 +77,13 @@ const ServerAPI = {
             }
 
             var tokens = await response.json();
-            if (tokens.access_token) {
-                this.setAuthToken(tokens.access_token, tokens.expires_in || 3600);
+            // Prefer ID token (has email claim for DB user lookup).
+            // Cognito refresh also returns a new id_token.
+            var newToken = tokens.id_token || tokens.access_token;
+            if (newToken) {
+                this.setAuthToken(newToken, tokens.expires_in || 3600);
                 console.log("Token refreshed silently");
-                return tokens.access_token;
+                return newToken;
             }
             return null;
         } catch (err) {

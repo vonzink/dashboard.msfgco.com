@@ -68,10 +68,13 @@
 
       const tokens = JSON.parse(text);
 
-      localStorage.setItem("auth_token", tokens.access_token);
+      // Use the ID token (contains email claim needed for DB user lookup).
+      // Cognito access tokens do NOT include email — only ID tokens do.
+      var authToken = tokens.id_token || tokens.access_token;
+      localStorage.setItem("auth_token", authToken);
       localStorage.removeItem("pkce_verifier");
 
-      // Store refresh token for silent renewal (access tokens expire after ~1 hour)
+      // Store refresh token for silent renewal (tokens expire after ~1 hour)
       if (tokens.refresh_token) {
         localStorage.setItem("refresh_token", tokens.refresh_token);
       }
@@ -80,7 +83,7 @@
       var maxAge = tokens.expires_in || 3600;
 
       // Set cookie on .msfgco.com so all subdomains share the session
-      document.cookie = "auth_token=" + encodeURIComponent(tokens.access_token) + "; path=/; domain=.msfgco.com; max-age=" + maxAge + "; SameSite=Lax; Secure";
+      document.cookie = "auth_token=" + encodeURIComponent(authToken) + "; path=/; domain=.msfgco.com; max-age=" + maxAge + "; SameSite=Lax; Secure";
 
       // Clear any loop-detection state from auth-gate
       sessionStorage.removeItem("last_auth_redirect");
