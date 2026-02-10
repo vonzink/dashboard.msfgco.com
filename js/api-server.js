@@ -322,6 +322,10 @@ const ServerAPI = {
     getMondaySyncLog() {
         return this.get('/monday/sync/log');
     },
+
+    getMondayViewConfig() {
+        return this.get('/monday/view-config');
+    },
 };
 
 window.ServerAPI = ServerAPI;

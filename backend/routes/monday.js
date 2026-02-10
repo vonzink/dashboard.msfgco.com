@@ -38,6 +38,32 @@ const VALID_PIPELINE_FIELDS = [
   'assigned_lo_name',
 ];
 
+// Human-readable default labels for pipeline fields
+const FIELD_LABELS = {
+  client_name: 'Client Name',
+  loan_number: 'Loan #',
+  loan_status: 'Loan Status',
+  lender: 'Lender',
+  subject_property: 'Subject Property',
+  assigned_lo_name: 'Loan Officer',
+  loan_amount: 'Loan Amount',
+  rate: 'Rate',
+  appraisal_status: 'Appraisal',
+  loan_purpose: 'Loan Purpose',
+  loan_type: 'Loan Type',
+  occupancy: 'Occupancy',
+  title_status: 'Title',
+  hoi_status: 'HOI',
+  loan_estimate: 'Loan Estimate',
+  application_date: 'App Date',
+  lock_expiration_date: 'Lock Exp',
+  closing_date: 'Closing Date',
+  funding_date: 'Funding Date',
+  stage: 'Stage',
+  status: 'Status',
+  notes: 'Notes',
+};
+
 // Default column-title → pipeline-field mapping (best-guess based on common names).
 // The admin can override these via POST /mappings.
 const DEFAULT_TITLE_MAP = {
@@ -116,6 +142,37 @@ async function mondayQuery(token, query, variables = {}) {
   return data.data;
 }
 
+// ── GET /view-config — column display config for the pipeline table ──
+router.get('/view-config', async (req, res, next) => {
+  try {
+    const [mappings] = await db.query(
+      `SELECT pipeline_field, display_label, display_order, visible
+       FROM monday_column_mappings 
+       WHERE board_id = ? 
+       ORDER BY display_order ASC, id ASC`,
+      [BOARD_ID]
+    );
+
+    // Build column list: always start with client_name
+    const columns = [
+      { field: 'client_name', label: 'Client Name', order: -1, visible: true, locked: true }
+    ];
+
+    for (const m of mappings) {
+      columns.push({
+        field: m.pipeline_field,
+        label: m.display_label || FIELD_LABELS[m.pipeline_field] || m.pipeline_field,
+        order: m.display_order ?? 99,
+        visible: m.visible !== 0,
+      });
+    }
+
+    res.json({ columns });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── GET /columns — fetch board columns ──────────────────────────
 router.get('/columns', async (req, res, next) => {
   try {
@@ -161,6 +218,7 @@ router.get('/columns', async (req, res, next) => {
       boardId: BOARD_ID,
       columns,
       validPipelineFields: VALID_PIPELINE_FIELDS,
+      fieldLabels: FIELD_LABELS,
     });
   } catch (error) {
     next(error);
@@ -216,9 +274,10 @@ router.post('/mappings', async (req, res, next) => {
 
       for (const m of mappings) {
         await connection.query(
-          `INSERT INTO monday_column_mappings (board_id, monday_column_id, monday_column_title, pipeline_field)
-           VALUES (?, ?, ?, ?)`,
-          [BOARD_ID, m.mondayColumnId, m.mondayColumnTitle || null, m.pipelineField]
+          `INSERT INTO monday_column_mappings (board_id, monday_column_id, monday_column_title, pipeline_field, display_label, display_order, visible)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [BOARD_ID, m.mondayColumnId, m.mondayColumnTitle || null, m.pipelineField,
+           m.displayLabel || null, m.displayOrder ?? 99, m.visible !== false ? 1 : 0]
         );
       }
 

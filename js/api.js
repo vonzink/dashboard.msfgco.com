@@ -206,10 +206,48 @@ const API = {
     },
 
     // ========================================
-    // PIPELINE (Monday.com sync)
+    // PIPELINE (Monday.com sync) — dynamic columns
     // ========================================
+    pipelineColumns: [],   // loaded from /monday/view-config
+
+    async loadPipelineConfig() {
+        try {
+            const config = await ServerAPI.getMondayViewConfig();
+            this.pipelineColumns = (config.columns || []).filter(c => c.visible !== false);
+        } catch (e) {
+            // Fallback default if no config saved yet
+            this.pipelineColumns = [
+                { field: 'client_name', label: 'Client Name' },
+                { field: 'loan_number', label: 'Loan #' },
+                { field: 'assigned_lo_name', label: 'Loan Officer' },
+                { field: 'subject_property', label: 'Subject Property' },
+                { field: 'loan_amount', label: 'Loan Amount' },
+                { field: 'rate', label: 'Rate' },
+                { field: 'appraisal_status', label: 'Appraisal' },
+                { field: 'occupancy', label: 'Occupancy' },
+                { field: 'application_date', label: 'App Date' },
+                { field: 'closing_date', label: 'Closing Date' },
+                { field: 'lock_expiration_date', label: 'Lock Exp' },
+                { field: 'funding_date', label: 'Funding Date' },
+            ];
+        }
+        this.renderPipelineHead();
+    },
+
+    renderPipelineHead() {
+        const thead = document.getElementById('pipelineHead');
+        if (!thead || this.pipelineColumns.length === 0) return;
+        thead.innerHTML = '<tr>' +
+            this.pipelineColumns.map(c => `<th class="sortable">${Utils.escapeHtml(c.label)}</th>`).join('') +
+            '</tr>';
+    },
+
     async loadPipeline() {
         try {
+            // Load column config first if not loaded yet
+            if (this.pipelineColumns.length === 0) {
+                await this.loadPipelineConfig();
+            }
             const data = await ServerAPI.getPipeline();
             this.pipelineData = data || [];
             this.renderPipeline(data);
@@ -220,12 +258,17 @@ const API = {
         }
     },
 
+    // Date fields that need formatting
+    DATE_FIELDS: ['application_date', 'lock_expiration_date', 'closing_date', 'funding_date', 'target_close_date'],
+    CURRENCY_FIELDS: ['loan_amount'],
+
     renderPipeline(data) {
         const tbody = document.getElementById('pipelineBody');
         if (!tbody) return;
+        const cols = this.pipelineColumns;
 
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="12" class="empty-state">
+            tbody.innerHTML = `<tr><td colspan="${cols.length || 1}" class="empty-state">
                 <i class="fas fa-database"></i>
                 <p>No pipeline data yet. Sync from Monday.com to populate.</p>
             </td></tr>`;
@@ -233,27 +276,25 @@ const API = {
         }
 
         tbody.innerHTML = data.map(item => {
-            return `
-                <tr data-id="${item.id}" data-lo="${Utils.escapeHtml(item.assigned_lo_name || '')}">
-                    <td><strong>${Utils.escapeHtml(item.client_name || '')}</strong></td>
-                    <td>${Utils.escapeHtml(item.loan_number || '')}</td>
-                    <td>
-                        <div class="lo-cell">
-                            <span class="lo-avatar">${Utils.getInitials(item.assigned_lo_name)}</span>
-                            ${Utils.escapeHtml(item.assigned_lo_name || 'Unassigned')}
-                        </div>
-                    </td>
-                    <td class="nowrap">${Utils.escapeHtml(item.subject_property || '')}</td>
-                    <td class="currency">${item.loan_amount ? Utils.formatCurrency(item.loan_amount) : ''}</td>
-                    <td>${Utils.escapeHtml(item.rate || '')}</td>
-                    <td>${Utils.escapeHtml(item.appraisal_status || '')}</td>
-                    <td>${Utils.escapeHtml(item.occupancy || '')}</td>
-                    <td class="nowrap">${Utils.formatDate(item.application_date, 'short')}</td>
-                    <td class="nowrap">${Utils.formatDate(item.closing_date, 'short')}</td>
-                    <td class="nowrap">${Utils.formatDate(item.lock_expiration_date, 'short')}</td>
-                    <td class="nowrap">${Utils.formatDate(item.funding_date, 'short')}</td>
-                </tr>
-            `;
+            const cells = cols.map(col => {
+                const val = item[col.field];
+                // Special rendering per field type
+                if (col.field === 'client_name') {
+                    return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
+                }
+                if (col.field === 'assigned_lo_name') {
+                    return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
+                }
+                if (this.CURRENCY_FIELDS.includes(col.field)) {
+                    return `<td class="currency">${val ? Utils.formatCurrency(val) : ''}</td>`;
+                }
+                if (this.DATE_FIELDS.includes(col.field)) {
+                    return `<td class="nowrap">${Utils.formatDate(val, 'short')}</td>`;
+                }
+                return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
+            }).join('');
+
+            return `<tr data-id="${item.id}" data-lo="${Utils.escapeHtml(item.assigned_lo_name || '')}">${cells}</tr>`;
         }).join('');
     },
 
@@ -366,6 +407,7 @@ const MondaySettings = {
     modal: null,
     boardColumns: [],
     validFields: [],
+    fieldLabels: {},
 
     init() {
         this.modal = document.getElementById('mondaySettingsModal');
@@ -385,6 +427,7 @@ const MondaySettings = {
         document.getElementById('mondayLoadColumnsBtn')?.addEventListener('click', () => this.loadColumns());
         document.getElementById('mondaySaveMappingsBtn')?.addEventListener('click', () => this.saveMappings());
         document.getElementById('mondayRunSyncBtn')?.addEventListener('click', () => this.runSync());
+        document.getElementById('mondaySaveDisplayBtn')?.addEventListener('click', () => this.saveDisplaySettings());
 
         // Pipeline filter handlers
         document.getElementById('pipelineLO')?.addEventListener('change', () => this.filterPipeline());
@@ -397,6 +440,7 @@ const MondaySettings = {
         document.body.style.overflow = 'hidden';
         this.loadStatus();
         this.loadSyncHistory();
+        this.loadDisplayConfig();
     },
 
     hide() {
@@ -472,6 +516,7 @@ const MondaySettings = {
             const data = await ServerAPI.getMondayColumns();
             this.boardColumns = data.columns || [];
             this.validFields = data.validPipelineFields || [];
+            this.fieldLabels = data.fieldLabels || {};
 
             // Also load existing mappings
             let existingMappings = {};
@@ -548,6 +593,8 @@ const MondaySettings = {
         try {
             await ServerAPI.saveMondayMappings(mappings);
             alert('Mappings saved! (' + mappings.length + ' columns mapped)');
+            // Load the display config UI now that we have mappings
+            this.loadDisplayConfig();
         } catch (err) {
             alert('Failed to save mappings: ' + err.message);
         }
@@ -562,7 +609,8 @@ const MondaySettings = {
 
         try {
             const result = await ServerAPI.syncMonday();
-            info.innerHTML = `<span style="color: var(--success-color, green);">Sync complete! ${result.itemsFetched} items fetched (${result.created} new, ${result.updated} updated)</span>`;
+            const delMsg = result.deleted ? `, ${result.deleted} removed` : '';
+            info.innerHTML = `<span style="color: var(--success-color, green);">Sync complete! ${result.itemsFetched} items fetched (${result.created} new, ${result.updated} updated${delMsg})</span>`;
             // Refresh the pipeline table
             await API.loadPipeline();
             this.loadSyncHistory();
@@ -623,6 +671,132 @@ const MondaySettings = {
             `;
         } catch (e) {
             container.textContent = 'Could not load sync history.';
+        }
+    },
+
+    // ── Table Display Config ─────────────────────────────
+    async loadDisplayConfig() {
+        const container = document.getElementById('mondayDisplayConfig');
+        const saveBtn = document.getElementById('mondaySaveDisplayBtn');
+        if (!container) return;
+
+        try {
+            const config = await ServerAPI.getMondayViewConfig();
+            const columns = config.columns || [];
+
+            if (columns.length <= 1) {
+                container.innerHTML = '<p style="font-size: 0.8rem; color: var(--text-muted);">Save column mappings first, then configure display here.</p>';
+                saveBtn.style.display = 'none';
+                return;
+            }
+
+            container.innerHTML = `
+                <div style="max-height: 400px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 6px;">
+                    <table class="data-table" style="margin: 0; font-size: 0.8rem;" id="displayConfigTable">
+                        <thead><tr>
+                            <th style="width: 40px;">Show</th>
+                            <th>Field</th>
+                            <th>Label</th>
+                            <th style="width: 80px;">Order</th>
+                        </tr></thead>
+                        <tbody>
+                            ${columns.map((col, idx) => {
+                                const isLocked = col.locked;
+                                return `<tr data-field="${col.field}">
+                                    <td style="text-align:center;">
+                                        <input type="checkbox" class="dc-visible" ${col.visible !== false ? 'checked' : ''} ${isLocked ? 'disabled' : ''} />
+                                    </td>
+                                    <td><code style="font-size:0.75rem;">${Utils.escapeHtml(col.field)}</code></td>
+                                    <td>
+                                        <input type="text" class="dc-label" value="${Utils.escapeHtml(col.label || '')}" 
+                                            ${isLocked ? 'disabled' : ''}
+                                            style="padding:0.2rem 0.4rem; font-size:0.8rem; border:1px solid var(--border-color); border-radius:4px; width:100%;" />
+                                    </td>
+                                    <td style="text-align:center;">
+                                        <button type="button" class="btn btn-secondary btn-sm dc-move-up" style="padding:0.1rem 0.3rem; font-size:0.7rem;" ${idx === 0 ? 'disabled' : ''}>&#9650;</button>
+                                        <button type="button" class="btn btn-secondary btn-sm dc-move-down" style="padding:0.1rem 0.3rem; font-size:0.7rem;" ${idx === columns.length - 1 ? 'disabled' : ''}>&#9660;</button>
+                                    </td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            saveBtn.style.display = '';
+
+            // Wire up move buttons
+            container.querySelectorAll('.dc-move-up').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const row = e.target.closest('tr');
+                    const prev = row.previousElementSibling;
+                    if (prev) row.parentNode.insertBefore(row, prev);
+                    this.updateMoveButtons();
+                });
+            });
+            container.querySelectorAll('.dc-move-down').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const row = e.target.closest('tr');
+                    const next = row.nextElementSibling;
+                    if (next) row.parentNode.insertBefore(next, row);
+                    this.updateMoveButtons();
+                });
+            });
+        } catch (err) {
+            container.innerHTML = `<p style="color: var(--danger-color, red); font-size: 0.8rem;">Failed to load display config: ${err.message}</p>`;
+        }
+    },
+
+    updateMoveButtons() {
+        const rows = document.querySelectorAll('#displayConfigTable tbody tr');
+        rows.forEach((row, idx) => {
+            row.querySelector('.dc-move-up').disabled = idx === 0;
+            row.querySelector('.dc-move-down').disabled = idx === rows.length - 1;
+        });
+    },
+
+    async saveDisplaySettings() {
+        // Read current mappings to get monday_column_id values
+        let existingMappings = [];
+        try {
+            existingMappings = await ServerAPI.getMondayMappings();
+        } catch (e) { /* ignore */ }
+
+        // Build mapping lookup: pipeline_field → monday mapping info
+        const mapByField = {};
+        for (const m of existingMappings) {
+            mapByField[m.pipeline_field] = m;
+        }
+
+        // Read display config rows (in current order)
+        const rows = document.querySelectorAll('#displayConfigTable tbody tr');
+        const mappings = [];
+        let order = 0;
+
+        rows.forEach(row => {
+            const field = row.dataset.field;
+            if (field === 'client_name') return; // skip locked
+            const existing = mapByField[field];
+            if (!existing) return; // skip fields without Monday mapping
+
+            mappings.push({
+                mondayColumnId: existing.monday_column_id,
+                mondayColumnTitle: existing.monday_column_title,
+                pipelineField: field,
+                displayLabel: row.querySelector('.dc-label').value.trim() || null,
+                displayOrder: order++,
+                visible: row.querySelector('.dc-visible').checked,
+            });
+        });
+
+        try {
+            await ServerAPI.saveMondayMappings(mappings);
+            alert('Display settings saved! Refreshing table...');
+            // Reload pipeline config and data
+            await API.loadPipelineConfig();
+            await API.loadPipeline();
+        } catch (err) {
+            alert('Failed to save display settings: ' + err.message);
         }
     },
 
