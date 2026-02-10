@@ -16,19 +16,58 @@ const ServerAPI = {
         );
     },
 
-    setAuthToken(token) {
+    setAuthToken(token, maxAge) {
         localStorage.setItem("auth_token", token);
-        // Also set shared domain cookie for cross-subdomain auth
-        document.cookie = "auth_token=" + encodeURIComponent(token) + "; path=/; domain=.msfgco.com; max-age=" + (60 * 60 * 24) + "; SameSite=Lax; Secure";
+        // Set shared domain cookie — max-age defaults to 1 hour (matches Cognito access token TTL)
+        var age = maxAge || 3600;
+        document.cookie = "auth_token=" + encodeURIComponent(token) + "; path=/; domain=.msfgco.com; max-age=" + age + "; SameSite=Lax; Secure";
     },
 
     clearAuth() {
         localStorage.removeItem("auth_token");
+        localStorage.removeItem("refresh_token");
         sessionStorage.removeItem("auth_token");
         // Clear domain cookie
         document.cookie = "auth_token=; path=/; domain=.msfgco.com; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure";
         // Clear path-only cookie too (legacy)
         document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    },
+
+    /**
+     * Attempt to silently refresh the access token using the stored Cognito refresh_token.
+     * Returns the new access_token on success, or null on failure.
+     */
+    async refreshAccessToken() {
+        var refreshToken = localStorage.getItem("refresh_token");
+        if (!refreshToken) return null;
+
+        try {
+            var response = await fetch("https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com/oauth2/token", {
+                method: "POST",
+                headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                    grant_type: "refresh_token",
+                    client_id: "2t9edrhu5crf8vq3ivigv6jopf",
+                    refresh_token: refreshToken,
+                }),
+            });
+
+            if (!response.ok) {
+                console.warn("Token refresh failed:", response.status);
+                return null;
+            }
+
+            var tokens = await response.json();
+            if (tokens.access_token) {
+                this.setAuthToken(tokens.access_token, tokens.expires_in || 3600);
+                console.log("Token refreshed silently");
+                return tokens.access_token;
+            }
+            return null;
+        } catch (err) {
+            console.warn("Token refresh error:", err);
+            return null;
+        }
     },
 
     // ========================================
@@ -59,6 +98,23 @@ const ServerAPI = {
             clearTimeout(timeoutId);
 
             if (response.status === 401) {
+                // Try silent token refresh before giving up
+                var newToken = await this.refreshAccessToken();
+                if (newToken) {
+                    // Retry the original request with the new token
+                    var retryHeaders = {
+                        ...(options.headers || {}),
+                        Authorization: "Bearer " + newToken,
+                    };
+                    var retryResponse = await fetch(url, {
+                        ...options,
+                        headers: retryHeaders,
+                    });
+                    if (retryResponse.ok) {
+                        return retryResponse.json();
+                    }
+                }
+                // Refresh failed or retry failed — clear everything and redirect
                 console.warn("401 Unauthorized — clearing auth and redirecting to login");
                 this.clearAuth();
                 window.location.href = "/login.html";

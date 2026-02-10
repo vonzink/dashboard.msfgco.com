@@ -62,10 +62,13 @@ app.use(cors({
   credentials: true
 }));
 
-// Rate limiting - 100 requests per 15 minutes per IP
+// Rate limiting - 300 requests per 15 minutes per IP
+// (raised from 100 — a single dashboard page load can trigger 5-10 API calls)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' }
 });
 app.use('/api/', limiter);

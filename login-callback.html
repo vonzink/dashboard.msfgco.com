@@ -71,12 +71,26 @@
       localStorage.setItem("auth_token", tokens.access_token);
       localStorage.removeItem("pkce_verifier");
 
-      // Set cookie on .msfgco.com so all subdomains (keywords.msfgco.com, etc.) share the session
-      document.cookie = "auth_token=" + encodeURIComponent(tokens.access_token) + "; path=/; domain=.msfgco.com; max-age=" + (60 * 60 * 24) + "; SameSite=Lax; Secure";
+      // Store refresh token for silent renewal (access tokens expire after ~1 hour)
+      if (tokens.refresh_token) {
+        localStorage.setItem("refresh_token", tokens.refresh_token);
+      }
+
+      // Cookie max-age matches the actual token TTL (defaults to 1 hour)
+      var maxAge = tokens.expires_in || 3600;
+
+      // Set cookie on .msfgco.com so all subdomains share the session
+      document.cookie = "auth_token=" + encodeURIComponent(tokens.access_token) + "; path=/; domain=.msfgco.com; max-age=" + maxAge + "; SameSite=Lax; Secure";
+
+      // Clear any loop-detection state from auth-gate
+      sessionStorage.removeItem("last_auth_redirect");
 
       statusEl.textContent = "Success. Redirecting to dashboard…";
-      detailsEl.textContent = "Token stored in localStorage and shared cookie.";
-      window.location.href = "/";
+      detailsEl.textContent = "Token stored. Refresh token: " + (tokens.refresh_token ? "yes" : "no");
+
+      var returnTo = sessionStorage.getItem("return_to");
+      sessionStorage.removeItem("return_to");
+      window.location.href = returnTo || "/";
     } catch (e) {
       statusEl.textContent = "Unexpected error.";
       detailsEl.textContent = String(e);
