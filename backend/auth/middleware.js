@@ -59,8 +59,18 @@ async function verifyCognitoJwt(token) {
 
   const { payload } = await jwtVerify(token, JWKS, {
     issuer: ISSUER,
-    ...(CLIENT_ID ? { audience: CLIENT_ID } : {}),
+    // Note: Cognito access tokens use "client_id" not "aud",
+    // so we skip the audience check here and verify manually.
   });
+
+  // Verify client_id for access tokens OR aud for ID tokens
+  if (CLIENT_ID) {
+    const aud = payload.aud;
+    const clientId = payload.client_id;
+    if (aud && aud !== CLIENT_ID && clientId !== CLIENT_ID) {
+      throw new Error("Token client mismatch");
+    }
+  }
 
   return payload;
 }

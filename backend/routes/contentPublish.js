@@ -1,12 +1,18 @@
 /**
- * /api/content/publish — Dispatch content to social media via Zapier or n8n
+ * /api/content/publish — Dispatch content to social media
+ *
+ * Supports three publishing methods:
+ *   - 'direct' — Native platform API (Facebook Graph, LinkedIn, X v2, etc.)
+ *   - 'n8n'    — n8n webhook automation
+ *   - 'zapier' — Zapier webhook automation
  *
  * POST /:id — publish a single content item
+ * POST /batch — publish multiple items
  *
  * The route:
  *   1. Looks up the content item
- *   2. Resolves the user's automation webhook (Zapier or n8n)
- *   3. Sends the post payload (text, hashtags, platform, image URL)
+ *   2. Resolves the publishing method (direct API or webhook)
+ *   3. Sends the post via chosen method
  *   4. Updates the content item status to "posted" or "failed"
  *   5. Logs everything to the audit trail
  */
@@ -15,6 +21,7 @@ const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { getCredential } = require('./integrations');
+const { publishDirect, supportsDirectPublish } = require('../utils/socialPublisher');
 
 router.use(requireDbUser);
 
@@ -101,7 +108,7 @@ router.post('/:id', async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const itemId = req.params.id;
-    const { method } = req.body; // 'zapier' | 'n8n' — optional override
+    const { method } = req.body; // 'direct' | 'zapier' | 'n8n' — optional override
 
     // ── Load content item ──
     const [items] = await db.query('SELECT * FROM content_items WHERE id = ?', [itemId]);
@@ -123,92 +130,136 @@ router.post('/:id', async (req, res, next) => {
       });
     }
 
-    // ── Resolve automation webhook ──
-    // Priority: explicit method param → user's n8n → user's zapier → error
-    let webhookUrl = null;
-    let automationMethod = method || null;
-
-    if (method === 'n8n' || !method) {
-      webhookUrl = await getCredential(userId, 'n8n');
-      if (webhookUrl) automationMethod = 'n8n';
-    }
-
-    if (!webhookUrl && (method === 'zapier' || !method)) {
-      webhookUrl = await getCredential(userId, 'zapier');
-      if (webhookUrl) automationMethod = 'zapier';
-    }
-
-    if (!webhookUrl) {
-      return res.status(400).json({
-        error: 'No automation webhook configured. Go to Settings → Integrations and add your Zapier or n8n webhook URL.',
-      });
-    }
-
-    // ── Build payload ──
+    // ── Parse content ──
     const hashtags = item.hashtags
       ? (typeof item.hashtags === 'string' ? JSON.parse(item.hashtags) : item.hashtags)
       : [];
 
-    const payload = {
-      // Core content
-      platform: item.platform,
-      text: item.text_content,
-      hashtags,
-      fullText: hashtags.length > 0
-        ? `${item.text_content}\n\n${hashtags.join(' ')}`
-        : item.text_content,
+    const imageUrl = item.image_s3_key
+      ? `https://${process.env.S3_BUCKET_NAME || 'msfg-dashboard-files'}.s3.amazonaws.com/${item.image_s3_key}`
+      : null;
 
-      // Metadata
-      content_id: item.id,
-      keyword: item.keyword,
-      suggestion: item.suggestion,
-
-      // Media (S3 URLs if available)
-      image_url: item.image_s3_key
-        ? `https://${process.env.S3_BUCKET_NAME || 'msfg-dashboard-files'}.s3.amazonaws.com/${item.image_s3_key}`
-        : null,
-      video_url: item.video_s3_key
-        ? `https://${process.env.S3_BUCKET_NAME || 'msfg-dashboard-files'}.s3.amazonaws.com/${item.video_s3_key}`
-        : null,
-
-      // Scheduling
-      scheduled_at: item.scheduled_at || null,
-
-      // Source
-      source: 'msfg-content-engine',
-      automation_method: automationMethod,
-      timestamp: new Date().toISOString(),
-    };
-
-    // ── Send to webhook ──
+    // ── Resolve publishing method ──
+    // Priority: explicit method → direct (if platform credential exists) → n8n → zapier → error
+    let automationMethod = null;
     let postSuccess = false;
     let errorMessage = null;
+    let postExternalId = null;
 
-    try {
-      const response = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(15000),
-      });
+    // Try direct publishing first (if requested or as default)
+    if (method === 'direct' || !method) {
+      // Map platform name: 'x' uses 'twitter' credential
+      const credentialService = item.platform === 'x' ? 'twitter' : item.platform;
+      const platformCredential = await getCredential(userId, credentialService);
 
-      if (response.ok) {
-        postSuccess = true;
-      } else {
-        const errText = await response.text().catch(() => 'Unknown error');
-        errorMessage = `Webhook returned ${response.status}: ${errText}`;
+      if (platformCredential && supportsDirectPublish(item.platform)) {
+        automationMethod = 'direct';
+        try {
+          const result = await publishDirect(item.platform, platformCredential, {
+            text: item.text_content,
+            hashtags,
+            imageUrl,
+          });
+          postSuccess = true;
+          postExternalId = result.postId || null;
+        } catch (err) {
+          errorMessage = err.message || 'Direct publish failed';
+          // If direct was explicitly requested, don't fall through to webhooks
+          if (method === 'direct') {
+            // Will be handled below in the update section
+          }
+        }
       }
-    } catch (error) {
-      errorMessage = error.message || 'Webhook request failed';
+    }
+
+    // Fall through to webhook methods if direct didn't work and wasn't explicitly requested
+    if (!postSuccess && method !== 'direct') {
+      let webhookUrl = null;
+
+      if (method === 'n8n' || !method) {
+        webhookUrl = await getCredential(userId, 'n8n');
+        if (webhookUrl) automationMethod = 'n8n';
+      }
+
+      if (!webhookUrl && (method === 'zapier' || !method)) {
+        webhookUrl = await getCredential(userId, 'zapier');
+        if (webhookUrl) automationMethod = 'zapier';
+      }
+
+      if (webhookUrl) {
+        const payload = {
+          platform: item.platform,
+          text: item.text_content,
+          hashtags,
+          fullText: hashtags.length > 0
+            ? `${item.text_content}\n\n${hashtags.join(' ')}`
+            : item.text_content,
+          content_id: item.id,
+          keyword: item.keyword,
+          suggestion: item.suggestion,
+          image_url: imageUrl,
+          video_url: item.video_s3_key
+            ? `https://${process.env.S3_BUCKET_NAME || 'msfg-dashboard-files'}.s3.amazonaws.com/${item.video_s3_key}`
+            : null,
+          scheduled_at: item.scheduled_at || null,
+          source: 'msfg-content-engine',
+          automation_method: automationMethod,
+          timestamp: new Date().toISOString(),
+        };
+
+        try {
+          const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (response.ok) {
+            postSuccess = true;
+            errorMessage = null;
+          } else {
+            const errText = await response.text().catch(() => 'Unknown error');
+            errorMessage = `Webhook returned ${response.status}: ${errText}`;
+          }
+        } catch (err) {
+          errorMessage = err.message || 'Webhook request failed';
+        }
+
+        // Log webhook call
+        try {
+          await db.query(
+            `INSERT INTO webhook_logs (endpoint, method, payload, response_code, ip_address, user_agent)
+             VALUES (?, 'POST', ?, ?, ?, ?)`,
+            [
+              webhookUrl.substring(0, 255),
+              JSON.stringify(payload),
+              postSuccess ? 200 : 502,
+              req.ip,
+              'msfg-content-engine',
+            ]
+          );
+        } catch {
+          // Non-fatal
+        }
+      }
+    }
+
+    // If nothing worked at all
+    if (!automationMethod) {
+      return res.status(400).json({
+        error: 'No publishing method available. Add a platform API key or automation webhook in Settings → Integrations.',
+      });
     }
 
     // ── Update content item ──
     if (postSuccess) {
       await db.query(
         `UPDATE content_items
-         SET status = 'posted', posted_at = NOW(), automation_method = ?, error_message = NULL, updated_at = NOW()
+         SET status = 'posted', posted_at = NOW(), automation_method = ?,
+             post_external_id = ?, error_message = NULL, updated_at = NOW()
          WHERE id = ?`,
-        [automationMethod, itemId]
+        [automationMethod, postExternalId, itemId]
       );
     } else {
       await db.query(
@@ -229,33 +280,18 @@ router.post('/:id', async (req, res, next) => {
         JSON.stringify({
           automation_method: automationMethod,
           platform: item.platform,
+          post_external_id: postExternalId || undefined,
           error: errorMessage || undefined,
         }),
       ]
     );
-
-    // ── Log to webhook_logs (reuse existing table) ──
-    try {
-      await db.query(
-        `INSERT INTO webhook_logs (endpoint, method, payload, response_code, ip_address, user_agent)
-         VALUES (?, 'POST', ?, ?, ?, ?)`,
-        [
-          webhookUrl.substring(0, 255),
-          JSON.stringify(payload),
-          postSuccess ? 200 : 502,
-          req.ip,
-          'msfg-content-engine',
-        ]
-      );
-    } catch {
-      // Non-fatal
-    }
 
     if (postSuccess) {
       res.json({
         success: true,
         platform: item.platform,
         automation_method: automationMethod,
+        post_external_id: postExternalId,
         content_id: itemId,
       });
     } else {

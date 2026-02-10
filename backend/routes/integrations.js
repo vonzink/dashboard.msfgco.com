@@ -16,7 +16,7 @@ const { encrypt, decrypt, mask } = require('../utils/encryption');
 router.use(requireDbUser);
 
 const VALID_SERVICES = [
-  'openai', 'canva', 'elevenlabs', 'midjourney',
+  'openai', 'canva', 'elevenlabs', 'midjourney', 'sora',
   'n8n', 'zapier',
   'facebook', 'instagram', 'twitter', 'linkedin', 'tiktok',
 ];
@@ -127,12 +127,22 @@ router.post('/:service/test', async (req, res, next) => {
     // Service-specific tests
     let testResult = { success: false, message: 'Test not implemented for this service' };
 
-    if (service === 'openai') {
+    if (service === 'openai' || service === 'sora') {
+      // Sora uses OpenAI API keys
       testResult = await testOpenAI(plaintext);
     } else if (service === 'n8n' || service === 'zapier') {
       testResult = await testWebhook(plaintext);
+    } else if (service === 'canva') {
+      testResult = await testCanva(plaintext);
+    } else if (service === 'elevenlabs') {
+      testResult = await testElevenLabs(plaintext);
+    } else if (service === 'facebook' || service === 'instagram') {
+      testResult = await testFacebookToken(plaintext);
+    } else if (service === 'linkedin') {
+      testResult = await testLinkedIn(plaintext);
+    } else if (service === 'twitter') {
+      testResult = await testTwitter(plaintext);
     } else {
-      // For social media APIs, just validate format for now
       testResult = { success: plaintext.length > 10, message: plaintext.length > 10 ? 'Credential looks valid (format check only)' : 'Credential seems too short' };
     }
 
@@ -198,6 +208,85 @@ async function testWebhook(url) {
       return { success: true, message: `Webhook responded with ${response.status}` };
     }
     return { success: false, message: `Webhook returned HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testCanva(apiKey) {
+  try {
+    const response = await fetch('https://api.canva.com/rest/v1/users/me', {
+      headers: { 'Authorization': `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      return { success: true, message: 'Canva API key is valid' };
+    }
+    return { success: false, message: `Canva returned HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testElevenLabs(apiKey) {
+  try {
+    const response = await fetch('https://api.elevenlabs.io/v1/user', {
+      headers: { 'xi-api-key': apiKey },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      return { success: true, message: 'ElevenLabs API key is valid' };
+    }
+    return { success: false, message: `ElevenLabs returned HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testFacebookToken(accessToken) {
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/me?access_token=${encodeURIComponent(accessToken)}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return { success: true, message: `Connected as ${data.name || 'Facebook user'}` };
+    }
+    const err = await response.json().catch(() => ({}));
+    return { success: false, message: err.error?.message || `Facebook returned HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testLinkedIn(accessToken) {
+  try {
+    const response = await fetch('https://api.linkedin.com/v2/userinfo', {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return { success: true, message: `Connected as ${data.name || 'LinkedIn user'}` };
+    }
+    return { success: false, message: `LinkedIn returned HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testTwitter(bearerToken) {
+  try {
+    const response = await fetch('https://api.twitter.com/2/users/me', {
+      headers: { 'Authorization': `Bearer ${bearerToken}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      return { success: true, message: `Connected as @${data.data?.username || 'Twitter user'}` };
+    }
+    const err = await response.json().catch(() => ({}));
+    return { success: false, message: err.detail || `Twitter returned HTTP ${response.status}` };
   } catch (error) {
     return { success: false, message: error.message || 'Connection failed' };
   }

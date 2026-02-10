@@ -71,8 +71,11 @@
       localStorage.setItem("auth_token", tokens.access_token);
       localStorage.removeItem("pkce_verifier");
 
+      // Set cookie on .msfgco.com so all subdomains (keywords.msfgco.com, etc.) share the session
+      document.cookie = "auth_token=" + encodeURIComponent(tokens.access_token) + "; path=/; domain=.msfgco.com; max-age=" + (60 * 60 * 24) + "; SameSite=Lax; Secure";
+
       statusEl.textContent = "Success. Redirecting to dashboard…";
-      detailsEl.textContent = "Token stored in localStorage as auth_token.";
+      detailsEl.textContent = "Token stored in localStorage and shared cookie.";
       window.location.href = "/";
     } catch (e) {
       statusEl.textContent = "Unexpected error.";

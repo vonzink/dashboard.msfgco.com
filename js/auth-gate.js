@@ -16,7 +16,9 @@
   const normalizedPath = path.endsWith("/index.html") ? path.replace(/\/index\.html$/, "/") : path;
 
   const isPublic = PUBLIC_PAGES.has(normalizedPath);
-  const token = localStorage.getItem(TOKEN_KEY);
+  // Check localStorage first, then shared domain cookie
+  const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+  const token = localStorage.getItem(TOKEN_KEY) || (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null);
 
   // If already authed and sitting on login page, bounce home (or return_to if set)
   if (token && isPublic) {

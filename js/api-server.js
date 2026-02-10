@@ -7,15 +7,28 @@ const ServerAPI = {
     // AUTHENTICATION
     // ========================================
     getAuthToken() {
-        // Cognito token stored by login callback
+        // Cognito token: localStorage → shared domain cookie → sessionStorage
+        const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
         return (
             localStorage.getItem("auth_token") ||
+            (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null) ||
             sessionStorage.getItem("auth_token")
         );
     },
 
     setAuthToken(token) {
         localStorage.setItem("auth_token", token);
+        // Also set shared domain cookie for cross-subdomain auth
+        document.cookie = "auth_token=" + encodeURIComponent(token) + "; path=/; domain=.msfgco.com; max-age=" + (60 * 60 * 24) + "; SameSite=Lax; Secure";
+    },
+
+    clearAuth() {
+        localStorage.removeItem("auth_token");
+        sessionStorage.removeItem("auth_token");
+        // Clear domain cookie
+        document.cookie = "auth_token=; path=/; domain=.msfgco.com; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure";
+        // Clear path-only cookie too (legacy)
+        document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     },
 
     // ========================================
@@ -46,7 +59,8 @@ const ServerAPI = {
             clearTimeout(timeoutId);
 
             if (response.status === 401) {
-                console.warn("401 Unauthorized — redirecting to login");
+                console.warn("401 Unauthorized — clearing auth and redirecting to login");
+                this.clearAuth();
                 window.location.href = "/login.html";
                 throw new Error("Unauthorized");
             }
