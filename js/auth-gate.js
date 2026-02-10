@@ -1,95 +1,52 @@
-// js/auth-gate.js — Blocks page load until auth is resolved (including token refresh)
-(async () => {
-  const TOKEN_KEY = "auth_token";
-  const RETURN_TO_KEY = "return_to";
-  const COGNITO_DOMAIN = "https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com";
-  const CLIENT_ID = "2t9edrhu5crf8vq3ivigv6jopf";
+// js/auth-gate.js — Synchronous auth check (must run before any other script)
+//
+// This script is INTENTIONALLY synchronous. An async approach (e.g. trying to
+// refresh the token here) doesn't actually block other <script> tags from loading
+// and firing API calls. Instead, we keep it simple:
+//   - Valid token → let the page load
+//   - Expired token → clear it and redirect to login
+//   - No token → redirect to login
+//
+// The Cognito hosted UI has its own session cookie (~30 days), so redirecting
+// to login is transparent — the user is auto-logged in and redirected back
+// with fresh tokens in under a second.
+//
+// Silent token refresh (using refresh_token) is handled by api-server.js
+// on individual 401 responses, NOT here.
 
-  const { pathname, search, hash } = window.location;
-  const path = pathname || "/";
+(() => {
+  var TOKEN_KEY = "auth_token";
+  var RETURN_TO_KEY = "return_to";
 
-  const PUBLIC_PAGES = new Set(["/login.html", "/login-callback.html"]);
-  const normalizedPath = path.endsWith("/index.html") ? path.replace(/\/index\.html$/, "/") : path;
-  const isPublic = PUBLIC_PAGES.has(normalizedPath);
+  var pathname = window.location.pathname || "/";
+  var search = window.location.search || "";
+  var hash = window.location.hash || "";
 
-  // ── Hide page body until auth is resolved (prevents flash of protected content) ──
-  if (!isPublic) {
-    document.documentElement.style.visibility = "hidden";
-  }
+  var PUBLIC_PAGES = ["/login.html", "/login-callback.html"];
+  var normalizedPath = pathname.endsWith("/index.html") ? pathname.replace(/\/index\.html$/, "/") : pathname;
+  var isPublic = PUBLIC_PAGES.indexOf(normalizedPath) !== -1;
 
-  // ── Helper: decode JWT payload ──
-  function jwtPayload(token) {
+  // ── Read token from localStorage or cookie ──
+  var cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+  var token = localStorage.getItem(TOKEN_KEY) || (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null);
+
+  // ── Check token expiry (decode JWT without verification) ──
+  if (token) {
     try {
-      const parts = token.split(".");
-      if (parts.length !== 3) return null;
-      return JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-    } catch (e) {
-      return null;
-    }
-  }
-
-  // ── Helper: is token expired? ──
-  function isExpired(token) {
-    const payload = jwtPayload(token);
-    if (!payload || !payload.exp) return false; // Can't determine — let server decide
-    return (payload.exp * 1000) < Date.now();
-  }
-
-  // ── Helper: clear all auth state ──
-  function clearAuth() {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem("refresh_token");
-    sessionStorage.removeItem("auth_token");
-    document.cookie = "auth_token=; path=/; domain=.msfgco.com; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure";
-    document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-  }
-
-  // ── Helper: set auth token + cookie ──
-  function setAuth(token, maxAge) {
-    localStorage.setItem(TOKEN_KEY, token);
-    var age = maxAge || 3600;
-    document.cookie = "auth_token=" + encodeURIComponent(token) + "; path=/; domain=.msfgco.com; max-age=" + age + "; SameSite=Lax; Secure";
-  }
-
-  // ── Helper: attempt silent refresh ──
-  async function refreshToken() {
-    var rt = localStorage.getItem("refresh_token");
-    if (!rt) return null;
-    try {
-      var response = await fetch(COGNITO_DOMAIN + "/oauth2/token", {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: CLIENT_ID,
-          refresh_token: rt,
-        }),
-      });
-      if (!response.ok) return null;
-      var tokens = await response.json();
-      if (tokens.access_token) {
-        setAuth(tokens.access_token, tokens.expires_in || 3600);
-        return tokens.access_token;
+      var parts = token.split(".");
+      if (parts.length === 3) {
+        var payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+        if (payload.exp && (payload.exp * 1000) < Date.now()) {
+          // Token is expired — clear everything
+          localStorage.removeItem(TOKEN_KEY);
+          localStorage.removeItem("refresh_token");
+          document.cookie = "auth_token=; path=/; domain=.msfgco.com; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure";
+          document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          token = null;
+        }
       }
-      return null;
     } catch (e) {
-      return null;
-    }
-  }
-
-  // ── Resolve current token ──
-  const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
-  let token = localStorage.getItem(TOKEN_KEY) || (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null);
-
-  // ── If token is expired, try to refresh it RIGHT NOW (before page renders) ──
-  if (token && isExpired(token)) {
-    var refreshed = await refreshToken();
-    if (refreshed) {
-      token = refreshed;
-    } else {
-      // Refresh failed — clear everything
-      clearAuth();
-      token = null;
+      // Can't decode — let the server decide
     }
   }
 
@@ -97,20 +54,18 @@
 
   // Already authed + on login page → bounce to dashboard
   if (token && isPublic) {
-    const returnTo = sessionStorage.getItem(RETURN_TO_KEY);
+    var returnTo = sessionStorage.getItem(RETURN_TO_KEY);
     sessionStorage.removeItem(RETURN_TO_KEY);
     window.location.replace(returnTo || "/");
     return;
   }
 
-  // Not authed + on protected page → go to login
+  // Not authed + on protected page → save target and go to login
   if (!token && !isPublic) {
-    const fullTarget = normalizedPath + (search || "") + (hash || "");
-    sessionStorage.setItem(RETURN_TO_KEY, fullTarget);
+    sessionStorage.setItem(RETURN_TO_KEY, normalizedPath + search + hash);
     window.location.replace("/login.html");
     return;
   }
 
-  // ── All good — show the page ──
-  document.documentElement.style.visibility = "";
+  // All good — page will render normally
 })();
