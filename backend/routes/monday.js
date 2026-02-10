@@ -6,13 +6,17 @@
  *     Monday.com remains the single source of truth.
  *     Data flows: Monday.com → dashboard DB (one-way).
  *
+ * Supports MULTIPLE boards — items from all boards merge into the pipeline table.
+ *
  * Endpoints:
- *   GET  /columns           — fetch board columns from Monday.com (for mapping UI)
- *   GET  /mappings          — get saved column mappings
- *   POST /mappings          — save column mappings (admin only)
- *   POST /sync              — trigger a sync from Monday.com → pipeline table (admin only)
- *   GET  /sync/status       — get last sync status
- *   GET  /sync/log          — get sync history
+ *   GET  /boards              — list configured boards
+ *   GET  /columns?board=ID    — fetch board columns from Monday.com (for mapping UI)
+ *   GET  /mappings?board=ID   — get saved column mappings for a board
+ *   POST /mappings            — save column mappings (admin only)
+ *   GET  /view-config         — column display config for the pipeline table
+ *   POST /sync                — trigger a sync from ALL boards → pipeline table (admin only)
+ *   GET  /sync/status         — get last sync status
+ *   GET  /sync/log            — get sync history
  */
 
 const express = require('express');
@@ -24,16 +28,16 @@ const { getCredential } = require('./integrations');
 router.use(requireDbUser);
 
 // ── Constants ───────────────────────────────────────────────────
-const BOARD_ID = '3946783498';
+const BOARD_IDS = ['3946783498', '8225994434'];
 const MONDAY_API_URL = 'https://api.monday.com/v2';
 
 // Fields we can map from Monday.com into the pipeline table
 const VALID_PIPELINE_FIELDS = [
-  'loan_number', 'loan_status', 'lender', 'subject_property',
+  'loan_number', 'lender', 'subject_property',
   'loan_amount', 'rate', 'appraisal_status', 'loan_purpose',
   'loan_type', 'occupancy', 'title_status', 'hoi_status',
   'loan_estimate', 'application_date', 'lock_expiration_date',
-  'closing_date', 'funding_date', 'stage', 'status', 'notes',
+  'closing_date', 'funding_date', 'stage', 'notes',
   // These are matched specially:
   'assigned_lo_name',
 ];
@@ -42,7 +46,6 @@ const VALID_PIPELINE_FIELDS = [
 const FIELD_LABELS = {
   client_name: 'Client Name',
   loan_number: 'Loan #',
-  loan_status: 'Loan Status',
   lender: 'Lender',
   subject_property: 'Subject Property',
   assigned_lo_name: 'Loan Officer',
@@ -60,14 +63,12 @@ const FIELD_LABELS = {
   closing_date: 'Closing Date',
   funding_date: 'Funding Date',
   stage: 'Stage',
-  status: 'Status',
   notes: 'Notes',
 };
 
 // Default column-title → pipeline-field mapping (best-guess based on common names).
 // The admin can override these via POST /mappings.
 const DEFAULT_TITLE_MAP = {
-  'loan status':          'loan_status',
   'lender':               'lender',
   'loan number':          'loan_number',
   'subject property':     'subject_property',
@@ -85,7 +86,7 @@ const DEFAULT_TITLE_MAP = {
   'lock expiration date': 'lock_expiration_date',
   'lock expiration':      'lock_expiration_date',
   'closing date':         'closing_date',
-  'closing data':         'closing_date',        // handle possible typo in board
+  'closing data':         'closing_date',
   'funding date':         'funding_date',
 };
 
@@ -97,13 +98,9 @@ const DEFAULT_TITLE_MAP = {
  *  2. Environment variable fallback
  */
 async function getMondayToken(userId) {
-  // Try DB-stored credential first (encrypted)
   const token = await getCredential(userId, 'monday');
   if (token) return token;
-
-  // Fallback to env var (for initial setup / CI)
   if (process.env.MONDAY_API_TOKEN) return process.env.MONDAY_API_TOKEN;
-
   return null;
 }
 
@@ -112,7 +109,6 @@ async function getMondayToken(userId) {
  * Rejects any string containing "mutation" as a safety net.
  */
 async function mondayQuery(token, query, variables = {}) {
-  // ⚠️ SAFETY: reject mutations
   if (/mutation/i.test(query)) {
     throw new Error('SAFETY: Mutations are not allowed — this integration is read-only');
   }
@@ -142,23 +138,101 @@ async function mondayQuery(token, query, variables = {}) {
   return data.data;
 }
 
+/**
+ * Fetch all items from a single board (paginated).
+ */
+async function fetchBoardItems(token, boardId) {
+  let allItems = [];
+  let cursor = null;
+
+  // First page
+  const firstPage = await mondayQuery(token, `query {
+    boards(ids: [${boardId}]) {
+      items_page(limit: 500) {
+        cursor
+        items {
+          id
+          name
+          group { title }
+          column_values {
+            id
+            text
+            value
+          }
+        }
+      }
+    }
+  }`);
+
+  const page = firstPage.boards?.[0]?.items_page;
+  if (page?.items) {
+    allItems = page.items;
+    cursor = page.cursor;
+  }
+
+  // Subsequent pages
+  while (cursor) {
+    const nextPage = await mondayQuery(token, `query ($cursor: String!) {
+      next_items_page(limit: 500, cursor: $cursor) {
+        cursor
+        items {
+          id
+          name
+          group { title }
+          column_values {
+            id
+            text
+            value
+          }
+        }
+      }
+    }`, { cursor });
+
+    const np = nextPage.next_items_page;
+    if (np?.items?.length > 0) {
+      allItems = allItems.concat(np.items);
+      cursor = np.cursor;
+    } else {
+      cursor = null;
+    }
+  }
+
+  return allItems;
+}
+
+// ── GET /boards — list configured boards ─────────────────────────
+router.get('/boards', (req, res) => {
+  res.json({ boardIds: BOARD_IDS });
+});
+
 // ── GET /view-config — column display config for the pipeline table ──
 router.get('/view-config', async (req, res, next) => {
   try {
+    // Get unique display config across all boards (use first board's settings as canonical)
     const [mappings] = await db.query(
-      `SELECT pipeline_field, display_label, display_order, visible
+      `SELECT DISTINCT pipeline_field, display_label, display_order, visible
        FROM monday_column_mappings 
-       WHERE board_id = ? 
-       ORDER BY display_order ASC, id ASC`,
-      [BOARD_ID]
+       WHERE board_id IN (?)
+       ORDER BY display_order ASC, pipeline_field ASC`,
+      [BOARD_IDS]
     );
+
+    // De-dupe by pipeline_field (keep first occurrence = lowest display_order)
+    const seen = new Set();
+    const unique = [];
+    for (const m of mappings) {
+      if (!seen.has(m.pipeline_field)) {
+        seen.add(m.pipeline_field);
+        unique.push(m);
+      }
+    }
 
     // Build column list: always start with client_name
     const columns = [
       { field: 'client_name', label: 'Client Name', order: -1, visible: true, locked: true }
     ];
 
-    for (const m of mappings) {
+    for (const m of unique) {
       columns.push({
         field: m.pipeline_field,
         label: m.display_label || FIELD_LABELS[m.pipeline_field] || m.pipeline_field,
@@ -180,13 +254,18 @@ router.get('/columns', async (req, res, next) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
+    const boardId = req.query.board || BOARD_IDS[0];
+    if (!BOARD_IDS.includes(boardId)) {
+      return res.status(400).json({ error: `Board ${boardId} is not configured.` });
+    }
+
     const token = await getMondayToken(getUserId(req));
     if (!token) {
       return res.status(400).json({ error: 'Monday.com API token not configured. Add it via Settings → Integrations.' });
     }
 
     const data = await mondayQuery(token, `query {
-      boards(ids: [${BOARD_ID}]) {
+      boards(ids: [${boardId}]) {
         name
         columns {
           id
@@ -215,7 +294,7 @@ router.get('/columns', async (req, res, next) => {
 
     res.json({
       boardName: board.name,
-      boardId: BOARD_ID,
+      boardId,
       columns,
       validPipelineFields: VALID_PIPELINE_FIELDS,
       fieldLabels: FIELD_LABELS,
@@ -232,9 +311,10 @@ router.get('/mappings', async (req, res, next) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
+    const boardId = req.query.board || BOARD_IDS[0];
     const [mappings] = await db.query(
-      'SELECT * FROM monday_column_mappings WHERE board_id = ? ORDER BY pipeline_field',
-      [BOARD_ID]
+      'SELECT * FROM monday_column_mappings WHERE board_id = ? ORDER BY display_order ASC, pipeline_field',
+      [boardId]
     );
 
     res.json(mappings);
@@ -250,7 +330,9 @@ router.post('/mappings', async (req, res, next) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    const { mappings } = req.body;
+    const { mappings, boardId } = req.body;
+    const targetBoard = boardId || BOARD_IDS[0];
+
     if (!Array.isArray(mappings)) {
       return res.status(400).json({ error: 'mappings must be an array of { mondayColumnId, mondayColumnTitle, pipelineField }' });
     }
@@ -270,13 +352,13 @@ router.post('/mappings', async (req, res, next) => {
     try {
       await connection.beginTransaction();
 
-      await connection.query('DELETE FROM monday_column_mappings WHERE board_id = ?', [BOARD_ID]);
+      await connection.query('DELETE FROM monday_column_mappings WHERE board_id = ?', [targetBoard]);
 
       for (const m of mappings) {
         await connection.query(
           `INSERT INTO monday_column_mappings (board_id, monday_column_id, monday_column_title, pipeline_field, display_label, display_order, visible)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [BOARD_ID, m.mondayColumnId, m.mondayColumnTitle || null, m.pipelineField,
+          [targetBoard, m.mondayColumnId, m.mondayColumnTitle || null, m.pipelineField,
            m.displayLabel || null, m.displayOrder ?? 99, m.visible !== false ? 1 : 0]
         );
       }
@@ -289,13 +371,13 @@ router.post('/mappings', async (req, res, next) => {
       connection.release();
     }
 
-    res.json({ success: true, count: mappings.length });
+    res.json({ success: true, count: mappings.length, boardId: targetBoard });
   } catch (error) {
     next(error);
   }
 });
 
-// ── POST /sync — trigger a read-only sync from Monday.com ──────
+// ── POST /sync — trigger a read-only sync from ALL Monday.com boards ──
 router.post('/sync', async (req, res, next) => {
   try {
     if (!isAdmin(req)) {
@@ -308,100 +390,6 @@ router.post('/sync', async (req, res, next) => {
       return res.status(400).json({ error: 'Monday.com API token not configured.' });
     }
 
-    // Load column mappings
-    const [mappings] = await db.query(
-      'SELECT monday_column_id, pipeline_field FROM monday_column_mappings WHERE board_id = ?',
-      [BOARD_ID]
-    );
-
-    if (mappings.length === 0) {
-      // Try auto-mapping from column titles
-      const autoMappings = await autoMapColumns(token);
-      if (autoMappings.length === 0) {
-        return res.status(400).json({
-          error: 'No column mappings configured. Go to Settings → Monday.com to map columns first.',
-        });
-      }
-      mappings.push(...autoMappings);
-    }
-
-    // Build a map: monday_column_id → pipeline_field
-    const columnMap = {};
-    for (const m of mappings) {
-      columnMap[m.monday_column_id] = m.pipeline_field;
-    }
-
-    // Create sync log entry
-    const [logResult] = await db.query(
-      'INSERT INTO monday_sync_log (board_id, triggered_by) VALUES (?, ?)',
-      [BOARD_ID, userId]
-    );
-    const syncLogId = logResult.insertId;
-
-    // Fetch all items from Monday.com (paginated)
-    let allItems = [];
-    let cursor = null;
-
-    try {
-      // First page
-      const firstPage = await mondayQuery(token, `query {
-        boards(ids: [${BOARD_ID}]) {
-          items_page(limit: 500) {
-            cursor
-            items {
-              id
-              name
-              group { title }
-              column_values {
-                id
-                text
-                value
-              }
-            }
-          }
-        }
-      }`);
-
-      const page = firstPage.boards?.[0]?.items_page;
-      if (page?.items) {
-        allItems = page.items;
-        cursor = page.cursor;
-      }
-
-      // Subsequent pages
-      while (cursor) {
-        const nextPage = await mondayQuery(token, `query ($cursor: String!) {
-          next_items_page(limit: 500, cursor: $cursor) {
-            cursor
-            items {
-              id
-              name
-              group { title }
-              column_values {
-                id
-                text
-                value
-              }
-            }
-          }
-        }`, { cursor });
-
-        const np = nextPage.next_items_page;
-        if (np?.items?.length > 0) {
-          allItems = allItems.concat(np.items);
-          cursor = np.cursor;
-        } else {
-          cursor = null;
-        }
-      }
-    } catch (fetchErr) {
-      await db.query(
-        'UPDATE monday_sync_log SET status = ?, error_message = ?, finished_at = NOW() WHERE id = ?',
-        ['error', fetchErr.message, syncLogId]
-      );
-      throw fetchErr;
-    }
-
     // Load all users (for LO name → user ID matching)
     const [users] = await db.query('SELECT id, name, email FROM users');
     const userNameMap = {};
@@ -409,94 +397,139 @@ router.post('/sync', async (req, res, next) => {
       if (u.name) userNameMap[u.name.toLowerCase().trim()] = u.id;
     }
 
-    // Upsert each item into pipeline
-    let created = 0;
-    let updated = 0;
-    let deleted = 0;
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalDeleted = 0;
+    let totalFetched = 0;
+    const allSyncedMondayIds = new Set();
 
-    // Collect all Monday.com item IDs we sync'd
-    const syncedMondayIds = new Set();
+    // Sync each board
+    for (const boardId of BOARD_IDS) {
+      // Load column mappings for this board
+      let [mappings] = await db.query(
+        'SELECT monday_column_id, pipeline_field FROM monday_column_mappings WHERE board_id = ?',
+        [boardId]
+      );
 
-    for (const item of allItems) {
-      const row = mapItemToRow(item, columnMap, userNameMap);
-      if (!row.client_name) continue; // skip items with no name
+      if (mappings.length === 0) {
+        // Try auto-mapping from column titles
+        const autoMappings = await autoMapColumns(token, boardId);
+        if (autoMappings.length === 0) {
+          console.log(`Monday sync: No mappings for board ${boardId}, skipping.`);
+          continue;
+        }
+        mappings = autoMappings;
+      }
 
-      syncedMondayIds.add(String(item.id));
+      // Build a map: monday_column_id → pipeline_field
+      const columnMap = {};
+      for (const m of mappings) {
+        columnMap[m.monday_column_id] = m.pipeline_field;
+      }
+
+      // Create sync log entry
+      const [logResult] = await db.query(
+        'INSERT INTO monday_sync_log (board_id, triggered_by) VALUES (?, ?)',
+        [boardId, userId]
+      );
+      const syncLogId = logResult.insertId;
+
+      let boardItems = [];
+      let created = 0;
+      let updated = 0;
 
       try {
-        // Check if this monday item already exists
-        const [existing] = await db.query(
-          'SELECT id FROM pipeline WHERE monday_item_id = ?',
-          [item.id]
+        boardItems = await fetchBoardItems(token, boardId);
+        totalFetched += boardItems.length;
+
+        for (const item of boardItems) {
+          const row = mapItemToRow(item, columnMap, userNameMap);
+          if (!row.client_name) continue;
+
+          allSyncedMondayIds.add(String(item.id));
+
+          try {
+            const [existing] = await db.query(
+              'SELECT id FROM pipeline WHERE monday_item_id = ?',
+              [item.id]
+            );
+
+            if (existing.length > 0) {
+              const sets = [];
+              const vals = [];
+              for (const [field, value] of Object.entries(row)) {
+                if (field === 'monday_item_id') continue;
+                sets.push(`${field} = ?`);
+                vals.push(value);
+              }
+              sets.push('last_synced_at = NOW()');
+              sets.push('source_system = ?');
+              vals.push('monday');
+              vals.push(existing[0].id);
+
+              await db.query(`UPDATE pipeline SET ${sets.join(', ')} WHERE id = ?`, vals);
+              updated++;
+            } else {
+              row.source_system = 'monday';
+              row.last_synced_at = new Date();
+              const fields = Object.keys(row);
+              const placeholders = fields.map(() => '?').join(', ');
+              const values = fields.map(f => row[f]);
+
+              await db.query(
+                `INSERT INTO pipeline (${fields.join(', ')}) VALUES (${placeholders})`,
+                values
+              );
+              created++;
+            }
+          } catch (rowErr) {
+            console.error(`Monday sync: failed to upsert item ${item.id} (board ${boardId}):`, rowErr.message);
+          }
+        }
+
+        // Update sync log for this board
+        await db.query(
+          `UPDATE monday_sync_log 
+           SET status = 'success', items_synced = ?, items_created = ?, items_updated = ?, finished_at = NOW()
+           WHERE id = ?`,
+          [boardItems.length, created, updated, syncLogId]
         );
 
-        if (existing.length > 0) {
-          // Update existing row
-          const sets = [];
-          const vals = [];
-          for (const [field, value] of Object.entries(row)) {
-            if (field === 'monday_item_id') continue;
-            sets.push(`${field} = ?`);
-            vals.push(value);
-          }
-          sets.push('last_synced_at = NOW()');
-          sets.push('source_system = ?');
-          vals.push('monday');
-          vals.push(existing[0].id);
-
-          await db.query(`UPDATE pipeline SET ${sets.join(', ')} WHERE id = ?`, vals);
-          updated++;
-        } else {
-          // Insert new row
-          row.source_system = 'monday';
-          row.last_synced_at = new Date();
-          const fields = Object.keys(row);
-          const placeholders = fields.map(() => '?').join(', ');
-          const values = fields.map(f => row[f]);
-
-          await db.query(
-            `INSERT INTO pipeline (${fields.join(', ')}) VALUES (${placeholders})`,
-            values
-          );
-          created++;
-        }
-      } catch (rowErr) {
-        console.error(`Monday sync: failed to upsert item ${item.id}:`, rowErr.message);
-        // Continue with other items — don't let one bad row stop the sync
+        totalCreated += created;
+        totalUpdated += updated;
+      } catch (fetchErr) {
+        await db.query(
+          'UPDATE monday_sync_log SET status = ?, error_message = ?, finished_at = NOW() WHERE id = ?',
+          ['error', fetchErr.message, syncLogId]
+        );
+        console.error(`Monday sync: error fetching board ${boardId}:`, fetchErr.message);
+        // Continue with other boards
       }
     }
 
-    // Delete pipeline rows that came from Monday.com but are no longer on the board
+    // Delete pipeline rows that came from Monday.com but are no longer on ANY board
     try {
       const [mondayRows] = await db.query(
         "SELECT id, monday_item_id FROM pipeline WHERE source_system = 'monday' AND monday_item_id IS NOT NULL"
       );
 
-      const toDelete = mondayRows.filter(r => !syncedMondayIds.has(String(r.monday_item_id)));
+      const toDelete = mondayRows.filter(r => !allSyncedMondayIds.has(String(r.monday_item_id)));
       if (toDelete.length > 0) {
         const deleteIds = toDelete.map(r => r.id);
         await db.query('DELETE FROM pipeline WHERE id IN (?)', [deleteIds]);
-        deleted = toDelete.length;
+        totalDeleted = toDelete.length;
       }
     } catch (delErr) {
       console.error('Monday sync: error cleaning up removed items:', delErr.message);
     }
 
-    // Update sync log
-    await db.query(
-      `UPDATE monday_sync_log 
-       SET status = 'success', items_synced = ?, items_created = ?, items_updated = ?, finished_at = NOW()
-       WHERE id = ?`,
-      [allItems.length, created, updated, syncLogId]
-    );
-
     res.json({
       success: true,
-      itemsFetched: allItems.length,
-      created,
-      updated,
-      deleted,
-      syncLogId,
+      boards: BOARD_IDS.length,
+      itemsFetched: totalFetched,
+      created: totalCreated,
+      updated: totalUpdated,
+      deleted: totalDeleted,
     });
   } catch (error) {
     next(error);
@@ -507,8 +540,8 @@ router.post('/sync', async (req, res, next) => {
 router.get('/sync/status', async (req, res, next) => {
   try {
     const [rows] = await db.query(
-      `SELECT * FROM monday_sync_log WHERE board_id = ? ORDER BY started_at DESC LIMIT 1`,
-      [BOARD_ID]
+      `SELECT * FROM monday_sync_log WHERE board_id IN (?) ORDER BY started_at DESC LIMIT 1`,
+      [BOARD_IDS]
     );
 
     if (rows.length === 0) {
@@ -529,8 +562,8 @@ router.get('/sync/log', async (req, res, next) => {
     }
 
     const [rows] = await db.query(
-      `SELECT * FROM monday_sync_log WHERE board_id = ? ORDER BY started_at DESC LIMIT 50`,
-      [BOARD_ID]
+      `SELECT * FROM monday_sync_log WHERE board_id IN (?) ORDER BY started_at DESC LIMIT 50`,
+      [BOARD_IDS]
     );
 
     res.json(rows);
@@ -562,38 +595,29 @@ function mapItemToRow(item, columnMap, userNameMap) {
 
     // Handle special field types
     if (field === 'loan_amount') {
-      // Parse currency/number
       const num = parseFloat(text.replace(/[$,\s]/g, ''));
       row.loan_amount = isNaN(num) ? null : num;
     } else if (field === 'assigned_lo_name') {
       row.assigned_lo_name = text;
-      // Try to match to a user ID
       const loId = userNameMap[text.toLowerCase().trim()];
       if (loId) {
         row.assigned_lo_id = loId;
       }
     } else if (['application_date', 'lock_expiration_date', 'closing_date', 'funding_date', 'target_close_date'].includes(field)) {
-      // Parse date — Monday.com sends dates as YYYY-MM-DD in the value JSON
       let dateVal = null;
       try {
-        // Try parsing the JSON value first (more reliable)
         if (cv.value) {
           const parsed = JSON.parse(cv.value);
           dateVal = parsed.date || parsed;
         }
       } catch {
-        // Fall back to text
         dateVal = text;
       }
       if (dateVal && typeof dateVal === 'string') {
-        // Validate it looks like a date
         const d = new Date(dateVal);
         row[field] = isNaN(d.getTime()) ? null : dateVal;
       }
     } else {
-      // Text fields: loan_status, lender, loan_number, subject_property,
-      // rate, appraisal_status, loan_purpose, loan_type, occupancy,
-      // title_status, hoi_status, loan_estimate, stage, status, notes
       row[field] = text;
     }
   }
@@ -613,9 +637,9 @@ function mapItemToRow(item, columnMap, userNameMap) {
 
 // ── Auto-map columns by title ───────────────────────────────────
 
-async function autoMapColumns(token) {
+async function autoMapColumns(token, boardId) {
   const data = await mondayQuery(token, `query {
-    boards(ids: [${BOARD_ID}]) {
+    boards(ids: [${boardId}]) {
       columns {
         id
         title

@@ -441,6 +441,20 @@ const MondaySettings = {
         this.loadStatus();
         this.loadSyncHistory();
         this.loadDisplayConfig();
+        this.loadBoards();
+    },
+
+    async loadBoards() {
+        const select = document.getElementById('mondayBoardSelect');
+        if (!select) return;
+        try {
+            const data = await ServerAPI.getMondayBoards();
+            const ids = data.boardIds || [];
+            select.innerHTML = '<option value="">Select a board...</option>' +
+                ids.map(id => `<option value="${id}">Board ${id}</option>`).join('');
+        } catch (e) {
+            // silently ignore
+        }
     },
 
     hide() {
@@ -510,18 +524,25 @@ const MondaySettings = {
     async loadColumns() {
         const container = document.getElementById('mondayMappingsContainer');
         const saveBtn = document.getElementById('mondaySaveMappingsBtn');
+        const selectedBoard = document.getElementById('mondayBoardSelect')?.value;
+
+        if (!selectedBoard) {
+            return alert('Please select a board first.');
+        }
+
+        this.currentBoardId = selectedBoard;
         container.innerHTML = '<p style="color: var(--text-muted);"><i class="fas fa-spinner fa-spin"></i> Loading columns from Monday.com...</p>';
 
         try {
-            const data = await ServerAPI.getMondayColumns();
+            const data = await ServerAPI.getMondayColumns(selectedBoard);
             this.boardColumns = data.columns || [];
             this.validFields = data.validPipelineFields || [];
             this.fieldLabels = data.fieldLabels || {};
 
-            // Also load existing mappings
+            // Also load existing mappings for this board
             let existingMappings = {};
             try {
-                const saved = await ServerAPI.getMondayMappings();
+                const saved = await ServerAPI.getMondayMappings(selectedBoard);
                 saved.forEach(m => { existingMappings[m.monday_column_id] = m.pipeline_field; });
             } catch (e) { /* first time — no mappings yet */ }
 
@@ -591,8 +612,8 @@ const MondaySettings = {
         }
 
         try {
-            await ServerAPI.saveMondayMappings(mappings);
-            alert('Mappings saved! (' + mappings.length + ' columns mapped)');
+            await ServerAPI.saveMondayMappings(mappings, this.currentBoardId);
+            alert('Mappings saved for board ' + (this.currentBoardId || 'default') + '! (' + mappings.length + ' columns mapped)');
             // Load the display config UI now that we have mappings
             this.loadDisplayConfig();
         } catch (err) {

@@ -294,18 +294,25 @@ const ServerAPI = {
     // ========================================
 
     /** Fetch board columns from Monday.com (admin) */
-    getMondayColumns() {
-        return this.get('/monday/columns');
+    getMondayColumns(boardId) {
+        const qs = boardId ? `?board=${boardId}` : '';
+        return this.get('/monday/columns' + qs);
+    },
+
+    /** List configured board IDs */
+    getMondayBoards() {
+        return this.get('/monday/boards');
     },
 
     /** Get saved column mappings (admin) */
-    getMondayMappings() {
-        return this.get('/monday/mappings');
+    getMondayMappings(boardId) {
+        const qs = boardId ? `?board=${boardId}` : '';
+        return this.get('/monday/mappings' + qs);
     },
 
     /** Save column mappings (admin) — mappings: [{ mondayColumnId, mondayColumnTitle, pipelineField }] */
-    saveMondayMappings(mappings) {
-        return this.post('/monday/mappings', { mappings });
+    saveMondayMappings(mappings, boardId) {
+        return this.post('/monday/mappings', { mappings, boardId });
     },
 
     /** Trigger a read-only sync from Monday.com → pipeline (admin) */

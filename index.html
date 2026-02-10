@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <!-- AUTH GATE (must be first script in head) -->
-  <script src="js/auth-gate.js?v=20260210-2"></script>
+  <script src="js/auth-gate.js?v=20260210-3"></script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -522,11 +522,16 @@
           <div class="info-section" style="margin-bottom: 1.5rem;">
             <h4><i class="fas fa-arrows-alt-h"></i> Column Mappings</h4>
             <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem;">
-              Map your Monday.com board columns to pipeline fields. Click "Load Columns" to fetch your board structure.
+              Select a board and map its columns to pipeline fields.
             </p>
-            <button type="button" class="btn btn-secondary btn-sm" id="mondayLoadColumnsBtn">
-              <i class="fas fa-download"></i> Load Columns from Board
-            </button>
+            <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.75rem;">
+              <select id="mondayBoardSelect" class="filter-select" style="padding: 0.4rem; font-size: 0.85rem;">
+                <option value="">Select a board...</option>
+              </select>
+              <button type="button" class="btn btn-secondary btn-sm" id="mondayLoadColumnsBtn">
+                <i class="fas fa-download"></i> Load Columns
+              </button>
+            </div>
             <div id="mondayMappingsContainer" style="margin-top: 1rem;"></div>
             <button type="button" class="btn btn-primary btn-sm" id="mondaySaveMappingsBtn" style="display:none; margin-top: 0.75rem;">
               <i class="fas fa-save"></i> Save Mappings
@@ -632,26 +637,26 @@
   </footer>
 
   <!-- Scripts (load order matters) -->
-  <script src="js/config.js?v=20260210-2"></script>
-  <script src="js/link-init.js?v=20260210-2"></script>
-  <script src="js/action-dispatcher.js?v=20260210-2"></script>
+  <script src="js/config.js?v=20260210-3"></script>
+  <script src="js/link-init.js?v=20260210-3"></script>
+  <script src="js/action-dispatcher.js?v=20260210-3"></script>
 
-  <script src="js/api-server.js?v=20260210-2"></script>
-  <script src="js/utils.js?v=20260210-2"></script>
-  <script src="js/theme.js?v=20260210-2"></script>
-  <script src="js/tables.js?v=20260210-2"></script>
-  <script src="js/chat.js?v=20260210-2"></script>
-  <script src="js/api.js?v=20260210-2"></script>
-  <script src="js/investors.js?v=20260210-2"></script>
-  <script src="js/goals.js?v=20260210-2"></script>
-  <script src="js/modals.js?v=20260210-2"></script>
+  <script src="js/api-server.js?v=20260210-3"></script>
+  <script src="js/utils.js?v=20260210-3"></script>
+  <script src="js/theme.js?v=20260210-3"></script>
+  <script src="js/tables.js?v=20260210-3"></script>
+  <script src="js/chat.js?v=20260210-3"></script>
+  <script src="js/api.js?v=20260210-3"></script>
+  <script src="js/investors.js?v=20260210-3"></script>
+  <script src="js/goals.js?v=20260210-3"></script>
+  <script src="js/modals.js?v=20260210-3"></script>
 
   <!-- Accessibility -->
-  <script src="js/a11y.js?v=20260210-2"></script>
+  <script src="js/a11y.js?v=20260210-3"></script>
 
   <!-- CSP-friendly progress widths -->
-  <script src="js/progress-init.js?v=20260210-2"></script>
+  <script src="js/progress-init.js?v=20260210-3"></script>
 
-  <script src="js/app.js?v=20260210-2"></script>
+  <script src="js/app.js?v=20260210-3"></script>
 </body>
 </html>
