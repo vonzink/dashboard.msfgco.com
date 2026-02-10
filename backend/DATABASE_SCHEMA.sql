@@ -200,11 +200,10 @@ CREATE TABLE IF NOT EXISTS user_preferences (
 
 
 INSERT INTO users (email, name, initials, role)
-VALUES ('zachary.zink@msfg.us', 'Zachary Zink', 'ZZ', 'Loan Officer')
+VALUES ('zachary.zink@msfg.us', 'Zachary Zink', 'ZZ', 'admin')
 ON DUPLICATE KEY UPDATE
   name='Zachary Zink',
-  initials='ZZ',
-  role='Loan Officer';
+  initials='ZZ';
 
 INSERT INTO user_preferences (user_id, theme, default_goal_period)
 SELECT id, 'light', 'monthly' FROM users WHERE email = 'zachary.zink@msfg.us'
