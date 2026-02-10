@@ -36,8 +36,27 @@ const ServerAPI = {
     /**
      * Attempt to silently refresh the access token using the stored Cognito refresh_token.
      * Returns the new access_token on success, or null on failure.
+     *
+     * Uses a lock (_refreshPromise) so that concurrent 401 responses
+     * coalesce into a single refresh call instead of racing.
      */
+    _refreshPromise: null,
+
     async refreshAccessToken() {
+        // If a refresh is already in flight, wait for it instead of starting another
+        if (this._refreshPromise) {
+            return this._refreshPromise;
+        }
+
+        this._refreshPromise = this._doRefresh();
+        try {
+            return await this._refreshPromise;
+        } finally {
+            this._refreshPromise = null;
+        }
+    },
+
+    async _doRefresh() {
         var refreshToken = localStorage.getItem("refresh_token");
         if (!refreshToken) return null;
 
@@ -98,27 +117,35 @@ const ServerAPI = {
             clearTimeout(timeoutId);
 
             if (response.status === 401) {
-                // Try silent token refresh before giving up
+                // Try silent token refresh (coalesced — only one refresh runs at a time)
                 var newToken = await this.refreshAccessToken();
                 if (newToken) {
                     // Retry the original request with the new token
-                    var retryHeaders = {
-                        ...(options.headers || {}),
-                        Authorization: "Bearer " + newToken,
-                    };
                     var retryResponse = await fetch(url, {
                         ...options,
-                        headers: retryHeaders,
+                        headers: {
+                            ...(options.headers || {}),
+                            Authorization: "Bearer " + newToken,
+                        },
                     });
                     if (retryResponse.ok) {
                         return retryResponse.json();
                     }
+                    // Retry also got non-200 — but it might be 403 (forbidden, not auth).
+                    // Only clear auth if it's still 401.
+                    if (retryResponse.status !== 401) {
+                        var retryErr = await retryResponse.json().catch(() => ({}));
+                        throw new Error(retryErr.error || retryResponse.statusText);
+                    }
                 }
-                // Refresh failed or retry failed — clear tokens but DON'T redirect.
-                // Let the page stay loaded so the user sees error messages instead of looping.
-                console.warn("401 Unauthorized — clearing auth tokens");
-                this.clearAuth();
-                throw new Error("Session expired. Please refresh and log in again.");
+                // Refresh failed or retry still 401 — redirect to login once
+                if (!this._redirecting) {
+                    this._redirecting = true;
+                    console.warn("401 Unauthorized — redirecting to login");
+                    this.clearAuth();
+                    window.location.href = "/login.html";
+                }
+                throw new Error("Session expired");
             }
 
             if (!response.ok) {
