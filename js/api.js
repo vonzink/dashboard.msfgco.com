@@ -450,8 +450,17 @@ const MondaySettings = {
         try {
             const data = await ServerAPI.getMondayBoards();
             const ids = data.boardIds || [];
-            select.innerHTML = '<option value="">Select a board...</option>' +
-                ids.map(id => `<option value="${id}">Board ${id}</option>`).join('');
+            // Try to fetch board names by loading columns for each
+            const options = [];
+            for (const id of ids) {
+                try {
+                    const boardData = await ServerAPI.getMondayColumns(id);
+                    options.push(`<option value="${id}">${Utils.escapeHtml(boardData.boardName)} (${id})</option>`);
+                } catch {
+                    options.push(`<option value="${id}">Board ${id}</option>`);
+                }
+            }
+            select.innerHTML = '<option value="">Select a board...</option>' + options.join('');
         } catch (e) {
             // silently ignore
         }

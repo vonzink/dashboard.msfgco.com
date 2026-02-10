@@ -112,11 +112,52 @@
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     border-radius: var(--radius-md, 8px);
+    position: relative;
+}
+
+/* Visible scrollbar for pipeline table */
+.table-responsive::-webkit-scrollbar {
+    height: 10px;
+}
+.table-responsive::-webkit-scrollbar-track {
+    background: var(--bg-secondary, #f1f1f1);
+    border-radius: 5px;
+}
+.table-responsive::-webkit-scrollbar-thumb {
+    background: var(--text-muted, #aaa);
+    border-radius: 5px;
+    min-width: 40px;
+}
+.table-responsive::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary, #888);
+}
+
+/* Firefox scrollbar */
+.table-responsive {
+    scrollbar-width: thin;
+    scrollbar-color: var(--text-muted, #aaa) var(--bg-secondary, #f1f1f1);
 }
 
 /* No-wrap helper for date cells */
 .nowrap {
     white-space: nowrap;
+}
+
+/* Pipeline table: prevent all cells from wrapping so scroll works */
+#pipelineTable th,
+#pipelineTable td {
+    white-space: nowrap;
+    padding: 0.6rem 0.75rem;
+}
+#pipelineTable th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted, #666);
+    border-bottom: 2px solid var(--border-color, #ddd);
 }
 
 /* Currency alignment */
