@@ -210,36 +210,52 @@ const API = {
     // ========================================
     pipelineColumns: [],   // loaded from /monday/view-config
 
+    FALLBACK_PIPELINE_COLUMNS: [
+        { field: 'client_name', label: 'Client Name' },
+        { field: 'loan_number', label: 'Loan #' },
+        { field: 'assigned_lo_name', label: 'Loan Officer' },
+        { field: 'subject_property', label: 'Subject Property' },
+        { field: 'loan_amount', label: 'Loan Amount' },
+        { field: 'rate', label: 'Rate' },
+        { field: 'appraisal_status', label: 'Appraisal' },
+        { field: 'occupancy', label: 'Occupancy' },
+        { field: 'application_date', label: 'App Date' },
+        { field: 'closing_date', label: 'Closing Date' },
+        { field: 'lock_expiration_date', label: 'Lock Exp' },
+        { field: 'funding_date', label: 'Funding Date' },
+    ],
+
     async loadPipelineConfig() {
         try {
             const config = await ServerAPI.getMondayViewConfig();
-            this.pipelineColumns = (config.columns || []).filter(c => c.visible !== false);
+            const cols = (config.columns || []).filter(c => c.visible !== false);
+            // Only use server config if it has more than just client_name
+            if (cols.length > 1) {
+                this.pipelineColumns = cols;
+            } else {
+                this.pipelineColumns = this.FALLBACK_PIPELINE_COLUMNS;
+            }
         } catch (e) {
-            // Fallback default if no config saved yet
-            this.pipelineColumns = [
-                { field: 'client_name', label: 'Client Name' },
-                { field: 'loan_number', label: 'Loan #' },
-                { field: 'assigned_lo_name', label: 'Loan Officer' },
-                { field: 'subject_property', label: 'Subject Property' },
-                { field: 'loan_amount', label: 'Loan Amount' },
-                { field: 'rate', label: 'Rate' },
-                { field: 'appraisal_status', label: 'Appraisal' },
-                { field: 'occupancy', label: 'Occupancy' },
-                { field: 'application_date', label: 'App Date' },
-                { field: 'closing_date', label: 'Closing Date' },
-                { field: 'lock_expiration_date', label: 'Lock Exp' },
-                { field: 'funding_date', label: 'Funding Date' },
-            ];
+            console.warn('Failed to load pipeline view config, using defaults:', e.message || e);
+            this.pipelineColumns = this.FALLBACK_PIPELINE_COLUMNS;
         }
         this.renderPipelineHead();
     },
 
     renderPipelineHead() {
         const thead = document.getElementById('pipelineHead');
-        if (!thead || this.pipelineColumns.length === 0) return;
+        if (!thead) return;
+        // Use current columns, or fallback if somehow empty
+        const cols = this.pipelineColumns.length > 0
+            ? this.pipelineColumns
+            : this.FALLBACK_PIPELINE_COLUMNS;
         thead.innerHTML = '<tr>' +
-            this.pipelineColumns.map(c => `<th class="sortable">${Utils.escapeHtml(c.label)}</th>`).join('') +
+            cols.map(c => `<th class="sortable">${Utils.escapeHtml(c.label || c.field)}</th>`).join('') +
             '</tr>';
+        // Re-bind sorting after head rebuild
+        thead.querySelectorAll('.sortable').forEach(header => {
+            header.addEventListener('click', (e) => TableManager.handleSort(e));
+        });
     },
 
     async loadPipeline() {
@@ -248,6 +264,9 @@ const API = {
             if (this.pipelineColumns.length === 0) {
                 await this.loadPipelineConfig();
             }
+            // Safety: always ensure head is rendered (clears "Loading..." placeholder)
+            this.renderPipelineHead();
+
             const data = await ServerAPI.getPipeline();
             this.pipelineData = data || [];
             this.renderPipeline(data);
@@ -255,6 +274,19 @@ const API = {
             this.loadSyncStatus();
         } catch (error) {
             console.error('Error loading pipeline:', error);
+            // Even on error, ensure the header is not stuck on "Loading..."
+            if (this.pipelineColumns.length === 0) {
+                this.pipelineColumns = this.FALLBACK_PIPELINE_COLUMNS;
+            }
+            this.renderPipelineHead();
+            // Show error state in the table body
+            const tbody = document.getElementById('pipelineBody');
+            if (tbody && !this.pipelineData?.length) {
+                tbody.innerHTML = `<tr><td colspan="${this.pipelineColumns.length}" class="empty-state">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Failed to load pipeline data. <button type="button" class="btn btn-secondary btn-sm" onclick="API.loadPipeline()" style="margin-top:0.5rem;"><i class="fas fa-redo"></i> Retry</button></p>
+                </td></tr>`;
+            }
         }
     },
 
