@@ -32,16 +32,38 @@ function authenticate(req, res, next) {
     }
 
     try {
+      // Try to find the user in our DB.
+      // ID tokens have email; access tokens only have sub/username.
       const email = req.user.email || req.user.claims?.email;
+      const sub = req.user.sub || req.user.claims?.sub;
+
+      let users = [];
+
+      // 1. Try email lookup (works with ID tokens)
       if (email) {
-        const [users] = await db.query(
+        [users] = await db.query(
           'SELECT id, email, name, role FROM users WHERE email = ?',
           [email]
         );
-        if (users.length > 0) {
-          req.user.db = users[0];
+      }
+
+      // 2. Fallback: try cognito_sub lookup (works with access tokens)
+      if (users.length === 0 && sub) {
+        [users] = await db.query(
+          'SELECT id, email, name, role FROM users WHERE cognito_sub = ?',
+          [sub]
+        );
+      }
+
+      if (users.length > 0) {
+        req.user.db = users[0];
+
+        // Backfill cognito_sub if we found the user by email but sub isn't stored yet
+        if (sub && !users[0].cognito_sub) {
+          db.query('UPDATE users SET cognito_sub = ? WHERE id = ?', [sub, users[0].id]).catch(() => {});
         }
       }
+
       next();
     } catch (dbErr) {
       console.error('DB user lookup error:', dbErr.message);
