@@ -818,6 +818,138 @@ textarea.form-input {
 .u-hidden { display: none !important; }
 .u-grid-span-all { grid-column: 1 / -1; }
 
+/* ========================================
+   INVESTOR DETAILS GRID
+======================================== */
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm) var(--spacing-lg);
+}
+
+.detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.detail-value {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.detail-value .tbd {
+    font-size: 0.85rem;
+}
+
+/* ========================================
+   MANAGE INVESTORS MODAL
+======================================== */
+.manage-investors-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.manage-investors-toolbar .form-input {
+    flex: 1;
+    min-width: 200px;
+    max-width: 350px;
+}
+
+.manage-investor-count {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.manage-investors-table {
+    font-size: 0.85rem;
+}
+
+.manage-investors-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.manage-investors-table td {
+    vertical-align: middle;
+}
+
+.manage-actions-cell {
+    white-space: nowrap;
+}
+
+.manage-actions-cell .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.manage-form-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--spacing-lg) 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.manage-investor-form .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.manage-investor-form .form-group-full {
+    grid-column: 1 / -1;
+}
+
+.manage-investor-form .form-group label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.manage-investor-form .form-group label i {
+    color: var(--green-bright);
+    width: 16px;
+    font-size: 0.8rem;
+}
+
+.manage-investor-form .form-input {
+    width: 100%;
+}
+
+/* Scrollable dropdown for many investors */
+.dropdown-menu-investors {
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+/* Admin-only items */
+.admin-only-item {
+    border-top: 1px solid var(--border-color);
+    font-weight: 600;
+    color: var(--green-forest);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .investor-info-grid {
@@ -840,5 +972,13 @@ textarea.form-input {
 
     .form-actions .btn {
         width: 100%;
+    }
+
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .manage-investor-form .form-grid {
+        grid-template-columns: 1fr;
     }
 }

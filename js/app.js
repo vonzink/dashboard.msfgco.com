@@ -20,7 +20,8 @@ const App = {
         this.initMondaySettings();
         this.initProgressBars();
         
-        // Load data from API
+        // Load user info + data from API
+        this.loadCurrentUser();
         this.loadData();
         
         // Start auto-refresh
@@ -49,6 +50,45 @@ const App = {
 
     initInvestors() {
         Investors.init();
+        this.initManageInvestorsModal();
+    },
+
+    initManageInvestorsModal() {
+        // Close button
+        const modal = document.getElementById('manageInvestorsModal');
+        if (!modal) return;
+
+        const closeBtn = modal.querySelector('.manage-investors-close');
+        if (closeBtn) closeBtn.addEventListener('click', () => Investors.hideManageModal());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) Investors.hideManageModal();
+        });
+
+        // Search
+        const searchInput = document.getElementById('manageInvestorSearch');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                Investors._manageSearchTerm = searchInput.value;
+                Investors._renderManageList();
+            });
+        }
+
+        // Add button
+        const addBtn = document.getElementById('manageAddInvestorBtn');
+        if (addBtn) addBtn.addEventListener('click', () => Investors._openForm(null));
+
+        // Cancel button on form
+        const cancelBtn = document.getElementById('manageFormCancelBtn');
+        if (cancelBtn) cancelBtn.addEventListener('click', () => Investors._showManageView('list'));
+
+        // Form submit
+        const form = document.getElementById('investorAdminForm');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                Investors._saveForm();
+            });
+        }
     },
 
     initGoals() {
@@ -72,6 +112,39 @@ const App = {
                 bar.style.transition = 'width 1s ease-out';
             });
         }, 500);
+    },
+
+    // ========================================
+    // CURRENT USER / ADMIN DETECTION
+    // ========================================
+    async loadCurrentUser() {
+        try {
+            const me = await ServerAPI.getMe();
+            if (me) {
+                CONFIG.currentUser.id = me.id;
+                CONFIG.currentUser.name = me.name || CONFIG.currentUser.name;
+                CONFIG.currentUser.email = me.email;
+                CONFIG.currentUser.initials = me.initials || CONFIG.currentUser.initials;
+                CONFIG.currentUser.role = me.role || 'user';
+
+                // Update header UI
+                const nameEl = document.getElementById('userName');
+                const roleEl = document.getElementById('userRole');
+                const avatarEl = document.getElementById('userAvatar');
+                if (nameEl && me.name) nameEl.textContent = me.name;
+                if (roleEl && me.role) roleEl.textContent = me.role;
+                if (avatarEl && me.initials) avatarEl.textContent = me.initials;
+
+                // Show admin-only elements
+                if (String(me.role).toLowerCase() === 'admin') {
+                    document.querySelectorAll('.admin-only-item').forEach(el => {
+                        el.style.display = '';
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('Could not load current user:', err);
+        }
     },
 
     // ========================================

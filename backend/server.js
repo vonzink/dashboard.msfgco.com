@@ -93,6 +93,18 @@ app.get('/health', (req, res) => {
 // Webhooks use their own API key auth (defined in webhooks.js)
 app.use('/api/webhooks', webhooksRoutes);
 
+// Current user info endpoint
+app.get('/api/me', authenticate, (req, res) => {
+  const user = req.user?.db || {};
+  res.json({
+    id: user.id || null,
+    email: user.email || null,
+    name: user.name || null,
+    initials: user.initials || null,
+    role: user.role || 'user'
+  });
+});
+
 // All other routes require JWT authentication
 app.use('/api/investors', authenticate, investorsRoutes);
 app.use('/api/announcements', authenticate, announcementsRoutes);

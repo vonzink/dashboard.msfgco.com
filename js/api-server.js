@@ -267,8 +267,34 @@ const ServerAPI = {
         return this.get(`/pipeline${query}`);
     },
 
+    // ========================================
+    // CURRENT USER
+    // ========================================
+    getMe() {
+        return this.get("/me");
+    },
+
+    // ========================================
+    // INVESTORS
+    // ========================================
+    getInvestors() {
+        return this.get("/investors");
+    },
+
+    getInvestor(key) {
+        return this.get(`/investors/${key}`);
+    },
+
+    createInvestor(data) {
+        return this.post("/investors", data);
+    },
+
     updateInvestor(idOrKey, data) {
         return this.put(`/investors/${idOrKey}`, data);
+    },
+
+    deleteInvestor(idOrKey) {
+        return this.delete(`/investors/${idOrKey}`);
     },
 
     getUploadUrl(fileName, fileType, fileSize) {

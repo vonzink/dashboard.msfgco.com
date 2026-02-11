@@ -30,9 +30,13 @@
       window.Investors?.showCompanyContactsModal?.(),
 
     'open-investor': (el) => {
-    const id = el?.dataset?.investor;
-    if (id) window.Investors?.showModal?.(id);
-  },
+      const id = el?.dataset?.investor;
+      if (id) window.Investors?.showModal?.(id);
+    },
+
+    'manage-investors': () => {
+      window.Investors?.showManageModal?.();
+    },
 
     // =====================
     // HR / Docs (placeholders)

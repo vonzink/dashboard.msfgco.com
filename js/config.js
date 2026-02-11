@@ -142,7 +142,8 @@
   Object.freeze(CONFIG.currency);
   Object.freeze(CONFIG.pagination);
   Object.freeze(CONFIG.chat);
-  Object.freeze(CONFIG.currentUser);
+  // NOTE: currentUser is NOT frozen — it is populated at runtime from /api/me
+  // Object.freeze(CONFIG.currentUser);
   Object.freeze(CONFIG.features);
   Object.freeze(CONFIG.storage);
   Object.freeze(CONFIG.links);
