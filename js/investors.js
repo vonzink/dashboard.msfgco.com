@@ -1041,7 +1041,7 @@ const Investors = {
         return;
       }
       count++;
-      const esc = (s) => (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]);
+      const esc = (s) => (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
       html +=
         '<tr>' +
           '<td>' + esc(name) + '</td>' +
