@@ -523,6 +523,8 @@ const Investors = {
     this.bindModalClose();
     this.bindCompanyContactsModalClose();
     this.bindGlobalEscapeClose();
+    // Replace hardcoded dropdown with the full dynamic investor list
+    this._refreshDropdown();
     console.log('Investors module initialized (' + Object.keys(this.data).length + ' investors loaded)');
   },
 
@@ -1166,17 +1168,40 @@ const Investors = {
     const container = document.getElementById('investorDropdownList');
     if (!container) return;
 
+    const esc = (s) => (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
     const sorted = Object.entries(this.data)
       .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
 
-    let html = '<div class="dropdown-header">Wholesale Partners</div>';
+    let html = '<div class="dropdown-header">Wholesale Partners (' + sorted.length + ')</div>' +
+      '<div class="investor-dropdown-search">' +
+        '<input type="text" id="investorDropdownSearch" class="form-input form-input-sm" placeholder="Search investors..." autocomplete="off" />' +
+      '</div>' +
+      '<div class="investor-dropdown-items" id="investorDropdownItems">';
+
     sorted.forEach(([key, inv]) => {
       html += '<button type="button" class="dropdown-item" data-action="open-investor" data-investor="' + key + '">' +
-        '<i class="fas fa-building"></i> ' + ((inv.name || key).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]))) +
+        '<i class="fas fa-building"></i> ' + esc(inv.name || key) +
       '</button>';
     });
 
+    html += '</div>';
     container.innerHTML = html;
+
+    // Bind search
+    const searchInput = document.getElementById('investorDropdownSearch');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        const q = e.target.value.toLowerCase().trim();
+        const items = document.querySelectorAll('#investorDropdownItems .dropdown-item');
+        items.forEach(btn => {
+          const name = (btn.textContent || '').toLowerCase();
+          btn.style.display = name.includes(q) ? '' : 'none';
+        });
+      });
+      // Prevent dropdown from closing when clicking into search
+      searchInput.addEventListener('click', (e) => e.stopPropagation());
+    }
   }
 };
 

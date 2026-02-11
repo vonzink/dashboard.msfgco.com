@@ -939,7 +939,28 @@ textarea.form-input {
 
 /* Scrollable dropdown for many investors */
 .dropdown-menu-investors {
-    max-height: 420px;
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+.investor-dropdown-search {
+    padding: 0.375rem 0.75rem;
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    z-index: 1;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.investor-dropdown-search .form-input {
+    width: 100%;
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8rem;
+    border-radius: var(--radius-md);
+}
+
+.investor-dropdown-items {
+    max-height: 340px;
     overflow-y: auto;
 }
 
