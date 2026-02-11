@@ -33,8 +33,8 @@ const Chat = {
     this.bindEvents();
     this.loadTags().then(() => this.loadMessages());
 
-    // Auto-refresh messages
-    this._refreshTimer = setInterval(() => this.loadMessages(), CONFIG.refresh.chat || 5000);
+    // Auto-refresh messages every 15 seconds
+    this._refreshTimer = setInterval(() => this.loadMessages(), CONFIG.refresh?.chat || 15000);
 
     console.log('Chat initialized');
   },
@@ -57,27 +57,167 @@ const Chat = {
         }
       });
     }
-  },
 
-  // ========================================
-  // TAGS
-  // ========================================
-  async loadTags() {
-    try {
-      this.tags = await ServerAPI.getChatTags();
-      this.renderTagFilter();
-      this.renderTagPicker();
-    } catch (err) {
-      console.warn('Failed to load chat tags:', err);
+    // Manage Tags button in section header
+    const manageBtn = document.getElementById('chatManageTagsBtn');
+    if (manageBtn) {
+      manageBtn.addEventListener('click', () => this.openManageTagsModal());
+    }
+
+    // Manage Tags modal — close button
+    const closeBtn = document.getElementById('closeManageTagsModal');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this.closeManageTagsModal());
+    }
+
+    // Manage Tags modal — overlay click to close
+    const modal = document.getElementById('manageTagsModal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this.closeManageTagsModal();
+      });
+    }
+
+    // Manage Tags modal — create tag button
+    const createBtn = document.getElementById('createTagSaveBtn');
+    if (createBtn) {
+      createBtn.addEventListener('click', () => this.createTagFromModal());
+    }
+
+    // Allow Enter key in the tag name input
+    const tagInput = document.getElementById('newTagNameInput');
+    if (tagInput) {
+      tagInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.createTagFromModal();
+        }
+      });
     }
   },
 
+  // ========================================
+  // MANAGE TAGS MODAL
+  // ========================================
+  openManageTagsModal() {
+    const modal = document.getElementById('manageTagsModal');
+    if (modal) {
+      modal.classList.add('active');
+      modal.setAttribute('aria-hidden', 'false');
+      this.renderManageTagsList();
+      // Focus the input
+      const inp = document.getElementById('newTagNameInput');
+      if (inp) setTimeout(() => inp.focus(), 100);
+    }
+  },
+
+  closeManageTagsModal() {
+    const modal = document.getElementById('manageTagsModal');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+  },
+
+  renderManageTagsList() {
+    const container = document.getElementById('manageTagsList');
+    if (!container) return;
+
+    const esc = Utils.escapeHtml.bind(Utils);
+
+    if (this.tags.length === 0) {
+      container.innerHTML = '<div class="manage-tags-empty">' +
+        '<i class="fas fa-tags"></i>' +
+        '<p>No tags yet. Create your first tag above!</p>' +
+      '</div>';
+      return;
+    }
+
+    let html = '<table class="manage-tags-table"><tbody>';
+    this.tags.forEach(tag => {
+      html += '<tr class="manage-tags-row" data-tag-id="' + tag.id + '">' +
+        '<td>' +
+          '<span class="chat-msg-tag" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' + esc(tag.name) + '</span>' +
+        '</td>' +
+        '<td class="manage-tags-actions-cell">' +
+          '<button type="button" class="btn btn-sm btn-danger manage-tag-delete-btn" data-tag-id="' + tag.id + '" title="Delete tag">' +
+            '<i class="fas fa-trash"></i>' +
+          '</button>' +
+        '</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+
+    // Bind delete buttons
+    container.querySelectorAll('.manage-tag-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tagId = parseInt(btn.dataset.tagId);
+        const tag = this.tags.find(t => t.id === tagId);
+        if (!tag) return;
+        if (!confirm('Delete tag "' + tag.name + '"? It will be removed from all messages.')) return;
+
+        try {
+          await ServerAPI.deleteChatTag(tagId);
+          this.tags = this.tags.filter(t => t.id !== tagId);
+          this.selectedTagIds = this.selectedTagIds.filter(id => id !== tagId);
+          this.renderManageTagsList();
+          this.renderTagFilter();
+          this.renderTagPicker();
+        } catch (err) {
+          console.error('Failed to delete tag:', err);
+          alert('Failed to delete tag.');
+        }
+      });
+    });
+  },
+
+  async createTagFromModal() {
+    const nameInput = document.getElementById('newTagNameInput');
+    const colorInput = document.getElementById('newTagColorInput');
+    const name = nameInput?.value.trim();
+    if (!name) {
+      nameInput?.focus();
+      return;
+    }
+
+    const color = colorInput?.value || '#8cc63e';
+
+    try {
+      const tag = await ServerAPI.createChatTag(name, color);
+      if (tag && tag.id) {
+        if (!this.tags.find(t => t.id === tag.id)) {
+          this.tags.push(tag);
+        }
+        this.renderManageTagsList();
+        this.renderTagFilter();
+        this.renderTagPicker();
+        // Clear input
+        if (nameInput) nameInput.value = '';
+      }
+    } catch (err) {
+      console.error('Failed to create tag:', err);
+      alert('Failed to create tag. It may already exist.');
+    }
+  },
+
+  // ========================================
+  // TAG FILTER BAR (top of chat)
+  // ========================================
   renderTagFilter() {
     const container = document.getElementById('chatTagFilter');
     if (!container) return;
 
     const esc = Utils.escapeHtml.bind(Utils);
-    let html = '<button type="button" class="chat-tag-btn chat-tag-all' +
+
+    if (this.tags.length === 0) {
+      container.innerHTML = '<span class="chat-tag-filter-hint"><i class="fas fa-info-circle"></i> Click "Manage Tags" to create tags for organizing conversations</span>';
+      return;
+    }
+
+    let html = '<span class="chat-tag-filter-label">Filter:</span>' +
+      '<button type="button" class="chat-tag-btn chat-tag-all' +
       (this.activeFilterTagId === null ? ' active' : '') +
       '" data-tag-filter="all">All</button>';
 
@@ -87,9 +227,6 @@ const Chat = {
         '" data-tag-filter="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
         esc(tag.name) + '</button>';
     });
-
-    html += '<button type="button" class="chat-tag-btn chat-tag-create" id="chatCreateTagBtn" title="Create new tag">' +
-      '<i class="fas fa-plus"></i></button>';
 
     container.innerHTML = html;
 
@@ -102,21 +239,18 @@ const Chat = {
         this.loadMessages();
       });
     });
-
-    // Bind create tag
-    const createBtn = document.getElementById('chatCreateTagBtn');
-    if (createBtn) {
-      createBtn.addEventListener('click', () => this.promptCreateTag());
-    }
   },
 
+  // ========================================
+  // TAG PICKER (above input)
+  // ========================================
   renderTagPicker() {
     const container = document.getElementById('chatTagPicker');
     if (!container) return;
 
     const esc = Utils.escapeHtml.bind(Utils);
     if (this.tags.length === 0) {
-      container.innerHTML = '<span class="chat-tag-picker-empty">No tags yet</span>';
+      container.innerHTML = '<span class="chat-tag-picker-empty">No tags yet — use "Manage Tags" to create some</span>';
       return;
     }
 
@@ -144,30 +278,6 @@ const Chat = {
     });
   },
 
-  async promptCreateTag() {
-    const name = prompt('Enter a name for the new tag:');
-    if (!name || !name.trim()) return;
-
-    // Pick a color from palette
-    const colors = ['#8cc63e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981'];
-    const color = colors[this.tags.length % colors.length];
-
-    try {
-      const tag = await ServerAPI.createChatTag(name.trim(), color);
-      if (tag && tag.id) {
-        // Avoid duplicate
-        if (!this.tags.find(t => t.id === tag.id)) {
-          this.tags.push(tag);
-        }
-        this.renderTagFilter();
-        this.renderTagPicker();
-      }
-    } catch (err) {
-      console.error('Failed to create tag:', err);
-      alert('Failed to create tag. It may already exist.');
-    }
-  },
-
   // ========================================
   // MESSAGES
   // ========================================
@@ -192,7 +302,10 @@ const Chat = {
     const esc = Utils.escapeHtml.bind(Utils);
 
     if (!messages || messages.length === 0) {
-      container.innerHTML = '<div class="chat-empty"><i class="fas fa-comments"></i><p>No messages yet. Start the conversation!</p></div>';
+      const filterMsg = this.activeFilterTagId
+        ? 'No messages with this tag.'
+        : 'No messages yet. Start the conversation!';
+      container.innerHTML = '<div class="chat-empty"><i class="fas fa-comments"></i><p>' + filterMsg + '</p></div>';
       return;
     }
 
@@ -254,7 +367,7 @@ const Chat = {
       '</label>';
     });
     if (this.tags.length === 0) {
-      html += '<p class="chat-tag-popover-empty">No tags yet. Create one above.</p>';
+      html += '<p class="chat-tag-popover-empty">No tags yet. Use "Manage Tags" to create some.</p>';
     }
     html += '</div>';
     html += '<div class="chat-tag-popover-actions">' +
@@ -280,7 +393,6 @@ const Chat = {
 
       try {
         await ServerAPI.updateMessageTags(msgId, selected);
-        // Update local cache
         msg.tags = selected.map(tid => this.tags.find(t => t.id === tid)).filter(Boolean);
         this.renderMessages(this.messages);
       } catch (err) {
@@ -331,7 +443,6 @@ const Chat = {
       }
     } catch (err) {
       console.error('Failed to send message:', err);
-      // Put text back so user doesn't lose it
       if (input) input.value = message;
     }
   },

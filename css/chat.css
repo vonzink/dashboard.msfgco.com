@@ -448,6 +448,89 @@
 }
 
 /* ========================================
+   TAG FILTER HINT (empty state)
+======================================== */
+.chat-tag-filter-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.125rem 0;
+}
+
+.chat-tag-filter-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+/* ========================================
+   MANAGE TAGS MODAL
+======================================== */
+.manage-tags-create {
+    margin-bottom: var(--spacing-md);
+}
+
+.manage-tags-create-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+}
+
+.manage-tags-create-row .form-input {
+    flex: 1;
+}
+
+.manage-tags-color-input {
+    width: 40px !important;
+    height: 36px;
+    padding: 2px !important;
+    border-radius: var(--radius-sm) !important;
+    cursor: pointer;
+    flex: 0 0 40px !important;
+}
+
+.manage-tags-empty {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+}
+
+.manage-tags-empty i {
+    font-size: 2rem;
+    opacity: 0.3;
+    margin-bottom: var(--spacing-sm);
+    display: block;
+}
+
+.manage-tags-empty p {
+    font-size: 0.85rem;
+}
+
+.manage-tags-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.manage-tags-row {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.manage-tags-row td {
+    padding: 0.5rem 0.25rem;
+    vertical-align: middle;
+}
+
+.manage-tags-actions-cell {
+    text-align: right;
+    width: 50px;
+}
+
+/* ========================================
    RESPONSIVE
 ======================================== */
 @media (max-width: 768px) {

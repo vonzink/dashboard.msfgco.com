@@ -372,6 +372,11 @@
     <section class="section-card animate-in" id="chatSection">
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-comments"></i> Team Chat</h2>
+        <div class="section-actions">
+          <button type="button" class="btn btn-sm btn-outline" id="chatManageTagsBtn" title="Manage Tags">
+            <i class="fas fa-tags"></i> Manage Tags
+          </button>
+        </div>
       </div>
       <div class="section-body">
         <div class="chat-container">
@@ -383,7 +388,7 @@
 
           <!-- Tag picker for outgoing messages -->
           <div class="chat-tag-picker-bar">
-            <span class="chat-tag-picker-label"><i class="fas fa-tags"></i> Tags:</span>
+            <span class="chat-tag-picker-label"><i class="fas fa-tags"></i> Attach tags:</span>
             <div class="chat-tag-picker" id="chatTagPicker"></div>
           </div>
 
@@ -751,6 +756,31 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- Manage Tags Modal -->
+    <div id="manageTagsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3 class="modal-title"><i class="fas fa-tags"></i> Manage Tags</h3>
+          <button type="button" class="modal-close" id="closeManageTagsModal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: var(--spacing-md);">
+          <!-- Create new tag -->
+          <div class="manage-tags-create">
+            <div class="manage-tags-create-row">
+              <input type="text" id="newTagNameInput" class="form-input" placeholder="New tag name..." maxlength="100" />
+              <input type="color" id="newTagColorInput" class="form-input manage-tags-color-input" value="#8cc63e" title="Pick a color" />
+              <button type="button" class="btn btn-primary btn-sm" id="createTagSaveBtn"><i class="fas fa-plus"></i> Add</button>
+            </div>
+          </div>
+
+          <!-- Existing tags list -->
+          <div class="manage-tags-list" id="manageTagsList">
+            <p class="text-muted" style="text-align:center; padding: 2rem 0;">Loading tags...</p>
+          </div>
+        </div>
       </div>
     </div>
 
