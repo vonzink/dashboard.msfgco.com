@@ -316,6 +316,38 @@ const ServerAPI = {
         return true;
     },
     // ========================================
+    // CHAT + TAGS
+    // ========================================
+    getChatMessages(params = {}) {
+        const qs = this.buildQuery(params);
+        return this.get(`/chat/messages${qs}`);
+    },
+
+    sendChatMessage(message, tagIds) {
+        return this.post("/chat/messages", { message, tag_ids: tagIds || [] });
+    },
+
+    updateMessageTags(messageId, tagIds) {
+        return this.put(`/chat/messages/${messageId}/tags`, { tag_ids: tagIds });
+    },
+
+    deleteChatMessage(id) {
+        return this.delete(`/chat/messages/${id}`);
+    },
+
+    getChatTags() {
+        return this.get("/chat/tags");
+    },
+
+    createChatTag(name, color) {
+        return this.post("/chat/tags", { name, color });
+    },
+
+    deleteChatTag(id) {
+        return this.delete(`/chat/tags/${id}`);
+    },
+
+    // ========================================
     // MONDAY.COM INTEGRATION
     // ========================================
 

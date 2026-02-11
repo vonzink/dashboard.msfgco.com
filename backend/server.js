@@ -12,6 +12,7 @@ const { authenticate } = require('./middleware/auth');
 
 // Route imports
 const investorsRoutes = require('./routes/investors');
+const chatRoutes = require('./routes/chat');
 const announcementsRoutes = require('./routes/announcements');
 const notificationsRoutes = require('./routes/notifications');
 const goalsRoutes = require('./routes/goals');
@@ -107,6 +108,7 @@ app.get('/api/me', authenticate, (req, res) => {
 
 // All other routes require JWT authentication
 app.use('/api/investors', authenticate, investorsRoutes);
+app.use('/api/chat', authenticate, chatRoutes);
 app.use('/api/announcements', authenticate, announcementsRoutes);
 app.use('/api/notifications', authenticate, notificationsRoutes);
 app.use('/api/goals', authenticate, goalsRoutes);

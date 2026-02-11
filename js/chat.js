@@ -1,313 +1,364 @@
 /* ============================================
    MSFG Dashboard - Chat Module
-   Company chat functionality
+   Company chat with tag-based filtering
    ============================================ */
 
-// Ensure CONFIG is available
 var CONFIG = window.CONFIG || window.MSFG_CONFIG;
 if (!CONFIG) { throw new Error('CONFIG not loaded. js/config.js must load before chat.js'); }
 
 const Chat = {
-    // ========================================
-    // PROPERTIES
-    // ========================================
-    currentUser: CONFIG.currentUser,
-    maxMessages: CONFIG.chat.maxMessages,
-    isConnected: false,
-    websocket: null,
+  // ========================================
+  // PROPERTIES
+  // ========================================
+  currentUser: CONFIG.currentUser,
+  maxMessages: CONFIG.chat.maxMessages,
+  isConnected: false,
+  websocket: null,
 
-    // ========================================
-    // INITIALIZATION
-    // ========================================
-    init() {
-        if (!CONFIG.features.chat) {
-            console.log('Chat feature disabled');
-            return;
-        }
+  tags: [],                // All available tags [{id, name, color}]
+  activeFilterTagId: null, // Currently filtering by this tag (null = show all)
+  selectedTagIds: [],      // Tags selected for the NEXT message being composed
+  messages: [],            // Local message cache
+  _refreshTimer: null,
 
-        this.bindEvents();
-        this.scrollToBottom();
-        
-        console.log('Chat initialized');
-    },
-
-    bindEvents() {
-        const input = document.getElementById('chatInput');
-        const sendBtn = document.querySelector('.chat-send');
-        
-        if (input) {
-            // Send on Enter
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    this.sendMessage();
-                }
-            });
-
-            // Character limit
-            input.addEventListener('input', (e) => {
-                if (e.target.value.length > CONFIG.chat.maxMessageLength) {
-                    e.target.value = e.target.value.slice(0, CONFIG.chat.maxMessageLength);
-                }
-            });
-        }
-        
-        if (sendBtn) {
-            sendBtn.addEventListener('click', () => this.sendMessage());
-        }
-    },
-
-    // ========================================
-    // SEND MESSAGE
-    // ========================================
-    sendMessage() {
-        const input = document.getElementById('chatInput');
-        const message = input?.value.trim();
-        
-        if (!message) return;
-
-        // Add to UI immediately (optimistic update)
-        this.addMessageToUI({
-            id: Date.now(),
-            sender: this.currentUser.name,
-            initials: this.currentUser.initials,
-            text: message,
-            timestamp: new Date().toISOString(),
-            isOwn: true
-        });
-        
-        // Clear input
-        input.value = '';
-        input.focus();
-        
-        // Send to server
-        this.sendToServer(message);
-    },
-
-    async sendToServer(message) {
-        try {
-            // If WebSocket connected, use it
-            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-                this.websocket.send(JSON.stringify({
-                    type: 'message',
-                    content: message,
-                    sender: this.currentUser.name,
-                    timestamp: new Date().toISOString()
-                }));
-                return;
-            }
-
-            // Fallback to REST API
-            // await API.post('/chat/messages', {
-            //     message: message,
-            //     sender: this.currentUser.name,
-            //     senderId: this.currentUser.id
-            // });
-            
-            console.log('Message sent:', message);
-        } catch (error) {
-            console.error('Failed to send message:', error);
-            this.showError('Failed to send message. Please try again.');
-        }
-    },
-
-    // ========================================
-    // RECEIVE MESSAGE
-    // ========================================
-    receiveMessage(data) {
-        // Don't show our own messages again
-        if (data.senderId === this.currentUser.id) return;
-
-        this.addMessageToUI({
-            id: data.id,
-            sender: data.sender,
-            initials: Utils.getInitials(data.sender),
-            text: data.message || data.content,
-            timestamp: data.timestamp,
-            isOwn: false
-        });
-    },
-
-    // ========================================
-    // UI METHODS
-    // ========================================
-    addMessageToUI(messageData) {
-        const container = document.getElementById('chatMessages');
-        if (!container) return;
-
-        const messageEl = this.createMessageElement(messageData);
-        container.appendChild(messageEl);
-        
-        this.scrollToBottom();
-        this.trimOldMessages();
-    },
-
-    createMessageElement(data) {
-        const div = document.createElement('div');
-        div.className = `chat-message ${data.isOwn ? 'own' : ''}`;
-        div.dataset.id = data.id;
-
-        div.innerHTML = `
-            <div class="chat-avatar">${Utils.escapeHtml(data.initials)}</div>
-            <div class="chat-bubble">
-                <div class="chat-sender">${data.isOwn ? 'You' : Utils.escapeHtml(data.sender)}</div>
-                <div class="chat-text">${Utils.escapeHtml(data.text)}</div>
-                <div class="chat-time">${Utils.formatTime(data.timestamp)}</div>
-            </div>
-        `;
-
-        return div;
-    },
-
-    scrollToBottom() {
-        const container = document.getElementById('chatMessages');
-        if (container) {
-            container.scrollTop = container.scrollHeight;
-        }
-    },
-
-    trimOldMessages() {
-        const container = document.getElementById('chatMessages');
-        if (!container) return;
-        
-        const messages = container.querySelectorAll('.chat-message');
-        const excess = messages.length - this.maxMessages;
-        
-        if (excess > 0) {
-            for (let i = 0; i < excess; i++) {
-                messages[i].remove();
-            }
-        }
-    },
-
-    showError(message) {
-        // Could show a toast notification here
-        console.error('Chat Error:', message);
-    },
-
-    // ========================================
-    // LOAD HISTORY
-    // ========================================
-    async loadHistory(limit = 50) {
-        try {
-            // const messages = await API.get(`/chat/messages?limit=${limit}`);
-            // this.renderHistory(messages);
-            console.log('Chat history: API endpoint ready at /api/chat/messages');
-        } catch (error) {
-            console.error('Failed to load chat history:', error);
-        }
-    },
-
-    renderHistory(messages) {
-        const container = document.getElementById('chatMessages');
-        if (!container || !messages?.length) return;
-
-        container.innerHTML = messages.map(msg => {
-            const isOwn = msg.senderId === this.currentUser.id;
-            return `
-                <div class="chat-message ${isOwn ? 'own' : ''}" data-id="${msg.id}">
-                    <div class="chat-avatar">${Utils.getInitials(msg.sender)}</div>
-                    <div class="chat-bubble">
-                        <div class="chat-sender">${isOwn ? 'You' : Utils.escapeHtml(msg.sender)}</div>
-                        <div class="chat-text">${Utils.escapeHtml(msg.message)}</div>
-                        <div class="chat-time">${Utils.formatTime(msg.timestamp)}</div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-        
-        this.scrollToBottom();
-    },
-
-    // ========================================
-    // WEBSOCKET CONNECTION
-    // ========================================
-    connect(url) {
-        if (this.websocket) {
-            this.disconnect();
-        }
-
-        try {
-            this.websocket = new WebSocket(url);
-            
-            this.websocket.onopen = () => {
-                this.isConnected = true;
-                console.log('Chat WebSocket connected');
-                this.updateConnectionStatus(true);
-            };
-            
-            this.websocket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.handleWebSocketMessage(data);
-                } catch (e) {
-                    console.error('Failed to parse WebSocket message:', e);
-                }
-            };
-            
-            this.websocket.onclose = () => {
-                this.isConnected = false;
-                console.log('Chat WebSocket disconnected');
-                this.updateConnectionStatus(false);
-                
-                // Auto-reconnect after 5 seconds
-                setTimeout(() => {
-                    if (!this.isConnected) {
-                        this.connect(url);
-                    }
-                }, 5000);
-            };
-            
-            this.websocket.onerror = (error) => {
-                console.error('Chat WebSocket error:', error);
-            };
-        } catch (error) {
-            console.error('Failed to connect WebSocket:', error);
-        }
-    },
-
-    disconnect() {
-        if (this.websocket) {
-            this.websocket.close();
-            this.websocket = null;
-            this.isConnected = false;
-        }
-    },
-
-    handleWebSocketMessage(data) {
-        switch (data.type) {
-            case 'message':
-                this.receiveMessage(data);
-                break;
-            case 'typing':
-                this.showTypingIndicator(data);
-                break;
-            case 'online':
-                this.updateOnlineCount(data.count);
-                break;
-            default:
-                console.log('Unknown message type:', data.type);
-        }
-    },
-
-    updateConnectionStatus(connected) {
-        // Could update UI to show connection status
-    },
-
-    showTypingIndicator(data) {
-        // Show "X is typing..." indicator
-    },
-
-    updateOnlineCount(count) {
-        const countEl = document.querySelector('.section-actions .fa-users')?.parentElement;
-        if (countEl) {
-            countEl.innerHTML = `<i class="fas fa-users"></i> ${count} online`;
-        }
+  // ========================================
+  // INITIALIZATION
+  // ========================================
+  init() {
+    if (!CONFIG.features.chat) {
+      console.log('Chat feature disabled');
+      return;
     }
+
+    this.bindEvents();
+    this.loadTags().then(() => this.loadMessages());
+
+    // Auto-refresh messages
+    this._refreshTimer = setInterval(() => this.loadMessages(), CONFIG.refresh.chat || 5000);
+
+    console.log('Chat initialized');
+  },
+
+  bindEvents() {
+    // Form submit
+    const form = document.getElementById('chatForm');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.sendMessage();
+      });
+    }
+
+    const input = document.getElementById('chatInput');
+    if (input) {
+      input.addEventListener('input', (e) => {
+        if (e.target.value.length > CONFIG.chat.maxMessageLength) {
+          e.target.value = e.target.value.slice(0, CONFIG.chat.maxMessageLength);
+        }
+      });
+    }
+  },
+
+  // ========================================
+  // TAGS
+  // ========================================
+  async loadTags() {
+    try {
+      this.tags = await ServerAPI.getChatTags();
+      this.renderTagFilter();
+      this.renderTagPicker();
+    } catch (err) {
+      console.warn('Failed to load chat tags:', err);
+    }
+  },
+
+  renderTagFilter() {
+    const container = document.getElementById('chatTagFilter');
+    if (!container) return;
+
+    const esc = Utils.escapeHtml.bind(Utils);
+    let html = '<button type="button" class="chat-tag-btn chat-tag-all' +
+      (this.activeFilterTagId === null ? ' active' : '') +
+      '" data-tag-filter="all">All</button>';
+
+    this.tags.forEach(tag => {
+      const isActive = this.activeFilterTagId === tag.id;
+      html += '<button type="button" class="chat-tag-btn' + (isActive ? ' active' : '') +
+        '" data-tag-filter="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
+        esc(tag.name) + '</button>';
+    });
+
+    html += '<button type="button" class="chat-tag-btn chat-tag-create" id="chatCreateTagBtn" title="Create new tag">' +
+      '<i class="fas fa-plus"></i></button>';
+
+    container.innerHTML = html;
+
+    // Bind filter clicks
+    container.querySelectorAll('[data-tag-filter]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const val = btn.dataset.tagFilter;
+        this.activeFilterTagId = val === 'all' ? null : parseInt(val);
+        this.renderTagFilter();
+        this.loadMessages();
+      });
+    });
+
+    // Bind create tag
+    const createBtn = document.getElementById('chatCreateTagBtn');
+    if (createBtn) {
+      createBtn.addEventListener('click', () => this.promptCreateTag());
+    }
+  },
+
+  renderTagPicker() {
+    const container = document.getElementById('chatTagPicker');
+    if (!container) return;
+
+    const esc = Utils.escapeHtml.bind(Utils);
+    if (this.tags.length === 0) {
+      container.innerHTML = '<span class="chat-tag-picker-empty">No tags yet</span>';
+      return;
+    }
+
+    let html = '';
+    this.tags.forEach(tag => {
+      const isSelected = this.selectedTagIds.includes(tag.id);
+      html += '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
+        '" data-tag-pick="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
+        esc(tag.name) + '</button>';
+    });
+    container.innerHTML = html;
+
+    // Bind toggle
+    container.querySelectorAll('[data-tag-pick]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tid = parseInt(btn.dataset.tagPick);
+        if (this.selectedTagIds.includes(tid)) {
+          this.selectedTagIds = this.selectedTagIds.filter(x => x !== tid);
+          btn.classList.remove('selected');
+        } else {
+          this.selectedTagIds.push(tid);
+          btn.classList.add('selected');
+        }
+      });
+    });
+  },
+
+  async promptCreateTag() {
+    const name = prompt('Enter a name for the new tag:');
+    if (!name || !name.trim()) return;
+
+    // Pick a color from palette
+    const colors = ['#8cc63e', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#10b981'];
+    const color = colors[this.tags.length % colors.length];
+
+    try {
+      const tag = await ServerAPI.createChatTag(name.trim(), color);
+      if (tag && tag.id) {
+        // Avoid duplicate
+        if (!this.tags.find(t => t.id === tag.id)) {
+          this.tags.push(tag);
+        }
+        this.renderTagFilter();
+        this.renderTagPicker();
+      }
+    } catch (err) {
+      console.error('Failed to create tag:', err);
+      alert('Failed to create tag. It may already exist.');
+    }
+  },
+
+  // ========================================
+  // MESSAGES
+  // ========================================
+  async loadMessages() {
+    try {
+      const params = { limit: 50 };
+      if (this.activeFilterTagId) params.tag = this.activeFilterTagId;
+
+      const messages = await ServerAPI.getChatMessages(params);
+      this.messages = messages;
+      this.renderMessages(messages);
+    } catch (err) {
+      console.warn('Failed to load chat messages:', err);
+    }
+  },
+
+  renderMessages(messages) {
+    const container = document.getElementById('chatMessages');
+    if (!container) return;
+
+    const userId = CONFIG.currentUser?.id;
+    const esc = Utils.escapeHtml.bind(Utils);
+
+    if (!messages || messages.length === 0) {
+      container.innerHTML = '<div class="chat-empty"><i class="fas fa-comments"></i><p>No messages yet. Start the conversation!</p></div>';
+      return;
+    }
+
+    container.innerHTML = messages.map(msg => {
+      const isOwn = msg.user_id === userId;
+      const tagsHtml = (msg.tags && msg.tags.length > 0)
+        ? '<div class="chat-msg-tags">' +
+          msg.tags.map(t =>
+            '<span class="chat-msg-tag" style="--tag-color: ' + esc(t.color || '#8cc63e') + ';">' + esc(t.name) + '</span>'
+          ).join('') +
+          '</div>'
+        : '';
+
+      return '<div class="chat-message' + (isOwn ? ' own' : '') + '" data-msg-id="' + msg.id + '">' +
+        '<div class="chat-avatar">' + esc(msg.sender_initials || '??') + '</div>' +
+        '<div class="chat-bubble">' +
+          '<div class="chat-sender">' + (isOwn ? 'You' : esc(msg.sender_name)) + '</div>' +
+          '<div class="chat-text">' + esc(msg.message) + '</div>' +
+          tagsHtml +
+          '<div class="chat-meta">' +
+            '<span class="chat-time">' + this.formatTime(msg.created_at) + '</span>' +
+            '<button type="button" class="chat-tag-edit-btn" title="Edit tags"><i class="fas fa-tag"></i></button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    // Bind tag edit buttons
+    container.querySelectorAll('.chat-tag-edit-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const msgEl = btn.closest('[data-msg-id]');
+        if (msgEl) this.showTagEditor(parseInt(msgEl.dataset.msgId), btn);
+      });
+    });
+
+    this.scrollToBottom();
+  },
+
+  showTagEditor(msgId, anchorEl) {
+    // Remove existing popover
+    document.querySelectorAll('.chat-tag-popover').forEach(el => el.remove());
+
+    const msg = this.messages.find(m => m.id === msgId);
+    if (!msg) return;
+
+    const currentTagIds = (msg.tags || []).map(t => t.id);
+    const esc = Utils.escapeHtml.bind(Utils);
+
+    const popover = document.createElement('div');
+    popover.className = 'chat-tag-popover';
+
+    let html = '<div class="chat-tag-popover-title">Tags</div><div class="chat-tag-popover-list">';
+    this.tags.forEach(tag => {
+      const checked = currentTagIds.includes(tag.id) ? ' checked' : '';
+      html += '<label class="chat-tag-popover-item">' +
+        '<input type="checkbox" value="' + tag.id + '"' + checked + ' /> ' +
+        '<span class="chat-tag-pill" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' + esc(tag.name) + '</span>' +
+      '</label>';
+    });
+    if (this.tags.length === 0) {
+      html += '<p class="chat-tag-popover-empty">No tags yet. Create one above.</p>';
+    }
+    html += '</div>';
+    html += '<div class="chat-tag-popover-actions">' +
+      '<button type="button" class="btn btn-sm btn-primary chat-tag-popover-save">Save</button>' +
+      '<button type="button" class="btn btn-sm btn-secondary chat-tag-popover-cancel">Cancel</button>' +
+    '</div>';
+
+    popover.innerHTML = html;
+
+    // Position near the anchor
+    const bubble = anchorEl.closest('.chat-bubble');
+    if (bubble) {
+      bubble.style.position = 'relative';
+      bubble.appendChild(popover);
+    } else {
+      document.body.appendChild(popover);
+    }
+
+    // Save handler
+    popover.querySelector('.chat-tag-popover-save').addEventListener('click', async () => {
+      const selected = Array.from(popover.querySelectorAll('input[type=checkbox]:checked'))
+        .map(cb => parseInt(cb.value));
+
+      try {
+        await ServerAPI.updateMessageTags(msgId, selected);
+        // Update local cache
+        msg.tags = selected.map(tid => this.tags.find(t => t.id === tid)).filter(Boolean);
+        this.renderMessages(this.messages);
+      } catch (err) {
+        console.error('Failed to update tags:', err);
+      }
+
+      popover.remove();
+    });
+
+    // Cancel handler
+    popover.querySelector('.chat-tag-popover-cancel').addEventListener('click', () => {
+      popover.remove();
+    });
+
+    // Close on outside click
+    setTimeout(() => {
+      const closeHandler = (e) => {
+        if (!popover.contains(e.target)) {
+          popover.remove();
+          document.removeEventListener('click', closeHandler);
+        }
+      };
+      document.addEventListener('click', closeHandler);
+    }, 0);
+  },
+
+  // ========================================
+  // SEND MESSAGE
+  // ========================================
+  async sendMessage() {
+    const input = document.getElementById('chatInput');
+    const message = input?.value.trim();
+    if (!message) return;
+
+    input.value = '';
+    input.focus();
+
+    try {
+      const newMsg = await ServerAPI.sendChatMessage(message, this.selectedTagIds);
+      // Clear selected tags after send
+      this.selectedTagIds = [];
+      this.renderTagPicker();
+
+      // Add to local cache and re-render
+      if (newMsg && newMsg.id) {
+        this.messages.push(newMsg);
+        this.renderMessages(this.messages);
+      }
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      // Put text back so user doesn't lose it
+      if (input) input.value = message;
+    }
+  },
+
+  // ========================================
+  // HELPERS
+  // ========================================
+  scrollToBottom() {
+    const container = document.getElementById('chatMessages');
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  },
+
+  formatTime(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+
+    if (isToday) {
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+      ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
 };
 
-// Global function for onclick handler
 window.sendMessage = () => Chat.sendMessage();
-
-// Export to global scope
 window.Chat = Chat;

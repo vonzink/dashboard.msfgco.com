@@ -375,7 +375,19 @@
       </div>
       <div class="section-body">
         <div class="chat-container">
+          <!-- Tag filter bar -->
+          <div class="chat-tag-filter-bar" id="chatTagFilter"></div>
+
+          <!-- Messages -->
           <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+
+          <!-- Tag picker for outgoing messages -->
+          <div class="chat-tag-picker-bar">
+            <span class="chat-tag-picker-label"><i class="fas fa-tags"></i> Tags:</span>
+            <div class="chat-tag-picker" id="chatTagPicker"></div>
+          </div>
+
+          <!-- Input -->
           <form class="chat-input-row" id="chatForm">
             <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." maxlength="1000" autocomplete="off" />
             <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
