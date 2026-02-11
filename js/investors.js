@@ -9,495 +9,11 @@ const Investors = {
   editMode: false,
 
   // =========================================================
-  // INVESTOR DATA
-  // Keys match the data-investor="" attributes used in HTML.
+  // INVESTOR DATA — loaded from API at runtime
+  // Keys match the data-investor="" attributes (investor_key column).
   // =========================================================
-  data: {
-    '5th-street-capital': {
-      name: '5th Street Capital',
-      accountExecutive: { name: 'Jaime Pierce', email: 'j.pierce@5thstcap.com', mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'a-mortgage-boutique': {
-      name: 'A Mortgage Boutique',
-      accountExecutive: { name: 'John Purchio', email: 'John.Purchio@amortgageboutique.com', mobile: '925-788-6998' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'ad-mortgage': {
-      name: 'AD Mortgage',
-      accountExecutive: { name: 'Cari Smith', email: 'cari.smith@admortgage.com', mobile: '303-358-5122' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 25000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'acc-mortgage': {
-      name: 'ACC Mortgage',
-      accountExecutive: { name: 'Debra Santeufemio', email: 'deb.santeufemio@accmortgage.com', mobile: '240.357.8223' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'acra-lending': {
-      name: 'Acra Lending',
-      accountExecutive: { name: 'Eric Do', email: 'Eric.Do@acralending.com', mobile: '478-461-4287' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'ahl-funding': {
-      name: 'AHL Funding',
-      accountExecutive: { name: 'Henry Liner', email: 'henry.liner@ahlmail.com', mobile: '(440) 567-3029' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'amwest': {
-      name: 'AmWest',
-      accountExecutive: { name: 'Christian Kim', email: 'christian.kim@amwestfunding.com', mobile: '714-831-3251' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'anchor-loans': {
-      name: 'Anchor Loans',
-      accountExecutive: { name: 'Tim Cheatham', email: 'timc@anchorloans.com', mobile: '805-724-3180' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'angel-oak': {
-      name: 'Angel Oak',
-      accountExecutive: { name: 'Chris Taylor', email: 'chris.taylor@angeloakms.com', mobile: '720-695-9330' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'arc': {
-      name: 'ARC',
-      accountExecutive: { name: 'Joe Foster', email: 'jfoster@archometpo.com', mobile: '720-560-0496' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'ardri': {
-      name: 'ARDRI',
-      accountExecutive: { name: 'Erika Kelly', email: 'erika@ardri.ai', mobile: '747-238-3514' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'axos': {
-      name: 'Axos',
-      accountExecutive: { name: 'McKenna Bond', email: 'mbond@axosbank.com', mobile: '858-744-8582' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'bluepoint': {
-      name: 'Bluepoint Mortgage',
-      accountExecutive: { name: 'Matthew Guerra', email: 'mguerra@bluepointmtg.com', mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'brokers-advantage': {
-      name: 'Brokers Advantage',
-      accountExecutive: { name: 'Benjamin Brunner', email: 'bbrunner@brokersadvantagemtg.com', mobile: '630-291-1499' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'brokers-first-funding': {
-      name: 'Brokers First Funding',
-      accountExecutive: { name: 'Mike Fields', email: 'mfields@bffws.com', mobile: '424-335-7738' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'cardinal': {
-      name: 'Cardinal Financial',
-      accountExecutive: { name: 'Terri Cutting', email: 'terri.cutting@cardinalfinancial.com', mobile: '480-351-5896' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'carrington': {
-      name: 'Carrington Mortgage',
-      accountExecutive: { name: 'April Guidetti', email: 'April.Guidetti@carringtonms.com', mobile: '949-413-3782' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'celtic-bank': {
-      name: 'Celtic Bank',
-      accountExecutive: { name: 'Pamela Borough', email: 'pamela.borough@celticloan.com', mobile: '858-776-5947' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'change-wholesale': {
-      name: 'Change Wholesale',
-      accountExecutive: { name: 'Clark Knoblock', email: 'Clark.Knoblock@changewholesale.com', mobile: '818-612-7246' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'civic': {
-      name: 'Civic',
-      accountExecutive: { name: 'Steven Weinstock', email: 'steven.weinstock@civicfs.com', mobile: '818-937-0908' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'click-n-close': {
-      name: 'Click n Close',
-      accountExecutive: { name: 'Brett Barnett', email: 'brett.barnett@clicknclose.com', mobile: 'Office 563-332-2529 / Cell 563-271-4087' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'cmg': {
-      name: 'CMG',
-      accountExecutive: { name: 'James Manero', email: 'jmanero@cmgfi.com', mobile: '301-339-6722' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'deephaven': {
-      name: 'Deephaven',
-      accountExecutive: { name: 'Jimmy Smith', email: 'jsmith@deephavenmortgage.com', mobile: 'Direct 704-709-0281 / Mobile 303-909-8225' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'e2': {
-      name: 'E2 / First State Bank',
-      accountExecutive: { name: null, email: null, mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'epm': {
-      name: 'EPM',
-      accountExecutive: { name: 'Ray Kopitsch', email: 'rkopitsch@epm.net', mobile: '906-440-0178' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'far': {
-      name: 'Finance of America Reverse',
-      accountExecutive: { name: 'Sheila Lancaster & Nicole Holman', email: 'slancaster@far.com, nholman@far.com', mobile: 'SL: 678-317-4033 / NH: 631-622-4512 / NH cell: 404-563-5729' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'fnba': {
-      name: 'First National Bank of America',
-      accountExecutive: { name: 'Eric Martin', email: 'eric.martin@fnba.com', mobile: '517-679-6518' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'freedom': {
-      name: 'Freedom Mortgage',
-      accountExecutive: { name: 'Neiko Basile', email: 'neiko.basile@freedommortgage.com', mobile: '310-871-5923' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'fund-loans': {
-      name: 'Fund Loans',
-      accountExecutive: { name: 'Zachary Burch', email: 'zburch@fundloans.com', mobile: '760-688-7456' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'giant-lending': {
-      name: 'Giant Lending',
-      accountExecutive: { name: 'Michael Cleary', email: 'mcleary@thegiantlending.com', mobile: '714-348-8149' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'homebridge': {
-      name: 'Homebridge Wholesale',
-      accountExecutive: { name: 'Dana Gibson', email: 'dgibson@homebridge.com', mobile: '619-251-6139' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'homelight': {
-      name: 'HomeLight',
-      accountExecutive: { name: 'TJ Sims', email: 'tj.sims@homelight.com', mobile: '480-864-0861' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'homexpress': {
-      name: 'HomeXpress',
-      accountExecutive: { name: 'Chad Curley', email: 'ccurley@homexmortgage.com', mobile: '719-487-5021' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'instalend': {
-      name: 'InstaLend',
-      accountExecutive: { name: 'Sohin Shah', email: 'sohin.shah@instalend.com', mobile: '917-435-5308' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'interfirst': {
-      name: 'Interfirst',
-      accountExecutive: { name: 'Dee Morelli', email: 'dmorelli@interfirst.com', mobile: 'O: 847-999-3198 / C: 630-956-0133' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'jet-mortgage': {
-      name: 'Jet Mortgage',
-      accountExecutive: { name: 'Yvonne Acosta', email: 'yvonne.acosta@jetmortgage.com', mobile: '714-673-6647' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'jmac': {
-      name: 'JMAC Lending',
-      accountExecutive: { name: 'Michael Martin', email: 'michael.martin@jmaclending.com', mobile: '949-390-2630' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'keystone': {
-      name: 'Keystone Funding',
-      accountExecutive: { name: 'Ralph Hartwig', email: 'rhartwig@keystonefunding.com', mobile: '303-324-0098' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'kind-lending': {
-      name: 'Kind Lending',
-      accountExecutive: { name: 'Michael Carew', email: 'mcarew@kindlending.com', mobile: '858-248-1273' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'knock': {
-      name: 'Knock',
-      accountExecutive: { name: 'Tammie Brethower', email: 'tammie@knock.com', mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'land-home': {
-      name: 'Land Home Financial Services',
-      accountExecutive: { name: 'Ray Munnings', email: 'Ray.Munnings@lhfs.com', mobile: '303-304-2576' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'lead-funding': {
-      name: 'Lead Funding',
-      accountExecutive: { name: 'Jason Richards', email: 'jason@leadfunding.com', mobile: '720-789-7632' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'lend-sure': {
-      name: 'Lend Sure (Non-QM)',
-      accountExecutive: { name: 'Phil Garonzik', email: 'pgaronzik@lendsure.com', mobile: '720-304-5082' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'lendz': {
-      name: 'Lendz Financial',
-      accountExecutive: { name: 'Aaron Easton', email: 'aaron.easton@lendzfinancial.com', mobile: '720-304-5082' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'lima-one': {
-      name: 'Lima One Capital',
-      accountExecutive: { name: 'Devin Stewart', email: 'dstewart@limaone.com', mobile: '714-767-6939' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'loanstream': {
-      name: 'LoanStream',
-      accountExecutive: { name: 'Laurie Simmons', email: 'lsimmons@lsmortgage.com', mobile: '864-249-4932' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'logan-finance': {
-      name: 'Logan Finance',
-      accountExecutive: { name: 'Jamie Lokan', email: 'jlokan@loganfinance.com', mobile: '918-691-7272' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'mlb': {
-      name: 'MLB Wholesale',
-      accountExecutive: { name: 'Justin Wolfe', email: 'jwolfe@mlbmortgage.com', mobile: '469-960-4771' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'mutual-of-omaha': {
-      name: 'Mutual of Omaha Mortgage',
-      accountExecutive: { name: 'John Mertz', email: 'jmertz@mutualmortgage.com', mobile: '908-370-6900' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'newfi': {
-      name: 'Newfi Lending',
-      accountExecutive: { name: 'Chris Kniker', email: 'ckniker@newfi.com', mobile: '720-708-8967' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'newrez': {
-      name: 'NewRez',
-      accountExecutive: { name: 'Zachary Carr', email: 'zachary.carr@newrez.com', mobile: '303-437-3021' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'orion': {
-      name: 'Orion',
-      accountExecutive: { name: 'Dawn McDonald', email: 'dmcdonald@orionlending.com', mobile: '586-382-0130' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'prmg': {
-      name: 'PRMG',
-      accountExecutive: { name: 'Greg Palas', email: 'gpalas@prmg.net', mobile: '303-947-5244' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'plaza': {
-      name: 'Plaza',
-      accountExecutive: { name: 'Todd Biddison', email: 'todd.biddison@plazahomemortgage.com', mobile: '515-360-3722' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'principle': {
-      name: 'Principle Lending',
-      accountExecutive: { name: 'John Mertz', email: 'jmertz@principlelending.com', mobile: 'O: 303-597-0440 Ext 2311 / C: 970-222-8170' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'provident': {
-      name: 'Provident',
-      accountExecutive: { name: 'Kim Jordan', email: 'kjordan@provident.com', mobile: '720-708-8967' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'supreme': {
-      name: 'Supreme Lending',
-      accountExecutive: { name: 'Bob Orban', email: 'Bob.Orban@SupremeLending.com', mobile: '412-278-5974' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'the-lender': {
-      name: 'the Lender',
-      accountExecutive: { name: 'Patty Lee', email: 'plee@thelender.com', mobile: '303-250-6731' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'the-loan-store': {
-      name: 'The Loan Store',
-      accountExecutive: { name: 'Sean Cartaya', email: 'scartaya@theloanstore.com', mobile: '949-266-0693' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'towne': {
-      name: 'Towne Mortgage Company',
-      accountExecutive: { name: 'Ryan Lopez', email: 'rlopez@townemortgage.com', mobile: '702-427-7553' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'triad': {
-      name: 'TRIAD',
-      accountExecutive: { name: 'Brady Way', email: 'bway@triadfs.com', mobile: '248-921-6115' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'union-home': {
-      name: 'Union Home Mortgage',
-      accountExecutive: { name: 'Burdette Baker', email: 'bbaker@uhm.com', mobile: '913-620-8131' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'uwm': {
-      name: 'UWM',
-      accountExecutive: { name: 'Rocky Lund', email: 'rlund@uwm.com', mobile: '330-398-0985' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'village-capital': {
-      name: 'Village Capital',
-      accountExecutive: { name: 'Robert Little', email: 'rolittle@villagecapital.com', mobile: '800-981-8898 x3496' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'windsor': {
-      name: 'Windsor Mortgage',
-      accountExecutive: { name: 'Mariah Jorgensen', email: 'mjorgensen@windsormortgage.com', mobile: '801-604-2364' },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    // Placeholder entries for existing dropdown items not in JSON
-    'flagstar': {
-      name: 'Flagstar',
-      accountExecutive: { name: null, email: null, mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'homepoint': {
-      name: 'Homepoint',
-      accountExecutive: { name: null, email: null, mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'kirkwood': {
-      name: 'Kirkwood',
-      accountExecutive: { name: null, email: null, mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    },
-    'amerihome': {
-      name: 'AmeriHome',
-      accountExecutive: { name: null, email: null, mobile: null },
-      states: null, bestPrograms: null, minimumFico: null, inHouseDpa: null,
-      epo: null, maxComp: 18000, docReviewForWireRelease: null, remoteClosingReview: null,
-      websiteUrl: null, notes: ''
-    }
-  },
+  data: {},
+  _loaded: false,
 
   // =========================================================
   // FIELD DEFINITIONS (ordered as requested)
@@ -523,9 +39,55 @@ const Investors = {
     this.bindModalClose();
     this.bindCompanyContactsModalClose();
     this.bindGlobalEscapeClose();
-    // Replace hardcoded dropdown with the full dynamic investor list
-    this._refreshDropdown();
-    console.log('Investors module initialized (' + Object.keys(this.data).length + ' investors loaded)');
+    // Load investor data from API, then build the dropdown
+    this.loadFromAPI();
+    console.log('Investors module initializing...');
+  },
+
+  /** Fetch investors from API and populate this.data */
+  async loadFromAPI() {
+    try {
+      const rows = await ServerAPI.getInvestors();
+      if (!Array.isArray(rows)) return;
+
+      this.data = {};
+      rows.forEach(row => {
+        const key = row.investor_key;
+        if (!key) return;
+        this.data[key] = {
+          id:                      row.id,
+          name:                    row.name || key,
+          accountExecutive: {
+            name:   row.account_executive_name || null,
+            email:  row.account_executive_email || null,
+            mobile: row.account_executive_mobile || null
+          },
+          states:                  row.states || null,
+          bestPrograms:            row.best_programs || null,
+          minimumFico:             row.minimum_fico || null,
+          inHouseDpa:              row.in_house_dpa || null,
+          epo:                     row.epo || null,
+          maxComp:                 row.max_comp != null ? Number(row.max_comp) : null,
+          docReviewForWireRelease: row.doc_review_wire || null,
+          remoteClosingReview:     row.remote_closing_review || null,
+          websiteUrl:              row.website_url || null,
+          logoUrl:                 row.logo_url || null,
+          notes:                   row.notes || ''
+        };
+      });
+
+      this._loaded = true;
+      this._refreshDropdown();
+      console.log('Investors loaded from API (' + Object.keys(this.data).length + ' investors)');
+    } catch (err) {
+      console.error('Failed to load investors from API:', err);
+      // Show an error in the dropdown
+      const container = document.getElementById('investorDropdownList');
+      if (container) {
+        container.innerHTML = '<div class="dropdown-header">Wholesale Partners</div>' +
+          '<span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Failed to load investors</span>';
+      }
+    }
   },
 
   // =========================================================

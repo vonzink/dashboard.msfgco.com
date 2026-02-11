@@ -5,39 +5,20 @@ const db = require('../db/connection');
 const { isAdmin } = require('../middleware/userContext');
 
 // ──────────────────────────────────────────────
-// GET /api/investors — Get all investors
+// GET /api/investors — Get all investors (lightweight list)
+// Returns only the core fields needed for dropdown + manage list.
+// Use GET /api/investors/:key for full detail (team, links, etc.)
 // ──────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
-    const [investors] = await db.query('SELECT * FROM investors ORDER BY name');
-
-    // Get related data for each investor
-    for (const investor of investors) {
-      const [team] = await db.query(
-        'SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name',
-        [investor.id]
-      );
-      investor.team = team;
-
-      const [lenderIds] = await db.query(
-        'SELECT * FROM investor_lender_ids WHERE investor_id = ?',
-        [investor.id]
-      );
-      investor.lenderIds = lenderIds[0] || {};
-
-      const [clauses] = await db.query(
-        'SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?',
-        [investor.id]
-      );
-      investor.mortgageeClauses = clauses;
-
-      const [links] = await db.query(
-        'SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type',
-        [investor.id]
-      );
-      investor.links = links;
-    }
-
+    const [investors] = await db.query(
+      `SELECT id, investor_key, name,
+              account_executive_name, account_executive_email, account_executive_mobile,
+              states, best_programs, minimum_fico, in_house_dpa,
+              epo, max_comp, doc_review_wire, remote_closing_review,
+              website_url, logo_url, notes
+       FROM investors ORDER BY name`
+    );
     res.json(investors);
   } catch (error) {
     next(error);
