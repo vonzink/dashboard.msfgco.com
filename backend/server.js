@@ -30,6 +30,7 @@ const contentGenerateRoutes = require('./routes/contentGenerate');
 const contentItemsRoutes = require('./routes/contentItems');
 const contentPublishRoutes = require('./routes/contentPublish');
 const mondayRoutes = require('./routes/monday');
+const calendarEventsRoutes = require('./routes/calendarEvents');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -127,6 +128,9 @@ app.use('/api/content/publish', authenticate, contentPublishRoutes);
 
 // Monday.com integration (read-only sync)
 app.use('/api/monday', authenticate, mondayRoutes);
+
+// Company Calendar
+app.use('/api/calendar-events', authenticate, calendarEventsRoutes);
 
 // ======================
 // ERROR HANDLING

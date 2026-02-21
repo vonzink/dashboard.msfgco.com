@@ -1,0 +1,278 @@
+/* === MSFG Brand Tokens === */
+:root {
+  --msfg-green: #8cc63E;
+  --msfg-teal: #104547;
+  --msfg-gray: #404041;
+  --msfg-light-green: rgba(140, 198, 62, .18);
+  --msfg-green-border: rgba(140, 198, 62, .9);
+  --radius: 12px;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f5f7f3;
+  color: var(--msfg-gray);
+}
+
+/* =============================================
+   LANDING PAGE
+   ============================================= */
+.landingPage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.landing {
+  text-align: center;
+  padding: 40px;
+}
+
+.landing-card {
+  background: #fff;
+  border-radius: 20px;
+  padding: 48px 56px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.08);
+  max-width: 420px;
+  margin: 0 auto;
+  border-top: 5px solid var(--msfg-green);
+}
+
+.landing-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.landing-card h1 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--msfg-teal);
+}
+
+.landing-card p {
+  margin: 0 0 28px;
+  font-size: 14px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.launch-btn {
+  display: inline-block;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 14px 36px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--msfg-teal);
+  color: #fff;
+  transition: background .15s;
+}
+.launch-btn:hover {
+  background: #0d3839;
+}
+
+/* =============================================
+   CALENDAR PAGE
+   ============================================= */
+.calendarPage {
+  padding: 20px 40px 40px;
+}
+
+/* === Page Header === */
+.pageHeader {
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  padding: 16px 24px;
+  background: var(--msfg-teal);
+  border-radius: var(--radius);
+  text-align: center;
+}
+.pageHeader h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: .5px;
+}
+
+/* === Calendar Container === */
+#calendarWrap {
+  position: relative;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+#calendar {
+  width: 100%;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+}
+
+/* === FullCalendar Toolbar === */
+.fc .fc-toolbar-title {
+  color: var(--msfg-teal);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.fc .fc-button {
+  background: var(--msfg-teal);
+  border-color: var(--msfg-teal);
+  font-weight: 700;
+  border-radius: 8px !important;
+  text-transform: capitalize;
+  font-size: 13px;
+  padding: 6px 12px;
+}
+.fc .fc-button:hover {
+  background: #0d3839;
+  border-color: #0d3839;
+}
+.fc .fc-button-active,
+.fc .fc-button:active {
+  background: var(--msfg-green) !important;
+  border-color: var(--msfg-green) !important;
+  color: var(--msfg-teal) !important;
+}
+
+.fc .fc-today-button {
+  background: var(--msfg-green);
+  border-color: var(--msfg-green);
+  color: var(--msfg-teal);
+  font-weight: 800;
+}
+.fc .fc-today-button:hover {
+  filter: brightness(.95);
+}
+.fc .fc-today-button:disabled {
+  opacity: .5;
+}
+
+/* === Today Highlight === */
+.fc .fc-day-today {
+  background: var(--msfg-light-green) !important;
+}
+
+/* === Events === */
+.fc .fc-event {
+  background: var(--msfg-teal);
+  border-color: var(--msfg-teal);
+  border-radius: 6px;
+  padding: 1px 4px;
+  font-size: 12px;
+}
+.fc .fc-daygrid-event {
+  border-radius: 6px;
+}
+
+/* =============================================
+   FLOATING DATA PANEL (draggable, no overlay)
+   ============================================= */
+.floating-panel {
+  position: fixed;
+  top: 120px;
+  right: 32px;
+  width: 380px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.04);
+  padding: 20px;
+  border-top: 4px solid var(--msfg-green);
+  z-index: 9999;
+  user-select: none;
+}
+
+.floating-panel .panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  cursor: grab;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.floating-panel .panelHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--msfg-teal);
+  pointer-events: none;
+}
+
+.floating-panel .closeX {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 10px;
+  color: var(--msfg-gray);
+}
+.floating-panel .closeX:hover { background: rgba(0,0,0,.06); }
+
+/* === Form Fields === */
+.floating-panel label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 10px;
+  color: var(--msfg-gray);
+  user-select: text;
+}
+.floating-panel input, .floating-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: var(--radius);
+  outline: none;
+  font-family: inherit;
+  font-size: 14px;
+  user-select: text;
+}
+.floating-panel input:focus, .floating-panel textarea:focus {
+  border-color: var(--msfg-green-border);
+  box-shadow: 0 0 0 4px var(--msfg-light-green);
+}
+
+/* === Action Buttons === */
+.floating-panel .actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.floating-panel button {
+  border: 0;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 13px;
+}
+#btnSave {
+  background: var(--msfg-green);
+  color: var(--msfg-teal);
+}
+#btnSave:hover { filter: brightness(0.95); }
+
+#btnCancel {
+  background: rgba(0,0,0,.06);
+  color: var(--msfg-gray);
+}
+#btnCancel:hover { background: rgba(0,0,0,.09); }
+
+#btnDelete {
+  background: rgba(255, 0, 0, .10);
+  color: #b00020;
+}
+#btnDelete:hover { background: rgba(255, 0, 0, .16); }

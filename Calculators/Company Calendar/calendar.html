@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>MSFG Company Calendar</title>
+
+  <link rel="stylesheet" href="styles.css">
+
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+</head>
+
+<body class="calendarPage">
+  <div class="pageHeader">
+    <h2>MSFG Team Calendar</h2>
+  </div>
+
+  <div id="calendarWrap">
+    <div id="calendar"></div>
+  </div>
+
+  <!-- Floating draggable data panel -->
+  <div id="eventPanel" class="floating-panel" style="display:none;">
+    <div class="panelHeader" id="panelDragHandle">
+      <h3 id="modalTitle">Add Event</h3>
+      <button class="closeX" id="btnX" title="Close">&#10005;</button>
+    </div>
+
+    <label>Title
+      <input id="f_title" placeholder="Vacation / Out / Big Event" />
+    </label>
+
+    <label>Who
+      <input id="f_who" placeholder="Name" />
+    </label>
+
+    <label>Start
+      <input id="f_start" type="datetime-local" />
+    </label>
+
+    <label>End
+      <input id="f_end" type="datetime-local" />
+    </label>
+
+    <label>Notes
+      <textarea id="f_notes" rows="3" placeholder="Any details..."></textarea>
+    </label>
+
+    <div class="actions">
+      <button id="btnDelete" style="display:none;">Delete</button>
+      <button id="btnCancel">Cancel</button>
+      <button id="btnSave">Save</button>
+    </div>
+  </div>
+
+  <script>
+    /* ── Dashboard API integration ── */
+    const API_BASE = window.location.protocol === 'https:'
+      ? 'https://api.msfgco.com/api'
+      : 'http://54.175.238.145:8080/api';
+
+    function getAuthToken() {
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+      return (
+        localStorage.getItem('auth_token') ||
+        (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null) ||
+        sessionStorage.getItem('auth_token')
+      );
+    }
+
+    async function api(path, opts = {}) {
+      const token = getAuthToken();
+      const headers = { 'Content-Type': 'application/json', ...opts.headers };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+
+      const res = await fetch(API_BASE + path, { ...opts, headers });
+      if (res.status === 401) {
+        alert('Session expired. Please log in again.');
+        return;
+      }
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function toLocalInputValue(date) {
+      if (!date) return '';
+      const pad = n => String(n).padStart(2, '0');
+      const d = new Date(date);
+      return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      const panel      = document.getElementById('eventPanel');
+      const modalTitle = document.getElementById('modalTitle');
+      const fTitle     = document.getElementById('f_title');
+      const fWho       = document.getElementById('f_who');
+      const fStart     = document.getElementById('f_start');
+      const fEnd       = document.getElementById('f_end');
+      const fNotes     = document.getElementById('f_notes');
+      const btnSave    = document.getElementById('btnSave');
+      const btnCancel  = document.getElementById('btnCancel');
+      const btnDelete  = document.getElementById('btnDelete');
+      const btnX       = document.getElementById('btnX');
+
+      /* ── Draggable floating panel ── */
+      const handle = document.getElementById('panelDragHandle');
+      let isDragging = false, dragOffsetX = 0, dragOffsetY = 0;
+
+      handle.addEventListener('mousedown', function(e) {
+        if (e.target.closest('.closeX')) return;
+        isDragging = true;
+        const rect = panel.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        handle.style.cursor = 'grabbing';
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const x = Math.max(0, Math.min(e.clientX - dragOffsetX, window.innerWidth - panel.offsetWidth));
+        const y = Math.max(0, Math.min(e.clientY - dragOffsetY, window.innerHeight - panel.offsetHeight));
+        panel.style.left = x + 'px';
+        panel.style.top  = y + 'px';
+        panel.style.right = 'auto';
+      });
+
+      document.addEventListener('mouseup', function() {
+        isDragging = false;
+        handle.style.cursor = 'grab';
+      });
+
+      /* ── Open / Close ── */
+      function openPanel() {
+        panel.style.display = 'block';
+        if (!panel.style.left || panel.style.left === 'auto') {
+          panel.style.top   = '120px';
+          panel.style.right = '32px';
+          panel.style.left  = 'auto';
+        }
+      }
+      function closePanel() { panel.style.display = 'none'; }
+
+      btnCancel.onclick = closePanel;
+      btnX.onclick = closePanel;
+
+      let editingEvent = null;
+
+      function primeFormForCreate(startDate, endDate) {
+        editingEvent = null;
+        btnDelete.style.display = 'none';
+        modalTitle.textContent = 'Add Event';
+        fTitle.value = '';
+        fWho.value   = '';
+        fNotes.value = '';
+        fStart.value = toLocalInputValue(startDate);
+        fEnd.value   = toLocalInputValue(endDate);
+      }
+
+      function primeFormForEdit(event) {
+        editingEvent = event;
+        btnDelete.style.display = 'inline-block';
+        modalTitle.textContent = 'Edit Event';
+        fTitle.value = event.title || '';
+        fWho.value   = event.extendedProps.who || '';
+        fNotes.value = event.extendedProps.notes || '';
+        fStart.value = toLocalInputValue(event.start);
+        fEnd.value   = toLocalInputValue(event.end);
+      }
+
+      /* ── FullCalendar ── */
+      var calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+        },
+        initialView: 'timeGridWeek',
+        selectable: true,
+        editable: true,
+
+        dateClick: function(info) {
+          var start = info.date;
+          var end = new Date(start.getTime() + 60 * 60 * 1000);
+          primeFormForCreate(start, end);
+          openPanel();
+        },
+
+        select: function(selectionInfo) {
+          primeFormForCreate(selectionInfo.start, selectionInfo.end);
+          openPanel();
+          calendar.unselect();
+        },
+
+        events: async function(info, success, failure) {
+          try {
+            var rows = await api('/calendar-events');
+            success(rows.map(function(r) {
+              return {
+                id: String(r.id),
+                title: r.title,
+                start: r.start,
+                end: r.end,
+                allDay: !!r.allDay,
+                extendedProps: { who: r.who || '', notes: r.notes || '' }
+              };
+            }));
+          } catch (e) { failure(e); }
+        },
+
+        eventClick: function(info) {
+          primeFormForEdit(info.event);
+          openPanel();
+        },
+
+        eventChange: async function(changeInfo) {
+          var e = changeInfo.event;
+          await api('/calendar-events/' + e.id, {
+            method: 'PUT',
+            body: JSON.stringify({
+              title: e.title,
+              who: e.extendedProps.who || '',
+              notes: e.extendedProps.notes || '',
+              start: e.start.toISOString(),
+              end: e.end ? e.end.toISOString() : null,
+              allDay: e.allDay
+            })
+          });
+        },
+
+        eventContent: function(arg) {
+          var who = arg.event.extendedProps.who;
+          var title = who ? arg.event.title + ' — ' + who : arg.event.title;
+          return { html: '<span>' + title + '</span>' };
+        }
+      });
+
+      /* ── Save ── */
+      btnSave.onclick = async function() {
+        var payload = {
+          title: fTitle.value.trim(),
+          who:   fWho.value.trim(),
+          start: fStart.value ? new Date(fStart.value).toISOString() : null,
+          end:   fEnd.value   ? new Date(fEnd.value).toISOString()   : null,
+          allDay: false,
+          notes: fNotes.value.trim()
+        };
+
+        if (!payload.title || !payload.start) {
+          alert('Title and Start are required.');
+          return;
+        }
+
+        if (!editingEvent) {
+          var created = await api('/calendar-events', { method: 'POST', body: JSON.stringify(payload) });
+          calendar.addEvent({
+            id: String(created.id),
+            title: payload.title,
+            start: payload.start,
+            end: payload.end,
+            allDay: false,
+            extendedProps: { who: payload.who, notes: payload.notes }
+          });
+        } else {
+          await api('/calendar-events/' + editingEvent.id, { method: 'PUT', body: JSON.stringify(payload) });
+          editingEvent.setProp('title', payload.title);
+          editingEvent.setStart(payload.start);
+          editingEvent.setEnd(payload.end);
+          editingEvent.setExtendedProp('who', payload.who);
+          editingEvent.setExtendedProp('notes', payload.notes);
+        }
+
+        closePanel();
+      };
+
+      /* ── Delete ── */
+      btnDelete.onclick = async function() {
+        if (!editingEvent) return;
+        if (!confirm('Delete this event?')) return;
+        await api('/calendar-events/' + editingEvent.id, { method: 'DELETE' });
+        editingEvent.remove();
+        closePanel();
+      };
+
+      calendar.render();
+    });
+  </script>
+</body>
+</html>

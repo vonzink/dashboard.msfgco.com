@@ -48,7 +48,17 @@
     // =====================
     // Schedule
     // =====================
-    'open-company-calendar': () => console.log('Open calendar'),
+    'open-company-calendar': () => {
+      const w = Math.min(1280, screen.availWidth - 80);
+      const h = Math.min(860, screen.availHeight - 80);
+      const left = Math.round((screen.availWidth - w) / 2);
+      const top  = Math.round((screen.availHeight - h) / 2);
+      window.open(
+        'Calculators/Company Calendar/calendar.html',
+        'MSFGCalendar',
+        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
+      );
+    },
     'open-timeoff-requests': () => console.log('Open PTO'),
 
     // =====================
