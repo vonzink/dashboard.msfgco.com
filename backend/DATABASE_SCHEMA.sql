@@ -207,12 +207,17 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     end DATETIME,
     allDay TINYINT DEFAULT 0,
     notes TEXT,
+    color VARCHAR(20) DEFAULT '#104547',
+    recurrence_rule VARCHAR(20) DEFAULT 'none',
+    recurrence_end DATE NULL,
+    recurrence_group_id VARCHAR(36) NULL,
     created_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_start (start),
-    INDEX idx_created_by (created_by)
+    INDEX idx_created_by (created_by),
+    INDEX idx_recurrence_group (recurrence_group_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO users (email, name, initials, role)

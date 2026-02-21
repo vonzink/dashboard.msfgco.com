@@ -160,8 +160,6 @@ body {
 
 /* === Events === */
 .fc .fc-event {
-  background: var(--msfg-teal);
-  border-color: var(--msfg-teal);
   border-radius: 6px;
   padding: 1px 4px;
   font-size: 12px;
@@ -227,6 +225,7 @@ body {
   color: var(--msfg-gray);
   user-select: text;
 }
+.floating-panel select,
 .floating-panel input, .floating-panel textarea {
   width: 100%;
   box-sizing: border-box;
@@ -239,10 +238,44 @@ body {
   font-size: 14px;
   user-select: text;
 }
+.floating-panel select:focus,
 .floating-panel input:focus, .floating-panel textarea:focus {
   border-color: var(--msfg-green-border);
   box-shadow: 0 0 0 4px var(--msfg-light-green);
 }
+
+/* === Color Picker === */
+.color-picker-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color .15s, transform .1s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.15);
+}
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+.color-swatch.active {
+  border-color: var(--msfg-gray);
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--msfg-gray);
+}
+.color-swatch[data-color="#104547"] { background: #104547; }
+.color-swatch[data-color="#8cc63E"] { background: #8cc63E; }
+.color-swatch[data-color="#2563eb"] { background: #2563eb; }
+.color-swatch[data-color="#7c3aed"] { background: #7c3aed; }
+.color-swatch[data-color="#dc2626"] { background: #dc2626; }
+.color-swatch[data-color="#ea580c"] { background: #ea580c; }
+.color-swatch[data-color="#0891b2"] { background: #0891b2; }
+.color-swatch[data-color="#404041"] { background: #404041; }
 
 /* === Action Buttons === */
 .floating-panel .actions {
@@ -276,3 +309,58 @@ body {
   color: #b00020;
 }
 #btnDelete:hover { background: rgba(255, 0, 0, .16); }
+
+/* === Recurring Event Icon === */
+.recur-icon {
+  font-size: 11px;
+  opacity: .7;
+}
+
+/* === Scope Dialog (This event / All events) === */
+.scope-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+.scope-box {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 24px 20px;
+  width: 320px;
+  box-shadow: 0 12px 48px rgba(0,0,0,.2);
+  text-align: center;
+}
+.scope-box h4 {
+  margin: 0 0 18px;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--msfg-teal);
+}
+.scope-btn {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  background: var(--msfg-teal);
+  color: #fff;
+  transition: background .15s;
+}
+.scope-btn:hover {
+  background: #0d3839;
+}
+.scope-btn.scope-cancel {
+  background: rgba(0,0,0,.06);
+  color: var(--msfg-gray);
+}
+.scope-btn.scope-cancel:hover {
+  background: rgba(0,0,0,.1);
+}

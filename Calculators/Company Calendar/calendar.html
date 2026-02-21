@@ -42,6 +42,35 @@
       <input id="f_end" type="datetime-local" />
     </label>
 
+    <label>Color
+      <div class="color-picker-row" id="colorPicker">
+        <button type="button" class="color-swatch" data-color="#104547" title="Teal (default)"></button>
+        <button type="button" class="color-swatch" data-color="#8cc63E" title="Green"></button>
+        <button type="button" class="color-swatch" data-color="#2563eb" title="Blue"></button>
+        <button type="button" class="color-swatch" data-color="#7c3aed" title="Purple"></button>
+        <button type="button" class="color-swatch" data-color="#dc2626" title="Red"></button>
+        <button type="button" class="color-swatch" data-color="#ea580c" title="Orange"></button>
+        <button type="button" class="color-swatch" data-color="#0891b2" title="Cyan"></button>
+        <button type="button" class="color-swatch" data-color="#404041" title="Dark Gray"></button>
+      </div>
+      <input id="f_color" type="hidden" value="#104547" />
+    </label>
+
+    <label id="recurrenceLabel">Repeat
+      <select id="f_recurrence">
+        <option value="none">None</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="biweekly">Every 2 Weeks</option>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+    </label>
+
+    <label id="recurrenceEndWrap" style="display:none;">Repeat Until
+      <input id="f_recurrence_end" type="date" />
+    </label>
+
     <label>Notes
       <textarea id="f_notes" rows="3" placeholder="Any details..."></textarea>
     </label>
@@ -50,6 +79,16 @@
       <button id="btnDelete" style="display:none;">Delete</button>
       <button id="btnCancel">Cancel</button>
       <button id="btnSave">Save</button>
+    </div>
+  </div>
+
+  <!-- Series scope dialog -->
+  <div id="scopeDialog" class="scope-overlay" style="display:none;">
+    <div class="scope-box">
+      <h4 id="scopeTitle">Edit recurring event</h4>
+      <button class="scope-btn" id="scopeSingle">This event only</button>
+      <button class="scope-btn" id="scopeAll">All events in series</button>
+      <button class="scope-btn scope-cancel" id="scopeCancel">Cancel</button>
     </div>
   </div>
 
@@ -97,10 +136,41 @@
       const fStart     = document.getElementById('f_start');
       const fEnd       = document.getElementById('f_end');
       const fNotes     = document.getElementById('f_notes');
+      const fColor     = document.getElementById('f_color');
+      const colorPicker = document.getElementById('colorPicker');
+      const fRecurrence = document.getElementById('f_recurrence');
+      const fRecurrenceEnd = document.getElementById('f_recurrence_end');
+      const recurrenceLabel = document.getElementById('recurrenceLabel');
+      const recurrenceEndWrap = document.getElementById('recurrenceEndWrap');
       const btnSave    = document.getElementById('btnSave');
       const btnCancel  = document.getElementById('btnCancel');
       const btnDelete  = document.getElementById('btnDelete');
       const btnX       = document.getElementById('btnX');
+
+      // Scope dialog
+      const scopeDialog = document.getElementById('scopeDialog');
+      const scopeTitle  = document.getElementById('scopeTitle');
+      const scopeSingle = document.getElementById('scopeSingle');
+      const scopeAll    = document.getElementById('scopeAll');
+      const scopeCancel = document.getElementById('scopeCancel');
+
+      /* ── Color picker ── */
+      function setActiveColor(hex) {
+        fColor.value = hex;
+        colorPicker.querySelectorAll('.color-swatch').forEach(function(s) {
+          s.classList.toggle('active', s.dataset.color === hex);
+        });
+      }
+      colorPicker.addEventListener('click', function(e) {
+        var swatch = e.target.closest('.color-swatch');
+        if (swatch) setActiveColor(swatch.dataset.color);
+      });
+      setActiveColor('#104547');
+
+      /* ── Recurrence toggle ── */
+      fRecurrence.addEventListener('change', function() {
+        recurrenceEndWrap.style.display = fRecurrence.value === 'none' ? 'none' : 'block';
+      });
 
       /* ── Draggable floating panel ── */
       const handle = document.getElementById('panelDragHandle');
@@ -155,6 +225,11 @@
         fNotes.value = '';
         fStart.value = toLocalInputValue(startDate);
         fEnd.value   = toLocalInputValue(endDate);
+        setActiveColor('#104547');
+        fRecurrence.value = 'none';
+        fRecurrenceEnd.value = '';
+        recurrenceLabel.style.display = 'block';
+        recurrenceEndWrap.style.display = 'none';
       }
 
       function primeFormForEdit(event) {
@@ -166,6 +241,29 @@
         fNotes.value = event.extendedProps.notes || '';
         fStart.value = toLocalInputValue(event.start);
         fEnd.value   = toLocalInputValue(event.end);
+        setActiveColor(event.extendedProps.color || '#104547');
+        // Hide recurrence when editing — can't change recurrence pattern
+        fRecurrence.value = 'none';
+        fRecurrenceEnd.value = '';
+        recurrenceLabel.style.display = 'none';
+        recurrenceEndWrap.style.display = 'none';
+      }
+
+      /* ── Scope dialog ── */
+      function askScope(title) {
+        return new Promise(function(resolve) {
+          scopeTitle.textContent = title;
+          scopeDialog.style.display = 'flex';
+          function cleanup() {
+            scopeDialog.style.display = 'none';
+            scopeSingle.onclick = null;
+            scopeAll.onclick = null;
+            scopeCancel.onclick = null;
+          }
+          scopeSingle.onclick = function() { cleanup(); resolve('single'); };
+          scopeAll.onclick    = function() { cleanup(); resolve('all'); };
+          scopeCancel.onclick = function() { cleanup(); resolve(null); };
+        });
       }
 
       /* ── FullCalendar ── */
@@ -178,6 +276,9 @@
         initialView: 'timeGridWeek',
         selectable: true,
         editable: true,
+        eventStartEditable: true,
+        eventDurationEditable: true,
+        dragScroll: true,
 
         dateClick: function(info) {
           var start = info.date;
@@ -196,13 +297,22 @@
           try {
             var rows = await api('/calendar-events');
             success(rows.map(function(r) {
+              var c = r.color || '#104547';
               return {
                 id: String(r.id),
                 title: r.title,
                 start: r.start,
                 end: r.end,
                 allDay: !!r.allDay,
-                extendedProps: { who: r.who || '', notes: r.notes || '' }
+                backgroundColor: c,
+                borderColor: c,
+                extendedProps: {
+                  who: r.who || '',
+                  notes: r.notes || '',
+                  color: c,
+                  recurrence_group_id: r.recurrence_group_id || null,
+                  recurrence_rule: r.recurrence_rule || 'none'
+                }
               };
             }));
           } catch (e) { failure(e); }
@@ -223,15 +333,18 @@
               notes: e.extendedProps.notes || '',
               start: e.start.toISOString(),
               end: e.end ? e.end.toISOString() : null,
-              allDay: e.allDay
+              allDay: e.allDay,
+              color: e.extendedProps.color || '#104547'
             })
           });
         },
 
         eventContent: function(arg) {
           var who = arg.event.extendedProps.who;
-          var title = who ? arg.event.title + ' — ' + who : arg.event.title;
-          return { html: '<span>' + title + '</span>' };
+          var isRecurring = arg.event.extendedProps.recurrence_group_id;
+          var title = who ? arg.event.title + ' \u2014 ' + who : arg.event.title;
+          var icon = isRecurring ? '<span class="recur-icon">\u21BB</span> ' : '';
+          return { html: icon + '<span>' + title + '</span>' };
         }
       });
 
@@ -243,7 +356,8 @@
           start: fStart.value ? new Date(fStart.value).toISOString() : null,
           end:   fEnd.value   ? new Date(fEnd.value).toISOString()   : null,
           allDay: false,
-          notes: fNotes.value.trim()
+          notes: fNotes.value.trim(),
+          color: fColor.value || '#104547'
         };
 
         if (!payload.title || !payload.start) {
@@ -252,22 +366,46 @@
         }
 
         if (!editingEvent) {
-          var created = await api('/calendar-events', { method: 'POST', body: JSON.stringify(payload) });
-          calendar.addEvent({
-            id: String(created.id),
-            title: payload.title,
-            start: payload.start,
-            end: payload.end,
-            allDay: false,
-            extendedProps: { who: payload.who, notes: payload.notes }
-          });
+          // New event
+          var rule = fRecurrence.value;
+          if (rule !== 'none') {
+            if (!fRecurrenceEnd.value) {
+              alert('Please set a "Repeat Until" date.');
+              return;
+            }
+            payload.recurrence_rule = rule;
+            payload.recurrence_end = fRecurrenceEnd.value;
+          }
+
+          await api('/calendar-events', { method: 'POST', body: JSON.stringify(payload) });
+          calendar.refetchEvents();
         } else {
-          await api('/calendar-events/' + editingEvent.id, { method: 'PUT', body: JSON.stringify(payload) });
-          editingEvent.setProp('title', payload.title);
-          editingEvent.setStart(payload.start);
-          editingEvent.setEnd(payload.end);
-          editingEvent.setExtendedProp('who', payload.who);
-          editingEvent.setExtendedProp('notes', payload.notes);
+          // Edit existing
+          var groupId = editingEvent.extendedProps.recurrence_group_id;
+          var scope = 'single';
+
+          if (groupId) {
+            scope = await askScope('Edit recurring event');
+            if (!scope) return;
+          }
+
+          await api('/calendar-events/' + editingEvent.id + '?scope=' + scope, {
+            method: 'PUT',
+            body: JSON.stringify(payload)
+          });
+
+          if (scope === 'all') {
+            calendar.refetchEvents();
+          } else {
+            editingEvent.setProp('title', payload.title);
+            editingEvent.setStart(payload.start);
+            editingEvent.setEnd(payload.end);
+            editingEvent.setProp('backgroundColor', payload.color);
+            editingEvent.setProp('borderColor', payload.color);
+            editingEvent.setExtendedProp('who', payload.who);
+            editingEvent.setExtendedProp('notes', payload.notes);
+            editingEvent.setExtendedProp('color', payload.color);
+          }
         }
 
         closePanel();
@@ -276,9 +414,25 @@
       /* ── Delete ── */
       btnDelete.onclick = async function() {
         if (!editingEvent) return;
-        if (!confirm('Delete this event?')) return;
-        await api('/calendar-events/' + editingEvent.id, { method: 'DELETE' });
-        editingEvent.remove();
+
+        var groupId = editingEvent.extendedProps.recurrence_group_id;
+        var scope = 'single';
+
+        if (groupId) {
+          scope = await askScope('Delete recurring event');
+          if (!scope) return;
+        } else {
+          if (!confirm('Delete this event?')) return;
+        }
+
+        await api('/calendar-events/' + editingEvent.id + '?scope=' + scope, { method: 'DELETE' });
+
+        if (scope === 'all') {
+          calendar.refetchEvents();
+        } else {
+          editingEvent.remove();
+        }
+
         closePanel();
       };
 
