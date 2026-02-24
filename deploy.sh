@@ -11,7 +11,7 @@ S3_BUCKET="s3://dashboard.msfgco.com"
 CF_DISTRIBUTION="E3QTH6K640MMKK"
 EC2_HOST="ubuntu@54.175.238.145"
 EC2_KEY="/Users/zacharyzink/MSFG/Security/msfg-mortgage-key.pem"
-EC2_PROJECT_DIR="/home/ubuntu/dashboard.msfgco.com"
+EC2_PROJECT_DIR="/home/ubuntu/msfg-backend"
 
 # ── Colors ──
 GREEN='\033[0;32m'
@@ -91,13 +91,13 @@ if [ "$DEPLOY_BACKEND" = true ]; then
   echo -e "${YELLOW}▸ Deploying backend to EC2...${NC}"
   ssh -i "$EC2_KEY" "$EC2_HOST" bash -s <<'REMOTE'
     set -e
-    cd /home/ubuntu/dashboard.msfgco.com
+    cd /home/ubuntu/msfg-backend
     echo "  Pulling latest from git..."
     git pull origin main
     echo "  Restarting backend with PM2..."
     cd backend
     npm install --production 2>/dev/null
-    pm2 restart msfg-dashboard-api 2>/dev/null || pm2 start server.js --name msfg-dashboard-api
+    pm2 restart msfg-backend 2>/dev/null || pm2 start server.js --name msfg-backend
     echo "  Backend deploy complete."
 REMOTE
 
