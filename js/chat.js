@@ -203,6 +203,21 @@ const Chat = {
   },
 
   // ========================================
+  // LOAD TAGS FROM API
+  // ========================================
+  async loadTags() {
+    try {
+      const tags = await ServerAPI.getChatTags();
+      this.tags = Array.isArray(tags) ? tags : [];
+      this.renderTagFilter();
+      this.renderTagPicker();
+    } catch (err) {
+      console.warn('Failed to load chat tags:', err);
+      this.tags = [];
+    }
+  },
+
+  // ========================================
   // TAG FILTER BAR (top of chat)
   // ========================================
   renderTagFilter() {

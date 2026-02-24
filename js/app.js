@@ -9,25 +9,36 @@ const App = {
     // ========================================
     init() {
         console.log('🏔️ MSFG Dashboard starting...');
-        
-        // Initialize modules in order
-        this.initTheme();
-        this.initTables();
-        this.initChat();
-        this.initInvestors();
-        this.initFundedLoans();
-        this.initGoals();
-        this.initModals();
-        this.initMondaySettings();
-        this.initProgressBars();
-        
+
+        // Initialize modules — each wrapped in try/catch so one
+        // failing module doesn't prevent the rest from loading
+        const modules = [
+            ['Theme',          () => this.initTheme()],
+            ['Tables',         () => this.initTables()],
+            ['Chat',           () => this.initChat()],
+            ['Investors',      () => this.initInvestors()],
+            ['Funded Loans',   () => this.initFundedLoans()],
+            ['Goals',          () => this.initGoals()],
+            ['Modals',         () => this.initModals()],
+            ['Monday',         () => this.initMondaySettings()],
+            ['Progress Bars',  () => this.initProgressBars()],
+        ];
+
+        for (const [name, initFn] of modules) {
+            try {
+                initFn();
+            } catch (err) {
+                console.error('Failed to init ' + name + ':', err);
+            }
+        }
+
         // Load user info + data from API
         this.loadCurrentUser();
         this.loadData();
-        
+
         // Start auto-refresh
-        DataRefresher.start();
-        
+        if (typeof DataRefresher !== 'undefined') DataRefresher.start();
+
         console.log('✅ MSFG Dashboard ready!');
     },
 
