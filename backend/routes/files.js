@@ -5,21 +5,17 @@ const { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } = r
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 
-const AWS_CREDS = {
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-};
+// Use default credential chain (~/.aws/credentials) — no explicit keys needed.
+// Falls back to env vars, EC2 instance role, etc. if shared creds file absent.
 
 // Default client (us-east-1) for uploads and forms bucket
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
-  credentials: AWS_CREDS,
 });
 
 // West client for msfg-media bucket (us-west-2)
 const s3ClientWest = new S3Client({
   region: 'us-west-2',
-  credentials: AWS_CREDS,
 });
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'msfg-dashboard-files';
