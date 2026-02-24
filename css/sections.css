@@ -454,6 +454,38 @@
 }
 
 /* ========================================
+   FUNDED LOANS
+======================================== */
+.funded-summary-bar {
+    display: flex;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.funded-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.funded-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.funded-stat-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--green-forest);
+}
+
+/* ========================================
    RESPONSIVE ADJUSTMENTS
 ======================================== */
 @media (max-width: 1400px) {

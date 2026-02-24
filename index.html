@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <!-- AUTH GATE (must be first script in head) -->
-  <script src="js/auth-gate.js?v=20260211-1"></script>
+  <script src="js/auth-gate.js?v=20260224-2"></script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -20,14 +20,14 @@
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
 
   <!-- Styles -->
-  <link rel="stylesheet" href="css/variables.css" />
-  <link rel="stylesheet" href="css/base.css" />
-  <link rel="stylesheet" href="css/layout.css" />
-  <link rel="stylesheet" href="css/components.css" />
-  <link rel="stylesheet" href="css/tables.css?v=20260211-1" />
-  <link rel="stylesheet" href="css/sections.css" />
-  <link rel="stylesheet" href="css/chat.css" />
-  <link rel="stylesheet" href="css/animations.css" />
+  <link rel="stylesheet" href="css/variables.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/base.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/layout.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/components.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/tables.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/sections.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/chat.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/animations.css?v=20260224-2" />
 </head>
 
 <body>
@@ -255,13 +255,104 @@
               <button type="button" class="quick-link" data-action="open-support-ticket"><i class="fas fa-headset"></i> Support Ticket</button>
               <button type="button" class="quick-link" data-action="open-notifications"><i class="fas fa-bell"></i> Notifications</button>
               <button type="button" class="quick-link" data-action="open-settings"><i class="fas fa-cog"></i> Settings</button>
+              <button type="button" class="quick-link admin-only-item" data-action="open-admin-settings" style="display:none;"><i class="fas fa-user-shield"></i> Admin Settings</button>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Goals -->
+    <!-- Pipeline (Monday.com Sync) -->
+    <section class="section-card animate-in" id="pipelineSection">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-chart-line"></i> Loan Pipeline</h2>
+        <div class="section-actions">
+          <input type="text" id="pipelineSearch" class="search-input" placeholder="Search pipeline..." />
+          <select class="filter-select" id="pipelineLO">
+            <option value="">All Loan Officers</option>
+          </select>
+          <button type="button" class="btn btn-secondary btn-sm" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
+            <i class="fas fa-sync-alt"></i> Sync
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="monday-settings" title="Monday.com Settings">
+            <i class="fas fa-cog"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="section-body">
+        <div class="sync-status-bar" id="syncStatusBar" style="display:none;">
+          <i class="fas fa-info-circle"></i>
+          <span id="syncStatusText">Last synced: Never</span>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="pipelineTable">
+            <thead id="pipelineHead">
+              <tr><th colspan="12"><i class="fas fa-spinner fa-spin"></i> Loading pipeline...</th></tr>
+            </thead>
+            <tbody id="pipelineBody">
+              <tr><td class="empty-state">
+                <i class="fas fa-database"></i>
+                <p>No pipeline data yet. Sync from Monday.com to populate.</p>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Loans Funded -->
+    <section class="section-card animate-in" id="fundedLoansSection">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-hand-holding-usd"></i> Loans Funded</h2>
+        <div class="section-actions">
+          <select class="filter-select" id="fundedLOSelect" style="display:none;">
+            <option value="">All Loan Officers</option>
+          </select>
+          <select class="filter-select" id="fundedPeriodSelect">
+            <option value="ytd" selected>Year to Date</option>
+            <option value="mtd">Month to Date</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="section-body">
+        <!-- Summary bar -->
+        <div class="funded-summary-bar" id="fundedSummaryBar">
+          <div class="funded-stat">
+            <span class="funded-stat-label">Total Units</span>
+            <span class="funded-stat-value" id="fundedTotalUnits">0</span>
+          </div>
+          <div class="funded-stat">
+            <span class="funded-stat-label">Total Volume</span>
+            <span class="funded-stat-value" id="fundedTotalAmount">$0</span>
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="fundedLoansTable">
+            <thead>
+              <tr>
+                <th>Borrower</th>
+                <th class="text-right">Loan Amount</th>
+                <th>Loan Officer</th>
+                <th>Product</th>
+                <th>Funded Date</th>
+              </tr>
+            </thead>
+            <tbody id="fundedLoansBody">
+              <tr><td colspan="5" class="empty-state">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading funded loans...</p>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Performance & Goals -->
     <section class="section-card animate-in">
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-trophy"></i> Performance & Goals</h2>
@@ -308,46 +399,6 @@
             <div class="progress-bar"><div class="progress-fill on-track" id="pullThroughProgress" data-progress="0"></div></div>
             <div class="goal-progress-text" id="pullThroughProgressText">0% complete</div>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Pipeline (Monday.com Sync) -->
-    <section class="section-card animate-in" id="pipelineSection">
-      <div class="section-header">
-        <h2 class="section-title"><i class="fas fa-chart-line"></i> Loan Pipeline</h2>
-        <div class="section-actions">
-          <input type="text" id="pipelineSearch" class="search-input" placeholder="Search pipeline..." />
-          <select class="filter-select" id="pipelineLO">
-            <option value="">All Loan Officers</option>
-          </select>
-          <button type="button" class="btn btn-secondary btn-sm" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
-            <i class="fas fa-sync-alt"></i> Sync
-          </button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="monday-settings" title="Monday.com Settings">
-            <i class="fas fa-cog"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="section-body">
-        <div class="sync-status-bar" id="syncStatusBar" style="display:none;">
-          <i class="fas fa-info-circle"></i>
-          <span id="syncStatusText">Last synced: Never</span>
-        </div>
-
-        <div class="table-responsive">
-          <table class="data-table" id="pipelineTable">
-            <thead id="pipelineHead">
-              <tr><th colspan="12"><i class="fas fa-spinner fa-spin"></i> Loading pipeline...</th></tr>
-            </thead>
-            <tbody id="pipelineBody">
-              <tr><td class="empty-state">
-                <i class="fas fa-database"></i>
-                <p>No pipeline data yet. Sync from Monday.com to populate.</p>
-              </td></tr>
-            </tbody>
-          </table>
         </div>
       </div>
     </section>
@@ -772,7 +823,7 @@
 
   <footer class="footer">
     <p>
-      © 2024 Mountain State Financial Group. All rights reserved. |
+      © 2025 Mountain State Financial Group. All rights reserved. |
       <button type="button" class="link-item" data-action="open-privacy">Privacy Policy</button> |
       <button type="button" class="link-item" data-action="open-terms">Terms of Service</button> |
       <button type="button" class="link-item" data-action="open-support">Support</button>
@@ -780,22 +831,23 @@
   </footer>
 
   <!-- Scripts (load order matters) -->
-  <script src="js/config.js?v=20260211-1"></script>
-  <script src="js/link-init.js?v=20260211-1"></script>
-  <script src="js/action-dispatcher.js?v=20260224-1"></script>
+  <script src="js/config.js?v=20260224-2"></script>
+  <script src="js/link-init.js?v=20260224-2"></script>
+  <script src="js/action-dispatcher.js?v=20260224-2"></script>
 
-  <script src="js/api-server.js?v=20260211-1"></script>
-  <script src="js/utils.js?v=20260211-1"></script>
-  <script src="js/theme.js?v=20260211-1"></script>
-  <script src="js/tables.js?v=20260211-1"></script>
-  <script src="js/chat.js?v=20260211-1"></script>
-  <script src="js/api.js?v=20260211-1"></script>
-  <script src="js/investors.js?v=20260211-1"></script>
-  <script src="js/goals.js?v=20260211-1"></script>
-  <script src="js/modals.js?v=20260211-1"></script>
+  <script src="js/api-server.js?v=20260224-2"></script>
+  <script src="js/utils.js?v=20260224-2"></script>
+  <script src="js/theme.js?v=20260224-2"></script>
+  <script src="js/tables.js?v=20260224-2"></script>
+  <script src="js/chat.js?v=20260224-2"></script>
+  <script src="js/api.js?v=20260224-2"></script>
+  <script src="js/investors.js?v=20260224-2"></script>
+  <script src="js/funded-loans.js?v=20260224-2"></script>
+  <script src="js/goals.js?v=20260224-2"></script>
+  <script src="js/modals.js?v=20260224-2"></script>
 
   <!-- Accessibility -->
-  <script src="js/a11y.js?v=20260211-1"></script>
+  <script src="js/a11y.js?v=20260224-2"></script>
 
   <!-- CSP-friendly progress widths -->
   <script src="js/progress-init.js?v=20260211-1"></script>

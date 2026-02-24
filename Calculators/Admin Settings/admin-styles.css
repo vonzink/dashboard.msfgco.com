@@ -1,0 +1,357 @@
+/* === MSFG Admin Settings Styles === */
+:root {
+  --msfg-green: #8cc63E;
+  --msfg-teal: #104547;
+  --msfg-gray: #404041;
+  --msfg-light-green: rgba(140, 198, 62, .18);
+  --msfg-green-border: rgba(140, 198, 62, .9);
+  --msfg-danger: #e74c3c;
+  --msfg-warning: #f39c12;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', Arial, sans-serif;
+  margin: 0;
+  background: #f5f7f3;
+  color: var(--msfg-gray);
+  padding: 0 24px 40px;
+}
+
+/* ── Page Header ── */
+.pageHeader {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pageHeader h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--msfg-teal);
+}
+
+/* ── Tabs ── */
+.admin-tabs {
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  display: flex;
+  gap: 4px;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+}
+
+.admin-tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  color: var(--msfg-gray);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.admin-tab:hover {
+  background: var(--msfg-light-green);
+}
+
+.admin-tab.active {
+  background: var(--msfg-teal);
+  color: #fff;
+}
+
+/* ── Tab Panels ── */
+.admin-panel {
+  max-width: 1100px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  padding: 24px;
+  display: none;
+}
+
+.admin-panel.active {
+  display: block;
+}
+
+/* ── Table ── */
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-table th {
+  text-align: left;
+  padding: 10px 12px;
+  background: #fafbf8;
+  border-bottom: 2px solid #eee;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #999;
+  font-weight: 600;
+}
+
+.admin-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f2f2f2;
+  vertical-align: middle;
+}
+
+.admin-table tr:hover td {
+  background: var(--msfg-light-green);
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+
+.btn-primary {
+  background: var(--msfg-teal);
+  color: #fff;
+}
+.btn-primary:hover { opacity: .9; }
+
+.btn-secondary {
+  background: #f0f0f0;
+  color: var(--msfg-gray);
+}
+.btn-secondary:hover { background: #e4e4e4; }
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn-danger {
+  background: var(--msfg-danger);
+  color: #fff;
+}
+.btn-danger:hover { opacity: .9; }
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Status Badge ── */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-active {
+  background: rgba(140, 198, 62, .2);
+  color: #2e7d32;
+}
+
+.badge-inactive {
+  background: rgba(231, 76, 60, .15);
+  color: var(--msfg-danger);
+}
+
+.badge-admin {
+  background: rgba(16, 69, 71, .15);
+  color: var(--msfg-teal);
+}
+
+/* ── Form ── */
+.admin-form {
+  display: none;
+  margin-top: 16px;
+  padding: 20px;
+  background: #fafbf8;
+  border-radius: var(--radius);
+  border: 1px solid #eee;
+}
+
+.admin-form.active { display: block; }
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+}
+
+.form-group input,
+.form-group select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .15s;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--msfg-teal);
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
+/* ── Upload Zone ── */
+.upload-zone {
+  border: 2px dashed #ccc;
+  border-radius: var(--radius);
+  padding: 40px 20px;
+  text-align: center;
+  color: #999;
+  cursor: pointer;
+  transition: all .2s;
+  margin-bottom: 16px;
+}
+
+.upload-zone:hover,
+.upload-zone.dragover {
+  border-color: var(--msfg-green-border);
+  background: var(--msfg-light-green);
+  color: var(--msfg-teal);
+}
+
+.upload-zone i {
+  font-size: 36px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.upload-zone p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.upload-zone .upload-hint {
+  font-size: 12px;
+  color: #bbb;
+  margin-top: 6px;
+}
+
+.upload-progress {
+  margin-top: 8px;
+  display: none;
+}
+
+.upload-progress-bar {
+  height: 6px;
+  background: #eee;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.upload-progress-fill {
+  height: 100%;
+  background: var(--msfg-green);
+  border-radius: 3px;
+  transition: width .3s;
+  width: 0;
+}
+
+/* ── System Info ── */
+.system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.system-card {
+  padding: 20px;
+  background: #fafbf8;
+  border-radius: var(--radius);
+  border: 1px solid #eee;
+}
+
+.system-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #999;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.system-card-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--msfg-teal);
+}
+
+.system-card-value.ok { color: #2e7d32; }
+.system-card-value.warn { color: var(--msfg-warning); }
+.system-card-value.error { color: var(--msfg-danger); }
+
+/* ── Loading / States ── */
+.state-msg {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+.state-msg i { font-size: 40px; margin-bottom: 12px; display: block; color: #ccc; }
+.state-msg p { margin: 0; font-size: 14px; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  body { padding: 0 12px 24px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .admin-tabs { flex-wrap: wrap; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+}

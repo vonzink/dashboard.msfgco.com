@@ -15,6 +15,7 @@ const App = {
         this.initTables();
         this.initChat();
         this.initInvestors();
+        this.initFundedLoans();
         this.initGoals();
         this.initModals();
         this.initMondaySettings();
@@ -91,6 +92,12 @@ const App = {
         }
     },
 
+    initFundedLoans() {
+        if (typeof FundedLoans !== 'undefined') {
+            FundedLoans.init();
+        }
+    },
+
     initGoals() {
         GoalsManager.init();
     },
@@ -136,10 +143,17 @@ const App = {
                 if (avatarEl && me.initials) avatarEl.textContent = me.initials;
 
                 // Show admin-only elements
-                if (String(me.role).toLowerCase() === 'admin') {
+                const role = String(me.role).toLowerCase();
+                if (role === 'admin') {
                     document.querySelectorAll('.admin-only-item').forEach(el => {
                         el.style.display = '';
                     });
+                }
+
+                // Show LO filter on funded loans for admin/manager
+                if (role === 'admin' || role === 'manager') {
+                    const fundedLO = document.getElementById('fundedLOSelect');
+                    if (fundedLO) fundedLO.style.display = '';
                 }
             }
         } catch (err) {

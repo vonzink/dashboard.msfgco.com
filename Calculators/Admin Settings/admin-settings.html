@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Settings - MSFG</title>
+
+  <link rel="stylesheet" href="admin-styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+</head>
+
+<body>
+  <div class="pageHeader">
+    <h2 id="pageTitle"><i class="fas fa-cog"></i> Admin Settings</h2>
+  </div>
+
+  <!-- Tab Navigation -->
+  <div class="admin-tabs">
+    <button class="admin-tab active" data-tab="employees">
+      <i class="fas fa-users"></i> Employees
+    </button>
+    <button class="admin-tab" data-tab="investors">
+      <i class="fas fa-landmark"></i> Investors
+    </button>
+    <button class="admin-tab" data-tab="forms">
+      <i class="fas fa-file-upload"></i> Forms Library
+    </button>
+    <button class="admin-tab" data-tab="system">
+      <i class="fas fa-server"></i> System
+    </button>
+  </div>
+
+  <!-- ================================================
+       TAB: Employees
+  ================================================ -->
+  <div class="admin-panel active" id="panel-employees">
+    <div class="toolbar">
+      <h3 style="margin:0; font-size:16px; color:#104547;">
+        <i class="fas fa-users"></i> Employee Management
+      </h3>
+      <div class="toolbar-right">
+        <button class="btn btn-primary" id="addUserBtn">
+          <i class="fas fa-plus"></i> Add Employee
+        </button>
+      </div>
+    </div>
+
+    <!-- Add/Edit Form -->
+    <div class="admin-form" id="userForm">
+      <h4 style="margin:0 0 14px; font-size:14px;" id="userFormTitle">Add Employee</h4>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="userNameInput">Full Name</label>
+          <input type="text" id="userNameInput" placeholder="John Doe" required />
+        </div>
+        <div class="form-group">
+          <label for="userEmailInput">Email</label>
+          <input type="email" id="userEmailInput" placeholder="john@msfgco.com" required />
+        </div>
+        <div class="form-group">
+          <label for="userInitialsInput">Initials</label>
+          <input type="text" id="userInitialsInput" placeholder="JD" maxlength="3" />
+        </div>
+        <div class="form-group">
+          <label for="userRoleSelect">Role</label>
+          <select id="userRoleSelect">
+            <option value="user">User</option>
+            <option value="lo">Loan Officer</option>
+            <option value="processor">Processor</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="userFormCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="userFormSaveBtn">
+          <i class="fas fa-save"></i> Save
+        </button>
+      </div>
+    </div>
+
+    <table class="admin-table" id="usersTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th style="width:120px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="usersBody">
+        <tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================================================
+       TAB: Investors
+  ================================================ -->
+  <div class="admin-panel" id="panel-investors">
+    <div class="toolbar">
+      <h3 style="margin:0; font-size:16px; color:#104547;">
+        <i class="fas fa-landmark"></i> Investor Database
+      </h3>
+      <div class="toolbar-right">
+        <a href="/index.html" class="btn btn-secondary" target="_opener" onclick="window.opener && window.opener.Investors && window.opener.Investors.showManageModal(); return false;">
+          <i class="fas fa-external-link-alt"></i> Open Manage Investors
+        </a>
+      </div>
+    </div>
+    <p style="color:#888; font-size:14px;">
+      Investors are managed from the main dashboard's Investor Database panel.
+      Click the button above to open the Manage Investors modal on the dashboard.
+    </p>
+    <table class="admin-table" id="investorsTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Account Executive</th>
+          <th>States</th>
+          <th>Best Programs</th>
+        </tr>
+      </thead>
+      <tbody id="investorsBody">
+        <tr><td colspan="4" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================================================
+       TAB: Forms Library Upload
+  ================================================ -->
+  <div class="admin-panel" id="panel-forms">
+    <div class="toolbar">
+      <h3 style="margin:0; font-size:16px; color:#104547;">
+        <i class="fas fa-file-upload"></i> Upload to Forms Library
+      </h3>
+      <div class="toolbar-right">
+        <div class="form-group" style="flex-direction:row; align-items:center; gap:8px;">
+          <label style="white-space:nowrap; margin:0;">Folder:</label>
+          <input type="text" id="uploadFolder" placeholder="e.g. Compliance/2025" style="width:200px;" />
+        </div>
+      </div>
+    </div>
+
+    <div class="upload-zone" id="uploadZone">
+      <i class="fas fa-cloud-upload-alt"></i>
+      <p>Drop files here or click to browse</p>
+      <span class="upload-hint">PDF, DOC, XLSX, images — up to 50 MB</span>
+    </div>
+    <input type="file" id="fileInput" multiple style="display:none;" />
+
+    <div class="upload-progress" id="uploadProgress">
+      <p id="uploadStatusText" style="font-size:13px; margin:0 0 6px;">Uploading...</p>
+      <div class="upload-progress-bar">
+        <div class="upload-progress-fill" id="uploadProgressFill"></div>
+      </div>
+    </div>
+
+    <div id="uploadResults"></div>
+
+    <p style="color:#888; font-size:13px; margin-top:16px;">
+      <i class="fas fa-info-circle"></i>
+      Files are uploaded directly to the <strong>msfg-mortgage-documents-prod</strong> S3 bucket.
+      They will appear in the Forms Library file browser immediately.
+    </p>
+  </div>
+
+  <!-- ================================================
+       TAB: System
+  ================================================ -->
+  <div class="admin-panel" id="panel-system">
+    <div class="toolbar">
+      <h3 style="margin:0; font-size:16px; color:#104547;">
+        <i class="fas fa-server"></i> System Information
+      </h3>
+      <div class="toolbar-right">
+        <button class="btn btn-secondary" id="refreshSystemBtn">
+          <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+      </div>
+    </div>
+
+    <div class="system-grid" id="systemGrid">
+      <div class="system-card">
+        <div class="system-card-label">Database</div>
+        <div class="system-card-value" id="sysDb">--</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-label">Active Users</div>
+        <div class="system-card-value" id="sysUsers">--</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-label">Investors</div>
+        <div class="system-card-value" id="sysInvestors">--</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-label">Uptime</div>
+        <div class="system-card-value" id="sysUptime">--</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-label">Environment</div>
+        <div class="system-card-value" id="sysEnv">--</div>
+      </div>
+      <div class="system-card">
+        <div class="system-card-label">Version</div>
+        <div class="system-card-value" id="sysVersion">--</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    /* ── API Config ── */
+    const API_BASE = window.location.protocol === 'https:'
+      ? 'https://api.msfgco.com/api'
+      : 'http://54.175.238.145:8080/api';
+
+    function getAuthToken() {
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+      return (
+        localStorage.getItem('auth_token') ||
+        (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null) ||
+        sessionStorage.getItem('auth_token')
+      );
+    }
+
+    async function api(path, opts = {}) {
+      const token = getAuthToken();
+      const headers = { ...(opts.headers || {}) };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+      if (!headers['Content-Type'] && opts.body && typeof opts.body === 'string') {
+        headers['Content-Type'] = 'application/json';
+      }
+
+      const res = await fetch(API_BASE + path, { ...opts, headers });
+
+      if (res.status === 401) {
+        alert('Session expired. Please log in again.');
+        return null;
+      }
+      if (res.status === 403) {
+        alert('Admin access required.');
+        return null;
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+      return res.json();
+    }
+
+    function escHtml(str) {
+      if (!str) return '';
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    /* ── Tabs ── */
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+
+        // Load data on tab switch
+        const tabName = tab.dataset.tab;
+        if (tabName === 'employees') loadUsers();
+        if (tabName === 'investors') loadInvestors();
+        if (tabName === 'system') loadSystem();
+      });
+    });
+
+    /* ═══════════════════════════════════════
+       EMPLOYEES TAB
+    ═══════════════════════════════════════ */
+    let editingUserId = null;
+
+    async function loadUsers() {
+      const tbody = document.getElementById('usersBody');
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+      try {
+        const users = await api('/admin/users');
+        if (!users) return;
+
+        if (users.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#999;">No users found.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = users.map(u => {
+          const statusBadge = u.is_active
+            ? '<span class="badge badge-active">Active</span>'
+            : '<span class="badge badge-inactive">Inactive</span>';
+          const roleBadge = u.role === 'admin'
+            ? '<span class="badge badge-admin">' + escHtml(u.role) + '</span>'
+            : escHtml(u.role || 'user');
+
+          return (
+            '<tr data-user-id="' + u.id + '">' +
+            '<td><strong>' + escHtml(u.name) + '</strong></td>' +
+            '<td>' + escHtml(u.email) + '</td>' +
+            '<td>' + roleBadge + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td>' +
+              '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
+              (u.is_active
+                ? '<button class="btn btn-sm btn-danger deactivate-user-btn" data-id="' + u.id + '" title="Deactivate"><i class="fas fa-user-slash"></i></button>'
+                : '<button class="btn btn-sm btn-primary activate-user-btn" data-id="' + u.id + '" title="Activate"><i class="fas fa-user-check"></i></button>'
+              ) +
+            '</td>' +
+            '</tr>'
+          );
+        }).join('');
+
+        // Bind edit buttons
+        tbody.querySelectorAll('.edit-user-btn').forEach(btn => {
+          btn.addEventListener('click', () => editUser(users.find(u => String(u.id) === btn.dataset.id)));
+        });
+
+        // Bind deactivate buttons
+        tbody.querySelectorAll('.deactivate-user-btn').forEach(btn => {
+          btn.addEventListener('click', () => toggleUserActive(btn.dataset.id, false));
+        });
+
+        // Bind activate buttons
+        tbody.querySelectorAll('.activate-user-btn').forEach(btn => {
+          btn.addEventListener('click', () => toggleUserActive(btn.dataset.id, true));
+        });
+      } catch (err) {
+        console.error('Load users error:', err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#e74c3c;">Failed to load users.</td></tr>';
+      }
+    }
+
+    function showUserForm(user) {
+      const form = document.getElementById('userForm');
+      const title = document.getElementById('userFormTitle');
+
+      if (user) {
+        editingUserId = user.id;
+        title.textContent = 'Edit Employee';
+        document.getElementById('userNameInput').value = user.name || '';
+        document.getElementById('userEmailInput').value = user.email || '';
+        document.getElementById('userEmailInput').disabled = true;
+        document.getElementById('userInitialsInput').value = user.initials || '';
+        document.getElementById('userRoleSelect').value = user.role || 'user';
+      } else {
+        editingUserId = null;
+        title.textContent = 'Add Employee';
+        document.getElementById('userNameInput').value = '';
+        document.getElementById('userEmailInput').value = '';
+        document.getElementById('userEmailInput').disabled = false;
+        document.getElementById('userInitialsInput').value = '';
+        document.getElementById('userRoleSelect').value = 'user';
+      }
+
+      form.classList.add('active');
+    }
+
+    function hideUserForm() {
+      document.getElementById('userForm').classList.remove('active');
+      editingUserId = null;
+    }
+
+    function editUser(user) {
+      if (user) showUserForm(user);
+    }
+
+    async function saveUser() {
+      const name = document.getElementById('userNameInput').value.trim();
+      const email = document.getElementById('userEmailInput').value.trim();
+      const initials = document.getElementById('userInitialsInput').value.trim();
+      const role = document.getElementById('userRoleSelect').value;
+
+      if (!name) return alert('Name is required');
+      if (!editingUserId && !email) return alert('Email is required');
+
+      try {
+        if (editingUserId) {
+          await api('/admin/users/' + editingUserId, {
+            method: 'PUT',
+            body: JSON.stringify({ name, initials, role }),
+          });
+        } else {
+          await api('/admin/users', {
+            method: 'POST',
+            body: JSON.stringify({ email, name, initials, role }),
+          });
+        }
+
+        hideUserForm();
+        loadUsers();
+      } catch (err) {
+        alert('Error saving user: ' + err.message);
+      }
+    }
+
+    async function toggleUserActive(userId, activate) {
+      const action = activate ? 'activate' : 'deactivate';
+      if (!confirm('Are you sure you want to ' + action + ' this user?')) return;
+
+      try {
+        if (activate) {
+          await api('/admin/users/' + userId, {
+            method: 'PUT',
+            body: JSON.stringify({ is_active: true }),
+          });
+        } else {
+          await api('/admin/users/' + userId, { method: 'DELETE' });
+        }
+        loadUsers();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Employee event listeners
+    document.getElementById('addUserBtn').addEventListener('click', () => showUserForm(null));
+    document.getElementById('userFormCancelBtn').addEventListener('click', hideUserForm);
+    document.getElementById('userFormSaveBtn').addEventListener('click', saveUser);
+
+    /* ═══════════════════════════════════════
+       INVESTORS TAB
+    ═══════════════════════════════════════ */
+    async function loadInvestors() {
+      const tbody = document.getElementById('investorsBody');
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+      try {
+        const investors = await api('/investors');
+        if (!investors) return;
+
+        if (investors.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#999;">No investors.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = investors.map(inv =>
+          '<tr>' +
+          '<td><strong>' + escHtml(inv.name) + '</strong></td>' +
+          '<td>' + escHtml(inv.account_executive_name || '--') + '</td>' +
+          '<td>' + escHtml(inv.states || '--') + '</td>' +
+          '<td>' + escHtml(inv.best_programs || '--') + '</td>' +
+          '</tr>'
+        ).join('');
+      } catch (err) {
+        console.error('Load investors error:', err);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#e74c3c;">Failed to load investors.</td></tr>';
+      }
+    }
+
+    /* ═══════════════════════════════════════
+       FORMS LIBRARY UPLOAD TAB
+    ═══════════════════════════════════════ */
+    const uploadZone = document.getElementById('uploadZone');
+    const fileInput = document.getElementById('fileInput');
+
+    uploadZone.addEventListener('click', () => fileInput.click());
+
+    uploadZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadZone.classList.add('dragover');
+    });
+
+    uploadZone.addEventListener('dragleave', () => {
+      uploadZone.classList.remove('dragover');
+    });
+
+    uploadZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragover');
+      handleFiles(e.dataTransfer.files);
+    });
+
+    fileInput.addEventListener('change', () => {
+      handleFiles(fileInput.files);
+      fileInput.value = '';
+    });
+
+    async function handleFiles(files) {
+      if (!files || files.length === 0) return;
+
+      const folder = document.getElementById('uploadFolder').value.trim();
+      const progressEl = document.getElementById('uploadProgress');
+      const statusText = document.getElementById('uploadStatusText');
+      const progressFill = document.getElementById('uploadProgressFill');
+      const resultsEl = document.getElementById('uploadResults');
+
+      progressEl.style.display = 'block';
+      resultsEl.innerHTML = '';
+
+      let completed = 0;
+      const total = files.length;
+
+      for (const file of files) {
+        statusText.textContent = 'Uploading ' + file.name + ' (' + (completed + 1) + '/' + total + ')...';
+        progressFill.style.width = ((completed / total) * 100) + '%';
+
+        try {
+          // Get presigned URL
+          const urlData = await api('/admin/files/upload-url', {
+            method: 'POST',
+            body: JSON.stringify({
+              fileName: file.name,
+              fileType: file.type || 'application/octet-stream',
+              folder: folder,
+            }),
+          });
+
+          if (!urlData) continue;
+
+          // Upload to S3
+          const uploadRes = await fetch(urlData.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            body: file,
+          });
+
+          if (!uploadRes.ok) throw new Error('Upload failed');
+
+          resultsEl.innerHTML += '<p style="color:#2e7d32; font-size:13px;"><i class="fas fa-check-circle"></i> ' + escHtml(file.name) + ' uploaded successfully</p>';
+        } catch (err) {
+          resultsEl.innerHTML += '<p style="color:#e74c3c; font-size:13px;"><i class="fas fa-times-circle"></i> ' + escHtml(file.name) + ' failed: ' + escHtml(err.message) + '</p>';
+        }
+
+        completed++;
+      }
+
+      progressFill.style.width = '100%';
+      statusText.textContent = 'Upload complete! ' + completed + '/' + total + ' files uploaded.';
+
+      setTimeout(() => { progressEl.style.display = 'none'; }, 3000);
+    }
+
+    /* ═══════════════════════════════════════
+       SYSTEM TAB
+    ═══════════════════════════════════════ */
+    async function loadSystem() {
+      try {
+        const info = await api('/admin/system');
+        if (!info) return;
+
+        const dbEl = document.getElementById('sysDb');
+        dbEl.textContent = info.database === 'connected' ? 'Connected' : 'Error';
+        dbEl.className = 'system-card-value ' + (info.database === 'connected' ? 'ok' : 'error');
+
+        document.getElementById('sysUsers').textContent = info.activeUsers;
+        document.getElementById('sysInvestors').textContent = info.totalInvestors;
+
+        // Format uptime
+        const hrs = Math.floor(info.uptime / 3600);
+        const mins = Math.floor((info.uptime % 3600) / 60);
+        document.getElementById('sysUptime').textContent = hrs + 'h ' + mins + 'm';
+
+        document.getElementById('sysEnv').textContent = info.environment;
+        document.getElementById('sysVersion').textContent = 'v' + info.version;
+      } catch (err) {
+        console.error('System info error:', err);
+      }
+    }
+
+    document.getElementById('refreshSystemBtn').addEventListener('click', loadSystem);
+
+    /* ── Init ── */
+    document.addEventListener('DOMContentLoaded', () => {
+      // Verify admin access
+      api('/me').then(me => {
+        if (!me || String(me.role).toLowerCase() !== 'admin') {
+          document.body.innerHTML = '<div style="text-align:center; padding:80px 20px; color:#e74c3c;"><i class="fas fa-lock" style="font-size:48px; margin-bottom:12px; display:block;"></i><p style="font-size:16px;">Admin access required.</p></div>';
+          return;
+        }
+        loadUsers();
+      });
+    });
+  })();
+  </script>
+</body>
+</html>

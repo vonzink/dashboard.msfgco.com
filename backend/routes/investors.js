@@ -41,29 +41,18 @@ router.get('/:key', async (req, res, next) => {
 
     const investor = investors[0];
 
-    const [team] = await db.query(
-      'SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name',
-      [investor.id]
-    );
-    investor.team = team;
+    // Parallel queries — reduces 4 sequential DB round-trips to 1
+    const [teamResult, lenderIdsResult, clausesResult, linksResult] = await Promise.all([
+      db.query('SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name', [investor.id]),
+      db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [investor.id]),
+      db.query('SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?', [investor.id]),
+      db.query('SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type', [investor.id]),
+    ]);
 
-    const [lenderIds] = await db.query(
-      'SELECT * FROM investor_lender_ids WHERE investor_id = ?',
-      [investor.id]
-    );
-    investor.lenderIds = lenderIds[0] || {};
-
-    const [clauses] = await db.query(
-      'SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?',
-      [investor.id]
-    );
-    investor.mortgageeClauses = clauses;
-
-    const [links] = await db.query(
-      'SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type',
-      [investor.id]
-    );
-    investor.links = links;
+    investor.team = teamResult[0];
+    investor.lenderIds = lenderIdsResult[0]?.[0] || {};
+    investor.mortgageeClauses = clausesResult[0];
+    investor.links = linksResult[0];
 
     res.json(investor);
   } catch (error) {

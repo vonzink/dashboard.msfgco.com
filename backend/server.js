@@ -20,6 +20,8 @@ const filesRoutes = require('./routes/files');
 const tasksRoutes = require('./routes/tasks');
 const preApprovalsRoutes = require('./routes/preApprovals');
 const pipelineRoutes = require('./routes/pipeline');
+const fundedLoansRoutes = require('./routes/fundedLoans');
+const adminRoutes = require('./routes/admin');
 const webhooksRoutes = require('./routes/webhooks');
 
 // Content Engine routes
@@ -117,6 +119,8 @@ app.use('/api/files', authenticate, filesRoutes);
 app.use('/api/tasks', authenticate, tasksRoutes);
 app.use('/api/pre-approvals', authenticate, preApprovalsRoutes);
 app.use('/api/pipeline', authenticate, pipelineRoutes);
+app.use('/api/funded-loans', authenticate, fundedLoansRoutes);
+app.use('/api/admin', authenticate, adminRoutes);
 
 // Content Engine (all require JWT auth)
 app.use('/api/integrations', authenticate, integrationsRoutes);

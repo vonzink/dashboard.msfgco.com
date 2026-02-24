@@ -297,6 +297,24 @@ const ServerAPI = {
         return this.delete(`/investors/${idOrKey}`);
     },
 
+    // ========================================
+    // FUNDED LOANS
+    // ========================================
+    getFundedLoans(params = {}) {
+        const qs = this.buildQuery(params);
+        return this.get(`/funded-loans${qs}`);
+    },
+
+    getFundedLoansSummary(params = {}) {
+        const qs = this.buildQuery(params);
+        return this.get(`/funded-loans/summary${qs}`);
+    },
+
+    getFundedLoansByLO(params = {}) {
+        const qs = this.buildQuery(params);
+        return this.get(`/funded-loans/by-lo/summary${qs}`);
+    },
+
     getUploadUrl(fileName, fileType, fileSize) {
         return this.post("/files/upload-url", { fileName, fileType, fileSize });
     },
