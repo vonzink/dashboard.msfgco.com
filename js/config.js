@@ -116,18 +116,20 @@
       monday: "https://msfg-squad.monday.com/",
 
       mmi: "https://new.mmi.run/login",
+      loan_sifter: "https://email.msfginfo.com/",
       listreports: "https://listreports.com/login?redirect=https%253A%252F%252Flistreports.com%252Fagent-intel%253Ftab%253Dlistside",
-      passport: "https://v3.titlepro247.com/Home?ReturnUrl=%2FAccount%2FIndex",
+      passport: "https://v3.titlepro247.com/Account",
       flueid: "https://pro.flueid.com/auth/sign-in",
 
       advantage_credit: "https://credit.advcredit.com/custom/login.aspx",
-      dropbox: "https://dropbox.com",
+      dropbox: "https://www.dropbox.com",
       microsoft: "https://microsoft.com",
       teams: "https://teams.microsoft.com",
 
       logos_s3: "https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/",
       facebook: "https://www.facebook.com/MSFGhomeloans",
       instagram: "https://www.instagram.com/msfg.us/",
+      youtube: "https://www.youtube.com/@MSFG-homeloans",
 
       keyword_explorer: "https://keywords.msfgco.com",
 
