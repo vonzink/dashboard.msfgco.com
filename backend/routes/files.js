@@ -5,12 +5,21 @@ const { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } = r
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 
+const AWS_CREDS = {
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+};
+
+// Default client (us-east-1) for uploads and forms bucket
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || 'us-east-1',
-  credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-  },
+  credentials: AWS_CREDS,
+});
+
+// West client for msfg-media bucket (us-west-2)
+const s3ClientWest = new S3Client({
+  region: 'us-west-2',
+  credentials: AWS_CREDS,
 });
 
 const BUCKET_NAME = process.env.S3_BUCKET_NAME || 'msfg-dashboard-files';
@@ -23,13 +32,20 @@ const ALLOWED_LIBRARIES = {
     bucket: 'msfg-mortgage-documents-prod',
     prefix: '',
     label: 'Forms Library',
+    region: 'us-east-1',
   },
   logos: {
     bucket: 'msfg-media',
     prefix: 'Assets/LOGOS/',
     label: 'Logos & Brand Assets',
+    region: 'us-west-2',
   },
 };
+
+// Pick the right S3 client based on library region
+function getS3Client(lib) {
+  return lib.region === 'us-west-2' ? s3ClientWest : s3Client;
+}
 
 // ========================================
 // POST /api/files/upload-url
@@ -99,7 +115,7 @@ router.get('/browse', async (req, res, next) => {
         ...(continuationToken ? { ContinuationToken: continuationToken } : {}),
       });
 
-      const response = await s3Client.send(command);
+      const response = await getS3Client(lib).send(command);
 
       if (response.CommonPrefixes) allPrefixes.push(...response.CommonPrefixes);
       if (response.Contents) allContents.push(...response.Contents);
@@ -167,7 +183,7 @@ router.get('/download-url', async (req, res, next) => {
       Key: fullKey,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 900 });
+    const url = await getSignedUrl(getS3Client(lib), command, { expiresIn: 900 });
     const fileName = key.split('/').pop();
 
     res.json({
