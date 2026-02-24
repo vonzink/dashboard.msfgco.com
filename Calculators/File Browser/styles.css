@@ -1,0 +1,182 @@
+/* === MSFG Brand Tokens === */
+:root {
+  --msfg-green: #8cc63E;
+  --msfg-teal: #104547;
+  --msfg-gray: #404041;
+  --msfg-light-green: rgba(140, 198, 62, .18);
+  --msfg-green-border: rgba(140, 198, 62, .9);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', Arial, sans-serif;
+  margin: 0;
+  background: #f5f7f3;
+  color: var(--msfg-gray);
+  padding: 0 24px 40px;
+}
+
+/* ── Page Header ── */
+.pageHeader {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pageHeader h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--msfg-teal);
+}
+
+.pageHeader .subtitle {
+  font-size: 13px;
+  color: #888;
+  margin-left: 4px;
+}
+
+/* ── Breadcrumbs ── */
+.breadcrumb-bar {
+  max-width: 1100px;
+  margin: 0 auto 14px;
+  padding: 10px 18px;
+  background: #fff;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.04);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.breadcrumb-item {
+  color: var(--msfg-teal);
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background .15s;
+}
+.breadcrumb-item:hover {
+  background: var(--msfg-light-green);
+}
+.breadcrumb-item.active {
+  color: var(--msfg-gray);
+  cursor: default;
+  font-weight: 600;
+}
+.breadcrumb-item.active:hover {
+  background: transparent;
+}
+.breadcrumb-sep {
+  color: #bbb;
+  font-size: 11px;
+  user-select: none;
+}
+
+/* ── File Browser Container ── */
+.file-browser {
+  max-width: 1100px;
+  margin: 0 auto;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: 0 2px 12px rgba(0,0,0,.06);
+  overflow: hidden;
+}
+
+/* ── Column Header ── */
+.file-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: #fafbf8;
+  border-bottom: 1px solid #eee;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #999;
+}
+
+/* ── File Row ── */
+.file-row {
+  display: flex;
+  align-items: center;
+  padding: 11px 20px;
+  border-bottom: 1px solid #f2f2f2;
+  cursor: pointer;
+  transition: background .12s;
+}
+.file-row:last-child {
+  border-bottom: none;
+}
+.file-row:hover {
+  background: var(--msfg-light-green);
+}
+
+/* ── Columns ── */
+.col-icon   { width: 40px; text-align: center; font-size: 18px; flex-shrink: 0; }
+.col-name   { flex: 1; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-size   { width: 90px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; }
+.col-date   { width: 130px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; }
+.col-action { width: 48px; text-align: center; flex-shrink: 0; }
+
+/* ── Icons ── */
+.file-row.folder .col-icon { color: var(--msfg-teal); }
+.file-row.file .col-icon   { color: #c0392b; }
+.file-row.file.img .col-icon { color: #2980b9; }
+.file-row.file.doc .col-icon { color: #2b579a; }
+.file-row.file.xls .col-icon { color: #217346; }
+
+/* ── Download Button ── */
+.download-btn {
+  border: 0;
+  background: transparent;
+  color: var(--msfg-teal);
+  cursor: pointer;
+  font-size: 15px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  transition: background .15s;
+}
+.download-btn:hover {
+  background: var(--msfg-light-green);
+}
+
+/* ── States ── */
+.state-msg {
+  text-align: center;
+  padding: 60px 20px;
+  color: #999;
+}
+.state-msg i {
+  font-size: 40px;
+  margin-bottom: 12px;
+  display: block;
+  color: #ccc;
+}
+.state-msg p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* ── Spinner ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.fa-spin { animation: spin 1s linear infinite; }
+
+/* ── Responsive ── */
+@media (max-width: 700px) {
+  body { padding: 0 12px 24px; }
+  .col-date { display: none; }
+  .col-size { width: 70px; }
+  .file-row { padding: 10px 12px; }
+  .file-header { padding: 8px 12px; }
+}

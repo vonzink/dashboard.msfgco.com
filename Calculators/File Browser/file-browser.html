@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSFG File Browser</title>
+
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+</head>
+
+<body>
+  <div class="pageHeader">
+    <h2 id="pageTitle"><i class="fas fa-folder-open"></i> File Browser</h2>
+  </div>
+
+  <!-- Breadcrumb navigation -->
+  <div class="breadcrumb-bar" id="breadcrumbs"></div>
+
+  <!-- File listing -->
+  <div class="file-browser" id="fileBrowser">
+    <!-- Column header -->
+    <div class="file-header">
+      <div class="col-icon"></div>
+      <div class="col-name">Name</div>
+      <div class="col-size">Size</div>
+      <div class="col-date">Modified</div>
+      <div class="col-action"></div>
+    </div>
+
+    <div id="fileList"></div>
+
+    <!-- Loading state -->
+    <div class="state-msg" id="loadingState">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>Loading files...</p>
+    </div>
+
+    <!-- Empty state -->
+    <div class="state-msg" id="emptyState" style="display:none;">
+      <i class="fas fa-folder-open"></i>
+      <p>This folder is empty.</p>
+    </div>
+
+    <!-- Error state -->
+    <div class="state-msg" id="errorState" style="display:none;">
+      <i class="fas fa-exclamation-triangle"></i>
+      <p id="errorMsg">Something went wrong.</p>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    /* ── API Config ── */
+    const API_BASE = window.location.protocol === 'https:'
+      ? 'https://api.msfgco.com/api'
+      : 'http://54.175.238.145:8080/api';
+
+    function getAuthToken() {
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+      return (
+        localStorage.getItem('auth_token') ||
+        (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null) ||
+        sessionStorage.getItem('auth_token')
+      );
+    }
+
+    async function api(path) {
+      const token = getAuthToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+
+      const res = await fetch(API_BASE + path, { headers });
+
+      if (res.status === 401) {
+        alert('Session expired. Please log in again.');
+        return null;
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || res.statusText);
+      }
+      return res.json();
+    }
+
+    /* ── State ── */
+    const params = new URLSearchParams(window.location.search);
+    const library = params.get('library') || 'forms';
+    let currentPath = '';
+
+    /* ── DOM refs ── */
+    const $title      = document.getElementById('pageTitle');
+    const $crumbs     = document.getElementById('breadcrumbs');
+    const $fileList   = document.getElementById('fileList');
+    const $loading    = document.getElementById('loadingState');
+    const $empty      = document.getElementById('emptyState');
+    const $error      = document.getElementById('errorState');
+    const $errorMsg   = document.getElementById('errorMsg');
+
+    /* ── Helpers ── */
+    function formatSize(bytes) {
+      if (!bytes || bytes === 0) return '--';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+      return (bytes / 1073741824).toFixed(1) + ' GB';
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '--';
+      const d = new Date(iso);
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function getFileIcon(name) {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      const map = {
+        pdf: 'fa-file-pdf',
+        doc: 'fa-file-word', docx: 'fa-file-word',
+        xls: 'fa-file-excel', xlsx: 'fa-file-excel', csv: 'fa-file-excel',
+        ppt: 'fa-file-powerpoint', pptx: 'fa-file-powerpoint',
+        png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image',
+        gif: 'fa-file-image', svg: 'fa-file-image', webp: 'fa-file-image',
+        bmp: 'fa-file-image', tiff: 'fa-file-image', tif: 'fa-file-image',
+        zip: 'fa-file-archive', rar: 'fa-file-archive', '7z': 'fa-file-archive',
+        txt: 'fa-file-alt', rtf: 'fa-file-alt',
+        mp4: 'fa-file-video', mov: 'fa-file-video', avi: 'fa-file-video',
+        mp3: 'fa-file-audio', wav: 'fa-file-audio',
+      };
+      return map[ext] || 'fa-file';
+    }
+
+    function getFileTypeClass(name) {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      if (['png','jpg','jpeg','gif','svg','webp','bmp','tiff','tif'].includes(ext)) return 'img';
+      if (['doc','docx'].includes(ext)) return 'doc';
+      if (['xls','xlsx','csv'].includes(ext)) return 'xls';
+      return '';
+    }
+
+    /* ── Show/hide states ── */
+    function showLoading() {
+      $loading.style.display = '';
+      $empty.style.display = 'none';
+      $error.style.display = 'none';
+      $fileList.innerHTML = '';
+    }
+
+    function showEmpty() {
+      $loading.style.display = 'none';
+      $empty.style.display = '';
+      $error.style.display = 'none';
+    }
+
+    function showError(msg) {
+      $loading.style.display = 'none';
+      $empty.style.display = 'none';
+      $error.style.display = '';
+      $errorMsg.textContent = msg || 'Something went wrong.';
+    }
+
+    function hideStates() {
+      $loading.style.display = 'none';
+      $empty.style.display = 'none';
+      $error.style.display = 'none';
+    }
+
+    /* ── Breadcrumbs ── */
+    function renderBreadcrumbs(path) {
+      $crumbs.innerHTML = '';
+
+      // Root item
+      const root = document.createElement('span');
+      root.className = 'breadcrumb-item' + (path ? '' : ' active');
+      root.textContent = library === 'logos' ? 'Logos' : 'Forms Library';
+      if (path) root.addEventListener('click', () => browse(''));
+      $crumbs.appendChild(root);
+
+      if (!path) return;
+
+      // Split path into segments
+      const segments = path.replace(/\/$/, '').split('/');
+      let cumulative = '';
+
+      segments.forEach((seg, i) => {
+        cumulative += seg + '/';
+        const isLast = i === segments.length - 1;
+
+        // Separator
+        const sep = document.createElement('span');
+        sep.className = 'breadcrumb-sep';
+        sep.textContent = '/';
+        $crumbs.appendChild(sep);
+
+        // Segment
+        const span = document.createElement('span');
+        span.className = 'breadcrumb-item' + (isLast ? ' active' : '');
+        span.textContent = seg;
+        if (!isLast) {
+          const target = cumulative;
+          span.addEventListener('click', () => browse(target));
+        }
+        $crumbs.appendChild(span);
+      });
+    }
+
+    /* ── Render file list ── */
+    function renderFileList(folders, files) {
+      $fileList.innerHTML = '';
+
+      if (folders.length === 0 && files.length === 0) {
+        showEmpty();
+        return;
+      }
+
+      hideStates();
+
+      // Folders first
+      folders.forEach((folder) => {
+        const row = document.createElement('div');
+        row.className = 'file-row folder';
+        row.innerHTML =
+          '<div class="col-icon"><i class="fas fa-folder"></i></div>' +
+          '<div class="col-name">' + escHtml(folder.name.replace(/\/$/, '')) + '</div>' +
+          '<div class="col-size">--</div>' +
+          '<div class="col-date">--</div>' +
+          '<div class="col-action"></div>';
+        row.addEventListener('click', () => browse(folder.path));
+        $fileList.appendChild(row);
+      });
+
+      // Files
+      files.forEach((file) => {
+        const typeClass = getFileTypeClass(file.name);
+        const row = document.createElement('div');
+        row.className = 'file-row file' + (typeClass ? ' ' + typeClass : '');
+        row.innerHTML =
+          '<div class="col-icon"><i class="fas ' + getFileIcon(file.name) + '"></i></div>' +
+          '<div class="col-name">' + escHtml(file.name) + '</div>' +
+          '<div class="col-size">' + formatSize(file.size) + '</div>' +
+          '<div class="col-date">' + formatDate(file.lastModified) + '</div>' +
+          '<div class="col-action">' +
+            '<button class="download-btn" title="Download"><i class="fas fa-download"></i></button>' +
+          '</div>';
+
+        // Click on row name area to download
+        const dlBtn = row.querySelector('.download-btn');
+        dlBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          downloadFile(file.key, file.name);
+        });
+        row.addEventListener('click', () => downloadFile(file.key, file.name));
+
+        $fileList.appendChild(row);
+      });
+    }
+
+    function escHtml(str) {
+      const d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    /* ── Browse ── */
+    async function browse(path) {
+      currentPath = path || '';
+      showLoading();
+      renderBreadcrumbs(currentPath);
+
+      try {
+        const data = await api(
+          '/files/browse?library=' + encodeURIComponent(library) +
+          '&path=' + encodeURIComponent(currentPath)
+        );
+
+        if (!data) return; // 401 handled inside api()
+
+        // Update page title on first load
+        document.title = data.label + ' - MSFG';
+        $title.innerHTML = '<i class="fas ' +
+          (library === 'logos' ? 'fa-images' : 'fa-file-pdf') +
+          '"></i> ' + escHtml(data.label);
+
+        renderFileList(data.folders, data.files);
+      } catch (err) {
+        console.error('Browse error:', err);
+        showError('Failed to load files. ' + (err.message || ''));
+      }
+    }
+
+    /* ── Download ── */
+    async function downloadFile(key, fileName) {
+      try {
+        const data = await api(
+          '/files/download-url?library=' + encodeURIComponent(library) +
+          '&key=' + encodeURIComponent(key)
+        );
+        if (data && data.downloadUrl) {
+          window.open(data.downloadUrl, '_blank');
+        }
+      } catch (err) {
+        console.error('Download error:', err);
+        alert('Failed to get download link for ' + fileName);
+      }
+    }
+
+    /* ── Init ── */
+    document.addEventListener('DOMContentLoaded', () => browse(''));
+  })();
+  </script>
+</body>
+</html>

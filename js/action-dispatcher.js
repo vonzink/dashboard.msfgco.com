@@ -79,6 +79,30 @@
     // =====================
     'open-settings': () => console.log('Open settings'),
 
+    'open-forms-library': () => {
+      const w = Math.min(1100, screen.availWidth - 80);
+      const h = Math.min(800, screen.availHeight - 80);
+      const left = Math.round((screen.availWidth - w) / 2);
+      const top  = Math.round((screen.availHeight - h) / 2);
+      window.open(
+        'Calculators/File Browser/file-browser.html?library=forms',
+        'MSFGFormsLibrary',
+        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
+      );
+    },
+
+    'open-logos-browser': () => {
+      const w = Math.min(1100, screen.availWidth - 80);
+      const h = Math.min(800, screen.availHeight - 80);
+      const left = Math.round((screen.availWidth - w) / 2);
+      const top  = Math.round((screen.availHeight - h) / 2);
+      window.open(
+        'Calculators/File Browser/file-browser.html?library=logos',
+        'MSFGLogosBrowser',
+        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
+      );
+    },
+
     // =====================
     // Monday.com Integration
     // =====================
