@@ -30,7 +30,8 @@ const VALID_PRE_APPROVAL_FIELDS = [
 ];
 
 const VALID_FUNDED_LOAN_FIELDS = [
-  'assigned_lo_name', 'loan_amount', 'funded_date',
+  'assigned_lo_name', 'loan_amount', 'loan_type',
+  'funded_date', 'investor', 'property_address',
 ];
 
 const VALID_FIELDS_BY_SECTION = {
@@ -68,6 +69,8 @@ const FIELD_LABELS = {
   status: 'Status',
   property_address: 'Property Address',
   funded_date: 'Funded Date',
+  investor: 'Investor',
+  group_name: 'Group',
 };
 
 const FIELD_LABELS_BY_SECTION = {
@@ -108,6 +111,10 @@ const DEFAULT_TITLE_MAP = {
   'property address':     'property_address',
   'funded date':          'funded_date',
   'status':               'status',
+  'investor':             'investor',
+  'product':              'loan_type',
+  'product type':         'loan_type',
+  'property':             'property_address',
 };
 
 // ── DB Helpers ───────────────────────────────────────────────────
@@ -355,8 +362,13 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap) {
 async function upsertFundedLoanRow(mondayItemId, row, userNameMap) {
   const flRow = {
     monday_item_id: String(mondayItemId),
+    client_name: row.client_name || 'Unnamed',
     loan_amount: row.loan_amount || 0,
+    loan_type: row.loan_type || null,
     funded_date: row.funded_date || null,
+    investor: row.investor || null,
+    property_address: row.property_address || null,
+    group_name: row.stage || null,
     source_system: 'monday',
     last_synced_at: new Date(),
   };

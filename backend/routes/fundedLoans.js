@@ -88,65 +88,74 @@ function getDateFilter(period) {
 // ========================================
 router.get('/', async (req, res, next) => {
   try {
-    const { period, lo_id, start_date, end_date } = req.query;
+    const { period, lo_id, group, start_date, end_date } = req.query;
     const userGroup = getUserGroup(req);
     const userId = req.user?.db?.id;
-    
+
     let whereClause = 'WHERE 1=1';
     const params = [];
-    
+
     // ========================================
     // ROLE-BASED DATA FILTERING
     // ========================================
-    
+
     if (userGroup === 'admin' || userGroup === 'manager') {
       // Admin/Manager: See all funded loans
       // Optional filter by specific LO
       if (lo_id) {
-        whereClause += ' AND assigned_lo_id = ?';
+        whereClause += ' AND fl.assigned_lo_id = ?';
         params.push(lo_id);
       }
     } else if (userGroup === 'processor') {
       // Processor: See only loans from their assigned LOs
       const loIds = await getProcessorLOIds(userId);
-      
+
       if (loIds.length === 0) {
         // No LOs assigned, return empty
-        return res.json({ data: [], summary: { count: 0, total_amount: 0 } });
+        return res.json({ data: [], summary: { count: 0, total_amount: 0 }, groups: [] });
       }
-      
-      whereClause += ` AND assigned_lo_id IN (${loIds.map(() => '?').join(',')})`;
+
+      whereClause += ` AND fl.assigned_lo_id IN (${loIds.map(() => '?').join(',')})`;
       params.push(...loIds);
     } else if (userGroup === 'lo') {
       // LO: See only their own loans
-      whereClause += ' AND assigned_lo_id = ?';
+      whereClause += ' AND fl.assigned_lo_id = ?';
       params.push(userId);
     } else {
       // External or unknown: No access to funded loans
       return res.status(403).json({ error: 'Access denied to funded loans' });
     }
-    
+
     // ========================================
     // DATE FILTERING
     // ========================================
-    
+
     if (start_date && end_date) {
       // Custom date range
-      whereClause += ' AND funded_date >= ? AND funded_date <= ?';
+      whereClause += ' AND fl.funded_date >= ? AND fl.funded_date <= ?';
       params.push(start_date, end_date);
     } else {
       // Use period filter (ytd, mtd, or YYYY-MM)
       const dateFilter = getDateFilter(period);
-      whereClause += ' AND funded_date >= ? AND funded_date <= ?';
+      whereClause += ' AND fl.funded_date >= ? AND fl.funded_date <= ?';
       params.push(dateFilter.start, dateFilter.end);
     }
-    
+
+    // ========================================
+    // GROUP FILTERING
+    // ========================================
+
+    if (group) {
+      whereClause += ' AND fl.group_name = ?';
+      params.push(group);
+    }
+
     // ========================================
     // QUERY FUNDED LOANS
     // ========================================
-    
+
     const [loans] = await db.query(
-      `SELECT 
+      `SELECT
         fl.*,
         u.name as lo_name,
         u.email as lo_email
@@ -156,34 +165,47 @@ router.get('/', async (req, res, next) => {
        ORDER BY fl.funded_date DESC`,
       params
     );
-    
+
     // ========================================
     // CALCULATE SUMMARY
     // ========================================
-    
+
     const [summary] = await db.query(
-      `SELECT 
+      `SELECT
         COUNT(*) as count,
-        COALESCE(SUM(loan_amount), 0) as total_amount
-       FROM funded_loans
+        COALESCE(SUM(fl.loan_amount), 0) as total_amount
+       FROM funded_loans fl
        ${whereClause}`,
       params
     );
-    
+
+    // ========================================
+    // AVAILABLE GROUPS (for filter dropdown)
+    // ========================================
+
+    const [groupRows] = await db.query(
+      `SELECT DISTINCT group_name FROM funded_loans
+       WHERE group_name IS NOT NULL AND group_name != ''
+       ORDER BY group_name`
+    );
+    const groups = groupRows.map(r => r.group_name);
+
     res.json({
       data: loans,
       summary: {
         count: summary[0].count,
         total_amount: parseFloat(summary[0].total_amount) || 0
       },
+      groups,
       filters: {
         period: period || 'ytd',
         lo_id: lo_id || null,
+        group: group || null,
         start_date: start_date || null,
         end_date: end_date || null
       }
     });
-    
+
   } catch (error) {
     next(error);
   }

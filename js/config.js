@@ -138,6 +138,7 @@
       facebook: "https://www.facebook.com/MSFGhomeloans",
       instagram: "https://www.instagram.com/msfg.us/",
       youtube: "https://www.youtube.com/@MSFG-homeloans",
+      linkedin: "https://www.linkedin.com/company/msfg-home-loans",
 
       keyword_explorer: "https://keywords.msfgco.com",
 

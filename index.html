@@ -108,15 +108,24 @@
               <i class="fas fa-book"></i> Handbook
             </button>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-header">Team Directory</div>
-            <div id="hrEmployeeList">
-              <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
-            </div>
-
-            <div class="dropdown-divider"></div>
             <button type="button" class="dropdown-item" data-action="open-training">
               <i class="fas fa-graduation-cap"></i> Training
             </button>
+          </div>
+        </li>
+
+        <!-- MSFG Contacts -->
+        <li class="nav-item">
+          <button type="button" class="nav-button">
+            <i class="fas fa-address-book"></i>
+            MSFG Contacts
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu dropdown-menu-contacts">
+            <div class="dropdown-header">Team Directory</div>
+            <div id="contactsEmployeeList">
+              <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
+            </div>
           </div>
         </li>
 
@@ -140,7 +149,6 @@
             <a data-link-key="mmi" class="dropdown-item"><i class="fas fa-chart-line"></i> MMI</a>
             <a data-link-key="loan_sifter" class="dropdown-item"><i class="fas fa-search-dollar"></i> Loan Sifter</a>
             <a data-link-key="listreports" class="dropdown-item"><i class="fas fa-list-alt"></i> List Reports</a>
-            <button type="button" class="dropdown-item" data-action="open-valuecheck"><i class="fas fa-check-circle"></i> ValueCheck</button>
             <a data-link-key="passport" class="dropdown-item"><i class="fas fa-passport"></i> Passport</a>
             <a data-link-key="flueid" class="dropdown-item"><i class="fas fa-water"></i> Flueid</a>
 
@@ -188,7 +196,7 @@
             <a data-link-key="facebook" class="dropdown-item"><i class="fab fa-facebook"></i> Facebook</a>
             <a data-link-key="instagram" class="dropdown-item"><i class="fab fa-instagram"></i> Instagram</a>
             <a data-link-key="youtube" class="dropdown-item"><i class="fab fa-youtube"></i> YouTube</a>
-            <button type="button" class="dropdown-item" data-action="open-linkedin"><i class="fab fa-linkedin"></i> LinkedIn</button>
+            <a data-link-key="linkedin" class="dropdown-item"><i class="fab fa-linkedin"></i> LinkedIn</a>
           </div>
         </li>
 
@@ -353,6 +361,9 @@
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-hand-holding-usd"></i> Loans Funded</h2>
         <div class="section-actions">
+          <select class="filter-select" id="fundedGroupSelect" style="display:none;">
+            <option value="">All Groups</option>
+          </select>
           <select class="filter-select" id="fundedLOSelect" style="display:none;">
             <option value="">All Loan Officers</option>
           </select>
@@ -386,12 +397,13 @@
                 <th>Borrower</th>
                 <th class="text-right">Loan Amount</th>
                 <th>Loan Officer</th>
+                <th>Group</th>
                 <th>Product</th>
                 <th>Funded Date</th>
               </tr>
             </thead>
             <tbody id="fundedLoansBody">
-              <tr><td colspan="5" class="empty-state">
+              <tr><td colspan="6" class="empty-state">
                 <i class="fas fa-spinner fa-spin"></i>
                 <p>Loading funded loans...</p>
               </td></tr>

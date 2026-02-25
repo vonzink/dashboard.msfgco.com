@@ -1012,6 +1012,13 @@ textarea.form-input {
     overflow-y: auto;
 }
 
+/* Scrollable dropdown for contacts */
+.dropdown-menu-contacts {
+    max-height: 480px;
+    overflow-y: auto;
+    min-width: 260px;
+}
+
 .investor-dropdown-search {
     padding: 0.375rem 0.75rem;
     position: sticky;

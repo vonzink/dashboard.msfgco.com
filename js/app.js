@@ -167,6 +167,10 @@ const App = {
                     const fundedLO = document.getElementById('fundedLOSelect');
                     if (fundedLO) fundedLO.style.display = '';
                 }
+
+                // Show group filter for all users (populated dynamically)
+                const fundedGroup = document.getElementById('fundedGroupSelect');
+                if (fundedGroup) fundedGroup.style.display = '';
             }
         } catch (err) {
             console.warn('Could not load current user:', err);
@@ -177,7 +181,7 @@ const App = {
     // EMPLOYEE DIRECTORY (HR dropdown)
     // ========================================
     async loadEmployeeDirectory() {
-        const container = document.getElementById('hrEmployeeList');
+        const container = document.getElementById('contactsEmployeeList');
         if (!container) return;
 
         try {
