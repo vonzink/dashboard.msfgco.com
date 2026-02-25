@@ -30,7 +30,7 @@ router.post('/tags', async (req, res, next) => {
     const tagColor = color || '#8cc63e';
     const tagName = name.trim();
 
-    const [result] = await db.query(
+    await db.query(
       'INSERT INTO chat_tags (name, color, created_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE id=id',
       [tagName, tagColor, userId]
     );
@@ -61,22 +61,25 @@ router.get('/messages', async (req, res, next) => {
     const before = parseInt(req.query.before) || null;
     const tagId = parseInt(req.query.tag) || null;
 
+    // Tag subquery — returns a proper JSON array, avoids GROUP_CONCAT
+    // length limits and fragile comma-splitting.
+    const TAG_SUBQUERY = `(
+      SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ct.id, 'name', ct.name, 'color', ct.color))
+      FROM chat_message_tags mt
+      JOIN chat_tags ct ON mt.tag_id = ct.id
+      WHERE mt.message_id = m.id
+    ) AS tags`;
+
     let query, params;
 
     if (tagId) {
-      // Filter by tag
+      // Filter by tag — INNER JOIN to filter, subquery to fetch all tags
       query = `
-        SELECT m.*, GROUP_CONCAT(DISTINCT ct.id ORDER BY ct.name SEPARATOR ',') AS tag_ids,
-               GROUP_CONCAT(DISTINCT ct.name ORDER BY ct.name SEPARATOR ',') AS tag_names,
-               GROUP_CONCAT(DISTINCT ct.color ORDER BY ct.name SEPARATOR ',') AS tag_colors
+        SELECT m.*, ${TAG_SUBQUERY}
         FROM chat_messages m
-        INNER JOIN chat_message_tags mt ON m.id = mt.message_id
-        INNER JOIN chat_tags ct2 ON mt.tag_id = ct2.id
-        LEFT JOIN chat_message_tags mt_all ON m.id = mt_all.message_id
-        LEFT JOIN chat_tags ct ON mt_all.tag_id = ct.id
-        WHERE ct2.id = ?
+        INNER JOIN chat_message_tags mt_filter ON m.id = mt_filter.message_id
+        WHERE mt_filter.tag_id = ?
         ${before ? 'AND m.id < ?' : ''}
-        GROUP BY m.id
         ORDER BY m.created_at DESC
         LIMIT ?
       `;
@@ -84,14 +87,9 @@ router.get('/messages', async (req, res, next) => {
     } else {
       // All messages
       query = `
-        SELECT m.*, GROUP_CONCAT(DISTINCT ct.id ORDER BY ct.name SEPARATOR ',') AS tag_ids,
-               GROUP_CONCAT(DISTINCT ct.name ORDER BY ct.name SEPARATOR ',') AS tag_names,
-               GROUP_CONCAT(DISTINCT ct.color ORDER BY ct.name SEPARATOR ',') AS tag_colors
+        SELECT m.*, ${TAG_SUBQUERY}
         FROM chat_messages m
-        LEFT JOIN chat_message_tags mt ON m.id = mt.message_id
-        LEFT JOIN chat_tags ct ON mt.tag_id = ct.id
         ${before ? 'WHERE m.id < ?' : ''}
-        GROUP BY m.id
         ORDER BY m.created_at DESC
         LIMIT ?
       `;
@@ -100,7 +98,7 @@ router.get('/messages', async (req, res, next) => {
 
     const [rows] = await db.query(query, params);
 
-    // Parse tag fields into arrays and reverse to chronological order
+    // Reverse to chronological order; tags arrive as JSON (or null)
     const messages = rows.reverse().map(row => ({
       id: row.id,
       user_id: row.user_id,
@@ -108,13 +106,7 @@ router.get('/messages', async (req, res, next) => {
       sender_initials: row.sender_initials,
       message: row.message,
       created_at: row.created_at,
-      tags: row.tag_ids
-        ? row.tag_ids.split(',').map((id, i) => ({
-            id: parseInt(id),
-            name: row.tag_names.split(',')[i],
-            color: row.tag_colors.split(',')[i]
-          }))
-        : []
+      tags: row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [],
     }));
 
     res.json(messages);
@@ -152,17 +144,17 @@ router.post('/messages', async (req, res, next) => {
 
     // Fetch the complete message with tags
     const [rows] = await db.query(`
-      SELECT m.*, GROUP_CONCAT(DISTINCT ct.id ORDER BY ct.name SEPARATOR ',') AS tag_ids,
-             GROUP_CONCAT(DISTINCT ct.name ORDER BY ct.name SEPARATOR ',') AS tag_names,
-             GROUP_CONCAT(DISTINCT ct.color ORDER BY ct.name SEPARATOR ',') AS tag_colors
+      SELECT m.*,
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ct.id, 'name', ct.name, 'color', ct.color))
+         FROM chat_message_tags mt
+         JOIN chat_tags ct ON mt.tag_id = ct.id
+         WHERE mt.message_id = m.id) AS tags
       FROM chat_messages m
-      LEFT JOIN chat_message_tags mt ON m.id = mt.message_id
-      LEFT JOIN chat_tags ct ON mt.tag_id = ct.id
       WHERE m.id = ?
-      GROUP BY m.id
     `, [msgId]);
 
     const row = rows[0];
+    const tags = row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [];
     res.status(201).json({
       id: row.id,
       user_id: row.user_id,
@@ -170,13 +162,7 @@ router.post('/messages', async (req, res, next) => {
       sender_initials: row.sender_initials,
       message: row.message,
       created_at: row.created_at,
-      tags: row.tag_ids
-        ? row.tag_ids.split(',').map((id, i) => ({
-            id: parseInt(id),
-            name: row.tag_names.split(',')[i],
-            color: row.tag_colors.split(',')[i]
-          }))
-        : []
+      tags,
     });
   } catch (err) { next(err); }
 });

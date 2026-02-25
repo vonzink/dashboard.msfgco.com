@@ -60,14 +60,17 @@ function authenticate(req, res, next) {
 
         // Backfill cognito_sub if we found the user by email but sub isn't stored yet
         if (sub && !users[0].cognito_sub) {
-          db.query('UPDATE users SET cognito_sub = ? WHERE id = ?', [sub, users[0].id]).catch(() => {});
+          db.query('UPDATE users SET cognito_sub = ? WHERE id = ?', [sub, users[0].id])
+            .catch(err => console.warn('cognito_sub backfill failed:', err.message));
         }
+      } else {
+        console.warn('Auth: JWT valid but no DB user found for email=%s sub=%s', email, sub);
       }
 
       next();
     } catch (dbErr) {
       console.error('DB user lookup error:', dbErr.message);
-      // Don't fail auth just because the DB lookup had an issue
+      // Still allow the request — JWT is valid, but downstream should check req.user.db
       next();
     }
   });
@@ -79,6 +82,19 @@ function authenticate(req, res, next) {
 function isAdmin(req) {
   const role = String(req.user?.db?.role || '').toLowerCase();
   return role === 'admin';
+}
+
+/**
+ * Express middleware: reject with 403 if user is not an admin.
+ * Use after `authenticate` on routes that require admin access.
+ *
+ *   router.post('/', requireAdmin, handler);
+ */
+function requireAdmin(req, res, next) {
+  if (!isAdmin(req)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
+  next();
 }
 
 /**
@@ -115,6 +131,7 @@ async function getUserFromApiKey(apiKey) {
 module.exports = {
   authenticate,
   isAdmin,
+  requireAdmin,
   getUserFromApiKey,
 };
 

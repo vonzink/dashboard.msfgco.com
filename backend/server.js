@@ -33,6 +33,7 @@ const contentItemsRoutes = require('./routes/contentItems');
 const contentPublishRoutes = require('./routes/contentPublish');
 const mondayRoutes = require('./routes/monday');
 const calendarEventsRoutes = require('./routes/calendarEvents');
+const usersRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -110,6 +111,7 @@ app.get('/api/me', authenticate, (req, res) => {
 });
 
 // All other routes require JWT authentication
+app.use('/api/users', authenticate, usersRoutes);
 app.use('/api/investors', authenticate, investorsRoutes);
 app.use('/api/chat', authenticate, chatRoutes);
 app.use('/api/announcements', authenticate, announcementsRoutes);

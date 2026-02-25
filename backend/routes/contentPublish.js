@@ -53,7 +53,7 @@ router.post('/batch', async (req, res, next) => {
         }
 
         const item = items[0];
-        let webhookUrl = await getCredential(userId, method || 'n8n') || await getCredential(userId, 'zapier');
+        const webhookUrl = await getCredential(userId, method || 'n8n') || await getCredential(userId, 'zapier');
         if (!webhookUrl) {
           results.push({ content_id: id, success: false, error: 'No webhook configured' });
           continue;

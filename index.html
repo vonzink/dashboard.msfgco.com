@@ -107,9 +107,13 @@
             <button type="button" class="dropdown-item" data-action="open-handbook">
               <i class="fas fa-book"></i> Handbook
             </button>
-            <button type="button" class="dropdown-item" data-action="open-company-contacts">
-              <i class="fas fa-address-book"></i> Contacts
-            </button>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-header">Team Directory</div>
+            <div id="hrEmployeeList">
+              <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
+            </div>
+
+            <div class="dropdown-divider"></div>
             <button type="button" class="dropdown-item" data-action="open-training">
               <i class="fas fa-graduation-cap"></i> Training
             </button>
@@ -159,7 +163,6 @@
           <div class="dropdown-menu">
             <div class="dropdown-header">Scheduling</div>
             <button type="button" class="dropdown-item" data-action="open-company-calendar"><i class="fas fa-calendar"></i> Company Calendar</button>
-            <button type="button" class="dropdown-item" data-action="open-timeoff-requests"><i class="fas fa-clock"></i> Time Off Requests</button>
             <a data-link-key="teams" class="dropdown-item"><i class="fas fa-video"></i> Meeting Rooms (Teams)</a>
           </div>
         </li>
@@ -237,10 +240,7 @@
           </button>
           <div class="dropdown-menu">
             <div class="dropdown-header">Calculators</div>
-            <button type="button" class="dropdown-item" data-action="open-mortgage-calculator"><i class="fas fa-calculator"></i> Mortgage Calculator</button>
-            <button type="button" class="dropdown-item" data-action="open-apr-calculator"><i class="fas fa-percentage"></i> APR Calculator</button>
-            <button type="button" class="dropdown-item" data-action="open-dti-calculator"><i class="fas fa-balance-scale"></i> DTI Calculator</button>
-            <button type="button" class="dropdown-item" data-action="open-affordability"><i class="fas fa-chart-pie"></i> Affordability</button>
+            <a data-link-key="loan_calc_hub" class="dropdown-item"><i class="fas fa-calculator"></i> Loan Calculator Hub</a>
 
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Resources</div>
@@ -272,6 +272,45 @@
       </div>
     </section>
 
+    <!-- Pre-Approvals (Monday.com Sync) -->
+    <section class="section-card animate-in" id="preApprovalsSection">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Pre-Approvals</h2>
+        <div class="section-actions">
+          <input type="text" id="preApprovalSearch" class="search-input" placeholder="Search pre-approvals..." />
+          <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
+            <i class="fas fa-sync-alt"></i> Sync
+          </button>
+        </div>
+      </div>
+
+      <div class="section-body">
+        <div class="table-responsive">
+          <table class="data-table" id="preApprovalsTable">
+            <thead>
+              <tr>
+                <th class="sortable">Client Name</th>
+                <th class="sortable text-right">Loan Amount</th>
+                <th class="sortable">Pre-Approval Date</th>
+                <th class="sortable">Expiration Date</th>
+                <th class="sortable">Status</th>
+                <th class="sortable">Loan Officer</th>
+                <th>Property Address</th>
+                <th class="sortable">Loan Type</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="preApprovalsBody">
+              <tr><td colspan="9" class="empty-state">
+                <i class="fas fa-database"></i>
+                <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- Pipeline (Monday.com Sync) -->
     <section class="section-card animate-in" id="pipelineSection">
       <div class="section-header">
@@ -281,11 +320,8 @@
           <select class="filter-select" id="pipelineLO">
             <option value="">All Loan Officers</option>
           </select>
-          <button type="button" class="btn btn-secondary btn-sm" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
+          <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
-          </button>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="monday-settings" title="Monday.com Settings">
-            <i class="fas fa-cog"></i>
           </button>
         </div>
       </div>
@@ -324,6 +360,9 @@
             <option value="ytd" selected>Year to Date</option>
             <option value="mtd">Month to Date</option>
           </select>
+          <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
+            <i class="fas fa-sync-alt"></i> Sync
+          </button>
         </div>
       </div>
 
@@ -706,6 +745,20 @@
                 <div class="form-group">
                   <label for="inv_websiteUrl"><i class="fas fa-globe"></i> Link to Website</label>
                   <input type="url" id="inv_websiteUrl" class="form-input" placeholder="https://..." />
+                </div>
+                <div class="form-group form-group-full inv-logo-upload-group">
+                  <label><i class="fas fa-image"></i> Logo</label>
+                  <div class="inv-logo-upload-area" id="invLogoUploadArea">
+                    <img id="invLogoPreview" class="inv-logo-preview" alt="" style="display:none;" />
+                    <div id="invLogoPlaceholder" class="inv-logo-placeholder">
+                      <i class="fas fa-cloud-upload-alt"></i>
+                      <span>Click or drag to upload logo</span>
+                    </div>
+                    <input type="file" id="invLogoFileInput" accept="image/*" style="display:none;" />
+                    <button type="button" id="invLogoRemoveBtn" class="btn btn-sm btn-danger inv-logo-remove-btn" style="display:none;" title="Remove logo">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </div>
                 </div>
                 <div class="form-group form-group-full">
                   <label for="inv_notes"><i class="fas fa-note-sticky"></i> Notes</label>

@@ -1,73 +1,10 @@
 /* ============================================
-   MSFG Dashboard - API Module
-   All API calls and data rendering
+   MSFG Dashboard - Data & Views
+   Data loading orchestration + DOM rendering.
+   All HTTP goes through ServerAPI (js/api-server.js).
    ============================================ */
 
 const API = {
-    // ========================================
-    // HTTP HELPERS
-    // ========================================
-    
-    /**
-     * Base fetch wrapper with error handling
-     */
-    async request(endpoint, options = {}) {
-        const url = `${CONFIG.api.baseUrl}${endpoint}`;
-        
-        const defaultOptions = {
-            headers: {
-                'Content-Type': 'application/json',
-                // Add auth header if needed
-                // 'Authorization': `Bearer ${token}`
-            },
-            timeout: CONFIG.api.timeout
-        };
-        
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), CONFIG.api.timeout);
-            
-            const response = await fetch(url, {
-                ...defaultOptions,
-                ...options,
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error(`API Error (${endpoint}):`, error);
-            throw error;
-        }
-    },
-
-    async get(endpoint) {
-        return this.request(endpoint, { method: 'GET' });
-    },
-
-    async post(endpoint, data) {
-        return this.request(endpoint, {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-    },
-
-    async put(endpoint, data) {
-        return this.request(endpoint, {
-            method: 'PUT',
-            body: JSON.stringify(data)
-        });
-    },
-
-    async delete(endpoint) {
-        return this.request(endpoint, { method: 'DELETE' });
-    },
-
     // ========================================
     // LOAD ALL DATA
     // ========================================
@@ -169,10 +106,12 @@ const API = {
     // PRE-APPROVALS
     // ========================================
     async loadPreApprovals() {
-        // Uncomment when API is ready
-        // const data = await this.get('/pre-approvals');
-        // this.renderPreApprovals(data);
-        console.log('Pre-approvals: API endpoint ready at /api/pre-approvals');
+        try {
+            const data = await ServerAPI.get('/pre-approvals');
+            this.renderPreApprovals(Array.isArray(data) ? data : data?.data || []);
+        } catch (err) {
+            console.warn('Pre-approvals load failed:', err.message);
+        }
     },
 
     renderPreApprovals(data) {
@@ -400,38 +339,38 @@ const API = {
     },
 
     // ========================================
-    // CRUD OPERATIONS
+    // CRUD OPERATIONS (delegate to ServerAPI)
     // ========================================
-    
+
     // Pre-Approvals
-    async createPreApproval(data) {
-        return this.post('/pre-approvals', data);
+    createPreApproval(data) {
+        return ServerAPI.post('/pre-approvals', data);
     },
 
-    async updatePreApproval(id, data) {
-        return this.put(`/pre-approvals/${id}`, data);
+    updatePreApproval(id, data) {
+        return ServerAPI.put(`/pre-approvals/${id}`, data);
     },
 
-    async deletePreApproval(id) {
-        return this.delete(`/pre-approvals/${id}`);
+    deletePreApproval(id) {
+        return ServerAPI.delete(`/pre-approvals/${id}`);
     },
 
     // Tasks
-    async createTask(data) {
-        return this.post('/tasks', data);
+    createTask(data) {
+        return ServerAPI.post('/tasks', data);
     },
 
-    async updateTask(id, data) {
-        return this.put(`/tasks/${id}`, data);
+    updateTask(id, data) {
+        return ServerAPI.put(`/tasks/${id}`, data);
     },
 
-    async deleteTask(id) {
-        return this.delete(`/tasks/${id}`);
+    deleteTask(id) {
+        return ServerAPI.delete(`/tasks/${id}`);
     },
 
     // News
-    async createAnnouncement(data) {
-        return this.post('/news', data);
+    createAnnouncement(data) {
+        return ServerAPI.post('/news', data);
     }
 };
 
@@ -445,23 +384,40 @@ const MondaySettings = {
         document.getElementById('pipelineLO')?.addEventListener('change', () => this.filterPipeline());
     },
 
-    async triggerSyncFromToolbar() {
-        const btn = document.getElementById('mondaySyncBtn');
-        if (!btn) return;
-        const originalHtml = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    async triggerSyncFromToolbar(clickedBtn) {
+        // Disable ALL sync buttons while syncing
+        const allBtns = document.querySelectorAll('.monday-sync-btn');
+        const originals = new Map();
+        allBtns.forEach(btn => {
+            originals.set(btn, btn.innerHTML);
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        });
 
         try {
-            const result = await ServerAPI.syncMonday();
-            await API.loadPipeline();
+            await ServerAPI.syncMonday();
+            // Reload all three synced sections
+            await Promise.allSettled([
+                API.loadPreApprovals(),
+                API.loadPipeline(),
+                typeof FundedLoans !== 'undefined' ? FundedLoans.load() : Promise.resolve(),
+            ]);
             // Brief success flash
-            btn.innerHTML = '<i class="fas fa-check"></i>';
-            setTimeout(() => { btn.innerHTML = originalHtml; btn.disabled = false; }, 2000);
+            allBtns.forEach(btn => {
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+            });
+            setTimeout(() => {
+                allBtns.forEach(btn => {
+                    btn.innerHTML = originals.get(btn);
+                    btn.disabled = false;
+                });
+            }, 2000);
         } catch (err) {
             alert('Sync failed: ' + err.message);
-            btn.innerHTML = originalHtml;
-            btn.disabled = false;
+            allBtns.forEach(btn => {
+                btn.innerHTML = originals.get(btn);
+                btn.disabled = false;
+            });
         }
     },
 
@@ -481,10 +437,11 @@ const MondaySettings = {
 };
 
 // ========================================
-// DATA REFRESHER
+// DATA REFRESHER — pauses when tab is hidden
 // ========================================
 const DataRefresher = {
     intervals: {},
+    _visibilityBound: false,
 
     start() {
         if (!CONFIG.features.autoRefresh) return;
@@ -495,12 +452,43 @@ const DataRefresher = {
         this.intervals.pipeline = setInterval(() => API.loadPipeline(), CONFIG.refresh.pipeline);
         this.intervals.goals = setInterval(() => API.loadGoals(), CONFIG.refresh.goals);
 
+        // Pause refreshes when tab is hidden, resume when visible
+        if (!this._visibilityBound) {
+            this._visibilityBound = true;
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    this._pause();
+                } else {
+                    // Refresh immediately on return, then resume intervals
+                    API.loadAllData();
+                    this._resume();
+                }
+            });
+        }
+
         console.log('Auto-refresh started');
     },
 
-    stop() {
+    /** Clear intervals without removing the visibility listener */
+    _pause() {
         Object.values(this.intervals).forEach(id => clearInterval(id));
         this.intervals = {};
+    },
+
+    /** Re-create intervals (called when tab becomes visible) */
+    _resume() {
+        if (!CONFIG.features.autoRefresh) return;
+        // Avoid duplicate intervals
+        this._pause();
+        this.intervals.news = setInterval(() => API.loadNews(), CONFIG.refresh.news);
+        this.intervals.tasks = setInterval(() => API.loadTasks(), CONFIG.refresh.tasks);
+        this.intervals.preApprovals = setInterval(() => API.loadPreApprovals(), CONFIG.refresh.preApprovals);
+        this.intervals.pipeline = setInterval(() => API.loadPipeline(), CONFIG.refresh.pipeline);
+        this.intervals.goals = setInterval(() => API.loadGoals(), CONFIG.refresh.goals);
+    },
+
+    stop() {
+        this._pause();
         console.log('Auto-refresh stopped');
     },
 

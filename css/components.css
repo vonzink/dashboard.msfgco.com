@@ -937,6 +937,75 @@ textarea.form-input {
     width: 100%;
 }
 
+/* ── Investor Logo Upload ─────────────────────────── */
+.inv-logo-upload-group {
+    margin-bottom: 0.5rem;
+}
+
+.inv-logo-upload-area {
+    position: relative;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inv-logo-upload-area:hover,
+.inv-logo-upload-area.drag-over {
+    border-color: var(--primary-color);
+    background: rgba(16, 69, 71, 0.04);
+}
+
+.inv-logo-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.inv-logo-placeholder i {
+    font-size: 1.5rem;
+    opacity: 0.5;
+}
+
+.inv-logo-preview {
+    max-width: 200px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.inv-logo-remove-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.inv-logo-upload-area.uploading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.inv-logo-upload-area.uploading::after {
+    content: 'Uploading...';
+    position: absolute;
+    bottom: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    color: var(--primary-color);
+}
+
 /* Scrollable dropdown for many investors */
 .dropdown-menu-investors {
     max-height: 480px;
@@ -1002,4 +1071,43 @@ textarea.form-input {
     .manage-investor-form .form-grid {
         grid-template-columns: 1fr;
     }
+}
+
+/* ========================================
+   EMPLOYEE DIRECTORY (HR dropdown)
+======================================== */
+.employee-card-link {
+    display: flex !important;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem !important;
+}
+
+.employee-avatar-sm {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--green-bright, #8cc63e);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.employee-link-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.employee-link-info strong {
+    font-size: 0.82rem;
+}
+
+.employee-link-info small {
+    font-size: 0.7rem;
+    opacity: 0.65;
 }

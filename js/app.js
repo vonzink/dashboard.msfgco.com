@@ -35,6 +35,7 @@ const App = {
         // Load user info + data from API
         this.loadCurrentUser();
         this.loadData();
+        this.loadEmployeeDirectory();
 
         // Start auto-refresh
         if (typeof DataRefresher !== 'undefined') DataRefresher.start();
@@ -169,6 +170,38 @@ const App = {
             }
         } catch (err) {
             console.warn('Could not load current user:', err);
+        }
+    },
+
+    // ========================================
+    // EMPLOYEE DIRECTORY (HR dropdown)
+    // ========================================
+    async loadEmployeeDirectory() {
+        const container = document.getElementById('hrEmployeeList');
+        if (!container) return;
+
+        try {
+            const users = await ServerAPI.get('/users/directory');
+            if (!Array.isArray(users) || users.length === 0) {
+                container.innerHTML = '<span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">No employees found.</span>';
+                return;
+            }
+
+            container.innerHTML = users.map(u => {
+                const initials = u.initials || (u.name || '').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const email = u.display_email || u.email || '';
+                return `
+                    <button type="button" class="dropdown-item employee-card-link" data-action="open-employee-card" data-employee-id="${u.id}">
+                        <span class="employee-avatar-sm">${initials}</span>
+                        <span class="employee-link-info">
+                            <strong>${u.name || 'Unknown'}</strong>
+                            <small>${u.role || ''}</small>
+                        </span>
+                    </button>`;
+            }).join('');
+        } catch (err) {
+            console.warn('Employee directory load failed:', err.message);
+            container.innerHTML = '<span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Could not load employees.</span>';
         }
     },
 

@@ -4,32 +4,21 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { isAdmin } = require('../middleware/userContext');
-const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const crypto = require('crypto');
+const { requireAdmin } = require('../middleware/userContext');
 const { encrypt, decrypt, mask } = require('../utils/encryption');
-
-// S3 client for forms library uploads (us-east-1)
-const s3Client = new S3Client({
-  region: process.env.AWS_REGION || 'us-east-1',
-});
-
-// S3 client for msfg-media bucket (us-west-2) — avatars, employee documents
-const s3West = new S3Client({ region: 'us-west-2' });
-const MEDIA_BUCKET = 'msfg-media';
-
-const FORMS_BUCKET = 'msfg-mortgage-documents-prod';
+const {
+  BUCKETS,
+  getUploadUrl,
+  getDownloadUrl,
+  deleteObject,
+  buildMediaKey,
+  buildFormsKey,
+} = require('../services/s3');
 
 // ========================================
 // ADMIN GUARD — applied to all routes
 // ========================================
-router.use((req, res, next) => {
-  if (!isAdmin(req)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-});
+router.use(requireAdmin);
 
 // ========================================
 // GET /api/admin/users — List all users
@@ -79,7 +68,6 @@ router.post('/users', async (req, res, next) => {
       return res.status(400).json({ error: 'email and name are required' });
     }
 
-    // Check for duplicate email
     const [existing] = await db.query(
       'SELECT id FROM users WHERE email = ?',
       [email]
@@ -119,7 +107,6 @@ router.put('/users/:id', async (req, res, next) => {
     const { name, initials, role, is_active } = req.body;
     const userId = req.params.id;
 
-    // Build dynamic SET clause
     const updates = [];
     const params = [];
 
@@ -139,7 +126,6 @@ router.put('/users/:id', async (req, res, next) => {
       params
     );
 
-    // Return updated user
     const [users] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
     res.json(users[0]);
   } catch (error) {
@@ -155,7 +141,6 @@ router.delete('/users/:id', async (req, res, next) => {
   try {
     const userId = req.params.id;
 
-    // Prevent admin from deactivating themselves
     const currentUserId = req.user?.db?.id;
     if (String(userId) === String(currentUserId)) {
       return res.status(400).json({ error: 'Cannot deactivate your own account' });
@@ -184,25 +169,9 @@ router.post('/files/upload-url', async (req, res, next) => {
       return res.status(400).json({ error: 'fileName is required' });
     }
 
-    // Sanitize folder path
-    const safeFolderRaw = (folder || '').replace(/\.\./g, '').replace(/^\//, '');
-    const safeFolder = safeFolderRaw ? safeFolderRaw.replace(/\/?$/, '/') : '';
-    const fileKey = safeFolder + fileName;
-
-    const command = new PutObjectCommand({
-      Bucket: FORMS_BUCKET,
-      Key: fileKey,
-      ContentType: fileType || 'application/octet-stream',
-    });
-
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-
-    res.json({
-      uploadUrl: url,
-      fileKey,
-      bucket: FORMS_BUCKET,
-      expiresIn: 3600,
-    });
+    const fileKey = buildFormsKey(fileName, folder);
+    const result = await getUploadUrl(BUCKETS.forms, fileKey, fileType || 'application/octet-stream');
+    res.json(result);
   } catch (error) {
     console.error('Error generating admin upload URL:', error);
     next(error);
@@ -218,7 +187,6 @@ router.get('/users/:id/profile', async (req, res, next) => {
   try {
     const userId = req.params.id;
 
-    // Get profile (may not exist yet)
     const [profiles] = await db.query('SELECT * FROM user_profiles WHERE user_id = ?', [userId]);
     const profile = profiles[0] || {
       user_id: parseInt(userId),
@@ -231,8 +199,7 @@ router.get('/users/:id/profile', async (req, res, next) => {
     let avatar_url = null;
     if (profile.avatar_s3_key) {
       try {
-        const cmd = new GetObjectCommand({ Bucket: MEDIA_BUCKET, Key: profile.avatar_s3_key });
-        avatar_url = await getSignedUrl(s3West, cmd, { expiresIn: 900 });
+        avatar_url = await getDownloadUrl(BUCKETS.media, profile.avatar_s3_key);
       } catch (e) {
         console.warn('Avatar URL generation failed:', e.message);
       }
@@ -286,7 +253,6 @@ router.put('/users/:id/profile', async (req, res, next) => {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    // Upsert: insert if not exists, update if exists
     const insertCols = ['user_id', ...fields.filter(f => req.body[f] !== undefined)];
     const insertPlaceholders = insertCols.map(() => '?').join(', ');
     const insertValues = [userId, ...values];
@@ -299,7 +265,6 @@ router.put('/users/:id/profile', async (req, res, next) => {
       [...insertValues, ...values]
     );
 
-    // Return updated profile
     const [profiles] = await db.query('SELECT * FROM user_profiles WHERE user_id = ?', [userId]);
     res.json(profiles[0] || {});
   } catch (error) {
@@ -322,18 +287,9 @@ router.post('/users/:id/avatar/upload-url', async (req, res, next) => {
       return res.status(400).json({ error: 'File must be an image' });
     }
 
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileKey = `employee-avatars/${userId}/${Date.now()}-${safeName}`;
-
-    const command = new PutObjectCommand({
-      Bucket: MEDIA_BUCKET,
-      Key: fileKey,
-      ContentType: fileType,
-    });
-
-    const uploadUrl = await getSignedUrl(s3West, command, { expiresIn: 3600 });
-
-    res.json({ uploadUrl, fileKey, bucket: MEDIA_BUCKET, expiresIn: 3600 });
+    const fileKey = buildMediaKey('employee-avatars', userId, fileName);
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType);
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -359,9 +315,7 @@ router.put('/users/:id/avatar/confirm', async (req, res, next) => {
 
     // Delete old avatar from S3 (best effort)
     if (oldKey && oldKey !== fileKey) {
-      try {
-        await s3West.send(new DeleteObjectCommand({ Bucket: MEDIA_BUCKET, Key: oldKey }));
-      } catch (e) { console.warn('Old avatar cleanup failed:', e.message); }
+      await deleteObject(BUCKETS.media, oldKey);
     }
 
     res.json({ success: true, fileKey });
@@ -379,9 +333,7 @@ router.delete('/users/:id/avatar', async (req, res, next) => {
     const key = rows[0]?.avatar_s3_key;
 
     if (key) {
-      try {
-        await s3West.send(new DeleteObjectCommand({ Bucket: MEDIA_BUCKET, Key: key }));
-      } catch (e) { console.warn('Avatar delete failed:', e.message); }
+      await deleteObject(BUCKETS.media, key);
     }
 
     await db.query('UPDATE user_profiles SET avatar_s3_key = NULL WHERE user_id = ?', [userId]);
@@ -426,7 +378,6 @@ router.post('/users/:id/notes', async (req, res, next) => {
       [req.params.id, authorId, note.trim()]
     );
 
-    // Return the created note with author name
     const [notes] = await db.query(
       `SELECT en.*, u.name AS author_name
        FROM employee_notes en JOIN users u ON en.author_id = u.id
@@ -482,18 +433,9 @@ router.post('/users/:id/documents/upload-url', async (req, res, next) => {
 
     if (!fileName) return res.status(400).json({ error: 'fileName is required' });
 
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileKey = `employee-documents/${userId}/${Date.now()}-${safeName}`;
-
-    const command = new PutObjectCommand({
-      Bucket: MEDIA_BUCKET,
-      Key: fileKey,
-      ContentType: fileType || 'application/octet-stream',
-    });
-
-    const uploadUrl = await getSignedUrl(s3West, command, { expiresIn: 3600 });
-
-    res.json({ uploadUrl, fileKey, bucket: MEDIA_BUCKET, expiresIn: 3600 });
+    const fileKey = buildMediaKey('employee-documents', userId, fileName);
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType || 'application/octet-stream');
+    res.json(result);
   } catch (error) {
     next(error);
   }
@@ -516,7 +458,6 @@ router.post('/users/:id/documents/confirm', async (req, res, next) => {
       [userId, fileName, fileKey, fileSize || null, fileType || null, category || null, description || null, uploadedBy]
     );
 
-    // Return created record
     const [docs] = await db.query(
       `SELECT ed.*, u.name AS uploader_name
        FROM employee_documents ed JOIN users u ON ed.uploaded_by = u.id
@@ -540,8 +481,7 @@ router.get('/users/:id/documents/:docId/download-url', async (req, res, next) =>
 
     if (docs.length === 0) return res.status(404).json({ error: 'Document not found' });
 
-    const cmd = new GetObjectCommand({ Bucket: MEDIA_BUCKET, Key: docs[0].file_s3_key });
-    const downloadUrl = await getSignedUrl(s3West, cmd, { expiresIn: 900 });
+    const downloadUrl = await getDownloadUrl(BUCKETS.media, docs[0].file_s3_key);
 
     res.json({ downloadUrl, fileName: docs[0].file_name, expiresIn: 900 });
   } catch (error) {
@@ -558,9 +498,7 @@ router.delete('/users/:id/documents/:docId', async (req, res, next) => {
     );
 
     if (docs.length > 0 && docs[0].file_s3_key) {
-      try {
-        await s3West.send(new DeleteObjectCommand({ Bucket: MEDIA_BUCKET, Key: docs[0].file_s3_key }));
-      } catch (e) { console.warn('Doc delete from S3 failed:', e.message); }
+      await deleteObject(BUCKETS.media, docs[0].file_s3_key);
     }
 
     await db.query('DELETE FROM employee_documents WHERE id = ? AND user_id = ?', [req.params.docId, req.params.id]);
@@ -651,11 +589,9 @@ router.delete('/users/:id/integrations/:service', async (req, res, next) => {
 // ========================================
 router.get('/system', async (req, res, next) => {
   try {
-    // Check DB connection
     const [dbCheck] = await db.query('SELECT 1 as ok');
     const dbOk = dbCheck && dbCheck[0]?.ok === 1;
 
-    // Get user count
     const [userCount] = await db.query('SELECT COUNT(*) as count FROM users WHERE is_active = 1');
     const [investorCount] = await db.query('SELECT COUNT(*) as count FROM investors');
 

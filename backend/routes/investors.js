@@ -2,7 +2,27 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { isAdmin } = require('../middleware/userContext');
+const { isAdmin, requireAdmin } = require('../middleware/userContext');
+const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject, buildMediaKey } = require('../services/s3');
+
+/**
+ * Detect whether logo_url is an S3 key (needs presigned URL) or an external URL.
+ * S3 keys never start with http.
+ */
+function isS3Key(val) {
+  return val && !val.startsWith('http://') && !val.startsWith('https://');
+}
+
+/** Resolve logo_url → presigned download URL if it's an S3 key. */
+async function resolveLogoUrl(logoUrl) {
+  if (!logoUrl) return null;
+  if (!isS3Key(logoUrl)) return logoUrl;
+  try {
+    return await getDownloadUrl(BUCKETS.media, logoUrl);
+  } catch {
+    return null;
+  }
+}
 
 // ──────────────────────────────────────────────
 // GET /api/investors — Get all investors (lightweight list)
@@ -19,6 +39,12 @@ router.get('/', async (req, res, next) => {
               website_url, logo_url, notes
        FROM investors ORDER BY name`
     );
+
+    // Resolve S3 keys → presigned download URLs
+    await Promise.all(investors.map(async (inv) => {
+      inv.logo_url = await resolveLogoUrl(inv.logo_url);
+    }));
+
     res.json(investors);
   } catch (error) {
     next(error);
@@ -54,6 +80,9 @@ router.get('/:key', async (req, res, next) => {
     investor.mortgageeClauses = clausesResult[0];
     investor.links = linksResult[0];
 
+    // Resolve S3 key → presigned download URL
+    investor.logo_url = await resolveLogoUrl(investor.logo_url);
+
     res.json(investor);
   } catch (error) {
     next(error);
@@ -63,12 +92,8 @@ router.get('/:key', async (req, res, next) => {
 // ──────────────────────────────────────────────
 // POST /api/investors — Create investor (admin only)
 // ──────────────────────────────────────────────
-router.post('/', async (req, res, next) => {
+router.post('/', requireAdmin, async (req, res, next) => {
   try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
     const {
       investor_key, name,
       account_executive_name, account_executive_email, account_executive_mobile, account_executive_address,
@@ -81,7 +106,7 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'investor_key and name are required' });
     }
 
-    const [result] = await db.query(
+    await db.query(
       `INSERT INTO investors
         (investor_key, name, account_executive_name, account_executive_email,
          account_executive_mobile, account_executive_address,
@@ -204,12 +229,8 @@ router.put('/:idOrKey', async (req, res, next) => {
 // ──────────────────────────────────────────────
 // DELETE /api/investors/:idOrKey — Delete investor (admin only)
 // ──────────────────────────────────────────────
-router.delete('/:idOrKey', async (req, res, next) => {
+router.delete('/:idOrKey', requireAdmin, async (req, res, next) => {
   try {
-    if (!isAdmin(req)) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-
     const isNumeric = /^\d+$/.test(req.params.idOrKey);
     const whereClause = isNumeric ? 'WHERE id = ?' : 'WHERE investor_key = ?';
 
@@ -221,6 +242,91 @@ router.delete('/:idOrKey', async (req, res, next) => {
     await db.query(`DELETE FROM investors ${whereClause}`, [req.params.idOrKey]);
 
     res.json({ success: true, message: 'Investor deleted' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// POST /api/investors/:id/logo/upload-url — Get presigned upload URL (admin only)
+// ──────────────────────────────────────────────
+router.post('/:id/logo/upload-url', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fileName, fileType } = req.body;
+
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+    if (!fileType || !fileType.startsWith('image/')) {
+      return res.status(400).json({ error: 'File must be an image' });
+    }
+
+    // Verify investor exists
+    const [rows] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    const fileKey = buildMediaKey('investor-logos', investorId, fileName);
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/logo/confirm — Save S3 key after upload (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/logo/confirm', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fileKey } = req.body;
+    if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
+
+    // Get old logo key for cleanup
+    const [old] = await db.query('SELECT logo_url FROM investors WHERE id = ?', [investorId]);
+    if (old.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+    const oldKey = old[0].logo_url;
+
+    // Save new S3 key
+    await db.query('UPDATE investors SET logo_url = ?, updated_at = NOW() WHERE id = ?', [fileKey, investorId]);
+
+    // Delete old logo from S3 (best effort) — only if it was an S3 key
+    if (oldKey && isS3Key(oldKey) && oldKey !== fileKey) {
+      await deleteObject(BUCKETS.media, oldKey);
+    }
+
+    // Return presigned URL for immediate display
+    const logoUrl = await resolveLogoUrl(fileKey);
+    res.json({ success: true, fileKey, logoUrl });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// DELETE /api/investors/:id/logo — Remove logo (admin only)
+// ──────────────────────────────────────────────
+router.delete('/:id/logo', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+
+    const [rows] = await db.query('SELECT logo_url FROM investors WHERE id = ?', [investorId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    const key = rows[0].logo_url;
+
+    // Delete from S3 if it's an S3 key
+    if (key && isS3Key(key)) {
+      await deleteObject(BUCKETS.media, key);
+    }
+
+    await db.query('UPDATE investors SET logo_url = NULL, updated_at = NOW() WHERE id = ?', [investorId]);
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

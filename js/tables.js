@@ -42,8 +42,10 @@ const TableManager = {
         // Sort the rows
         const sortedRows = this.sortRows(rows, columnIndex, !isCurrentlyAsc);
         
-        // Append sorted rows
-        sortedRows.forEach(row => tbody.appendChild(row));
+        // Batch-append sorted rows via DocumentFragment (single reflow)
+        const frag = document.createDocumentFragment();
+        sortedRows.forEach(row => frag.appendChild(row));
+        tbody.appendChild(frag);
     },
 
     sortRows(rows, columnIndex, ascending) {

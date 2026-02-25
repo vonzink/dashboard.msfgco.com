@@ -99,8 +99,8 @@ router.get('/browse', async (req, res, next) => {
     const fullPrefix = lib.prefix + path;
 
     // Collect all pages (handles > 1000 objects)
-    let allContents = [];
-    let allPrefixes = [];
+    const allContents = [];
+    const allPrefixes = [];
     let continuationToken;
 
     do {

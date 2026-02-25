@@ -61,12 +61,12 @@ const ServerAPI = {
         if (!refreshToken) return null;
 
         try {
-            var response = await fetch("https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com/oauth2/token", {
+            var response = await fetch(CONFIG.cognito.tokenUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
                 body: new URLSearchParams({
                     grant_type: "refresh_token",
-                    client_id: "2t9edrhu5crf8vq3ivigv6jopf",
+                    client_id: CONFIG.cognito.clientId,
                     refresh_token: refreshToken,
                 }),
             });
@@ -295,6 +295,21 @@ const ServerAPI = {
 
     deleteInvestor(idOrKey) {
         return this.delete(`/investors/${idOrKey}`);
+    },
+
+    /** Get presigned upload URL for an investor logo */
+    getInvestorLogoUploadUrl(investorId, fileName, fileType) {
+        return this.post(`/investors/${investorId}/logo/upload-url`, { fileName, fileType });
+    },
+
+    /** Confirm logo upload — saves S3 key in DB */
+    confirmInvestorLogo(investorId, fileKey) {
+        return this.put(`/investors/${investorId}/logo/confirm`, { fileKey });
+    },
+
+    /** Delete investor logo */
+    deleteInvestorLogo(investorId) {
+        return this.delete(`/investors/${investorId}/logo`);
     },
 
     // ========================================

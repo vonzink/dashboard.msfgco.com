@@ -3,6 +3,8 @@
 .idea/
 .vscode/
 *.swp
+*.bak
+*.bak.*
 
 # Node / build
 node_modules/

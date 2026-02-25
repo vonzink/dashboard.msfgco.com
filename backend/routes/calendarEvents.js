@@ -17,7 +17,7 @@ function generateOccurrences(start, end, rule, until) {
 
   // Cap at 365 occurrences to prevent runaway loops
   const MAX = 365;
-  let cur = new Date(s);
+  const cur = new Date(s);
 
   while (cur <= limit && dates.length < MAX) {
     const occStart = new Date(cur);

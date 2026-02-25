@@ -94,12 +94,13 @@ function requireAuth(options = {}) {
     : ["/api/webhooks"];
 
   return async function authMiddleware(req, res, next) {
+    const token = extractToken(req);
+
     try {
       if (publicPaths.some((p) => req.path === p || req.originalUrl?.startsWith(p))) {
         return next();
       }
 
-      const token = extractToken(req);
       if (!token) return res.status(401).json({ error: "Missing auth token" });
 
       const claims = await verifyCognitoJwt(token);

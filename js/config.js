@@ -25,6 +25,14 @@
     },
 
     // ========================================
+    // AWS COGNITO (token refresh)
+    // ========================================
+    cognito: {
+      tokenUrl: 'https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com/oauth2/token',
+      clientId: '2t9edrhu5crf8vq3ivigv6jopf',
+    },
+
+    // ========================================
     // REFRESH INTERVALS (milliseconds)
     // ========================================
     refresh: {
@@ -116,7 +124,7 @@
       monday: "https://msfg-squad.monday.com/",
 
       mmi: "https://new.mmi.run/login",
-      loan_sifter: "https://email.msfginfo.com/",
+      loan_sifter: "https://loansifternow.optimalblue.com/",
       listreports: "https://listreports.com/login?redirect=https%253A%252F%252Flistreports.com%252Fagent-intel%253Ftab%253Dlistside",
       passport: "https://v3.titlepro247.com/Account",
       flueid: "https://pro.flueid.com/auth/sign-in",
@@ -133,12 +141,15 @@
 
       keyword_explorer: "https://keywords.msfgco.com",
 
-      ratesheet: "https://loansifternow.optimalblue.com"
+      loan_calc_hub: "https://msfginfo.com/",
+
+      ratesheet: "https://email.msfginfo.com"
     }
   };
 
   // Freeze everything (deep enough for this structure)
   Object.freeze(CONFIG.api);
+  Object.freeze(CONFIG.cognito);
   Object.freeze(CONFIG.refresh);
   Object.freeze(CONFIG.dateFormat);
   Object.freeze(CONFIG.currency);

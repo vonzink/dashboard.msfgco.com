@@ -48,7 +48,7 @@ function buildPrompt({ suggestion, platform, template, additionalInstructions })
   const constraints = PLATFORM_CONSTRAINTS[platform] || PLATFORM_CONSTRAINTS.facebook;
 
   // ── System message ────────────────────────────────────────────
-  let systemParts = [];
+  const systemParts = [];
 
   // Base identity from template (or sensible default)
   if (template?.system_prompt) {
@@ -78,7 +78,7 @@ function buildPrompt({ suggestion, platform, template, additionalInstructions })
   const systemMessage = systemParts.join('\n\n');
 
   // ── User message ──────────────────────────────────────────────
-  let userParts = [];
+  const userParts = [];
 
   userParts.push(`Generate a ${constraints.name} post about: "${suggestion}"`);
   userParts.push(

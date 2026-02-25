@@ -35,10 +35,15 @@ const Investors = {
     { key: 'notes',                   label: 'Notes',                      type: 'textarea' }
   ],
 
+  // Track pending logo state for the manage form
+  _pendingLogoFile: null,    // File object awaiting upload
+  _pendingLogoRemoved: false, // true if user clicked remove
+
   init() {
     this.bindModalClose();
     this.bindCompanyContactsModalClose();
     this.bindGlobalEscapeClose();
+    this._bindLogoUpload();
     // Load investor data from API, then build the dropdown
     this.loadFromAPI();
     console.log('Investors module initializing...');
@@ -249,8 +254,10 @@ const Investors = {
     // Logo
     const logoEl = modal.querySelector('.investor-logo');
     if (logoEl) {
-      logoEl.src = investor.logo || '';
+      const logoSrc = investor.logoUrl || '';
+      logoEl.src = logoSrc;
       logoEl.alt = investor.name ? investor.name + ' Logo' : 'Investor Logo';
+      logoEl.style.display = logoSrc ? '' : 'none';
     }
 
     if (!investor.notes) investor.notes = '';
@@ -537,6 +544,108 @@ const Investors = {
   },
 
   // =========================================================
+  // LOGO UPLOAD (manage form)
+  // =========================================================
+
+  /** Bind click, drag-drop, and remove for logo upload area */
+  _bindLogoUpload() {
+    const area = document.getElementById('invLogoUploadArea');
+    const fileInput = document.getElementById('invLogoFileInput');
+    const removeBtn = document.getElementById('invLogoRemoveBtn');
+    if (!area || !fileInput) return;
+
+    // Click to select file
+    area.addEventListener('click', (e) => {
+      if (e.target.closest('#invLogoRemoveBtn')) return; // don't trigger on remove
+      fileInput.click();
+    });
+
+    // File selected via input
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        this._setLogoPending(fileInput.files[0]);
+      }
+    });
+
+    // Drag & drop
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('drag-over'); });
+    area.addEventListener('dragleave', () => { area.classList.remove('drag-over'); });
+    area.addEventListener('drop', (e) => {
+      e.preventDefault();
+      area.classList.remove('drag-over');
+      const file = e.dataTransfer?.files?.[0];
+      if (file && file.type.startsWith('image/')) {
+        this._setLogoPending(file);
+      }
+    });
+
+    // Remove button
+    if (removeBtn) {
+      removeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._pendingLogoFile = null;
+        this._pendingLogoRemoved = true;
+        this._updateLogoPreview(null);
+      });
+    }
+  },
+
+  /** Set a file as the pending logo and show preview */
+  _setLogoPending(file) {
+    if (!file || !file.type.startsWith('image/')) {
+      alert('Please select an image file (PNG, JPG, SVG, etc.)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Logo must be under 5 MB.');
+      return;
+    }
+    this._pendingLogoFile = file;
+    this._pendingLogoRemoved = false;
+
+    // Show local preview
+    const reader = new FileReader();
+    reader.onload = (e) => this._updateLogoPreview(e.target.result);
+    reader.readAsDataURL(file);
+  },
+
+  /** Update the logo preview UI in the manage form */
+  _updateLogoPreview(src) {
+    const preview = document.getElementById('invLogoPreview');
+    const placeholder = document.getElementById('invLogoPlaceholder');
+    const removeBtn = document.getElementById('invLogoRemoveBtn');
+
+    if (src) {
+      if (preview) { preview.src = src; preview.style.display = ''; }
+      if (placeholder) placeholder.style.display = 'none';
+      if (removeBtn) removeBtn.style.display = '';
+    } else {
+      if (preview) { preview.src = ''; preview.style.display = 'none'; }
+      if (placeholder) placeholder.style.display = '';
+      if (removeBtn) removeBtn.style.display = 'none';
+    }
+  },
+
+  /**
+   * Upload a logo file to S3 for a given investor ID.
+   * Uses the 2-step presigned URL flow.
+   * Returns the presigned download URL on success.
+   */
+  async _uploadLogo(investorId, file) {
+    // Step 1: Get presigned upload URL
+    const { uploadUrl, fileKey } = await ServerAPI.getInvestorLogoUploadUrl(
+      investorId, file.name, file.type
+    );
+
+    // Step 2: PUT file directly to S3
+    await ServerAPI.uploadToS3(uploadUrl, file);
+
+    // Step 3: Confirm — saves S3 key in DB
+    const result = await ServerAPI.confirmInvestorLogo(investorId, fileKey);
+    return result.logoUrl; // presigned download URL
+  },
+
+  // =========================================================
   // ADMIN: Manage Investors Modal
   // =========================================================
   _manageSearchTerm: '',
@@ -639,6 +748,9 @@ const Investors = {
   /** Open the add/edit form for an investor */
   _openForm(key) {
     this._editingKey = key || null;
+    this._pendingLogoFile = null;
+    this._pendingLogoRemoved = false;
+
     const vals = this.getFormValues(key);
     const title = document.getElementById('manageFormTitle');
     if (title) title.textContent = key ? 'Edit Investor' : 'Add Investor';
@@ -647,6 +759,14 @@ const Investors = {
       const input = document.getElementById('inv_' + def.key);
       if (input) input.value = vals[def.key] ?? '';
     });
+
+    // Reset file input
+    const fileInput = document.getElementById('invLogoFileInput');
+    if (fileInput) fileInput.value = '';
+
+    // Show current logo or placeholder
+    const inv = key ? this.data[key] : null;
+    this._updateLogoPreview(inv?.logoUrl || null);
 
     this._showManageView('form');
   },
@@ -670,6 +790,7 @@ const Investors = {
     this.applyFormValues(key, vals);
 
     // Persist to backend
+    let savedInvestor;
     try {
       const payload = {
         investor_key:               key,
@@ -690,15 +811,43 @@ const Investors = {
       };
 
       if (this._editingKey) {
-        await ServerAPI.updateInvestor(key, payload);
+        savedInvestor = await ServerAPI.updateInvestor(key, payload);
       } else {
-        await ServerAPI.createInvestor(payload);
+        savedInvestor = await ServerAPI.createInvestor(payload);
       }
       console.log('Investor saved:', key);
     } catch (err) {
       console.error('Failed to persist investor to backend:', err);
-      // Data is still saved locally, backend save failed silently
     }
+
+    // Handle logo upload / removal (needs investor ID from DB)
+    const investorId = savedInvestor?.id || this.data[key]?.id;
+    if (investorId) {
+      try {
+        if (this._pendingLogoFile) {
+          // Upload new logo
+          const area = document.getElementById('invLogoUploadArea');
+          if (area) area.classList.add('uploading');
+
+          const logoUrl = await this._uploadLogo(investorId, this._pendingLogoFile);
+          if (this.data[key]) this.data[key].logoUrl = logoUrl;
+
+          if (area) area.classList.remove('uploading');
+          console.log('Investor logo uploaded:', key);
+        } else if (this._pendingLogoRemoved) {
+          // Remove existing logo
+          await ServerAPI.deleteInvestorLogo(investorId);
+          if (this.data[key]) this.data[key].logoUrl = null;
+          console.log('Investor logo removed:', key);
+        }
+      } catch (err) {
+        console.error('Logo upload/remove failed:', err);
+        alert('Investor saved, but logo upload failed. Please try again.');
+      }
+    }
+
+    this._pendingLogoFile = null;
+    this._pendingLogoRemoved = false;
 
     // Refresh list & go back
     this._renderManageList();
