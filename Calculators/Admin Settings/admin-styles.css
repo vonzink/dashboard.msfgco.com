@@ -377,10 +377,125 @@ body {
   padding-bottom: 0;
 }
 
+/* ── Profile Sub-Tabs ── */
+.profile-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  background: #fafbf8;
+  border-radius: 8px;
+  padding: 4px;
+  border: 1px solid #eee;
+}
+
+.profile-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--msfg-gray);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.profile-tab:hover {
+  background: var(--msfg-light-green);
+}
+
+.profile-tab.active {
+  background: var(--msfg-teal);
+  color: #fff;
+}
+
+.profile-section {
+  display: none;
+}
+
+.profile-section.active {
+  display: block;
+}
+
+/* ── Avatar ── */
+.avatar-container {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: var(--msfg-light-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 3px solid var(--msfg-green-border);
+  margin: 0 auto;
+}
+
+.avatar-initials {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--msfg-teal);
+  line-height: 1;
+}
+
+/* ── Notes ── */
+.note-card {
+  padding: 14px 16px;
+  background: #fafbf8;
+  border-radius: var(--radius);
+  border: 1px solid #eee;
+  margin-bottom: 10px;
+}
+
+.note-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.note-author {
+  font-weight: 700;
+  color: var(--msfg-teal);
+}
+
+.note-date {
+  color: #999;
+  flex: 1;
+}
+
+.note-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--msfg-gray);
+  white-space: pre-wrap;
+}
+
+/* ── Document Category Badge ── */
+.doc-category {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--msfg-light-green);
+  color: var(--msfg-teal);
+}
+
 /* ── Responsive ── */
 @media (max-width: 700px) {
   body { padding: 0 12px 24px; }
   .form-grid { grid-template-columns: 1fr; }
   .admin-tabs { flex-wrap: wrap; }
   .toolbar { flex-direction: column; align-items: stretch; }
+  .profile-tabs { flex-wrap: wrap; }
+  #ptab-basic > div { flex-direction: column !important; }
 }

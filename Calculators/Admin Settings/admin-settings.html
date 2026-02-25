@@ -86,6 +86,208 @@
       </div>
     </div>
 
+    <!-- Employee Profile Detail View (hidden by default) -->
+    <div id="employeeProfileView" style="display:none;">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-arrow-left" id="profileBackBtn" style="cursor:pointer; margin-right:8px;" title="Back to list"></i>
+          <span id="profileTitle">Employee Profile</span>
+        </h3>
+      </div>
+
+      <!-- Profile Sub-Tabs -->
+      <div class="profile-tabs" id="profileTabs">
+        <button class="profile-tab active" data-ptab="basic"><i class="fas fa-user"></i> Basic Info</button>
+        <button class="profile-tab" data-ptab="social"><i class="fas fa-share-alt"></i> Social</button>
+        <button class="profile-tab" data-ptab="ai"><i class="fas fa-robot"></i> AI Keys</button>
+        <button class="profile-tab" data-ptab="signature"><i class="fas fa-envelope"></i> Signature</button>
+        <button class="profile-tab" data-ptab="notes"><i class="fas fa-sticky-note"></i> Notes</button>
+        <button class="profile-tab" data-ptab="documents"><i class="fas fa-folder-open"></i> Documents</button>
+      </div>
+
+      <!-- ── SUB-TAB: Basic Info ── -->
+      <div class="profile-section active" id="ptab-basic">
+        <div style="display:flex; gap:24px; align-items:flex-start;">
+          <!-- Avatar -->
+          <div style="flex-shrink:0; text-align:center; min-width:140px;">
+            <div class="avatar-container" id="profileAvatar">
+              <img id="profileAvatarImg" src="" alt="" style="display:none; width:120px; height:120px; border-radius:50%; object-fit:cover;" />
+              <div id="profileAvatarInitials" class="avatar-initials"></div>
+            </div>
+            <div style="margin-top:8px; display:flex; gap:4px; justify-content:center;">
+              <button class="btn btn-sm btn-secondary" id="avatarUploadBtn"><i class="fas fa-camera"></i> Upload</button>
+              <button class="btn btn-sm btn-danger" id="avatarRemoveBtn" style="display:none;"><i class="fas fa-trash"></i></button>
+            </div>
+            <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" />
+            <p id="profileNameDisplay" style="font-size:16px; font-weight:700; margin:12px 0 0; color:#104547;"></p>
+            <p id="profileRoleDisplay" style="font-size:12px; color:#888; margin:2px 0;"></p>
+            <p id="profileEmailDisplay" style="font-size:12px; color:#888; margin:0;"></p>
+          </div>
+          <!-- Editable Fields -->
+          <div style="flex:1;">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Team</label>
+                <input type="text" id="profileTeam" placeholder="e.g. Sales, Operations" />
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="profilePhone" placeholder="(555) 123-4567" />
+              </div>
+              <div class="form-group">
+                <label>Display Email</label>
+                <input type="email" id="profileDisplayEmail" placeholder="public-facing email" />
+              </div>
+              <div class="form-group">
+                <label>Website</label>
+                <input type="url" id="profileWebsite" placeholder="https://..." />
+              </div>
+              <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Online Application URL</label>
+                <input type="url" id="profileOnlineApp" placeholder="https://apply.msfgco.com/..." />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="profileBasicSaveBtn"><i class="fas fa-save"></i> Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Social Media ── -->
+      <div class="profile-section" id="ptab-social">
+        <div class="form-grid">
+          <div class="form-group">
+            <label><i class="fab fa-facebook" style="color:#1877F2;"></i> Facebook</label>
+            <input type="url" id="profileFacebook" placeholder="https://facebook.com/..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-instagram" style="color:#E4405F;"></i> Instagram</label>
+            <input type="url" id="profileInstagram" placeholder="https://instagram.com/..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-twitter" style="color:#1DA1F2;"></i> Twitter / X</label>
+            <input type="url" id="profileTwitter" placeholder="https://x.com/..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-linkedin" style="color:#0A66C2;"></i> LinkedIn</label>
+            <input type="url" id="profileLinkedin" placeholder="https://linkedin.com/in/..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-tiktok"></i> TikTok</label>
+            <input type="url" id="profileTiktok" placeholder="https://tiktok.com/@..." />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="profileSocialSaveBtn"><i class="fas fa-save"></i> Save</button>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: AI Keys ── -->
+      <div class="profile-section" id="ptab-ai">
+        <div class="monday-section">
+          <h4 style="margin:0 0 8px; font-size:14px; color:#104547;">
+            <i class="fas fa-brain" style="color:#10a37f;"></i> ChatGPT (OpenAI) API Key
+          </h4>
+          <p id="aiOpenaiStatus" style="font-size:13px; color:#888; margin:0 0 8px;">Checking...</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="aiOpenaiInput" placeholder="sk-..." style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
+            <button class="btn btn-primary btn-sm" id="aiOpenaiSaveBtn"><i class="fas fa-save"></i> Save</button>
+            <button class="btn btn-danger btn-sm" id="aiOpenaiClearBtn"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+        <div class="monday-section">
+          <h4 style="margin:0 0 8px; font-size:14px; color:#104547;">
+            <i class="fas fa-robot" style="color:#d97706;"></i> Claude (Anthropic) API Key
+          </h4>
+          <p id="aiAnthropicStatus" style="font-size:13px; color:#888; margin:0 0 8px;">Checking...</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="aiAnthropicInput" placeholder="sk-ant-..." style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
+            <button class="btn btn-primary btn-sm" id="aiAnthropicSaveBtn"><i class="fas fa-save"></i> Save</button>
+            <button class="btn btn-danger btn-sm" id="aiAnthropicClearBtn"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Email Signature ── -->
+      <div class="profile-section" id="ptab-signature">
+        <div class="form-group">
+          <label>Email Signature (HTML)</label>
+          <textarea id="profileSignatureInput" rows="12"
+            style="width:100%; font-family:'Courier New',monospace; font-size:12px; padding:12px; border:1px solid #ddd; border-radius:8px; resize:vertical;"
+            placeholder="Paste your HTML email signature here..."></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="signaturePreviewBtn"><i class="fas fa-eye"></i> Preview</button>
+          <button class="btn btn-primary" id="signatureSaveBtn"><i class="fas fa-save"></i> Save</button>
+        </div>
+        <div id="signaturePreview" style="display:none; margin-top:16px; padding:16px; border:1px solid #eee; border-radius:8px; background:#fff;">
+          <h4 style="margin:0 0 8px; font-size:11px; color:#999; text-transform:uppercase; letter-spacing:.5px;">Preview</h4>
+          <div id="signaturePreviewContent"></div>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Notes ── -->
+      <div class="profile-section" id="ptab-notes">
+        <div style="margin-bottom:16px;">
+          <textarea id="noteInput" rows="3"
+            style="width:100%; padding:12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px; resize:vertical;"
+            placeholder="Add a note about this employee..."></textarea>
+          <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+            <button class="btn btn-primary btn-sm" id="addNoteBtn"><i class="fas fa-plus"></i> Add Note</button>
+          </div>
+        </div>
+        <div id="notesList">
+          <p style="text-align:center; color:#999; font-size:13px;">No notes yet.</p>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Documents ── -->
+      <div class="profile-section" id="ptab-documents">
+        <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+          <select id="docCategoryUpload" style="padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;">
+            <option value="">No Category</option>
+            <option value="Contract">Contract</option>
+            <option value="Performance Review">Performance Review</option>
+            <option value="License">License</option>
+            <option value="Training">Training</option>
+            <option value="Other">Other</option>
+          </select>
+          <input type="text" id="docDescriptionInput" placeholder="Description (optional)" style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
+        </div>
+
+        <div class="upload-zone" id="docUploadZone">
+          <i class="fas fa-cloud-upload-alt"></i>
+          <p>Drop files here or click to browse</p>
+          <span class="upload-hint">PDF, DOC, XLSX, images — contracts, performance reports, etc.</span>
+        </div>
+        <input type="file" id="docFileInput" multiple style="display:none;" />
+
+        <div class="upload-progress" id="docUploadProgress">
+          <p id="docUploadStatusText" style="font-size:13px; margin:0 0 6px;">Uploading...</p>
+          <div class="upload-progress-bar">
+            <div class="upload-progress-fill" id="docUploadProgressFill"></div>
+          </div>
+        </div>
+
+        <table class="admin-table" id="documentsTable" style="margin-top:16px;">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Category</th>
+              <th>Size</th>
+              <th>Uploaded By</th>
+              <th>Date</th>
+              <th style="width:100px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="documentsBody">
+            <tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <table class="admin-table" id="usersTable">
       <thead>
         <tr>
@@ -93,7 +295,7 @@
           <th>Email</th>
           <th>Role</th>
           <th>Status</th>
-          <th style="width:120px;">Actions</th>
+          <th style="width:180px;">Actions</th>
         </tr>
       </thead>
       <tbody id="usersBody">
@@ -448,6 +650,7 @@
             '<td>' + roleBadge + '</td>' +
             '<td>' + statusBadge + '</td>' +
             '<td>' +
+              '<button class="btn btn-sm btn-primary view-profile-btn" data-id="' + u.id + '" title="View Profile"><i class="fas fa-id-card"></i></button> ' +
               '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
               (u.is_active
                 ? '<button class="btn btn-sm btn-danger deactivate-user-btn" data-id="' + u.id + '" title="Deactivate"><i class="fas fa-user-slash"></i></button>'
@@ -457,6 +660,11 @@
             '</tr>'
           );
         }).join('');
+
+        // Bind view profile buttons
+        tbody.querySelectorAll('.view-profile-btn').forEach(btn => {
+          btn.addEventListener('click', () => showProfile(btn.dataset.id, users));
+        });
 
         // Bind edit buttons
         tbody.querySelectorAll('.edit-user-btn').forEach(btn => {
@@ -564,6 +772,523 @@
     document.getElementById('addUserBtn').addEventListener('click', () => showUserForm(null));
     document.getElementById('userFormCancelBtn').addEventListener('click', hideUserForm);
     document.getElementById('userFormSaveBtn').addEventListener('click', saveUser);
+
+    /* ═══════════════════════════════════════
+       EMPLOYEE PROFILE VIEW
+    ═══════════════════════════════════════ */
+    let profileUserId = null;
+    let profileUserObj = null;
+
+    // --- Show / Hide Profile ---
+    function showProfile(userId, users) {
+      profileUserId = userId;
+      profileUserObj = users ? users.find(u => String(u.id) === String(userId)) : null;
+
+      // Hide table + form, show profile view
+      document.getElementById('usersTable').style.display = 'none';
+      document.getElementById('userForm').classList.remove('active');
+      document.getElementById('addUserBtn').parentElement.parentElement.style.display = 'none';
+      document.getElementById('employeeProfileView').style.display = 'block';
+
+      // Set header
+      document.getElementById('profileTitle').textContent = (profileUserObj ? profileUserObj.name : 'Employee') + ' — Profile';
+
+      // Reset to Basic Info tab
+      document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.profile-section').forEach(p => p.classList.remove('active'));
+      document.querySelector('[data-ptab="basic"]').classList.add('active');
+      document.getElementById('ptab-basic').classList.add('active');
+
+      // Set static display info
+      if (profileUserObj) {
+        document.getElementById('profileNameDisplay').textContent = profileUserObj.name || '';
+        document.getElementById('profileRoleDisplay').textContent = (profileUserObj.role || 'user').toUpperCase();
+        document.getElementById('profileEmailDisplay').textContent = profileUserObj.email || '';
+        document.getElementById('profileAvatarInitials').textContent = profileUserObj.initials || profileUserObj.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || '';
+      }
+
+      loadProfileData();
+    }
+
+    function hideProfile() {
+      document.getElementById('employeeProfileView').style.display = 'none';
+      document.getElementById('usersTable').style.display = '';
+      document.getElementById('addUserBtn').parentElement.parentElement.style.display = '';
+      profileUserId = null;
+      profileUserObj = null;
+    }
+
+    // Back button
+    document.getElementById('profileBackBtn').addEventListener('click', hideProfile);
+
+    // Profile sub-tab switching
+    document.querySelectorAll('.profile-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.profile-section').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('ptab-' + tab.dataset.ptab).classList.add('active');
+
+        // Lazy-load data per tab
+        const t = tab.dataset.ptab;
+        if (t === 'notes') loadNotes();
+        if (t === 'documents') loadDocuments();
+        if (t === 'ai') loadAIKeys();
+      });
+    });
+
+    // --- Load Profile Data ---
+    async function loadProfileData() {
+      try {
+        const data = await api('/admin/users/' + profileUserId + '/profile');
+        if (!data) return;
+
+        // Basic fields
+        document.getElementById('profileTeam').value = data.team || '';
+        document.getElementById('profilePhone').value = data.phone || '';
+        document.getElementById('profileDisplayEmail').value = data.display_email || '';
+        document.getElementById('profileWebsite').value = data.website || '';
+        document.getElementById('profileOnlineApp').value = data.online_app_url || '';
+
+        // Social fields
+        document.getElementById('profileFacebook').value = data.facebook_url || '';
+        document.getElementById('profileInstagram').value = data.instagram_url || '';
+        document.getElementById('profileTwitter').value = data.twitter_url || '';
+        document.getElementById('profileLinkedin').value = data.linkedin_url || '';
+        document.getElementById('profileTiktok').value = data.tiktok_url || '';
+
+        // Email signature
+        document.getElementById('profileSignatureInput').value = data.email_signature || '';
+        document.getElementById('signaturePreview').style.display = 'none';
+
+        // Avatar
+        const img = document.getElementById('profileAvatarImg');
+        const initials = document.getElementById('profileAvatarInitials');
+        const removeBtn = document.getElementById('avatarRemoveBtn');
+        if (data.avatar_url) {
+          img.src = data.avatar_url;
+          img.style.display = 'block';
+          initials.style.display = 'none';
+          removeBtn.style.display = '';
+        } else {
+          img.style.display = 'none';
+          initials.style.display = '';
+          removeBtn.style.display = 'none';
+        }
+
+        // AI keys status (inline in profile data)
+        if (data.ai_keys) {
+          updateAIStatus('openai', data.ai_keys.openai);
+          updateAIStatus('anthropic', data.ai_keys.anthropic);
+        }
+      } catch (err) {
+        console.error('Load profile error:', err);
+      }
+    }
+
+    // --- Save Basic Info ---
+    document.getElementById('profileBasicSaveBtn').addEventListener('click', async () => {
+      try {
+        await api('/admin/users/' + profileUserId + '/profile', {
+          method: 'PUT',
+          body: JSON.stringify({
+            team: document.getElementById('profileTeam').value.trim(),
+            phone: document.getElementById('profilePhone').value.trim(),
+            display_email: document.getElementById('profileDisplayEmail').value.trim(),
+            website: document.getElementById('profileWebsite').value.trim(),
+            online_app_url: document.getElementById('profileOnlineApp').value.trim(),
+          }),
+        });
+        alert('Basic info saved!');
+      } catch (err) {
+        alert('Error saving: ' + err.message);
+      }
+    });
+
+    // --- Save Social ---
+    document.getElementById('profileSocialSaveBtn').addEventListener('click', async () => {
+      try {
+        await api('/admin/users/' + profileUserId + '/profile', {
+          method: 'PUT',
+          body: JSON.stringify({
+            facebook_url: document.getElementById('profileFacebook').value.trim(),
+            instagram_url: document.getElementById('profileInstagram').value.trim(),
+            twitter_url: document.getElementById('profileTwitter').value.trim(),
+            linkedin_url: document.getElementById('profileLinkedin').value.trim(),
+            tiktok_url: document.getElementById('profileTiktok').value.trim(),
+          }),
+        });
+        alert('Social links saved!');
+      } catch (err) {
+        alert('Error saving: ' + err.message);
+      }
+    });
+
+    // --- Avatar Upload ---
+    document.getElementById('avatarUploadBtn').addEventListener('click', () => {
+      document.getElementById('avatarFileInput').click();
+    });
+
+    document.getElementById('avatarFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) return alert('Please select an image file');
+      if (file.size > 5 * 1024 * 1024) return alert('Image must be under 5 MB');
+
+      try {
+        // 1. Get presigned URL
+        const urlData = await api('/admin/users/' + profileUserId + '/avatar/upload-url', {
+          method: 'POST',
+          body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+        });
+        if (!urlData) return;
+
+        // 2. Upload to S3
+        const uploadRes = await fetch(urlData.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!uploadRes.ok) throw new Error('Upload to S3 failed');
+
+        // 3. Confirm
+        await api('/admin/users/' + profileUserId + '/avatar/confirm', {
+          method: 'PUT',
+          body: JSON.stringify({ fileKey: urlData.fileKey }),
+        });
+
+        // 4. Show preview
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          document.getElementById('profileAvatarImg').src = ev.target.result;
+          document.getElementById('profileAvatarImg').style.display = 'block';
+          document.getElementById('profileAvatarInitials').style.display = 'none';
+          document.getElementById('avatarRemoveBtn').style.display = '';
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        alert('Avatar upload failed: ' + err.message);
+      }
+
+      e.target.value = ''; // reset file input
+    });
+
+    // --- Avatar Remove ---
+    document.getElementById('avatarRemoveBtn').addEventListener('click', async () => {
+      if (!confirm('Remove profile picture?')) return;
+      try {
+        await api('/admin/users/' + profileUserId + '/avatar', { method: 'DELETE' });
+        document.getElementById('profileAvatarImg').style.display = 'none';
+        document.getElementById('profileAvatarInitials').style.display = '';
+        document.getElementById('avatarRemoveBtn').style.display = 'none';
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Email Signature ---
+    document.getElementById('signaturePreviewBtn').addEventListener('click', () => {
+      const html = document.getElementById('profileSignatureInput').value;
+      const preview = document.getElementById('signaturePreview');
+      document.getElementById('signaturePreviewContent').innerHTML = html;
+      preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('signatureSaveBtn').addEventListener('click', async () => {
+      try {
+        await api('/admin/users/' + profileUserId + '/profile', {
+          method: 'PUT',
+          body: JSON.stringify({
+            email_signature: document.getElementById('profileSignatureInput').value,
+          }),
+        });
+        alert('Signature saved!');
+      } catch (err) {
+        alert('Error saving: ' + err.message);
+      }
+    });
+
+    // --- AI Keys ---
+    function updateAIStatus(service, data) {
+      const statusEl = document.getElementById('ai' + service.charAt(0).toUpperCase() + service.slice(1) + 'Status');
+      if (!statusEl) return;
+      // Map service names for display
+      const sId = service === 'openai' ? 'Openai' : 'Anthropic';
+      const el = document.getElementById('ai' + sId + 'Status');
+      if (!el) return;
+      if (data && data.maskedValue) {
+        el.innerHTML = '<span style="color:#2e7d32;"><i class="fas fa-check-circle"></i> Configured</span> — ' + escHtml(data.maskedValue);
+      } else {
+        el.innerHTML = '<span style="color:#999;"><i class="fas fa-times-circle"></i> Not configured</span>';
+      }
+    }
+
+    async function loadAIKeys() {
+      try {
+        const keys = await api('/admin/users/' + profileUserId + '/integrations');
+        if (!keys) return;
+
+        // Reset both
+        updateAIStatus('openai', null);
+        updateAIStatus('anthropic', null);
+
+        keys.forEach(k => updateAIStatus(k.service, k));
+      } catch (err) {
+        console.error('Load AI keys error:', err);
+      }
+    }
+
+    async function saveAIKey(service) {
+      const inputId = service === 'openai' ? 'aiOpenaiInput' : 'aiAnthropicInput';
+      const value = document.getElementById(inputId).value.trim();
+      if (!value) return alert('Please enter an API key');
+
+      try {
+        const result = await api('/admin/users/' + profileUserId + '/integrations', {
+          method: 'POST',
+          body: JSON.stringify({ service, value }),
+        });
+        if (result) {
+          document.getElementById(inputId).value = '';
+          loadAIKeys();
+          alert('API key saved!');
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    async function clearAIKey(service) {
+      if (!confirm('Remove this API key?')) return;
+      try {
+        await api('/admin/users/' + profileUserId + '/integrations/' + service, { method: 'DELETE' });
+        loadAIKeys();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    document.getElementById('aiOpenaiSaveBtn').addEventListener('click', () => saveAIKey('openai'));
+    document.getElementById('aiOpenaiClearBtn').addEventListener('click', () => clearAIKey('openai'));
+    document.getElementById('aiAnthropicSaveBtn').addEventListener('click', () => saveAIKey('anthropic'));
+    document.getElementById('aiAnthropicClearBtn').addEventListener('click', () => clearAIKey('anthropic'));
+
+    // --- Notes ---
+    async function loadNotes() {
+      const container = document.getElementById('notesList');
+      container.innerHTML = '<p style="text-align:center; color:#999; font-size:13px;"><i class="fas fa-spinner fa-spin"></i> Loading...</p>';
+
+      try {
+        const notes = await api('/admin/users/' + profileUserId + '/notes');
+        if (!notes) return;
+
+        if (notes.length === 0) {
+          container.innerHTML = '<p style="text-align:center; color:#999; font-size:13px;">No notes yet.</p>';
+          return;
+        }
+
+        container.innerHTML = notes.map(n => {
+          const date = new Date(n.created_at);
+          const dateStr = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+            + ' at ' + date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+          return (
+            '<div class="note-card" data-note-id="' + n.id + '">' +
+              '<div class="note-header">' +
+                '<span class="note-author">' + escHtml(n.author_name) + '</span>' +
+                '<span class="note-date">' + escHtml(dateStr) + '</span>' +
+                '<button class="btn btn-sm btn-danger delete-note-btn" data-id="' + n.id + '" title="Delete"><i class="fas fa-trash"></i></button>' +
+              '</div>' +
+              '<div class="note-body">' + escHtml(n.note) + '</div>' +
+            '</div>'
+          );
+        }).join('');
+
+        container.querySelectorAll('.delete-note-btn').forEach(btn => {
+          btn.addEventListener('click', () => deleteNote(btn.dataset.id));
+        });
+      } catch (err) {
+        container.innerHTML = '<p style="text-align:center; color:#e74c3c; font-size:13px;">Failed to load notes.</p>';
+      }
+    }
+
+    document.getElementById('addNoteBtn').addEventListener('click', async () => {
+      const input = document.getElementById('noteInput');
+      const note = input.value.trim();
+      if (!note) return alert('Please enter a note');
+
+      try {
+        await api('/admin/users/' + profileUserId + '/notes', {
+          method: 'POST',
+          body: JSON.stringify({ note }),
+        });
+        input.value = '';
+        loadNotes();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    async function deleteNote(noteId) {
+      if (!confirm('Delete this note?')) return;
+      try {
+        await api('/admin/users/' + profileUserId + '/notes/' + noteId, { method: 'DELETE' });
+        loadNotes();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // --- Documents ---
+    async function loadDocuments() {
+      const tbody = document.getElementById('documentsBody');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+      try {
+        const docs = await api('/admin/users/' + profileUserId + '/documents');
+        if (!docs) return;
+
+        if (docs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">No documents uploaded yet.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = docs.map(d => {
+          const date = new Date(d.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+          const size = d.file_size ? formatFileSize(d.file_size) : '—';
+          const cat = d.category ? '<span class="doc-category">' + escHtml(d.category) + '</span>' : '—';
+          return (
+            '<tr>' +
+              '<td><strong>' + escHtml(d.file_name) + '</strong>' +
+                (d.description ? '<br><small style="color:#888;">' + escHtml(d.description) + '</small>' : '') +
+              '</td>' +
+              '<td>' + cat + '</td>' +
+              '<td>' + escHtml(size) + '</td>' +
+              '<td>' + escHtml(d.uploader_name) + '</td>' +
+              '<td>' + escHtml(date) + '</td>' +
+              '<td>' +
+                '<button class="btn btn-sm btn-secondary download-doc-btn" data-id="' + d.id + '" title="Download"><i class="fas fa-download"></i></button> ' +
+                '<button class="btn btn-sm btn-danger delete-doc-btn" data-id="' + d.id + '" title="Delete"><i class="fas fa-trash"></i></button>' +
+              '</td>' +
+            '</tr>'
+          );
+        }).join('');
+
+        tbody.querySelectorAll('.download-doc-btn').forEach(btn => {
+          btn.addEventListener('click', () => downloadDoc(btn.dataset.id));
+        });
+        tbody.querySelectorAll('.delete-doc-btn').forEach(btn => {
+          btn.addEventListener('click', () => deleteDoc(btn.dataset.id));
+        });
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#e74c3c;">Failed to load documents.</td></tr>';
+      }
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    async function downloadDoc(docId) {
+      try {
+        const data = await api('/admin/users/' + profileUserId + '/documents/' + docId + '/download-url');
+        if (data && data.downloadUrl) {
+          window.open(data.downloadUrl, '_blank');
+        }
+      } catch (err) {
+        alert('Download error: ' + err.message);
+      }
+    }
+
+    async function deleteDoc(docId) {
+      if (!confirm('Delete this document? This cannot be undone.')) return;
+      try {
+        await api('/admin/users/' + profileUserId + '/documents/' + docId, { method: 'DELETE' });
+        loadDocuments();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Document upload zone
+    const docZone = document.getElementById('docUploadZone');
+    const docInput = document.getElementById('docFileInput');
+
+    docZone.addEventListener('click', () => docInput.click());
+    docZone.addEventListener('dragover', (e) => { e.preventDefault(); docZone.classList.add('dragover'); });
+    docZone.addEventListener('dragleave', () => docZone.classList.remove('dragover'));
+    docZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      docZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleDocUpload(e.dataTransfer.files);
+    });
+    docInput.addEventListener('change', (e) => {
+      if (e.target.files.length) handleDocUpload(e.target.files);
+      e.target.value = '';
+    });
+
+    async function handleDocUpload(files) {
+      const progressEl = document.getElementById('docUploadProgress');
+      const statusText = document.getElementById('docUploadStatusText');
+      const fill = document.getElementById('docUploadProgressFill');
+      const category = document.getElementById('docCategoryUpload').value;
+      const description = document.getElementById('docDescriptionInput').value.trim();
+
+      progressEl.style.display = 'block';
+      const total = files.length;
+      let done = 0;
+
+      for (const file of files) {
+        try {
+          statusText.textContent = 'Uploading ' + file.name + ' (' + (done + 1) + '/' + total + ')...';
+          fill.style.width = ((done / total) * 100) + '%';
+
+          // 1. Get presigned URL
+          const urlData = await api('/admin/users/' + profileUserId + '/documents/upload-url', {
+            method: 'POST',
+            body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+          });
+          if (!urlData) continue;
+
+          // 2. Upload to S3
+          const uploadRes = await fetch(urlData.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            body: file,
+          });
+          if (!uploadRes.ok) throw new Error('S3 upload failed for ' + file.name);
+
+          // 3. Confirm
+          await api('/admin/users/' + profileUserId + '/documents/confirm', {
+            method: 'POST',
+            body: JSON.stringify({
+              fileKey: urlData.fileKey,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: file.size,
+              category: category || null,
+              description: description || null,
+            }),
+          });
+
+          done++;
+          fill.style.width = ((done / total) * 100) + '%';
+        } catch (err) {
+          console.error('Upload error for', file.name, err);
+          alert('Failed to upload ' + file.name + ': ' + err.message);
+        }
+      }
+
+      statusText.textContent = done + ' of ' + total + ' files uploaded.';
+      fill.style.width = '100%';
+      setTimeout(() => { progressEl.style.display = 'none'; fill.style.width = '0'; }, 2000);
+
+      // Clear description field
+      document.getElementById('docDescriptionInput').value = '';
+
+      loadDocuments();
+    }
 
     /* ═══════════════════════════════════════
        INVESTORS TAB

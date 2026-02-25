@@ -424,6 +424,37 @@ const ServerAPI = {
     getMondayViewConfig() {
         return this.get('/monday/view-config');
     },
+
+    // ========================================
+    // EMPLOYEE PROFILES
+    // ========================================
+    getEmployeeProfile(userId) {
+        return this.get(`/admin/users/${userId}/profile`);
+    },
+
+    updateEmployeeProfile(userId, data) {
+        return this.put(`/admin/users/${userId}/profile`, data);
+    },
+
+    getEmployeeNotes(userId) {
+        return this.get(`/admin/users/${userId}/notes`);
+    },
+
+    createEmployeeNote(userId, note) {
+        return this.post(`/admin/users/${userId}/notes`, { note });
+    },
+
+    deleteEmployeeNote(userId, noteId) {
+        return this.delete(`/admin/users/${userId}/notes/${noteId}`);
+    },
+
+    getEmployeeDocuments(userId) {
+        return this.get(`/admin/users/${userId}/documents`);
+    },
+
+    getEmployeeDocDownloadUrl(userId, docId) {
+        return this.get(`/admin/users/${userId}/documents/${docId}/download-url`);
+    },
 };
 
 window.ServerAPI = ServerAPI;

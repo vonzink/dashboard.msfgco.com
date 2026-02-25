@@ -16,7 +16,7 @@ const { encrypt, decrypt, mask } = require('../utils/encryption');
 router.use(requireDbUser);
 
 const VALID_SERVICES = [
-  'openai', 'canva', 'elevenlabs', 'midjourney', 'sora',
+  'openai', 'anthropic', 'canva', 'elevenlabs', 'midjourney', 'sora',
   'n8n', 'zapier', 'monday',
   'facebook', 'instagram', 'twitter', 'linkedin', 'tiktok',
 ];
@@ -130,6 +130,8 @@ router.post('/:service/test', async (req, res, next) => {
     if (service === 'openai' || service === 'sora') {
       // Sora uses OpenAI API keys
       testResult = await testOpenAI(plaintext);
+    } else if (service === 'anthropic') {
+      testResult = await testAnthropic(plaintext);
     } else if (service === 'n8n' || service === 'zapier') {
       testResult = await testWebhook(plaintext);
     } else if (service === 'canva') {
@@ -190,6 +192,25 @@ async function testOpenAI(apiKey) {
     });
     if (response.ok) {
       return { success: true, message: 'OpenAI API key is valid' };
+    }
+    const err = await response.json().catch(() => ({}));
+    return { success: false, message: err.error?.message || `HTTP ${response.status}` };
+  } catch (error) {
+    return { success: false, message: error.message || 'Connection failed' };
+  }
+}
+
+async function testAnthropic(apiKey) {
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/models', {
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (response.ok) {
+      return { success: true, message: 'Anthropic (Claude) API key is valid' };
     }
     const err = await response.json().catch(() => ({}));
     return { success: false, message: err.error?.message || `HTTP ${response.status}` };
