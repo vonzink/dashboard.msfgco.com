@@ -115,6 +115,12 @@ const DEFAULT_TITLE_MAP = {
   'product':              'loan_type',
   'product type':         'loan_type',
   'property':             'property_address',
+  // Funded-loans specific aliases
+  'fund date':            'funded_date',
+  'funding date':         'funded_date',
+  'funding amount':       'loan_amount',
+  'sbj address':          'property_address',
+  'subject address':      'property_address',
 };
 
 // ── DB Helpers ───────────────────────────────────────────────────
