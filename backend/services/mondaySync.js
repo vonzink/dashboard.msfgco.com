@@ -360,12 +360,18 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap) {
 }
 
 async function upsertFundedLoanRow(mondayItemId, row, userNameMap) {
+  // funded_date is NOT NULL in DB — skip items without one
+  if (!row.funded_date) {
+    console.log(`Monday sync: skipping funded loan item ${mondayItemId} — no funded_date`);
+    return 'skipped';
+  }
+
   const flRow = {
     monday_item_id: String(mondayItemId),
     client_name: row.client_name || 'Unnamed',
     loan_amount: row.loan_amount || 0,
     loan_type: row.loan_type || null,
-    funded_date: row.funded_date || null,
+    funded_date: row.funded_date,
     investor: row.investor || null,
     property_address: row.property_address || null,
     group_name: row.stage || null,
@@ -489,6 +495,7 @@ async function syncAllBoards(userId) {
         const row = mapItemToRow(item, columnMap, userNameMap);
         if (!row.client_name && section === 'pipeline') continue;
 
+        // Track all items from Monday.com (even skipped ones) to prevent cleanup from deleting them
         syncedIdsBySection[section]?.add(String(item.id));
 
         try {
@@ -502,6 +509,7 @@ async function syncAllBoards(userId) {
           }
           if (result === 'created') created++;
           else if (result === 'updated') updated++;
+          // 'skipped' — item exists on Monday but missing required data (e.g. no funded_date)
         } catch (rowErr) {
           console.error(`Monday sync: failed to upsert item ${item.id} (board ${boardId}, section ${section}):`, rowErr.message);
         }
