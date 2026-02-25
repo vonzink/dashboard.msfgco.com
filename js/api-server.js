@@ -375,9 +375,24 @@ const ServerAPI = {
         return this.get('/monday/columns' + qs);
     },
 
-    /** List configured board IDs */
+    /** List configured boards (with full details) */
     getMondayBoards() {
         return this.get('/monday/boards');
+    },
+
+    /** Add a new board */
+    addMondayBoard(data) {
+        return this.post('/monday/boards', data);
+    },
+
+    /** Update board config */
+    updateMondayBoard(boardId, data) {
+        return this.put(`/monday/boards/${boardId}`, data);
+    },
+
+    /** Remove a board */
+    deleteMondayBoard(boardId) {
+        return this.delete(`/monday/boards/${boardId}`);
     },
 
     /** Get saved column mappings (admin) */

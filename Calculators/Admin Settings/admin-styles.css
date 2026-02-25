@@ -348,6 +348,35 @@ body {
 .state-msg i { font-size: 40px; margin-bottom: 12px; display: block; color: #ccc; }
 .state-msg p { margin: 0; font-size: 14px; }
 
+/* ── Monday.com Section Badges ── */
+.section-pipeline {
+  background: rgba(16, 69, 71, .15);
+  color: var(--msfg-teal);
+}
+
+.section-preapprovals {
+  background: rgba(52, 152, 219, .15);
+  color: #2980b9;
+}
+
+.section-funded {
+  background: rgba(140, 198, 62, .15);
+  color: #2e7d32;
+}
+
+/* ── Monday Tab Sections ── */
+.monday-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.monday-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
 /* ── Responsive ── */
 @media (max-width: 700px) {
   body { padding: 0 12px 24px; }

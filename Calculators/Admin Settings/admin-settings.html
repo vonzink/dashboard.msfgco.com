@@ -31,6 +31,9 @@
     <button class="admin-tab" data-tab="system">
       <i class="fas fa-server"></i> System
     </button>
+    <button class="admin-tab" data-tab="monday">
+      <i class="fas fa-sync-alt"></i> Monday.com
+    </button>
   </div>
 
   <!-- ================================================
@@ -214,6 +217,137 @@
     </div>
   </div>
 
+  <!-- ================================================
+       TAB: Monday.com Integration
+  ================================================ -->
+  <div class="admin-panel" id="panel-monday">
+
+    <!-- API Token -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-key"></i> API Token
+        </h3>
+      </div>
+      <p id="mondayTokenStatus" style="font-size:13px; color:#888; margin:0 0 8px;">Checking...</p>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <input type="password" id="mondayTokenInput" placeholder="Paste your Monday.com API token" style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:13px;" />
+        <button class="btn btn-primary btn-sm" id="mondaySaveTokenBtn"><i class="fas fa-save"></i> Save</button>
+        <button class="btn btn-secondary btn-sm" id="mondayTestTokenBtn"><i class="fas fa-plug"></i> Test</button>
+      </div>
+    </div>
+
+    <!-- Board Management -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-th-large"></i> Registered Boards
+        </h3>
+        <div class="toolbar-right">
+          <button class="btn btn-primary btn-sm" id="mondayAddBoardBtn"><i class="fas fa-plus"></i> Add Board</button>
+        </div>
+      </div>
+
+      <!-- Add Board Form (hidden by default) -->
+      <div class="admin-form" id="mondayBoardForm">
+        <h4 style="margin:0 0 12px; font-size:14px;" id="mondayBoardFormTitle">Add Board</h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="mondayBoardIdInput">Board ID</label>
+            <input type="text" id="mondayBoardIdInput" placeholder="e.g. 3946783498" />
+          </div>
+          <div class="form-group">
+            <label for="mondayBoardNameInput">Board Name</label>
+            <input type="text" id="mondayBoardNameInput" placeholder="e.g. Purchase Pipeline" />
+          </div>
+          <div class="form-group">
+            <label for="mondayBoardSectionSelect">Target Section</label>
+            <select id="mondayBoardSectionSelect">
+              <option value="pipeline">Loan Pipeline</option>
+              <option value="pre_approvals">Pre-Approvals</option>
+              <option value="funded_loans">Loans Funded</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" id="mondayBoardFormCancelBtn">Cancel</button>
+          <button class="btn btn-primary" id="mondayBoardFormSaveBtn"><i class="fas fa-save"></i> Save Board</button>
+        </div>
+      </div>
+
+      <table class="admin-table" id="mondayBoardsTable">
+        <thead>
+          <tr>
+            <th>Board ID</th>
+            <th>Name</th>
+            <th>Section</th>
+            <th>Status</th>
+            <th style="width:120px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="mondayBoardsBody">
+          <tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Column Mappings -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-arrows-alt-h"></i> Column Mappings
+        </h3>
+      </div>
+      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+        Select a board, load its columns from Monday.com, and map them to dashboard fields.
+      </p>
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+        <select id="mondayMappingBoardSelect" style="padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:13px; flex:1;">
+          <option value="">Select a board...</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="mondayLoadColumnsBtn"><i class="fas fa-download"></i> Load Columns</button>
+      </div>
+      <div id="mondayMappingsContainer"></div>
+      <button class="btn btn-primary btn-sm" id="mondaySaveMappingsBtn" style="display:none; margin-top:8px;">
+        <i class="fas fa-save"></i> Save Mappings
+      </button>
+    </div>
+
+    <!-- Display Config -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-table"></i> Pipeline Table Columns
+        </h3>
+      </div>
+      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+        Choose which columns appear in the pipeline table, set custom labels, and reorder them.
+      </p>
+      <div id="mondayDisplayConfig">
+        <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtn" style="display:none; margin-top:8px;">
+        <i class="fas fa-save"></i> Save Display Settings
+      </button>
+    </div>
+
+    <!-- Sync Controls -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-sync-alt"></i> Sync Controls
+        </h3>
+        <div class="toolbar-right">
+          <button class="btn btn-primary btn-sm" id="mondayRunSyncBtn"><i class="fas fa-play"></i> Run Sync Now</button>
+        </div>
+      </div>
+      <div id="mondaySyncInfo" style="font-size:13px; color:#888; margin-bottom:8px;">No syncs have been run yet.</div>
+
+      <h4 style="font-size:14px; margin:16px 0 8px; color:#104547;"><i class="fas fa-history"></i> Sync History</h4>
+      <div id="mondaySyncHistory" style="font-size:13px; color:#888;">Loading...</div>
+    </div>
+  </div>
+
   <script>
   (() => {
     'use strict';
@@ -277,6 +411,7 @@
         if (tabName === 'employees') loadUsers();
         if (tabName === 'investors') loadInvestors();
         if (tabName === 'system') loadSystem();
+        if (tabName === 'monday') loadMondayTab();
       });
     });
 
@@ -572,6 +707,465 @@
 
     document.getElementById('refreshSystemBtn').addEventListener('click', loadSystem);
 
+    /* ═══════════════════════════════════════
+       MONDAY.COM TAB
+    ═══════════════════════════════════════ */
+    let mondayBoards = [];
+    let mondayBoardColumns = [];
+    let mondayCurrentBoardId = null;
+    let mondayEditingBoardId = null;
+
+    function loadMondayTab() {
+      loadMondayBoards();
+      loadMondayTokenStatus();
+      loadMondaySyncHistory();
+      loadMondayDisplayConfig();
+    }
+
+    // ── Token Management ──
+    async function loadMondayTokenStatus() {
+      try {
+        const integrations = await api('/integrations');
+        if (!integrations) return;
+        const monday = integrations.find(i => i.service === 'monday');
+        const status = document.getElementById('mondayTokenStatus');
+        if (monday) {
+          status.textContent = 'Token configured (' + (monday.maskedValue || '***') + '). Last tested: ' + (monday.last_tested_at ? new Date(monday.last_tested_at).toLocaleString() : 'Never');
+          status.style.color = '#2e7d32';
+        } else {
+          status.textContent = 'No token configured. Paste your Monday.com API token below.';
+          status.style.color = '#f39c12';
+        }
+      } catch (e) { /* non-critical */ }
+    }
+
+    async function saveMondayToken() {
+      const input = document.getElementById('mondayTokenInput');
+      const value = input.value.trim();
+      if (!value) return alert('Please enter a token.');
+      try {
+        await api('/integrations', {
+          method: 'POST',
+          body: JSON.stringify({ service: 'monday', credential_type: 'api_key', value: value, label: 'Monday.com API Token' }),
+        });
+        input.value = '';
+        loadMondayTokenStatus();
+        alert('Token saved!');
+      } catch (err) { alert('Failed to save token: ' + err.message); }
+    }
+
+    async function testMondayToken() {
+      const status = document.getElementById('mondayTokenStatus');
+      status.textContent = 'Testing connection...';
+      status.style.color = '#888';
+      try {
+        const result = await api('/integrations/monday/test', { method: 'POST', body: '{}' });
+        if (result && result.success) {
+          status.textContent = result.message || 'Connection successful!';
+          status.style.color = '#2e7d32';
+        } else {
+          status.textContent = 'Test failed: ' + (result ? result.message : 'Unknown error');
+          status.style.color = '#e74c3c';
+        }
+      } catch (err) {
+        status.textContent = 'Test failed: ' + err.message;
+        status.style.color = '#e74c3c';
+      }
+    }
+
+    document.getElementById('mondaySaveTokenBtn').addEventListener('click', saveMondayToken);
+    document.getElementById('mondayTestTokenBtn').addEventListener('click', testMondayToken);
+
+    // ── Board Management ──
+    async function loadMondayBoards() {
+      const tbody = document.getElementById('mondayBoardsBody');
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+      try {
+        const data = await api('/monday/boards');
+        if (!data) return;
+        mondayBoards = data.boards || [];
+
+        if (mondayBoards.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">No boards registered. Click "Add Board" to get started.</td></tr>';
+          populateBoardSelect([]);
+          return;
+        }
+
+        const sectionLabels = { pipeline: 'Loan Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Loans Funded' };
+        const sectionClasses = { pipeline: 'section-pipeline', pre_approvals: 'section-preapprovals', funded_loans: 'section-funded' };
+
+        tbody.innerHTML = mondayBoards.map(b =>
+          '<tr data-board-id="' + escHtml(b.board_id) + '">' +
+          '<td><code style="font-size:12px;">' + escHtml(b.board_id) + '</code></td>' +
+          '<td><strong>' + escHtml(b.board_name || 'Unnamed') + '</strong></td>' +
+          '<td><span class="badge ' + (sectionClasses[b.target_section] || '') + '">' + escHtml(sectionLabels[b.target_section] || b.target_section) + '</span></td>' +
+          '<td>' + (b.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>') + '</td>' +
+          '<td>' +
+            '<button class="btn btn-sm btn-secondary monday-edit-board" data-bid="' + escHtml(b.board_id) + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
+            '<button class="btn btn-sm btn-danger monday-delete-board" data-bid="' + escHtml(b.board_id) + '" title="Remove"><i class="fas fa-trash"></i></button>' +
+          '</td>' +
+          '</tr>'
+        ).join('');
+
+        // Bind edit buttons
+        tbody.querySelectorAll('.monday-edit-board').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const board = mondayBoards.find(b => b.board_id === btn.dataset.bid);
+            if (board) showBoardForm(board);
+          });
+        });
+
+        // Bind delete buttons
+        tbody.querySelectorAll('.monday-delete-board').forEach(btn => {
+          btn.addEventListener('click', () => deleteMondayBoard(btn.dataset.bid));
+        });
+
+        populateBoardSelect(mondayBoards);
+      } catch (err) {
+        console.error('Load boards error:', err);
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#e74c3c;">Failed to load boards.</td></tr>';
+      }
+    }
+
+    function populateBoardSelect(boards) {
+      const select = document.getElementById('mondayMappingBoardSelect');
+      select.innerHTML = '<option value="">Select a board...</option>' +
+        boards.map(b => '<option value="' + escHtml(b.board_id) + '">' + escHtml(b.board_name || b.board_id) + ' (' + escHtml(b.board_id) + ')</option>').join('');
+    }
+
+    function showBoardForm(board) {
+      const form = document.getElementById('mondayBoardForm');
+      const title = document.getElementById('mondayBoardFormTitle');
+      if (board) {
+        mondayEditingBoardId = board.board_id;
+        title.textContent = 'Edit Board';
+        document.getElementById('mondayBoardIdInput').value = board.board_id;
+        document.getElementById('mondayBoardIdInput').disabled = true;
+        document.getElementById('mondayBoardNameInput').value = board.board_name || '';
+        document.getElementById('mondayBoardSectionSelect').value = board.target_section || 'pipeline';
+      } else {
+        mondayEditingBoardId = null;
+        title.textContent = 'Add Board';
+        document.getElementById('mondayBoardIdInput').value = '';
+        document.getElementById('mondayBoardIdInput').disabled = false;
+        document.getElementById('mondayBoardNameInput').value = '';
+        document.getElementById('mondayBoardSectionSelect').value = 'pipeline';
+      }
+      form.classList.add('active');
+    }
+
+    function hideBoardForm() {
+      document.getElementById('mondayBoardForm').classList.remove('active');
+      mondayEditingBoardId = null;
+    }
+
+    async function saveMondayBoard() {
+      const boardId = document.getElementById('mondayBoardIdInput').value.trim();
+      const boardName = document.getElementById('mondayBoardNameInput').value.trim();
+      const targetSection = document.getElementById('mondayBoardSectionSelect').value;
+
+      if (!boardId) return alert('Board ID is required');
+
+      try {
+        if (mondayEditingBoardId) {
+          await api('/monday/boards/' + mondayEditingBoardId, {
+            method: 'PUT',
+            body: JSON.stringify({ boardName, targetSection }),
+          });
+        } else {
+          await api('/monday/boards', {
+            method: 'POST',
+            body: JSON.stringify({ boardId, boardName, targetSection }),
+          });
+        }
+        hideBoardForm();
+        loadMondayBoards();
+      } catch (err) { alert('Error saving board: ' + err.message); }
+    }
+
+    async function deleteMondayBoard(boardId) {
+      if (!confirm('Remove board ' + boardId + '? This will also delete its column mappings and sync history.')) return;
+      try {
+        await api('/monday/boards/' + boardId, { method: 'DELETE' });
+        loadMondayBoards();
+      } catch (err) { alert('Error removing board: ' + err.message); }
+    }
+
+    document.getElementById('mondayAddBoardBtn').addEventListener('click', () => showBoardForm(null));
+    document.getElementById('mondayBoardFormCancelBtn').addEventListener('click', hideBoardForm);
+    document.getElementById('mondayBoardFormSaveBtn').addEventListener('click', saveMondayBoard);
+
+    // ── Column Mappings ──
+    async function loadMondayColumns() {
+      const boardId = document.getElementById('mondayMappingBoardSelect').value;
+      if (!boardId) return alert('Please select a board first.');
+
+      mondayCurrentBoardId = boardId;
+      const container = document.getElementById('mondayMappingsContainer');
+      const saveBtn = document.getElementById('mondaySaveMappingsBtn');
+      container.innerHTML = '<p style="color:#888; font-size:13px;"><i class="fas fa-spinner fa-spin"></i> Loading columns from Monday.com...</p>';
+
+      try {
+        const data = await api('/monday/columns?board=' + boardId);
+        if (!data) return;
+
+        mondayBoardColumns = data.columns || [];
+        const validFields = data.validPipelineFields || [];
+        const fieldLabels = data.fieldLabels || {};
+        const section = data.targetSection || 'pipeline';
+
+        // Load existing mappings
+        let existingMappings = {};
+        try {
+          const saved = await api('/monday/mappings?board=' + boardId);
+          if (saved) saved.forEach(m => { existingMappings[m.monday_column_id] = m.pipeline_field; });
+        } catch (e) { /* first time */ }
+
+        if (mondayBoardColumns.length === 0) {
+          container.innerHTML = '<p style="color:#888; font-size:13px;">No columns found on this board.</p>';
+          return;
+        }
+
+        const sectionLabels = { pipeline: 'Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Funded Loans' };
+
+        container.innerHTML =
+          '<p style="font-size:12px; color:#888; margin:0 0 6px;">Board: <strong>' + escHtml(data.boardName) + '</strong> — ' + mondayBoardColumns.length + ' columns — Section: <span class="badge ' + (section === 'pipeline' ? 'section-pipeline' : section === 'pre_approvals' ? 'section-preapprovals' : 'section-funded') + '">' + escHtml(sectionLabels[section] || section) + '</span></p>' +
+          '<div style="max-height:350px; overflow-y:auto; border:1px solid #eee; border-radius:8px;">' +
+            '<table class="admin-table" style="margin:0; font-size:12px;">' +
+              '<thead><tr><th>Monday.com Column</th><th>Type</th><th>Maps To</th></tr></thead>' +
+              '<tbody>' +
+                mondayBoardColumns.map(col => {
+                  const savedField = existingMappings[col.id] || col.suggestedField || '';
+                  return '<tr>' +
+                    '<td>' + escHtml(col.title) + '</td>' +
+                    '<td><code style="font-size:11px;">' + escHtml(col.type) + '</code></td>' +
+                    '<td><select class="monday-mapping-select" data-col-id="' + escHtml(col.id) + '" data-col-title="' + escHtml(col.title) + '" style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px; width:100%;">' +
+                      '<option value="">— skip —</option>' +
+                      validFields.map(f => '<option value="' + f + '"' + (f === savedField ? ' selected' : '') + '>' + escHtml(fieldLabels[f] || f) + '</option>').join('') +
+                    '</select></td>' +
+                  '</tr>';
+                }).join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>';
+
+        saveBtn.style.display = '';
+      } catch (err) {
+        container.innerHTML = '<p style="color:#e74c3c; font-size:13px;">Failed to load columns: ' + escHtml(err.message) + '</p>';
+      }
+    }
+
+    async function saveMondayMappings() {
+      const selects = document.querySelectorAll('.monday-mapping-select');
+      const mappings = [];
+      selects.forEach(sel => {
+        if (sel.value) {
+          mappings.push({
+            mondayColumnId: sel.dataset.colId,
+            mondayColumnTitle: sel.dataset.colTitle,
+            pipelineField: sel.value,
+          });
+        }
+      });
+
+      if (mappings.length === 0) return alert('Please map at least one column.');
+
+      // Check for duplicates
+      const fields = mappings.map(m => m.pipelineField);
+      const dupes = fields.filter((f, i) => fields.indexOf(f) !== i);
+      if (dupes.length > 0) return alert('Duplicate mapping: "' + dupes[0] + '" is mapped to multiple columns.');
+
+      try {
+        await api('/monday/mappings', {
+          method: 'POST',
+          body: JSON.stringify({ mappings, boardId: mondayCurrentBoardId }),
+        });
+        alert('Mappings saved for board ' + mondayCurrentBoardId + '! (' + mappings.length + ' columns mapped)');
+        loadMondayDisplayConfig();
+      } catch (err) { alert('Failed to save: ' + err.message); }
+    }
+
+    document.getElementById('mondayLoadColumnsBtn').addEventListener('click', loadMondayColumns);
+    document.getElementById('mondaySaveMappingsBtn').addEventListener('click', saveMondayMappings);
+
+    // ── Display Config ──
+    async function loadMondayDisplayConfig() {
+      const container = document.getElementById('mondayDisplayConfig');
+      const saveBtn = document.getElementById('mondaySaveDisplayBtn');
+      if (!container) return;
+
+      try {
+        const config = await api('/monday/view-config');
+        if (!config) return;
+        const columns = config.columns || [];
+
+        if (columns.length <= 1) {
+          container.innerHTML = '<p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>';
+          saveBtn.style.display = 'none';
+          return;
+        }
+
+        container.innerHTML =
+          '<div style="max-height:350px; overflow-y:auto; border:1px solid #eee; border-radius:8px;">' +
+            '<table class="admin-table" style="margin:0; font-size:12px;" id="displayConfigTable">' +
+              '<thead><tr><th style="width:40px;">Show</th><th>Field</th><th>Label</th><th style="width:80px;">Order</th></tr></thead>' +
+              '<tbody>' +
+                columns.map((col, idx) => {
+                  const isLocked = col.locked;
+                  return '<tr data-field="' + col.field + '">' +
+                    '<td style="text-align:center;"><input type="checkbox" class="dc-visible"' + (col.visible !== false ? ' checked' : '') + (isLocked ? ' disabled' : '') + ' /></td>' +
+                    '<td><code style="font-size:11px;">' + escHtml(col.field) + '</code></td>' +
+                    '<td><input type="text" class="dc-label" value="' + escHtml(col.label || '') + '"' + (isLocked ? ' disabled' : '') + ' style="padding:4px 8px; font-size:12px; border:1px solid #ddd; border-radius:6px; width:100%;" /></td>' +
+                    '<td style="text-align:center;">' +
+                      '<button type="button" class="btn btn-secondary btn-sm dc-move-up" style="padding:2px 6px; font-size:10px;"' + (idx === 0 ? ' disabled' : '') + '>&#9650;</button> ' +
+                      '<button type="button" class="btn btn-secondary btn-sm dc-move-down" style="padding:2px 6px; font-size:10px;"' + (idx === columns.length - 1 ? ' disabled' : '') + '>&#9660;</button>' +
+                    '</td>' +
+                  '</tr>';
+                }).join('') +
+              '</tbody>' +
+            '</table>' +
+          '</div>';
+
+        saveBtn.style.display = '';
+
+        // Wire move buttons
+        container.querySelectorAll('.dc-move-up').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const row = e.target.closest('tr');
+            const prev = row.previousElementSibling;
+            if (prev) row.parentNode.insertBefore(row, prev);
+            updateMoveButtons();
+          });
+        });
+        container.querySelectorAll('.dc-move-down').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            const row = e.target.closest('tr');
+            const next = row.nextElementSibling;
+            if (next) row.parentNode.insertBefore(next, row);
+            updateMoveButtons();
+          });
+        });
+      } catch (err) {
+        container.innerHTML = '<p style="color:#e74c3c; font-size:13px;">Failed to load display config: ' + escHtml(err.message) + '</p>';
+      }
+    }
+
+    function updateMoveButtons() {
+      const rows = document.querySelectorAll('#displayConfigTable tbody tr');
+      rows.forEach((row, idx) => {
+        const up = row.querySelector('.dc-move-up');
+        const down = row.querySelector('.dc-move-down');
+        if (up) up.disabled = idx === 0;
+        if (down) down.disabled = idx === rows.length - 1;
+      });
+    }
+
+    async function saveMondayDisplaySettings() {
+      const rows = document.querySelectorAll('#displayConfigTable tbody tr');
+      const displayConfig = {};
+      let order = 0;
+      rows.forEach(row => {
+        const field = row.dataset.field;
+        if (field === 'client_name') return;
+        displayConfig[field] = {
+          displayLabel: row.querySelector('.dc-label').value.trim() || null,
+          displayOrder: order++,
+          visible: row.querySelector('.dc-visible').checked,
+        };
+      });
+
+      try {
+        // Get all board IDs
+        const data = await api('/monday/boards');
+        if (!data) return;
+        const boards = (data.boards || []).filter(b => b.is_active);
+
+        for (const board of boards) {
+          let boardMappings = [];
+          try { boardMappings = await api('/monday/mappings?board=' + board.board_id); } catch (e) { continue; }
+          if (!boardMappings || boardMappings.length === 0) continue;
+
+          const updated = boardMappings.map(m => ({
+            mondayColumnId: m.monday_column_id,
+            mondayColumnTitle: m.monday_column_title,
+            pipelineField: m.pipeline_field,
+            displayLabel: displayConfig[m.pipeline_field] ? displayConfig[m.pipeline_field].displayLabel : (m.display_label || null),
+            displayOrder: displayConfig[m.pipeline_field] ? displayConfig[m.pipeline_field].displayOrder : (m.display_order || 99),
+            visible: displayConfig[m.pipeline_field] ? displayConfig[m.pipeline_field].visible : (m.visible !== 0),
+          }));
+
+          await api('/monday/mappings', {
+            method: 'POST',
+            body: JSON.stringify({ mappings: updated, boardId: board.board_id }),
+          });
+        }
+
+        alert('Display settings saved!');
+      } catch (err) { alert('Failed to save display settings: ' + err.message); }
+    }
+
+    document.getElementById('mondaySaveDisplayBtn').addEventListener('click', saveMondayDisplaySettings);
+
+    // ── Sync Controls ──
+    async function runMondaySync() {
+      const btn = document.getElementById('mondayRunSyncBtn');
+      const info = document.getElementById('mondaySyncInfo');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+      info.textContent = 'Sync in progress...';
+
+      try {
+        const result = await api('/monday/sync', { method: 'POST', body: '{}' });
+        if (!result) { info.textContent = 'Sync failed.'; return; }
+        const delMsg = result.deleted ? ', ' + result.deleted + ' removed' : '';
+        info.innerHTML = '<span style="color:#2e7d32;">Sync complete! ' + result.itemsFetched + ' items (' + result.created + ' new, ' + result.updated + ' updated' + delMsg + ')</span>';
+        loadMondaySyncHistory();
+      } catch (err) {
+        info.innerHTML = '<span style="color:#e74c3c;">Sync failed: ' + escHtml(err.message) + '</span>';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> Run Sync Now';
+      }
+    }
+
+    async function loadMondaySyncHistory() {
+      const container = document.getElementById('mondaySyncHistory');
+      if (!container) return;
+
+      try {
+        const logs = await api('/monday/sync/log');
+        if (!logs || logs.length === 0) {
+          container.textContent = 'No syncs have been run yet.';
+          return;
+        }
+
+        const statusColors = { success: '#2e7d32', error: '#e74c3c', running: '#f39c12' };
+
+        container.innerHTML =
+          '<table class="admin-table" style="margin:0; font-size:12px;">' +
+            '<thead><tr><th>Date</th><th>Board</th><th>Section</th><th>Status</th><th>Items</th><th>New</th><th>Updated</th></tr></thead>' +
+            '<tbody>' +
+              logs.slice(0, 15).map(log =>
+                '<tr>' +
+                '<td style="white-space:nowrap;">' + new Date(log.started_at).toLocaleString() + '</td>' +
+                '<td><code style="font-size:11px;">' + escHtml(log.board_name || log.board_id) + '</code></td>' +
+                '<td>' + escHtml(log.target_section || 'pipeline') + '</td>' +
+                '<td><span style="color:' + (statusColors[log.status] || '#888') + '; font-weight:600;">' + escHtml(log.status) + '</span></td>' +
+                '<td>' + (log.items_synced || 0) + '</td>' +
+                '<td>' + (log.items_created || 0) + '</td>' +
+                '<td>' + (log.items_updated || 0) + '</td>' +
+                '</tr>'
+              ).join('') +
+            '</tbody>' +
+          '</table>';
+      } catch (e) {
+        container.textContent = 'Could not load sync history.';
+      }
+    }
+
+    document.getElementById('mondayRunSyncBtn').addEventListener('click', runMondaySync);
+
     /* ── Init ── */
     document.addEventListener('DOMContentLoaded', () => {
       // Verify admin access
@@ -580,7 +1174,13 @@
           document.body.innerHTML = '<div style="text-align:center; padding:80px 20px; color:#e74c3c;"><i class="fas fa-lock" style="font-size:48px; margin-bottom:12px; display:block;"></i><p style="font-size:16px;">Admin access required.</p></div>';
           return;
         }
-        loadUsers();
+
+        // Hash-based deep linking
+        if (window.location.hash === '#monday') {
+          document.querySelector('[data-tab="monday"]').click();
+        } else {
+          loadUsers();
+        }
       });
     });
   })();
