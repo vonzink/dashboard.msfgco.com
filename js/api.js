@@ -218,6 +218,9 @@ const API = {
         { field: 'loan_amount', label: 'Loan Amount' },
         { field: 'rate', label: 'Rate' },
         { field: 'appraisal_status', label: 'Appraisal' },
+        { field: 'prelims_status', label: 'Prelims' },
+        { field: 'mini_set_status', label: 'Mini Set' },
+        { field: 'cd_status', label: 'CD' },
         { field: 'occupancy', label: 'Occupancy' },
         { field: 'application_date', label: 'App Date' },
         { field: 'closing_date', label: 'Closing Date' },
@@ -818,41 +821,47 @@ const MondaySettings = {
     },
 
     async saveDisplaySettings() {
-        // Read current mappings to get monday_column_id values
-        let existingMappings = [];
-        try {
-            existingMappings = await ServerAPI.getMondayMappings();
-        } catch (e) { /* ignore */ }
-
-        // Build mapping lookup: pipeline_field → monday mapping info
-        const mapByField = {};
-        for (const m of existingMappings) {
-            mapByField[m.pipeline_field] = m;
-        }
-
-        // Read display config rows (in current order)
+        // 1. Read display config (order, visibility, labels) from the DOM rows
         const rows = document.querySelectorAll('#displayConfigTable tbody tr');
-        const mappings = [];
+        const displayConfig = {};
         let order = 0;
 
         rows.forEach(row => {
             const field = row.dataset.field;
             if (field === 'client_name') return; // skip locked
-            const existing = mapByField[field];
-            if (!existing) return; // skip fields without Monday mapping
-
-            mappings.push({
-                mondayColumnId: existing.monday_column_id,
-                mondayColumnTitle: existing.monday_column_title,
-                pipelineField: field,
+            displayConfig[field] = {
                 displayLabel: row.querySelector('.dc-label').value.trim() || null,
                 displayOrder: order++,
                 visible: row.querySelector('.dc-visible').checked,
-            });
+            };
         });
 
         try {
-            await ServerAPI.saveMondayMappings(mappings);
+            // 2. Get all board IDs
+            const { boardIds } = await ServerAPI.getMondayBoards();
+
+            // 3. For each board, load its mappings and merge display config
+            for (const boardId of boardIds) {
+                let boardMappings = [];
+                try {
+                    boardMappings = await ServerAPI.getMondayMappings(boardId);
+                } catch (e) { continue; }
+
+                if (boardMappings.length === 0) continue;
+
+                // Merge display config onto each board's mappings
+                const updated = boardMappings.map(m => ({
+                    mondayColumnId: m.monday_column_id,
+                    mondayColumnTitle: m.monday_column_title,
+                    pipelineField: m.pipeline_field,
+                    displayLabel: displayConfig[m.pipeline_field]?.displayLabel ?? m.display_label ?? null,
+                    displayOrder: displayConfig[m.pipeline_field]?.displayOrder ?? m.display_order ?? 99,
+                    visible: displayConfig[m.pipeline_field]?.visible ?? (m.visible !== 0),
+                }));
+
+                await ServerAPI.saveMondayMappings(updated, boardId);
+            }
+
             alert('Display settings saved! Refreshing table...');
             // Reload pipeline config and data
             await API.loadPipelineConfig();

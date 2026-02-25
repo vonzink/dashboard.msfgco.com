@@ -103,6 +103,7 @@ router.put('/:id', async (req, res, next) => {
       loan_number, loan_status, lender, subject_property, rate,
       appraisal_status, loan_purpose, occupancy, title_status, hoi_status,
       loan_estimate, application_date, lock_expiration_date, closing_date, funding_date,
+      prelims_status, mini_set_status, cd_status,
     } = req.body;
     
     const updates = [];
@@ -142,7 +143,10 @@ router.put('/:id', async (req, res, next) => {
     if (lock_expiration_date !== undefined) { updates.push('lock_expiration_date = ?'); values.push(lock_expiration_date); }
     if (closing_date !== undefined) { updates.push('closing_date = ?'); values.push(closing_date); }
     if (funding_date !== undefined) { updates.push('funding_date = ?'); values.push(funding_date); }
-    
+    if (prelims_status !== undefined) { updates.push('prelims_status = ?'); values.push(prelims_status); }
+    if (mini_set_status !== undefined) { updates.push('mini_set_status = ?'); values.push(mini_set_status); }
+    if (cd_status !== undefined) { updates.push('cd_status = ?'); values.push(cd_status); }
+
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }

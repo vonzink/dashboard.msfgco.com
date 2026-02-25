@@ -45,6 +45,30 @@
       </div>
 
       <div class="header-right">
+        <!-- Utility Toolbar -->
+        <div class="header-utils">
+          <a data-link-key="ratesheet" class="header-util-btn" title="Today's Rate Sheet">
+            <i class="fas fa-chart-bar"></i>
+          </a>
+          <button type="button" class="header-util-btn" data-action="open-lock-desk" title="Lock Desk">
+            <i class="fas fa-file-alt"></i>
+          </button>
+          <button type="button" class="header-util-btn" data-action="open-support-ticket" title="Support Ticket">
+            <i class="fas fa-headset"></i>
+          </button>
+          <button type="button" class="header-util-btn" data-action="open-notifications" title="Notifications">
+            <i class="fas fa-bell"></i>
+          </button>
+          <button type="button" class="header-util-btn" data-action="open-settings" title="Settings">
+            <i class="fas fa-cog"></i>
+          </button>
+          <button type="button" class="header-util-btn admin-only-item" data-action="open-admin-settings" title="Admin Settings" style="display:none;">
+            <i class="fas fa-user-shield"></i>
+          </button>
+        </div>
+
+        <div class="header-divider"></div>
+
         <div class="user-info">
           <div class="user-avatar" id="userAvatar">ZB</div>
           <div>
@@ -244,21 +268,7 @@
       </div>
 
       <div class="section-body">
-        <div class="news-grid">
-          <div class="news-feed" id="newsFeed"></div>
-
-          <div class="quick-links">
-            <h4><i class="fas fa-link"></i> Quick Links</h4>
-            <div class="quick-links-list">
-              <a data-link-key="ratesheet" class="quick-link"><i class="fas fa-chart-bar"></i> Today's Rate Sheet</a>
-              <button type="button" class="quick-link" data-action="open-lock-desk"><i class="fas fa-file-alt"></i> Lock Desk</button>
-              <button type="button" class="quick-link" data-action="open-support-ticket"><i class="fas fa-headset"></i> Support Ticket</button>
-              <button type="button" class="quick-link" data-action="open-notifications"><i class="fas fa-bell"></i> Notifications</button>
-              <button type="button" class="quick-link" data-action="open-settings"><i class="fas fa-cog"></i> Settings</button>
-              <button type="button" class="quick-link admin-only-item" data-action="open-admin-settings" style="display:none;"><i class="fas fa-user-shield"></i> Admin Settings</button>
-            </div>
-          </div>
-        </div>
+        <div class="news-feed" id="newsFeed"></div>
       </div>
     </section>
 

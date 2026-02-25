@@ -38,6 +38,7 @@ const VALID_PIPELINE_FIELDS = [
   'loan_type', 'occupancy', 'title_status', 'hoi_status',
   'loan_estimate', 'application_date', 'lock_expiration_date',
   'closing_date', 'funding_date', 'stage', 'notes',
+  'prelims_status', 'mini_set_status', 'cd_status',
   // These are matched specially:
   'assigned_lo_name',
 ];
@@ -64,6 +65,9 @@ const FIELD_LABELS = {
   funding_date: 'Funding Date',
   stage: 'Stage',
   notes: 'Notes',
+  prelims_status: 'Prelims',
+  mini_set_status: 'Mini Set',
+  cd_status: 'CD',
 };
 
 // Default column-title → pipeline-field mapping (best-guess based on common names).
@@ -88,6 +92,12 @@ const DEFAULT_TITLE_MAP = {
   'closing date':         'closing_date',
   'closing data':         'closing_date',
   'funding date':         'funding_date',
+  'prelims':              'prelims_status',
+  'prelims status':       'prelims_status',
+  'mini set':             'mini_set_status',
+  'mini set status':      'mini_set_status',
+  'cd':                   'cd_status',
+  'cd status':            'cd_status',
 };
 
 // ── Helpers ─────────────────────────────────────────────────────

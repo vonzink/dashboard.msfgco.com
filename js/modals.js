@@ -15,6 +15,7 @@ const ModalsManager = {
 
     this.bindGlobalEscapeClose();      // ✅ single ESC handler
     this.bindDeleteButtons();          // ✅ delegated delete handler
+    this.bindEmbedToggles();           // ✅ iframe preview toggle + resize
     this.loadAnnouncements();
 
     console.log('ModalsManager initialized');
@@ -386,7 +387,7 @@ const ModalsManager = {
         content: saved.content,
         link: saved.link,
         icon: saved.icon,
-        author: authorName,
+        author: saved.author_name || authorName,
         createdAt: saved.created_at,
         fileName: saved.file_name
       };
@@ -399,6 +400,62 @@ const ModalsManager = {
       console.error('Failed to save announcement:', error);
       alert('Failed to save announcement. Please try again.');
     }
+  },
+
+  // ========================================
+  // IFRAME EMBED TOGGLE + RESIZE
+  // ========================================
+  bindEmbedToggles() {
+    // Delegated click handler for preview toggle buttons
+    document.addEventListener('click', (e) => {
+      const toggleBtn = e.target.closest('.news-embed-toggle');
+      if (!toggleBtn) return;
+
+      const wrapper = toggleBtn.closest('.news-embed-wrapper');
+      const container = wrapper.querySelector('.news-embed-container');
+      const iframe = wrapper.querySelector('.news-embed-frame');
+      const isVisible = container.style.display !== 'none';
+
+      if (isVisible) {
+        // Collapse
+        container.style.display = 'none';
+        toggleBtn.innerHTML = '<i class="fas fa-eye"></i> Preview Page';
+        toggleBtn.classList.remove('active');
+        iframe.src = '';  // unload iframe to save resources
+      } else {
+        // Expand — load the URL into iframe
+        container.style.display = 'block';
+        toggleBtn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Preview';
+        toggleBtn.classList.add('active');
+        if (!iframe.src || iframe.src === 'about:blank') {
+          iframe.src = iframe.dataset.src;
+        }
+      }
+    });
+
+    // Delegated drag-to-resize handler
+    document.addEventListener('mousedown', (e) => {
+      const handle = e.target.closest('.news-embed-resize-handle');
+      if (!handle) return;
+
+      e.preventDefault();
+      const frameWrapper = handle.closest('.news-embed-frame-wrapper');
+      const startY = e.clientY;
+      const startH = frameWrapper.offsetHeight;
+
+      const onMove = (ev) => {
+        const newH = Math.max(150, Math.min(900, startH + (ev.clientY - startY)));
+        frameWrapper.style.height = newH + 'px';
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
   },
 
   addAnnouncementToUI(announcement) {
@@ -424,9 +481,24 @@ const ModalsManager = {
           <p>${Utils.escapeHtml(announcement.content)}</p>
 
           ${safeLink ? `
-            <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="news-link">
-              <i class="fas fa-external-link-alt"></i> View Link
-            </a>` : ''}
+            <div class="news-embed-wrapper">
+              <div class="news-embed-toolbar">
+                <button type="button" class="news-embed-toggle" data-url="${safeLink}" title="Preview page">
+                  <i class="fas fa-eye"></i> Preview Page
+                </button>
+                <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="news-link-external" title="Open in new tab">
+                  <i class="fas fa-external-link-alt"></i> Open in New Tab
+                </a>
+              </div>
+              <div class="news-embed-container" style="display:none;">
+                <div class="news-embed-frame-wrapper">
+                  <iframe class="news-embed-frame" data-src="${safeLink}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" loading="lazy"></iframe>
+                  <div class="news-embed-resize-handle" title="Drag to resize">
+                    <i class="fas fa-grip-lines"></i>
+                  </div>
+                </div>
+              </div>
+            </div>` : ''}
 
           ${announcement.fileName ? `
             <div class="news-file">
@@ -477,7 +549,7 @@ const ModalsManager = {
           content: a.content,
           link: a.link,
           icon: a.icon,
-          author: 'Admin',
+          author: a.author_name || 'Unknown',
           createdAt: a.created_at,
           fileName: a.file_name
         };
