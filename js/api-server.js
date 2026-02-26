@@ -312,6 +312,26 @@ const ServerAPI = {
         return this.delete(`/investors/${investorId}/logo`);
     },
 
+    /** Replace investor team members */
+    updateInvestorTeam(investorId, team) {
+        return this.put(`/investors/${investorId}/team`, { team });
+    },
+
+    /** Upsert investor lender IDs */
+    updateInvestorLenderIds(investorId, data) {
+        return this.put(`/investors/${investorId}/lender-ids`, data);
+    },
+
+    /** Replace investor mortgagee clauses */
+    updateInvestorMortgageeClauses(investorId, clauses) {
+        return this.put(`/investors/${investorId}/mortgagee-clauses`, { clauses });
+    },
+
+    /** Replace investor links */
+    updateInvestorLinks(investorId, links) {
+        return this.put(`/investors/${investorId}/links`, { links });
+    },
+
     // ========================================
     // FUNDED LOANS
     // ========================================
@@ -443,6 +463,10 @@ const ServerAPI = {
     // ========================================
     // EMPLOYEE PROFILES
     // ========================================
+    getEmployeeContactCard(userId) {
+        return this.get(`/users/${userId}/contact-card`);
+    },
+
     getEmployeeProfile(userId) {
         return this.get(`/admin/users/${userId}/profile`);
     },

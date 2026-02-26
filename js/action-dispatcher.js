@@ -48,7 +48,16 @@
     },
 
     'manage-investors': () => {
-      window.Investors?.showManageModal?.();
+      // Open admin settings page to investors tab
+      const w = Math.min(1200, screen.availWidth - 80);
+      const h = Math.min(860, screen.availHeight - 80);
+      const left = Math.round((screen.availWidth - w) / 2);
+      const top  = Math.round((screen.availHeight - h) / 2);
+      window.open(
+        'Calculators/Admin Settings/admin-settings.html#investors',
+        'MSFGAdminSettings',
+        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
+      );
     },
 
     // =====================
@@ -61,15 +70,8 @@
     'open-employee-card': (el) => {
       const empId = el?.dataset?.employeeId;
       if (!empId) return;
-      const w = Math.min(1200, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/Admin Settings/admin-settings.html#employee/' + empId,
-        'MSFGAdminSettings',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
+      // Show in-page contact card modal
+      window.Investors?.showContactCard?.(empId);
     },
     'open-lock-desk': () => comingSoon('Lock Desk'),
 

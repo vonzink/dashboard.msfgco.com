@@ -334,4 +334,136 @@ router.delete('/:id/logo', requireAdmin, async (req, res, next) => {
   }
 });
 
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/team — Replace team members (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/team', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { team } = req.body; // [{role, name, phone, email, sort_order}]
+
+    if (!Array.isArray(team)) {
+      return res.status(400).json({ error: 'team must be an array' });
+    }
+
+    // Verify investor exists
+    const [existing] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    // Replace: delete all, then insert new
+    await db.query('DELETE FROM investor_team WHERE investor_id = ?', [investorId]);
+
+    for (let i = 0; i < team.length; i++) {
+      const m = team[i];
+      if (!m.name && !m.role) continue;
+      await db.query(
+        'INSERT INTO investor_team (investor_id, role, name, phone, email, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+        [investorId, m.role || null, m.name || null, m.phone || null, m.email || null, m.sort_order ?? i]
+      );
+    }
+
+    const [rows] = await db.query('SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name', [investorId]);
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/lender-ids — Upsert lender IDs (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/lender-ids', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fha_id, va_id } = req.body;
+
+    const [existing] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    await db.query(
+      `INSERT INTO investor_lender_ids (investor_id, fha_id, va_id)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE fha_id = ?, va_id = ?`,
+      [investorId, fha_id || null, va_id || null, fha_id || null, va_id || null]
+    );
+
+    const [rows] = await db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [investorId]);
+    res.json(rows[0] || {});
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/mortgagee-clauses — Replace mortgagee clauses (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/mortgagee-clauses', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { clauses } = req.body; // [{name, isaoa, address}]
+
+    if (!Array.isArray(clauses)) {
+      return res.status(400).json({ error: 'clauses must be an array' });
+    }
+
+    const [existing] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    await db.query('DELETE FROM investor_mortgagee_clauses WHERE investor_id = ?', [investorId]);
+
+    for (const c of clauses) {
+      if (!c.name) continue;
+      await db.query(
+        'INSERT INTO investor_mortgagee_clauses (investor_id, name, isaoa, address) VALUES (?, ?, ?, ?)',
+        [investorId, c.name, c.isaoa || null, c.address || null]
+      );
+    }
+
+    const [rows] = await db.query('SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?', [investorId]);
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/links — Replace investor links (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/links', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { links } = req.body; // [{link_type, url, label}]
+
+    if (!Array.isArray(links)) {
+      return res.status(400).json({ error: 'links must be an array' });
+    }
+
+    const [existing] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    await db.query('DELETE FROM investor_links WHERE investor_id = ?', [investorId]);
+
+    for (const l of links) {
+      if (!l.url) continue;
+      await db.query(
+        'INSERT INTO investor_links (investor_id, link_type, url, label) VALUES (?, ?, ?, ?)',
+        [investorId, l.link_type || 'website', l.url, l.label || null]
+      );
+    }
+
+    const [rows] = await db.query('SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type', [investorId]);
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

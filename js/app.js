@@ -63,45 +63,6 @@ const App = {
 
     initInvestors() {
         Investors.init();
-        this.initManageInvestorsModal();
-    },
-
-    initManageInvestorsModal() {
-        // Close button
-        const modal = document.getElementById('manageInvestorsModal');
-        if (!modal) return;
-
-        const closeBtn = modal.querySelector('.manage-investors-close');
-        if (closeBtn) closeBtn.addEventListener('click', () => Investors.hideManageModal());
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) Investors.hideManageModal();
-        });
-
-        // Search
-        const searchInput = document.getElementById('manageInvestorSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                Investors._manageSearchTerm = searchInput.value;
-                Investors._renderManageList();
-            });
-        }
-
-        // Add button
-        const addBtn = document.getElementById('manageAddInvestorBtn');
-        if (addBtn) addBtn.addEventListener('click', () => Investors._openForm(null));
-
-        // Cancel button on form
-        const cancelBtn = document.getElementById('manageFormCancelBtn');
-        if (cancelBtn) cancelBtn.addEventListener('click', () => Investors._showManageView('list'));
-
-        // Form submit
-        const form = document.getElementById('investorAdminForm');
-        if (form) {
-            form.addEventListener('submit', (e) => {
-                e.preventDefault();
-                Investors._saveForm();
-            });
-        }
     },
 
     initFundedLoans() {

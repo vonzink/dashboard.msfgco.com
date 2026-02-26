@@ -1,12 +1,11 @@
 /* ============================================
    MSFG Dashboard - Investors Module
-   Investor information, modal, and admin management
-   Step 4/5 compatible (dispatcher + a11y)
+   Investor information, modal (read-only except notes),
+   and dropdown management
 ============================================ */
 
 const Investors = {
   currentInvestorId: null,
-  editMode: false,
 
   // =========================================================
   // INVESTOR DATA — loaded from API at runtime
@@ -15,35 +14,10 @@ const Investors = {
   data: {},
   _loaded: false,
 
-  // =========================================================
-  // FIELD DEFINITIONS (ordered as requested)
-  // =========================================================
-  fieldDefs: [
-    { key: 'name',                    label: 'Investor',                   type: 'text',     required: true },
-    { key: 'ae_name',                 label: 'Account Exec',               type: 'text' },
-    { key: 'ae_email',                label: 'AE Email',                   type: 'email' },
-    { key: 'ae_phone',                label: 'AE Phone',                   type: 'tel' },
-    { key: 'states',                  label: 'States',                     type: 'text' },
-    { key: 'bestPrograms',            label: 'Best Programs',              type: 'text' },
-    { key: 'minimumFico',             label: 'Minimum FICO',               type: 'text' },
-    { key: 'inHouseDpa',              label: 'In-house DPA',               type: 'text' },
-    { key: 'epo',                     label: 'EPO',                        type: 'text' },
-    { key: 'maxComp',                 label: 'Max Comp',                   type: 'number' },
-    { key: 'docReviewForWireRelease', label: 'Doc Review for Wire Release',type: 'text' },
-    { key: 'remoteClosingReview',     label: 'Remote Closing Review',      type: 'text' },
-    { key: 'websiteUrl',              label: 'Link to Website',            type: 'url' },
-    { key: 'notes',                   label: 'Notes',                      type: 'textarea' }
-  ],
-
-  // Track pending logo state for the manage form
-  _pendingLogoFile: null,    // File object awaiting upload
-  _pendingLogoRemoved: false, // true if user clicked remove
-
   init() {
     this.bindModalClose();
     this.bindCompanyContactsModalClose();
     this.bindGlobalEscapeClose();
-    this._bindLogoUpload();
     // Load investor data from API, then build the dropdown
     this.loadFromAPI();
     console.log('Investors module initializing...');
@@ -86,7 +60,6 @@ const Investors = {
       console.log('Investors loaded from API (' + Object.keys(this.data).length + ' investors)');
     } catch (err) {
       console.error('Failed to load investors from API:', err);
-      // Show an error in the dropdown
       const container = document.getElementById('investorDropdownList');
       if (container) {
         container.innerHTML = '<div class="dropdown-header">Wholesale Partners</div>' +
@@ -98,59 +71,8 @@ const Investors = {
   // =========================================================
   // HELPERS
   // =========================================================
-
-  /** Generate a URL-safe slug from an investor name */
-  slugify(name) {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
-  },
-
-  /** Return a flat form-ready object for a given investor key (or blank for new) */
-  getFormValues(key) {
-    const inv = key ? this.data[key] : null;
-    const ae = inv?.accountExecutive || {};
-    return {
-      name:                    inv?.name || '',
-      ae_name:                 ae.name || '',
-      ae_email:                ae.email || '',
-      ae_phone:                ae.mobile || '',
-      states:                  inv?.states || '',
-      bestPrograms:            inv?.bestPrograms || '',
-      minimumFico:             inv?.minimumFico || '',
-      inHouseDpa:              inv?.inHouseDpa || '',
-      epo:                     inv?.epo || '',
-      maxComp:                 inv?.maxComp ?? '',
-      docReviewForWireRelease: inv?.docReviewForWireRelease || '',
-      remoteClosingReview:     inv?.remoteClosingReview || '',
-      websiteUrl:              inv?.websiteUrl || '',
-      notes:                   inv?.notes || ''
-    };
-  },
-
-  /** Apply form values back to local data */
-  applyFormValues(key, vals) {
-    if (!this.data[key]) {
-      this.data[key] = {};
-    }
-    const inv = this.data[key];
-    inv.name                    = vals.name;
-    inv.accountExecutive        = {
-      name:   vals.ae_name   || null,
-      email:  vals.ae_email  || null,
-      mobile: vals.ae_phone  || null
-    };
-    inv.states                  = vals.states || null;
-    inv.bestPrograms            = vals.bestPrograms || null;
-    inv.minimumFico             = vals.minimumFico || null;
-    inv.inHouseDpa              = vals.inHouseDpa || null;
-    inv.epo                     = vals.epo || null;
-    inv.maxComp                 = vals.maxComp ? Number(vals.maxComp) : null;
-    inv.docReviewForWireRelease = vals.docReviewForWireRelease || null;
-    inv.remoteClosingReview     = vals.remoteClosingReview || null;
-    inv.websiteUrl              = vals.websiteUrl || null;
-    inv.notes                   = vals.notes || '';
+  _esc(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   },
 
   // =========================================================
@@ -159,13 +81,6 @@ const Investors = {
   bindGlobalEscapeClose() {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-
-      // Close manage modal first if open
-      const manage = document.getElementById('manageInvestorsModal');
-      if (manage && manage.classList.contains('active')) {
-        this.hideManageModal();
-        return;
-      }
 
       // Close contacts first if open
       const contacts = document.getElementById('companyContactsModal');
@@ -197,9 +112,10 @@ const Investors = {
     });
   },
 
-  showModal(investorId) {
-    const investor = this.data[investorId];
-    if (!investor) {
+  /** Show investor modal — fetches full detail from API */
+  async showModal(investorId) {
+    const basicInvestor = this.data[investorId];
+    if (!basicInvestor) {
       console.warn('Investor not found:', investorId);
       return;
     }
@@ -211,12 +127,9 @@ const Investors = {
     }
 
     this.currentInvestorId = investorId;
-    this.editMode = false;
 
-    this.populateModal(investor);
-    this.bindSettingsButton();
-    this.bindEditFunctionality();
-
+    // Show modal with basic data first (fast)
+    this.populateModal(basicInvestor);
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
 
@@ -224,6 +137,17 @@ const Investors = {
       const content = modal.querySelector('.modal-content');
       if (content) content.style.transform = 'scale(1) translateY(0)';
     }, 10);
+
+    // Fetch full detail from API for sub-resources
+    try {
+      const full = await ServerAPI.getInvestor(investorId);
+      if (full) {
+        this.populateModal(full);
+        this.bindNotesEditing();
+      }
+    } catch (err) {
+      console.warn('Could not load full investor detail:', err);
+    }
   },
 
   hideModal() {
@@ -243,9 +167,7 @@ const Investors = {
     const modal = document.getElementById('investorModal');
     if (!modal) return;
 
-    const esc = typeof Utils !== 'undefined' && Utils.escapeHtml
-      ? Utils.escapeHtml.bind(Utils)
-      : (s) => s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const esc = this._esc;
 
     // Name
     const nameEl = modal.querySelector('.investor-name');
@@ -254,72 +176,68 @@ const Investors = {
     // Logo
     const logoEl = modal.querySelector('.investor-logo');
     if (logoEl) {
-      const logoSrc = investor.logoUrl || '';
+      const logoSrc = investor.logoUrl || investor.logo_url || '';
       logoEl.src = logoSrc;
       logoEl.alt = investor.name ? investor.name + ' Logo' : 'Investor Logo';
       logoEl.style.display = logoSrc ? '' : 'none';
     }
 
-    if (!investor.notes) investor.notes = '';
-
-    // Account Executive
+    // Account Executive (read-only)
     const aeSection = modal.querySelector('.account-executive');
     if (aeSection) {
       const ae = investor.accountExecutive || {};
-      if (ae.name && ae.name !== 'TBD') {
+      // Also check flat API response fields
+      const aeName = ae.name || investor.account_executive_name;
+      const aeEmail = ae.email || investor.account_executive_email;
+      const aePhone = ae.mobile || investor.account_executive_phone;
+
+      if (aeName && aeName !== 'TBD') {
         aeSection.innerHTML =
-          '<h4><i class="fas fa-user-tie"></i> Account Executive' +
-          '  <button type="button" class="section-edit-btn" data-section="accountExecutive"><i class="fas fa-edit"></i></button>' +
-          '</h4>' +
-          '<div class="contact-info editable-content">' +
-            (ae.name ? '<div contenteditable="true" data-field="name"><strong>' + esc(ae.name) + '</strong></div>' : '') +
-            (ae.mobile ? '<div contenteditable="true" data-field="mobile"><i class="fas fa-phone"></i> <a href="tel:' + ae.mobile.replace(/\D/g, '') + '">' + esc(ae.mobile) + '</a></div>' : '') +
-            (ae.email ? '<div contenteditable="true" data-field="email"><i class="fas fa-envelope"></i> <a href="mailto:' + ae.email + '">' + esc(ae.email) + '</a></div>' : '') +
-            (ae.address ? '<div contenteditable="true" data-field="address"><i class="fas fa-map-marker-alt"></i> ' + esc(ae.address) + '</div>' : '') +
+          '<h4><i class="fas fa-user-tie"></i> Account Executive</h4>' +
+          '<div class="contact-info">' +
+            (aeName ? '<div><strong>' + esc(aeName) + '</strong></div>' : '') +
+            (aePhone ? '<div><i class="fas fa-phone"></i> <a href="tel:' + aePhone.replace(/\D/g, '') + '">' + esc(aePhone) + '</a></div>' : '') +
+            (aeEmail ? '<div><i class="fas fa-envelope"></i> <a href="mailto:' + aeEmail + '">' + esc(aeEmail) + '</a></div>' : '') +
           '</div>';
       } else {
         aeSection.innerHTML =
-          '<h4><i class="fas fa-user-tie"></i> Account Executive' +
-          '  <button type="button" class="section-edit-btn" data-section="accountExecutive"><i class="fas fa-edit"></i></button>' +
-          '</h4>' +
+          '<h4><i class="fas fa-user-tie"></i> Account Executive</h4>' +
           '<p class="tbd">Information coming soon</p>';
       }
     }
 
-    // Investor details grid (new fields)
+    // Investor details grid (read-only)
     const detailsSection = modal.querySelector('.investor-details');
     if (detailsSection) {
       let html = '<h4><i class="fas fa-info-circle"></i> Investor Details</h4><div class="details-grid">';
       const details = [
         { label: 'States',                    value: investor.states },
-        { label: 'Best Programs',             value: investor.bestPrograms },
-        { label: 'Minimum FICO',              value: investor.minimumFico },
-        { label: 'In-house DPA',              value: investor.inHouseDpa },
+        { label: 'Best Programs',             value: investor.bestPrograms || investor.best_programs },
+        { label: 'Minimum FICO',              value: investor.minimumFico || investor.min_fico },
+        { label: 'In-house DPA',              value: investor.inHouseDpa || investor.in_house_dpa },
         { label: 'EPO',                       value: investor.epo },
-        { label: 'Max Comp',                  value: investor.maxComp ? '$' + Number(investor.maxComp).toLocaleString() : null },
-        { label: 'Doc Review for Wire Release', value: investor.docReviewForWireRelease },
-        { label: 'Remote Closing Review',     value: investor.remoteClosingReview }
+        { label: 'Max Comp',                  value: (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : null },
+        { label: 'Doc Review for Wire Release', value: investor.docReviewForWireRelease || investor.doc_review_for_wire_release },
+        { label: 'Remote Closing Review',     value: investor.remoteClosingReview || investor.remote_closing_review }
       ];
       details.forEach(d => {
         html += '<div class="detail-row">' +
           '<span class="detail-label">' + esc(d.label) + '</span>' +
-          '<span class="detail-value">' + (d.value ? esc(String(d.value)) : '<em class="tbd">—</em>') + '</span>' +
+          '<span class="detail-value">' + (d.value ? esc(String(d.value)) : '<em class="tbd">\u2014</em>') + '</span>' +
         '</div>';
       });
       html += '</div>';
       detailsSection.innerHTML = html;
     }
 
-    // Team
+    // Team (read-only)
     const teamSection = modal.querySelector('.investor-team');
     if (teamSection) {
-      if (Array.isArray(investor.team) && investor.team.length > 0) {
-        let teamHtml =
-          '<h4><i class="fas fa-users"></i> Meet My Team:' +
-          '  <button type="button" class="section-edit-btn" data-section="team"><i class="fas fa-edit"></i></button>' +
-          '</h4><div class="team-list editable-content">';
-        investor.team.forEach((member) => {
-          teamHtml += '<div class="team-member" contenteditable="true">';
+      const team = investor.team || [];
+      if (team.length > 0) {
+        let teamHtml = '<h4><i class="fas fa-users"></i> Team</h4><div class="team-list">';
+        team.forEach(member => {
+          teamHtml += '<div class="team-member">';
           if (member.role) teamHtml += '<strong>' + esc(member.role) + '</strong> / ';
           if (member.name) teamHtml += esc(member.name);
           if (member.phone) teamHtml += ' / <a href="tel:' + member.phone.replace(/\D/g, '') + '">' + esc(member.phone) + '</a>';
@@ -330,80 +248,105 @@ const Investors = {
         teamSection.innerHTML = teamHtml;
       } else {
         teamSection.innerHTML =
-          '<h4><i class="fas fa-users"></i> Team' +
-          '  <button type="button" class="section-edit-btn" data-section="team"><i class="fas fa-edit"></i></button>' +
-          '</h4><p class="tbd">Information coming soon</p>';
+          '<h4><i class="fas fa-users"></i> Team</h4>' +
+          '<p class="tbd">No team members listed</p>';
       }
     }
 
-    // Lender IDs
+    // Lender IDs (read-only)
     const lenderSection = modal.querySelector('.lender-ids');
     if (lenderSection) {
       const ids = investor.lenderIds || {};
-      if (ids.fha || ids.va) {
+      if (ids.fha_id || ids.va_id || ids.fha || ids.va) {
         lenderSection.innerHTML =
-          '<h4><i class="fas fa-id-card"></i> Lender IDs' +
-          '  <button type="button" class="section-edit-btn" data-section="lenderIds"><i class="fas fa-edit"></i></button>' +
-          '</h4><div class="lender-ids-list editable-content">' +
-            (ids.fha ? '<div contenteditable="true" data-field="fha"><strong>FHA:</strong> ' + esc(ids.fha) + '</div>' : '') +
-            (ids.va ? '<div contenteditable="true" data-field="va"><strong>VA:</strong> ' + esc(ids.va) + '</div>' : '') +
+          '<h4><i class="fas fa-id-card"></i> Lender IDs</h4>' +
+          '<div class="lender-ids-list">' +
+            ((ids.fha_id || ids.fha) ? '<div><strong>FHA:</strong> ' + esc(ids.fha_id || ids.fha) + '</div>' : '') +
+            ((ids.va_id || ids.va) ? '<div><strong>VA:</strong> ' + esc(ids.va_id || ids.va) + '</div>' : '') +
           '</div>';
       } else {
         lenderSection.innerHTML =
-          '<h4><i class="fas fa-id-card"></i> Lender IDs' +
-          '  <button type="button" class="section-edit-btn" data-section="lenderIds"><i class="fas fa-edit"></i></button>' +
-          '</h4><p class="tbd">Information coming soon</p>';
+          '<h4><i class="fas fa-id-card"></i> Lender IDs</h4>' +
+          '<p class="tbd">No lender IDs on file</p>';
       }
     }
 
-    // Mortgagee Clause
+    // Mortgagee Clauses (read-only — now supports array)
     const clauseSection = modal.querySelector('.mortgagee-clause');
     if (clauseSection) {
+      const clauses = investor.mortgageeClauses || [];
+      // Legacy single-object format fallback
       const mc = investor.mortgageeClause || {};
-      if (mc.name) {
+      if (clauses.length > 0) {
+        let html = '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4><div class="clause-info">';
+        clauses.forEach(c => {
+          html += '<div class="clause-item" style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #f0f0f0;">';
+          html += '<div><strong>' + esc(c.name) + '</strong></div>';
+          if (c.isaoa) html += '<div>' + esc(c.isaoa) + '</div>';
+          if (c.address) html += '<div style="color:#666;">' + esc(c.address) + '</div>';
+          html += '</div>';
+        });
+        html += '</div>';
+        clauseSection.innerHTML = html;
+      } else if (mc.name) {
         clauseSection.innerHTML =
-          '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses' +
-          '  <button type="button" class="section-edit-btn" data-section="mortgageeClause"><i class="fas fa-edit"></i></button>' +
-          '</h4><div class="clause-info editable-content">' +
-            '<div contenteditable="true" data-field="name"><strong>' + esc(mc.name) + '</strong></div>' +
-            (mc.isaoa ? '<div contenteditable="true" data-field="isaoa">' + esc(mc.isaoa) + '</div>' : '') +
-            (mc.address ? '<div contenteditable="true" data-field="address">' + esc(mc.address) + '</div>' : '') +
+          '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4>' +
+          '<div class="clause-info">' +
+            '<div><strong>' + esc(mc.name) + '</strong></div>' +
+            (mc.isaoa ? '<div>' + esc(mc.isaoa) + '</div>' : '') +
+            (mc.address ? '<div style="color:#666;">' + esc(mc.address) + '</div>' : '') +
           '</div>';
       } else {
         clauseSection.innerHTML =
-          '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses' +
-          '  <button type="button" class="section-edit-btn" data-section="mortgageeClause"><i class="fas fa-edit"></i></button>' +
-          '</h4><p class="tbd">Information coming soon</p>';
+          '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4>' +
+          '<p class="tbd">No mortgagee clauses on file</p>';
       }
     }
 
-    // Links
+    // Links (read-only)
     const linksSection = modal.querySelector('.investor-links');
     if (linksSection) {
-      const links = investor.links || {};
-      let linksHtml =
-        '<h4><i class="fas fa-link"></i> Resources' +
-        '  <button type="button" class="section-edit-btn" data-section="links"><i class="fas fa-edit"></i></button>' +
-        '</h4><div class="links-list">';
+      const links = investor.links || [];
+      const websiteUrl = investor.websiteUrl || investor.website_url;
+      let linksHtml = '<h4><i class="fas fa-link"></i> Resources</h4><div class="links-list">';
 
-      if (investor.websiteUrl && investor.websiteUrl !== '#') {
-        linksHtml += '<a href="' + investor.websiteUrl + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Website</a>';
+      // Legacy top-level websiteUrl
+      if (websiteUrl && websiteUrl !== '#') {
+        linksHtml += '<a href="' + websiteUrl + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Website</a>';
       }
-      if (investor.loginUrl && investor.loginUrl !== '#') {
-        linksHtml += '<a href="' + investor.loginUrl + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-sign-in-alt"></i> Login</a>';
+
+      // Links from sub-table (array format from full detail)
+      if (Array.isArray(links)) {
+        const LINK_ICONS = {
+          website: 'fas fa-globe', login: 'fas fa-sign-in-alt', flex_site: 'fas fa-laptop',
+          faq: 'fas fa-question-circle', appraisal_video: 'fas fa-video', new_scenarios: 'fas fa-envelope'
+        };
+        const LINK_LABELS = {
+          website: 'Website', login: 'Login Portal', flex_site: 'Flex Site',
+          faq: 'FAQs', appraisal_video: 'Ordering Appraisals', new_scenarios: 'New Scenarios'
+        };
+        links.forEach(link => {
+          if (!link.url) return;
+          const icon = LINK_ICONS[link.link_type] || 'fas fa-external-link-alt';
+          const label = link.label || LINK_LABELS[link.link_type] || link.link_type;
+          const isEmail = link.url.startsWith('mailto:');
+          linksHtml += '<a href="' + link.url + '"' + (isEmail ? '' : ' target="_blank" rel="noopener noreferrer"') + ' class="link-item"><i class="' + icon + '"></i> ' + esc(label) + '</a>';
+        });
+      } else if (typeof links === 'object') {
+        // Legacy object format fallback
+        if (links.website) linksHtml += '<a href="' + links.website + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Main Website</a>';
+        if (links.flexSite) linksHtml += '<a href="' + links.flexSite + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-laptop"></i> Flex Site</a>';
+        if (links.faq) linksHtml += '<a href="' + links.faq + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-question-circle"></i> FAQs</a>';
+        if (links.appraisalVideo) linksHtml += '<a href="' + links.appraisalVideo + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-video"></i> Ordering Appraisals</a>';
+        if (links.newScenarios) linksHtml += '<a href="' + links.newScenarios + '" class="link-item"><i class="fas fa-envelope"></i> New Scenarios</a>';
+        if (links.login) linksHtml += '<a href="' + links.login + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-sign-in-alt"></i> Login Portal</a>';
       }
-      if (links.website) linksHtml += '<a href="' + links.website + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Main Website</a>';
-      if (links.flexSite) linksHtml += '<a href="' + links.flexSite + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-laptop"></i> Flex Site</a>';
-      if (links.faq) linksHtml += '<a href="' + links.faq + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-question-circle"></i> FAQs</a>';
-      if (links.appraisalVideo) linksHtml += '<a href="' + links.appraisalVideo + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-video"></i> Ordering Appraisals</a>';
-      if (links.newScenarios) linksHtml += '<a href="' + links.newScenarios + '" class="link-item"><i class="fas fa-envelope"></i> New Scenarios</a>';
-      if (links.login && links.login !== investor.loginUrl) linksHtml += '<a href="' + links.login + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-sign-in-alt"></i> Login Portal</a>';
 
       linksHtml += '</div>';
       linksSection.innerHTML = linksHtml;
     }
 
-    // Notes
+    // Notes (editable)
     const notesSection = modal.querySelector('.investor-notes .notes-content');
     if (notesSection) {
       notesSection.textContent = investor.notes || '';
@@ -412,71 +355,26 @@ const Investors = {
     }
   },
 
-  // =========================================================
-  // Settings / edit hooks
-  // =========================================================
-  bindSettingsButton() {
-    const settingsBtn = document.querySelector('.investor-settings-btn');
-    if (!settingsBtn) return;
+  /** Bind notes editing — save on blur */
+  bindNotesEditing() {
+    const notesContent = document.querySelector('#investorModal .notes-content');
+    if (!notesContent || notesContent._notesBound) return;
+    notesContent._notesBound = true;
 
-    settingsBtn.onclick = (e) => {
-      e.stopPropagation();
-      this.toggleEditMode();
-
-      const editBtns = document.querySelectorAll('.section-edit-btn');
-      editBtns.forEach((btn) => {
-        btn.style.opacity = this.editMode ? '1' : '';
-      });
-    };
-  },
-
-  bindEditFunctionality() {
-    document.querySelectorAll('.section-edit-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const section = e.target.closest('[data-section]');
-        if (section) this.editSection(section.dataset.section);
-      });
+    notesContent.addEventListener('blur', () => this.saveNotes());
+    notesContent.addEventListener('input', () => notesContent.classList.remove('empty'));
+    notesContent.addEventListener('focus', (e) => {
+      if (e.target.classList.contains('empty')) {
+        e.target.textContent = '';
+        e.target.classList.remove('empty');
+      }
     });
-
-    const notesContent = document.querySelector('.notes-content');
-    if (notesContent) {
-      notesContent.addEventListener('blur', () => this.saveNotes());
-      notesContent.addEventListener('input', () => notesContent.classList.remove('empty'));
-      notesContent.addEventListener('focus', (e) => {
-        if (e.target.classList.contains('empty')) {
-          e.target.textContent = '';
-          e.target.classList.remove('empty');
-        }
-      });
-    }
-  },
-
-  toggleEditMode() {
-    this.editMode = !this.editMode;
-    const modal = document.getElementById('investorModal');
-    if (modal) modal.classList.toggle('edit-mode', this.editMode);
-  },
-
-  editSection(sectionName) {
-    const section = document.querySelector('[data-section="' + sectionName + '"]');
-    if (!section) return;
-
-    const content = section.querySelector('.editable-content, .contact-info, .team-list, .lender-ids-list, .clause-info, .links-list');
-    if (!content) return;
-
-    content.contentEditable = true;
-    content.focus();
-
-    content.addEventListener('blur', () => {
-      this.saveSection(sectionName);
-    }, { once: true });
   },
 
   async saveNotes() {
     if (!this.currentInvestorId) return;
 
-    const notesContent = document.querySelector('.notes-content');
+    const notesContent = document.querySelector('#investorModal .notes-content');
     if (!notesContent) return;
 
     const notes = notesContent.textContent.trim();
@@ -489,12 +387,7 @@ const Investors = {
       }
     } catch (error) {
       console.error('Failed to save notes:', error);
-      if (Utils.setStorage) Utils.setStorage('investor_notes_' + this.currentInvestorId, notes);
     }
-  },
-
-  saveSection(sectionName) {
-    console.log('Saving section: ' + sectionName);
   },
 
   // =========================================================
@@ -544,342 +437,104 @@ const Investors = {
   },
 
   // =========================================================
-  // LOGO UPLOAD (manage form)
+  // MSFG Contact Card — in-page modal
   // =========================================================
+  async showContactCard(userId) {
+    const modal = document.getElementById('companyContactsModal');
+    if (!modal) return;
 
-  /** Bind click, drag-drop, and remove for logo upload area */
-  _bindLogoUpload() {
-    const area = document.getElementById('invLogoUploadArea');
-    const fileInput = document.getElementById('invLogoFileInput');
-    const removeBtn = document.getElementById('invLogoRemoveBtn');
-    if (!area || !fileInput) return;
+    const esc = this._esc;
 
-    // Click to select file
-    area.addEventListener('click', (e) => {
-      if (e.target.closest('#invLogoRemoveBtn')) return; // don't trigger on remove
-      fileInput.click();
-    });
-
-    // File selected via input
-    fileInput.addEventListener('change', () => {
-      if (fileInput.files && fileInput.files[0]) {
-        this._setLogoPending(fileInput.files[0]);
-      }
-    });
-
-    // Drag & drop
-    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('drag-over'); });
-    area.addEventListener('dragleave', () => { area.classList.remove('drag-over'); });
-    area.addEventListener('drop', (e) => {
-      e.preventDefault();
-      area.classList.remove('drag-over');
-      const file = e.dataTransfer?.files?.[0];
-      if (file && file.type.startsWith('image/')) {
-        this._setLogoPending(file);
-      }
-    });
-
-    // Remove button
-    if (removeBtn) {
-      removeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._pendingLogoFile = null;
-        this._pendingLogoRemoved = true;
-        this._updateLogoPreview(null);
-      });
-    }
-  },
-
-  /** Set a file as the pending logo and show preview */
-  _setLogoPending(file) {
-    if (!file || !file.type.startsWith('image/')) {
-      alert('Please select an image file (PNG, JPG, SVG, etc.)');
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Logo must be under 5 MB.');
-      return;
-    }
-    this._pendingLogoFile = file;
-    this._pendingLogoRemoved = false;
-
-    // Show local preview
-    const reader = new FileReader();
-    reader.onload = (e) => this._updateLogoPreview(e.target.result);
-    reader.readAsDataURL(file);
-  },
-
-  /** Update the logo preview UI in the manage form */
-  _updateLogoPreview(src) {
-    const preview = document.getElementById('invLogoPreview');
-    const placeholder = document.getElementById('invLogoPlaceholder');
-    const removeBtn = document.getElementById('invLogoRemoveBtn');
-
-    if (src) {
-      if (preview) { preview.src = src; preview.style.display = ''; }
-      if (placeholder) placeholder.style.display = 'none';
-      if (removeBtn) removeBtn.style.display = '';
-    } else {
-      if (preview) { preview.src = ''; preview.style.display = 'none'; }
-      if (placeholder) placeholder.style.display = '';
-      if (removeBtn) removeBtn.style.display = 'none';
-    }
-  },
-
-  /**
-   * Upload a logo file to S3 for a given investor ID.
-   * Uses the 2-step presigned URL flow.
-   * Returns the presigned download URL on success.
-   */
-  async _uploadLogo(investorId, file) {
-    // Step 1: Get presigned upload URL
-    const { uploadUrl, fileKey } = await ServerAPI.getInvestorLogoUploadUrl(
-      investorId, file.name, file.type
-    );
-
-    // Step 2: PUT file directly to S3
-    await ServerAPI.uploadToS3(uploadUrl, file);
-
-    // Step 3: Confirm — saves S3 key in DB
-    const result = await ServerAPI.confirmInvestorLogo(investorId, fileKey);
-    return result.logoUrl; // presigned download URL
-  },
-
-  // =========================================================
-  // ADMIN: Manage Investors Modal
-  // =========================================================
-  _manageSearchTerm: '',
-  _editingKey: null,       // null = new investor, string = editing existing
-
-  showManageModal() {
-    const modal = document.getElementById('manageInvestorsModal');
-    if (!modal) { console.error('manageInvestorsModal not found'); return; }
-
-    this._manageSearchTerm = '';
-    this._editingKey = null;
-    this._renderManageList();
-    this._showManageView('list');
+    // Show modal with loading state
+    const content = modal.querySelector('.modal-content') || modal;
+    content.innerHTML =
+      '<button type="button" class="contacts-modal-close">&times;</button>' +
+      '<div style="text-align:center; padding:40px; color:#999;"><i class="fas fa-spinner fa-spin" style="font-size:24px;"></i><p>Loading contact...</p></div>';
 
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
-    setTimeout(() => {
-      const c = modal.querySelector('.modal-content');
-      if (c) c.style.transform = 'scale(1) translateY(0)';
-    }, 10);
-  },
+    setTimeout(() => { content.style.transform = 'scale(1) translateY(0)'; }, 10);
 
-  hideManageModal() {
-    const modal = document.getElementById('manageInvestorsModal');
-    if (!modal) return;
-    const c = modal.querySelector('.modal-content');
-    if (c) c.style.transform = 'scale(0.95) translateY(20px)';
-    setTimeout(() => {
-      modal.classList.remove('active');
-      document.body.style.overflow = '';
-    }, 200);
-  },
-
-  /** Toggle between 'list' and 'form' views inside the manage modal */
-  _showManageView(view) {
-    const listView = document.getElementById('manageInvestorsList');
-    const formView = document.getElementById('manageInvestorForm');
-    if (!listView || !formView) return;
-
-    if (view === 'form') {
-      listView.style.display = 'none';
-      formView.style.display = 'block';
-    } else {
-      listView.style.display = 'block';
-      formView.style.display = 'none';
-    }
-  },
-
-  /** Render the investor list table inside the manage modal */
-  _renderManageList() {
-    const container = document.getElementById('manageInvestorsTableBody');
-    if (!container) return;
-
-    const search = this._manageSearchTerm.toLowerCase();
-    const sorted = Object.entries(this.data)
-      .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
-
-    let html = '';
-    let count = 0;
-    sorted.forEach(([key, inv]) => {
-      const name = inv.name || key;
-      const ae = inv.accountExecutive || {};
-      if (search && !name.toLowerCase().includes(search) && !(ae.name || '').toLowerCase().includes(search)) {
-        return;
-      }
-      count++;
-      const esc = (s) => (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-      html +=
-        '<tr>' +
-          '<td>' + esc(name) + '</td>' +
-          '<td>' + esc(ae.name || '—') + '</td>' +
-          '<td>' + esc(ae.email || '—') + '</td>' +
-          '<td>' + esc(ae.mobile || '—') + '</td>' +
-          '<td class="manage-actions-cell">' +
-            '<button type="button" class="btn btn-sm btn-secondary manage-edit-btn" data-key="' + key + '"><i class="fas fa-edit"></i></button> ' +
-            '<button type="button" class="btn btn-sm btn-danger manage-delete-btn" data-key="' + key + '"><i class="fas fa-trash"></i></button>' +
-          '</td>' +
-        '</tr>';
-    });
-
-    if (count === 0) {
-      html = '<tr><td colspan="5" class="empty-state">No investors found.</td></tr>';
-    }
-
-    container.innerHTML = html;
-
-    // Update count
-    const countEl = document.getElementById('manageInvestorCount');
-    if (countEl) countEl.textContent = count + ' investor' + (count !== 1 ? 's' : '');
-
-    // Bind edit/delete
-    container.querySelectorAll('.manage-edit-btn').forEach(btn => {
-      btn.addEventListener('click', () => this._openForm(btn.dataset.key));
-    });
-    container.querySelectorAll('.manage-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => this._deleteInvestor(btn.dataset.key));
-    });
-  },
-
-  /** Open the add/edit form for an investor */
-  _openForm(key) {
-    this._editingKey = key || null;
-    this._pendingLogoFile = null;
-    this._pendingLogoRemoved = false;
-
-    const vals = this.getFormValues(key);
-    const title = document.getElementById('manageFormTitle');
-    if (title) title.textContent = key ? 'Edit Investor' : 'Add Investor';
-
-    this.fieldDefs.forEach(def => {
-      const input = document.getElementById('inv_' + def.key);
-      if (input) input.value = vals[def.key] ?? '';
-    });
-
-    // Reset file input
-    const fileInput = document.getElementById('invLogoFileInput');
-    if (fileInput) fileInput.value = '';
-
-    // Show current logo or placeholder
-    const inv = key ? this.data[key] : null;
-    this._updateLogoPreview(inv?.logoUrl || null);
-
-    this._showManageView('form');
-  },
-
-  /** Save the form (create or update) */
-  async _saveForm() {
-    const vals = {};
-    this.fieldDefs.forEach(def => {
-      const input = document.getElementById('inv_' + def.key);
-      if (input) vals[def.key] = input.value.trim();
-    });
-
-    if (!vals.name) {
-      alert('Investor name is required.');
-      return;
-    }
-
-    const key = this._editingKey || this.slugify(vals.name);
-
-    // Apply locally
-    this.applyFormValues(key, vals);
-
-    // Persist to backend
-    let savedInvestor;
-    try {
-      const payload = {
-        investor_key:               key,
-        name:                       vals.name,
-        account_executive_name:     vals.ae_name || null,
-        account_executive_email:    vals.ae_email || null,
-        account_executive_mobile:   vals.ae_phone || null,
-        states:                     vals.states || null,
-        best_programs:              vals.bestPrograms || null,
-        minimum_fico:               vals.minimumFico || null,
-        in_house_dpa:               vals.inHouseDpa || null,
-        epo:                        vals.epo || null,
-        max_comp:                   vals.maxComp ? Number(vals.maxComp) : null,
-        doc_review_wire:            vals.docReviewForWireRelease || null,
-        remote_closing_review:      vals.remoteClosingReview || null,
-        website_url:                vals.websiteUrl || null,
-        notes:                      vals.notes || null
-      };
-
-      if (this._editingKey) {
-        savedInvestor = await ServerAPI.updateInvestor(key, payload);
-      } else {
-        savedInvestor = await ServerAPI.createInvestor(payload);
-      }
-      console.log('Investor saved:', key);
-    } catch (err) {
-      console.error('Failed to persist investor to backend:', err);
-    }
-
-    // Handle logo upload / removal (needs investor ID from DB)
-    const investorId = savedInvestor?.id || this.data[key]?.id;
-    if (investorId) {
-      try {
-        if (this._pendingLogoFile) {
-          // Upload new logo
-          const area = document.getElementById('invLogoUploadArea');
-          if (area) area.classList.add('uploading');
-
-          const logoUrl = await this._uploadLogo(investorId, this._pendingLogoFile);
-          if (this.data[key]) this.data[key].logoUrl = logoUrl;
-
-          if (area) area.classList.remove('uploading');
-          console.log('Investor logo uploaded:', key);
-        } else if (this._pendingLogoRemoved) {
-          // Remove existing logo
-          await ServerAPI.deleteInvestorLogo(investorId);
-          if (this.data[key]) this.data[key].logoUrl = null;
-          console.log('Investor logo removed:', key);
-        }
-      } catch (err) {
-        console.error('Logo upload/remove failed:', err);
-        alert('Investor saved, but logo upload failed. Please try again.');
-      }
-    }
-
-    this._pendingLogoFile = null;
-    this._pendingLogoRemoved = false;
-
-    // Refresh list & go back
-    this._renderManageList();
-    this._showManageView('list');
-    this._refreshDropdown();
-  },
-
-  /** Delete an investor (with confirmation) */
-  async _deleteInvestor(key) {
-    const inv = this.data[key];
-    if (!inv) return;
-
-    if (!confirm('Delete investor "' + (inv.name || key) + '"? This cannot be undone.')) return;
-
-    delete this.data[key];
+    // Re-bind close
+    const closeBtn = content.querySelector('.contacts-modal-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.hideCompanyContactsModal());
 
     try {
-      await ServerAPI.deleteInvestor(key);
-    } catch (err) {
-      console.error('Failed to delete investor on backend:', err);
-    }
+      const user = await ServerAPI.getEmployeeContactCard(userId);
+      if (!user) throw new Error('Not found');
 
-    this._renderManageList();
-    this._refreshDropdown();
+      const initials = user.initials || (user.name || '').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+
+      // Build social icons
+      const socials = [
+        { url: user.facebook_url, icon: 'fab fa-facebook-f', color: '#1877F2', label: 'Facebook' },
+        { url: user.instagram_url, icon: 'fab fa-instagram', color: '#E4405F', label: 'Instagram' },
+        { url: user.twitter_url, icon: 'fab fa-x-twitter', color: '#000', label: 'X' },
+        { url: user.linkedin_url, icon: 'fab fa-linkedin-in', color: '#0A66C2', label: 'LinkedIn' },
+        { url: user.tiktok_url, icon: 'fab fa-tiktok', color: '#000', label: 'TikTok' },
+      ].filter(s => s.url);
+
+      let socialHtml = '';
+      if (socials.length > 0) {
+        socialHtml = '<div class="contact-card-social">';
+        socials.forEach(s => {
+          socialHtml += '<a href="' + s.url + '" target="_blank" rel="noopener noreferrer" class="social-icon-link" title="' + s.label + '" style="color:' + s.color + '"><i class="' + s.icon + '"></i></a>';
+        });
+        socialHtml += '</div>';
+      }
+
+      // Build info grid
+      let infoHtml = '<div class="contact-card-grid">';
+      if (user.phone) infoHtml += '<div class="contact-card-item"><i class="fas fa-phone"></i><a href="tel:' + user.phone.replace(/\D/g, '') + '">' + esc(user.phone) + '</a></div>';
+      const email = user.display_email || user.email;
+      if (email) infoHtml += '<div class="contact-card-item"><i class="fas fa-envelope"></i><a href="mailto:' + email + '">' + esc(email) + '</a></div>';
+      if (user.website) infoHtml += '<div class="contact-card-item"><i class="fas fa-globe"></i><a href="' + user.website + '" target="_blank" rel="noopener noreferrer">' + esc(user.website.replace(/^https?:\/\//, '')) + '</a></div>';
+      if (user.online_app_url) infoHtml += '<div class="contact-card-item"><i class="fas fa-file-alt"></i><a href="' + user.online_app_url + '" target="_blank" rel="noopener noreferrer">Online Application</a></div>';
+      infoHtml += '</div>';
+
+      // Email signature
+      let sigHtml = '';
+      if (user.email_signature) {
+        sigHtml =
+          '<div class="contact-card-section">' +
+            '<h4 style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px;">Email Signature</h4>' +
+            '<div class="signature-preview">' + user.email_signature + '</div>' +
+          '</div>';
+      }
+
+      content.innerHTML =
+        '<button type="button" class="contacts-modal-close">&times;</button>' +
+        '<div class="contact-card-header">' +
+          (user.avatar_url
+            ? '<img class="contact-card-avatar" src="' + user.avatar_url + '" alt="' + esc(user.name) + '" />'
+            : '<div class="contact-card-avatar-initials">' + esc(initials) + '</div>') +
+          '<h3 class="contact-card-name">' + esc(user.name) + '</h3>' +
+          '<p class="contact-card-role">' + esc(user.role || '') + (user.team ? ' \u2022 ' + esc(user.team) : '') + '</p>' +
+        '</div>' +
+        infoHtml +
+        socialHtml +
+        sigHtml;
+
+      // Re-bind close
+      const newCloseBtn = content.querySelector('.contacts-modal-close');
+      if (newCloseBtn) newCloseBtn.addEventListener('click', () => this.hideCompanyContactsModal());
+    } catch (err) {
+      content.innerHTML =
+        '<button type="button" class="contacts-modal-close">&times;</button>' +
+        '<div style="text-align:center; padding:40px; color:#e74c3c;"><i class="fas fa-exclamation-circle" style="font-size:24px; margin-bottom:8px; display:block;"></i><p>Could not load contact information.</p></div>';
+      const errCloseBtn = content.querySelector('.contacts-modal-close');
+      if (errCloseBtn) errCloseBtn.addEventListener('click', () => this.hideCompanyContactsModal());
+    }
   },
 
-  /** Refresh the investor dropdown in the nav */
+  // =========================================================
+  // Investor dropdown in nav
+  // =========================================================
   _refreshDropdown() {
     const container = document.getElementById('investorDropdownList');
     if (!container) return;
 
-    const esc = (s) => (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+    const esc = this._esc;
 
     const sorted = Object.entries(this.data)
       .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
@@ -910,7 +565,6 @@ const Investors = {
           btn.style.display = name.includes(q) ? '' : 'none';
         });
       });
-      // Prevent dropdown from closing when clicking into search
       searchInput.addEventListener('click', (e) => e.stopPropagation());
     }
   }

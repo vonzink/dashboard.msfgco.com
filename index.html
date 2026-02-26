@@ -511,22 +511,18 @@
             <img class="investor-logo" alt="Investor Logo" />
             <h2 class="investor-name">Investor</h2>
           </div>
-
-          <button type="button" class="investor-settings-btn" aria-label="Investor settings">
-            <i class="fas fa-gear"></i>
-          </button>
         </div>
 
         <div class="modal-body">
           <div class="investor-info-grid">
-            <div class="info-section account-executive" data-section="accountExecutive"></div>
-            <div class="info-section investor-details" data-section="details"></div>
-            <div class="info-section investor-team" data-section="team"></div>
-            <div class="info-section lender-ids" data-section="lenderIds"></div>
-            <div class="info-section mortgagee-clause" data-section="mortgageeClause"></div>
-            <div class="info-section investor-links" data-section="links"></div>
+            <div class="info-section account-executive"></div>
+            <div class="info-section investor-details"></div>
+            <div class="info-section investor-team"></div>
+            <div class="info-section lender-ids"></div>
+            <div class="info-section mortgagee-clause"></div>
+            <div class="info-section investor-links"></div>
 
-            <div class="info-section investor-notes u-grid-span-all" data-section="notes">
+            <div class="info-section investor-notes u-grid-span-all">
               <h4><i class="fas fa-note-sticky"></i> Notes</h4>
               <div class="notes-content empty" contenteditable="true"></div>
             </div>
@@ -535,25 +531,10 @@
       </div>
     </div>
 
-    <!-- Company Contacts Modal (required by investors.js open-company-contacts) -->
+    <!-- Contact Card Modal (populated dynamically by Investors.showContactCard) -->
     <div id="companyContactsModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content">
-        <button type="button" class="modal-close contacts-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
-
-        <div class="modal-header">
-          <div class="investor-header-content">
-            <h2 class="investor-name">Company Contacts</h2>
-          </div>
-        </div>
-
-        <div class="modal-body">
-          <div class="investor-info-grid">
-            <div class="info-section u-grid-span-all">
-              <h4><i class="fas fa-address-book"></i> Contacts</h4>
-              <p class="tbd">Add your contacts list here (or wire to API).</p>
-            </div>
-          </div>
-        </div>
+      <div class="modal-content" style="max-width:480px;">
+        <button type="button" class="contacts-modal-close" aria-label="Close modal">&times;</button>
       </div>
     </div>
 
@@ -664,131 +645,6 @@
     </div>
 
     <!-- Manage Investors Modal (admin only) -->
-    <div id="manageInvestorsModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width: 1100px;">
-        <button type="button" class="modal-close manage-investors-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
-
-        <div class="modal-header">
-          <div class="investor-header-content">
-            <h2 class="investor-name"><i class="fas fa-handshake"></i> Manage Investors</h2>
-          </div>
-        </div>
-
-        <div class="modal-body">
-          <!-- LIST VIEW -->
-          <div id="manageInvestorsList">
-            <div class="manage-investors-toolbar">
-              <input type="text" id="manageInvestorSearch" class="form-input" placeholder="Search investors..." />
-              <span id="manageInvestorCount" class="manage-investor-count"></span>
-              <button type="button" class="btn btn-primary" id="manageAddInvestorBtn">
-                <i class="fas fa-plus"></i> Add Investor
-              </button>
-            </div>
-
-            <div class="table-responsive">
-              <table class="data-table manage-investors-table">
-                <thead>
-                  <tr>
-                    <th>Investor</th>
-                    <th>Account Exec</th>
-                    <th>AE Email</th>
-                    <th>AE Phone</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody id="manageInvestorsTableBody"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- FORM VIEW (add / edit) -->
-          <div id="manageInvestorForm" style="display:none;">
-            <h3 id="manageFormTitle" class="manage-form-title">Add Investor</h3>
-            <form id="investorAdminForm" class="manage-investor-form">
-              <div class="form-grid">
-                <div class="form-group">
-                  <label for="inv_name"><i class="fas fa-building"></i> Investor Name *</label>
-                  <input type="text" id="inv_name" class="form-input" required />
-                </div>
-                <div class="form-group">
-                  <label for="inv_ae_name"><i class="fas fa-user-tie"></i> Account Exec</label>
-                  <input type="text" id="inv_ae_name" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_ae_email"><i class="fas fa-envelope"></i> AE Email</label>
-                  <input type="email" id="inv_ae_email" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_ae_phone"><i class="fas fa-phone"></i> AE Phone</label>
-                  <input type="tel" id="inv_ae_phone" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_states"><i class="fas fa-map-marked-alt"></i> States</label>
-                  <input type="text" id="inv_states" class="form-input" placeholder="e.g. CO, TX, CA" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_bestPrograms"><i class="fas fa-star"></i> Best Programs</label>
-                  <input type="text" id="inv_bestPrograms" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_minimumFico"><i class="fas fa-chart-bar"></i> Minimum FICO</label>
-                  <input type="text" id="inv_minimumFico" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_inHouseDpa"><i class="fas fa-hand-holding-usd"></i> In-house DPA</label>
-                  <input type="text" id="inv_inHouseDpa" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_epo"><i class="fas fa-clock"></i> EPO</label>
-                  <input type="text" id="inv_epo" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_maxComp"><i class="fas fa-dollar-sign"></i> Max Comp</label>
-                  <input type="number" id="inv_maxComp" class="form-input" step="0.01" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_docReviewForWireRelease"><i class="fas fa-file-invoice"></i> Doc Review for Wire Release</label>
-                  <input type="text" id="inv_docReviewForWireRelease" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_remoteClosingReview"><i class="fas fa-laptop-house"></i> Remote Closing Review</label>
-                  <input type="text" id="inv_remoteClosingReview" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label for="inv_websiteUrl"><i class="fas fa-globe"></i> Link to Website</label>
-                  <input type="url" id="inv_websiteUrl" class="form-input" placeholder="https://..." />
-                </div>
-                <div class="form-group form-group-full inv-logo-upload-group">
-                  <label><i class="fas fa-image"></i> Logo</label>
-                  <div class="inv-logo-upload-area" id="invLogoUploadArea">
-                    <img id="invLogoPreview" class="inv-logo-preview" alt="" style="display:none;" />
-                    <div id="invLogoPlaceholder" class="inv-logo-placeholder">
-                      <i class="fas fa-cloud-upload-alt"></i>
-                      <span>Click or drag to upload logo</span>
-                    </div>
-                    <input type="file" id="invLogoFileInput" accept="image/*" style="display:none;" />
-                    <button type="button" id="invLogoRemoveBtn" class="btn btn-sm btn-danger inv-logo-remove-btn" style="display:none;" title="Remove logo">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                  </div>
-                </div>
-                <div class="form-group form-group-full">
-                  <label for="inv_notes"><i class="fas fa-note-sticky"></i> Notes</label>
-                  <textarea id="inv_notes" class="form-input" rows="3"></textarea>
-                </div>
-              </div>
-
-              <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="manageFormCancelBtn">Cancel</button>
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Investor</button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-      </div>
-    </div>
-
     <!-- Manage Tags Modal -->
     <div id="manageTagsModal" class="investor-modal" aria-hidden="true">
       <div class="modal-content" style="max-width: 520px;">

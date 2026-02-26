@@ -424,6 +424,43 @@ body {
   display: block;
 }
 
+/* ── Investor Profile Sections (scoped) ── */
+.inv-profile-section {
+  display: none;
+}
+
+.inv-profile-section.active {
+  display: block;
+}
+
+/* Repeatable row (team members, clauses) */
+.inv-repeatable-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  padding: 10px 0;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.inv-repeatable-row input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .15s;
+}
+
+.inv-repeatable-row input:focus {
+  border-color: var(--msfg-teal);
+}
+
+.inv-clause-row {
+  grid-template-columns: 1fr 1fr 2fr auto;
+}
+
 /* ── Avatar ── */
 .avatar-container {
   width: 120px;

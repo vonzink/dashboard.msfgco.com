@@ -308,20 +308,36 @@
        TAB: Investors
   ================================================ -->
   <div class="admin-panel" id="panel-investors">
-    <div class="toolbar">
+    <div class="toolbar" id="investorListToolbar">
       <h3 style="margin:0; font-size:16px; color:#104547;">
         <i class="fas fa-landmark"></i> Investor Database
       </h3>
       <div class="toolbar-right">
-        <a href="/index.html" class="btn btn-secondary" target="_opener" onclick="window.opener && window.opener.Investors && window.opener.Investors.showManageModal(); return false;">
-          <i class="fas fa-external-link-alt"></i> Open Manage Investors
-        </a>
+        <button class="btn btn-primary" id="addInvestorBtn">
+          <i class="fas fa-plus"></i> Add Investor
+        </button>
       </div>
     </div>
-    <p style="color:#888; font-size:14px;">
-      Investors are managed from the main dashboard's Investor Database panel.
-      Click the button above to open the Manage Investors modal on the dashboard.
-    </p>
+
+    <!-- Add/Edit Form (quick create) -->
+    <div class="admin-form" id="investorQuickForm">
+      <h4 style="margin:0 0 14px; font-size:14px;" id="investorQuickFormTitle">Add Investor</h4>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="invNameInput">Investor Name</label>
+          <input type="text" id="invNameInput" placeholder="e.g. Pennymac" required />
+        </div>
+        <div class="form-group">
+          <label for="invAeNameInput">Account Executive</label>
+          <input type="text" id="invAeNameInput" placeholder="Name" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="invQuickCancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="invQuickSaveBtn"><i class="fas fa-save"></i> Save</button>
+      </div>
+    </div>
+
     <table class="admin-table" id="investorsTable">
       <thead>
         <tr>
@@ -329,12 +345,181 @@
           <th>Account Executive</th>
           <th>States</th>
           <th>Best Programs</th>
+          <th style="width:140px;">Actions</th>
         </tr>
       </thead>
       <tbody id="investorsBody">
-        <tr><td colspan="4" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+        <tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
       </tbody>
     </table>
+
+    <!-- Investor Profile Detail View (hidden by default) -->
+    <div id="investorProfileView" style="display:none;">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-arrow-left" id="invProfileBackBtn" style="cursor:pointer; margin-right:8px;" title="Back to list"></i>
+          <span id="invProfileTitle">Investor Profile</span>
+        </h3>
+      </div>
+
+      <!-- Investor Sub-Tabs -->
+      <div class="profile-tabs" id="invProfileTabs">
+        <button class="profile-tab active" data-inv-tab="inv-basic"><i class="fas fa-info-circle"></i> Basic Info</button>
+        <button class="profile-tab" data-inv-tab="inv-team"><i class="fas fa-users"></i> Team</button>
+        <button class="profile-tab" data-inv-tab="inv-lender"><i class="fas fa-id-card"></i> Lender IDs</button>
+        <button class="profile-tab" data-inv-tab="inv-clauses"><i class="fas fa-file-contract"></i> Mortgagee Clauses</button>
+        <button class="profile-tab" data-inv-tab="inv-links"><i class="fas fa-link"></i> Links</button>
+      </div>
+
+      <!-- ── SUB-TAB: Basic Info ── -->
+      <div class="inv-profile-section active" id="inv-basic">
+        <div style="display:flex; gap:24px; align-items:flex-start;">
+          <!-- Logo -->
+          <div style="flex-shrink:0; text-align:center; min-width:160px;">
+            <div class="avatar-container" id="invLogoContainer" style="width:140px; height:140px; border-radius:12px; cursor:pointer;" title="Click to upload logo">
+              <img id="invProfileLogoImg" src="" alt="" style="display:none; width:140px; height:140px; border-radius:12px; object-fit:contain;" />
+              <div id="invProfileLogoPlaceholder" style="font-size:14px; color:#999;"><i class="fas fa-building" style="font-size:36px; display:block; margin-bottom:6px;"></i>No Logo</div>
+            </div>
+            <div style="margin-top:8px; display:flex; gap:4px; justify-content:center;">
+              <button class="btn btn-sm btn-secondary" id="invLogoUploadBtn2"><i class="fas fa-camera"></i> Upload</button>
+              <button class="btn btn-sm btn-danger" id="invLogoRemoveBtn2" style="display:none;"><i class="fas fa-trash"></i></button>
+            </div>
+            <input type="file" id="invLogoFileInput2" accept="image/*" style="display:none;" />
+            <p id="invProfileName" style="font-size:16px; font-weight:700; margin:12px 0 0; color:#104547;"></p>
+          </div>
+          <!-- Editable Fields -->
+          <div style="flex:1;">
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Investor Name</label>
+                <input type="text" id="invEditName" />
+              </div>
+              <div class="form-group">
+                <label>AE Name</label>
+                <input type="text" id="invEditAeName" />
+              </div>
+              <div class="form-group">
+                <label>AE Email</label>
+                <input type="email" id="invEditAeEmail" />
+              </div>
+              <div class="form-group">
+                <label>AE Phone</label>
+                <input type="tel" id="invEditAePhone" />
+              </div>
+              <div class="form-group">
+                <label>States</label>
+                <input type="text" id="invEditStates" placeholder="e.g. CO, TX, FL" />
+              </div>
+              <div class="form-group">
+                <label>Best Programs</label>
+                <input type="text" id="invEditBestPrograms" />
+              </div>
+              <div class="form-group">
+                <label>Minimum FICO</label>
+                <input type="text" id="invEditMinFico" />
+              </div>
+              <div class="form-group">
+                <label>In-house DPA</label>
+                <input type="text" id="invEditDpa" />
+              </div>
+              <div class="form-group">
+                <label>EPO</label>
+                <input type="text" id="invEditEpo" />
+              </div>
+              <div class="form-group">
+                <label>Max Comp</label>
+                <input type="number" id="invEditMaxComp" step="0.01" />
+              </div>
+              <div class="form-group">
+                <label>Doc Review for Wire Release</label>
+                <input type="text" id="invEditDocReview" />
+              </div>
+              <div class="form-group">
+                <label>Remote Closing Review</label>
+                <input type="text" id="invEditRemoteClosing" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" id="invBasicSaveBtn"><i class="fas fa-save"></i> Save Basic Info</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Team ── -->
+      <div class="inv-profile-section" id="inv-team">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <p style="margin:0; font-size:13px; color:#888;">Manage team members for this investor.</p>
+          <button class="btn btn-sm btn-primary" id="invAddTeamMemberBtn"><i class="fas fa-plus"></i> Add Member</button>
+        </div>
+        <div id="invTeamRows"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="invTeamSaveBtn"><i class="fas fa-save"></i> Save Team</button>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Lender IDs ── -->
+      <div class="inv-profile-section" id="inv-lender">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>FHA Lender ID</label>
+            <input type="text" id="invEditFhaId" placeholder="e.g. 12345-0000-0" />
+          </div>
+          <div class="form-group">
+            <label>VA Lender ID</label>
+            <input type="text" id="invEditVaId" placeholder="e.g. 678900" />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="invLenderSaveBtn"><i class="fas fa-save"></i> Save Lender IDs</button>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Mortgagee Clauses ── -->
+      <div class="inv-profile-section" id="inv-clauses">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <p style="margin:0; font-size:13px; color:#888;">Manage mortgagee clauses for this investor.</p>
+          <button class="btn btn-sm btn-primary" id="invAddClauseBtn"><i class="fas fa-plus"></i> Add Clause</button>
+        </div>
+        <div id="invClauseRows"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="invClausesSaveBtn"><i class="fas fa-save"></i> Save Clauses</button>
+        </div>
+      </div>
+
+      <!-- ── SUB-TAB: Links ── -->
+      <div class="inv-profile-section" id="inv-links">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Website</label>
+            <input type="url" id="invLinkWebsite" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>Login Portal</label>
+            <input type="url" id="invLinkLogin" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>Flex Site</label>
+            <input type="url" id="invLinkFlexSite" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>FAQ Page</label>
+            <input type="url" id="invLinkFaq" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>Appraisal Video</label>
+            <input type="url" id="invLinkAppraisal" placeholder="https://..." />
+          </div>
+          <div class="form-group">
+            <label>New Scenarios (email)</label>
+            <input type="text" id="invLinkScenarios" placeholder="mailto:..." />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="invLinksSaveBtn"><i class="fas fa-save"></i> Save Links</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ================================================
@@ -794,8 +979,8 @@
       document.getElementById('profileTitle').textContent = (profileUserObj ? profileUserObj.name : 'Employee') + ' — Profile';
 
       // Reset to Basic Info tab
-      document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.profile-section').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('#profileTabs .profile-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('#employeeProfileView .profile-section').forEach(p => p.classList.remove('active'));
       document.querySelector('[data-ptab="basic"]').classList.add('active');
       document.getElementById('ptab-basic').classList.add('active');
 
@@ -821,11 +1006,11 @@
     // Back button
     document.getElementById('profileBackBtn').addEventListener('click', hideProfile);
 
-    // Profile sub-tab switching
-    document.querySelectorAll('.profile-tab').forEach(tab => {
+    // Profile sub-tab switching (scoped to employee profile)
+    document.querySelectorAll('#profileTabs .profile-tab').forEach(tab => {
       tab.addEventListener('click', () => {
-        document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.profile-section').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('#profileTabs .profile-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#employeeProfileView .profile-section').forEach(p => p.classList.remove('active'));
         tab.classList.add('active');
         document.getElementById('ptab-' + tab.dataset.ptab).classList.add('active');
 
@@ -1293,30 +1478,424 @@
     /* ═══════════════════════════════════════
        INVESTORS TAB
     ═══════════════════════════════════════ */
+    let investorsList = [];
+    let currentInvestorId = null;
+    let currentInvestorData = null;
+
     async function loadInvestors() {
       const tbody = document.getElementById('investorsBody');
-      tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>';
 
       try {
         const investors = await api('/investors');
         if (!investors) return;
+        investorsList = investors;
 
         if (investors.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#999;">No investors.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" class="state-msg"><p>No investors.</p></td></tr>';
           return;
         }
 
         tbody.innerHTML = investors.map(inv =>
-          '<tr>' +
+          '<tr data-inv-id="' + inv.id + '">' +
           '<td><strong>' + escHtml(inv.name) + '</strong></td>' +
           '<td>' + escHtml(inv.account_executive_name || '--') + '</td>' +
           '<td>' + escHtml(inv.states || '--') + '</td>' +
           '<td>' + escHtml(inv.best_programs || '--') + '</td>' +
+          '<td>' +
+            '<button class="btn btn-sm btn-secondary inv-edit-btn" data-key="' + escHtml(inv.investor_key) + '" title="Edit"><i class="fas fa-pen"></i></button> ' +
+            '<button class="btn btn-sm btn-danger inv-delete-btn" data-id="' + inv.id + '" data-name="' + escHtml(inv.name) + '" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>' +
           '</tr>'
         ).join('');
+
+        // Edit buttons → open profile
+        tbody.querySelectorAll('.inv-edit-btn').forEach(btn => {
+          btn.addEventListener('click', () => showInvestorProfile(btn.dataset.key));
+        });
+
+        // Delete buttons
+        tbody.querySelectorAll('.inv-delete-btn').forEach(btn => {
+          btn.addEventListener('click', () => deleteInvestor(btn.dataset.id, btn.dataset.name));
+        });
       } catch (err) {
         console.error('Load investors error:', err);
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#e74c3c;">Failed to load investors.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="state-msg" style="color:#e74c3c;"><p>Failed to load investors.</p></td></tr>';
+      }
+    }
+
+    // --- Quick Add / Edit form ---
+    const invQuickForm = document.getElementById('investorQuickForm');
+    const invQuickFormTitle = document.getElementById('investorQuickFormTitle');
+
+    document.getElementById('addInvestorBtn').addEventListener('click', () => {
+      document.getElementById('invNameInput').value = '';
+      document.getElementById('invAeNameInput').value = '';
+      invQuickFormTitle.textContent = 'Add Investor';
+      invQuickForm.classList.add('active');
+    });
+
+    document.getElementById('invQuickCancelBtn').addEventListener('click', () => {
+      invQuickForm.classList.remove('active');
+    });
+
+    document.getElementById('invQuickSaveBtn').addEventListener('click', async () => {
+      const name = document.getElementById('invNameInput').value.trim();
+      if (!name) return alert('Please enter an investor name.');
+
+      try {
+        await api('/investors', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: name,
+            account_executive_name: document.getElementById('invAeNameInput').value.trim() || null,
+          }),
+        });
+        invQuickForm.classList.remove('active');
+        loadInvestors();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    async function deleteInvestor(id, name) {
+      if (!confirm('Delete investor "' + name + '"? This cannot be undone.')) return;
+      try {
+        await api('/investors/' + id, { method: 'DELETE' });
+        loadInvestors();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // --- Investor Profile Detail View ---
+    async function showInvestorProfile(investorKey) {
+      try {
+        const data = await api('/investors/' + encodeURIComponent(investorKey));
+        if (!data) return;
+
+        currentInvestorData = data;
+        currentInvestorId = data.id;
+
+        // Hide table, show profile
+        document.getElementById('investorsTable').style.display = 'none';
+        document.getElementById('investorListToolbar').style.display = 'none';
+        invQuickForm.classList.remove('active');
+        document.getElementById('investorProfileView').style.display = 'block';
+        document.getElementById('invProfileTitle').textContent = data.name + ' — Profile';
+        document.getElementById('invProfileName').textContent = data.name;
+
+        // Reset sub-tabs to Basic Info
+        document.querySelectorAll('#invProfileTabs .profile-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.inv-profile-section').forEach(p => p.classList.remove('active'));
+        document.querySelector('[data-inv-tab="inv-basic"]').classList.add('active');
+        document.getElementById('inv-basic').classList.add('active');
+
+        // Populate Basic Info
+        populateInvestorBasicInfo(data);
+
+        // Populate sub-sections
+        populateInvestorTeam(data.team || []);
+        populateInvestorLenderIds(data.lenderIds || {});
+        populateInvestorClauses(data.mortgageeClauses || []);
+        populateInvestorLinks(data.links || []);
+
+        // Logo
+        loadInvestorLogo(data);
+      } catch (err) {
+        alert('Error loading investor: ' + err.message);
+      }
+    }
+
+    function hideInvestorProfile() {
+      document.getElementById('investorProfileView').style.display = 'none';
+      document.getElementById('investorsTable').style.display = '';
+      document.getElementById('investorListToolbar').style.display = '';
+      currentInvestorId = null;
+      currentInvestorData = null;
+    }
+
+    // Back button
+    document.getElementById('invProfileBackBtn').addEventListener('click', () => {
+      hideInvestorProfile();
+      loadInvestors();
+    });
+
+    // Investor sub-tab switching (scoped to investor profile)
+    document.querySelectorAll('#invProfileTabs .profile-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#invProfileTabs .profile-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.inv-profile-section').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.invTab).classList.add('active');
+      });
+    });
+
+    // --- Populate Basic Info ---
+    function populateInvestorBasicInfo(data) {
+      document.getElementById('invEditName').value = data.name || '';
+      document.getElementById('invEditAeName').value = data.account_executive_name || '';
+      document.getElementById('invEditAeEmail').value = data.account_executive_email || '';
+      document.getElementById('invEditAePhone').value = data.account_executive_phone || '';
+      document.getElementById('invEditStates').value = data.states || '';
+      document.getElementById('invEditBestPrograms').value = data.best_programs || '';
+      document.getElementById('invEditMinFico').value = data.min_fico || '';
+      document.getElementById('invEditDpa').value = data.in_house_dpa || '';
+      document.getElementById('invEditEpo').value = data.epo || '';
+      document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
+      document.getElementById('invEditDocReview').value = data.doc_review_for_wire_release || '';
+      document.getElementById('invEditRemoteClosing').value = data.remote_closing_review || '';
+    }
+
+    // Save Basic Info
+    document.getElementById('invBasicSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      try {
+        await api('/investors/' + currentInvestorId, {
+          method: 'PUT',
+          body: JSON.stringify({
+            name: document.getElementById('invEditName').value.trim(),
+            account_executive_name: document.getElementById('invEditAeName').value.trim() || null,
+            account_executive_email: document.getElementById('invEditAeEmail').value.trim() || null,
+            account_executive_phone: document.getElementById('invEditAePhone').value.trim() || null,
+            states: document.getElementById('invEditStates').value.trim() || null,
+            best_programs: document.getElementById('invEditBestPrograms').value.trim() || null,
+            min_fico: document.getElementById('invEditMinFico').value.trim() || null,
+            in_house_dpa: document.getElementById('invEditDpa').value.trim() || null,
+            epo: document.getElementById('invEditEpo').value.trim() || null,
+            max_comp: document.getElementById('invEditMaxComp').value || null,
+            doc_review_for_wire_release: document.getElementById('invEditDocReview').value.trim() || null,
+            remote_closing_review: document.getElementById('invEditRemoteClosing').value.trim() || null,
+          }),
+        });
+        document.getElementById('invProfileTitle').textContent = document.getElementById('invEditName').value.trim() + ' — Profile';
+        document.getElementById('invProfileName').textContent = document.getElementById('invEditName').value.trim();
+        alert('Basic info saved!');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Logo ---
+    function loadInvestorLogo(data) {
+      const img = document.getElementById('invProfileLogoImg');
+      const placeholder = document.getElementById('invProfileLogoPlaceholder');
+      const removeBtn = document.getElementById('invLogoRemoveBtn2');
+
+      if (data.logo_url) {
+        img.src = data.logo_url;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = '';
+      } else {
+        img.style.display = 'none';
+        img.src = '';
+        placeholder.style.display = '';
+        removeBtn.style.display = 'none';
+      }
+    }
+
+    document.getElementById('invLogoUploadBtn2').addEventListener('click', () => {
+      document.getElementById('invLogoFileInput2').click();
+    });
+
+    document.getElementById('invLogoFileInput2').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !currentInvestorId) return;
+      try {
+        const { uploadUrl, fileKey } = await api('/investors/' + currentInvestorId + '/logo/upload-url', {
+          method: 'POST',
+          body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+        });
+        await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+        const result = await api('/investors/' + currentInvestorId + '/logo/confirm', {
+          method: 'PUT',
+          body: JSON.stringify({ fileKey }),
+        });
+        loadInvestorLogo({ logo_url: result.logo_url });
+      } catch (err) {
+        alert('Logo upload failed: ' + err.message);
+      }
+      e.target.value = '';
+    });
+
+    document.getElementById('invLogoRemoveBtn2').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      if (!confirm('Remove logo?')) return;
+      try {
+        await api('/investors/' + currentInvestorId + '/logo', { method: 'DELETE' });
+        loadInvestorLogo({});
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Team ---
+    function populateInvestorTeam(team) {
+      const container = document.getElementById('invTeamRows');
+      container.innerHTML = '';
+      if (team.length === 0) {
+        addTeamMemberRow(container);
+        return;
+      }
+      team.forEach(m => addTeamMemberRow(container, m));
+    }
+
+    function addTeamMemberRow(container, data) {
+      container = container || document.getElementById('invTeamRows');
+      const row = document.createElement('div');
+      row.className = 'inv-repeatable-row';
+      row.innerHTML =
+        '<input type="text" placeholder="Role" value="' + escHtml((data && data.role) || '') + '" data-field="role" />' +
+        '<input type="text" placeholder="Name" value="' + escHtml((data && data.name) || '') + '" data-field="name" />' +
+        '<input type="tel" placeholder="Phone" value="' + escHtml((data && data.phone) || '') + '" data-field="phone" />' +
+        '<input type="email" placeholder="Email" value="' + escHtml((data && data.email) || '') + '" data-field="email" />' +
+        '<button class="btn btn-sm btn-danger" title="Remove"><i class="fas fa-times"></i></button>';
+      row.querySelector('button').addEventListener('click', () => row.remove());
+      container.appendChild(row);
+    }
+
+    document.getElementById('invAddTeamMemberBtn').addEventListener('click', () => addTeamMemberRow());
+
+    document.getElementById('invTeamSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      const rows = document.querySelectorAll('#invTeamRows .inv-repeatable-row');
+      const team = [];
+      rows.forEach((row, i) => {
+        const role = row.querySelector('[data-field="role"]').value.trim();
+        const name = row.querySelector('[data-field="name"]').value.trim();
+        const phone = row.querySelector('[data-field="phone"]').value.trim();
+        const email = row.querySelector('[data-field="email"]').value.trim();
+        if (name || role) team.push({ role, name, phone, email, sort_order: i });
+      });
+      try {
+        await api('/investors/' + currentInvestorId + '/team', {
+          method: 'PUT',
+          body: JSON.stringify({ team }),
+        });
+        alert('Team saved!');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Lender IDs ---
+    function populateInvestorLenderIds(data) {
+      document.getElementById('invEditFhaId').value = data.fha_id || '';
+      document.getElementById('invEditVaId').value = data.va_id || '';
+    }
+
+    document.getElementById('invLenderSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      try {
+        await api('/investors/' + currentInvestorId + '/lender-ids', {
+          method: 'PUT',
+          body: JSON.stringify({
+            fha_id: document.getElementById('invEditFhaId').value.trim() || null,
+            va_id: document.getElementById('invEditVaId').value.trim() || null,
+          }),
+        });
+        alert('Lender IDs saved!');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Mortgagee Clauses ---
+    function populateInvestorClauses(clauses) {
+      const container = document.getElementById('invClauseRows');
+      container.innerHTML = '';
+      if (clauses.length === 0) {
+        addClauseRow(container);
+        return;
+      }
+      clauses.forEach(c => addClauseRow(container, c));
+    }
+
+    function addClauseRow(container, data) {
+      container = container || document.getElementById('invClauseRows');
+      const row = document.createElement('div');
+      row.className = 'inv-repeatable-row inv-clause-row';
+      row.innerHTML =
+        '<input type="text" placeholder="Name" value="' + escHtml((data && data.name) || '') + '" data-field="name" />' +
+        '<input type="text" placeholder="ISAOA" value="' + escHtml((data && data.isaoa) || '') + '" data-field="isaoa" />' +
+        '<input type="text" placeholder="Address" value="' + escHtml((data && data.address) || '') + '" data-field="address" />' +
+        '<button class="btn btn-sm btn-danger" title="Remove"><i class="fas fa-times"></i></button>';
+      row.querySelector('button').addEventListener('click', () => row.remove());
+      container.appendChild(row);
+    }
+
+    document.getElementById('invAddClauseBtn').addEventListener('click', () => addClauseRow());
+
+    document.getElementById('invClausesSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      const rows = document.querySelectorAll('#invClauseRows .inv-repeatable-row');
+      const clauses = [];
+      rows.forEach(row => {
+        const name = row.querySelector('[data-field="name"]').value.trim();
+        const isaoa = row.querySelector('[data-field="isaoa"]').value.trim();
+        const address = row.querySelector('[data-field="address"]').value.trim();
+        if (name) clauses.push({ name, isaoa, address });
+      });
+      try {
+        await api('/investors/' + currentInvestorId + '/mortgagee-clauses', {
+          method: 'PUT',
+          body: JSON.stringify({ clauses }),
+        });
+        alert('Mortgagee clauses saved!');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Links ---
+    const LINK_FIELDS = [
+      { type: 'website', id: 'invLinkWebsite' },
+      { type: 'login', id: 'invLinkLogin' },
+      { type: 'flex_site', id: 'invLinkFlexSite' },
+      { type: 'faq', id: 'invLinkFaq' },
+      { type: 'appraisal_video', id: 'invLinkAppraisal' },
+      { type: 'new_scenarios', id: 'invLinkScenarios' },
+    ];
+
+    function populateInvestorLinks(links) {
+      // Clear all
+      LINK_FIELDS.forEach(f => { document.getElementById(f.id).value = ''; });
+      // Fill from data
+      links.forEach(link => {
+        const field = LINK_FIELDS.find(f => f.type === link.link_type);
+        if (field) document.getElementById(field.id).value = link.url || '';
+      });
+    }
+
+    document.getElementById('invLinksSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      const links = [];
+      LINK_FIELDS.forEach(f => {
+        const url = document.getElementById(f.id).value.trim();
+        if (url) links.push({ link_type: f.type, url: url });
+      });
+      try {
+        await api('/investors/' + currentInvestorId + '/links', {
+          method: 'PUT',
+          body: JSON.stringify({ links }),
+        });
+        alert('Links saved!');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Hash routing for deep-link ---
+    function checkInvestorHash() {
+      const hash = window.location.hash;
+      if (hash === '#investors') {
+        // Switch to investors tab
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+        document.querySelector('[data-tab="investors"]').classList.add('active');
+        document.getElementById('panel-investors').classList.add('active');
+        loadInvestors();
       }
     }
 
@@ -1901,8 +2480,11 @@
         }
 
         // Hash-based deep linking
-        if (window.location.hash === '#monday') {
+        var hash = window.location.hash;
+        if (hash === '#monday') {
           document.querySelector('[data-tab="monday"]').click();
+        } else if (hash === '#investors') {
+          document.querySelector('[data-tab="investors"]').click();
         } else {
           loadUsers();
         }
