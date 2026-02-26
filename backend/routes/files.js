@@ -4,6 +4,9 @@ const router = express.Router();
 const { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
+const { requireDbUser } = require('../middleware/userContext');
+
+router.use(requireDbUser);
 
 // Use default credential chain (~/.aws/credentials) — no explicit keys needed.
 // Falls back to env vars, EC2 instance role, etc. if shared creds file absent.

@@ -9,6 +9,8 @@ const rateLimit = require('express-rate-limit');
 
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
+const logger = require('./lib/logger');
+const pinoHttp = require('pino-http');
 
 // Route imports
 const investorsRoutes = require('./routes/investors');
@@ -80,6 +82,9 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Request logging
+app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -142,7 +147,7 @@ app.use('/api/calendar-events', authenticate, calendarEventsRoutes);
 // ERROR HANDLING
 // ======================
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  logger.error({ err }, 'Unhandled error');
   
   // Don't leak error details in production
   const message = process.env.NODE_ENV === 'production' 
@@ -166,25 +171,23 @@ app.use((req, res) => {
 async function startServer() {
   try {
     await db.ping();
-    console.log('✓ Database connection successful');
-    
+    logger.info('Database connection successful');
+
     const migrations = require('./db/migrations');
     await migrations.runMigrations();
-    console.log('✓ Database migrations completed');
-    
+    logger.info('Database migrations completed');
+
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`✓ Server running on http://0.0.0.0:${PORT}`);
-      console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`✓ Allowed origins: ${allowedOrigins.join(', ')}`);
+      logger.info({ port: PORT, env: process.env.NODE_ENV || 'development', origins: allowedOrigins }, 'Server started');
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.fatal({ err: error }, 'Failed to start server');
     process.exit(1);
   }
 }
 
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
+  logger.info('SIGTERM received, shutting down gracefully');
   await db.close();
   process.exit(0);
 });

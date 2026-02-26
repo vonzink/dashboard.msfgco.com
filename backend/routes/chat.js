@@ -2,7 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getUserId } = require('../middleware/userContext');
+const { requireDbUser, getUserId } = require('../middleware/userContext');
+const { chatMessage, validate } = require('../validation/schemas');
+
+router.use(requireDbUser);
 
 // ──────────────────────────────────────────────
 // TAGS
@@ -114,12 +117,9 @@ router.get('/messages', async (req, res, next) => {
 });
 
 // POST /api/chat/messages — send a message
-router.post('/messages', async (req, res, next) => {
+router.post('/messages', validate(chatMessage), async (req, res, next) => {
   try {
     const { message, tag_ids } = req.body;
-    if (!message || !message.trim()) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
 
     const userId = getUserId(req);
     const user = req.user?.db || {};

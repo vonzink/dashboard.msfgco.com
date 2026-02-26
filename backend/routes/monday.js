@@ -42,7 +42,7 @@ const {
   getBoardSection,
   mondayQuery,
   syncAllBoards,
-} = require('../services/mondaySync');
+} = require('../services/monday');
 
 router.use(requireDbUser);
 

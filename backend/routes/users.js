@@ -2,6 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
+const { requireDbUser } = require('../middleware/userContext');
+
+router.use(requireDbUser);
 
 // GET /api/users/directory — active employees (name, email, role, initials)
 router.get('/directory', async (req, res, next) => {

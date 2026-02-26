@@ -2,6 +2,7 @@
 // Updated to use the auth middleware
 const { getUserFromApiKey } = require('./auth');
 const db = require('../db/connection');
+const logger = require('../lib/logger');
 
 async function validateApiKey(req, res, next) {
   try {
@@ -29,7 +30,7 @@ async function validateApiKey(req, res, next) {
     
     next();
   } catch (error) {
-    console.error('API key validation error:', error);
+    logger.error({ err: error }, 'API key validation error');
     res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -62,7 +63,7 @@ async function logRequest(req, statusCode, responseBody) {
       ]
     );
   } catch (error) {
-    console.error('Failed to log webhook call:', error);
+    logger.error({ err: error }, 'Failed to log webhook call');
   }
 }
 

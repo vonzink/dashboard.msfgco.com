@@ -2,8 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { isAdmin, requireAdmin } = require('../middleware/userContext');
+const { requireDbUser, isAdmin, requireAdmin } = require('../middleware/userContext');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject, buildMediaKey } = require('../services/s3');
+
+router.use(requireDbUser);
 
 /**
  * Detect whether logo_url is an S3 key (needs presigned URL) or an external URL.

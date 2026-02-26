@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getDbUser, getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { preApproval, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -58,13 +59,9 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/pre-approvals - Create new pre-approval
-router.post('/', async (req, res, next) => {
+router.post('/', validate(preApproval), async (req, res, next) => {
   try {
     const { client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes } = req.body;
-    
-    if (!client_name || !loan_amount || !pre_approval_date || !expiration_date) {
-      return res.status(400).json({ error: 'client_name, loan_amount, pre_approval_date, and expiration_date are required' });
-    }
     
     const dbUser = getDbUser(req);
     const currentUserId = getUserId(req);

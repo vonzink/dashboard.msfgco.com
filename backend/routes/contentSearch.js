@@ -6,6 +6,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
+const { requireDbUser } = require('../middleware/userContext');
+
+router.use(requireDbUser);
 
 const GOOGLE_SUGGEST_URL = 'https://suggestqueries.google.com/complete/search';
 const BATCH_SIZE = 5;

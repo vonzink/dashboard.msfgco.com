@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getDbUser, getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { pipelineUpdate, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -94,7 +95,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /api/pipeline/:id - Update pipeline item
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
   try {
     const {
       client_name, loan_amount, loan_type, stage, target_close_date,

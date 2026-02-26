@@ -4,6 +4,9 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
+const { requireDbUser } = require('../middleware/userContext');
+
+router.use(requireDbUser);
 
 // ========================================
 // HELPER FUNCTIONS

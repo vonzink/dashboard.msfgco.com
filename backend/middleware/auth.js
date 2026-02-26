@@ -8,13 +8,16 @@
  * 3. Attaches req.user.db  =  { id, email, name, role }
  *
  * Exports:
- *   authenticate  – Express middleware (JWT + DB lookup)
- *   isAdmin       – helper: isAdmin(req) → boolean
- *   getUserFromApiKey – look up a user row by API key string
+ *   authenticate       – Express middleware (JWT + DB lookup)
+ *   getUserFromApiKey   – look up a user row by API key string
+ *
+ * Note: isAdmin / requireAdmin / requireDbUser live in middleware/userContext.js
+ *       (single source of truth for role helpers).
  */
 
 const db = require('../db/connection');
 const { requireAuth } = require('../auth/middleware');
+const logger = require('../lib/logger');
 
 // Cognito JWT verification middleware (handles 401 on failure)
 const cognitoAuth = requireAuth();
@@ -61,40 +64,19 @@ function authenticate(req, res, next) {
         // Backfill cognito_sub if we found the user by email but sub isn't stored yet
         if (sub && !users[0].cognito_sub) {
           db.query('UPDATE users SET cognito_sub = ? WHERE id = ?', [sub, users[0].id])
-            .catch(err => console.warn('cognito_sub backfill failed:', err.message));
+            .catch(err => logger.warn({ err }, 'cognito_sub backfill failed'));
         }
       } else {
-        console.warn('Auth: JWT valid but no DB user found for email=%s sub=%s', email, sub);
+        logger.warn({ email, sub }, 'JWT valid but no DB user found');
       }
 
       next();
     } catch (dbErr) {
-      console.error('DB user lookup error:', dbErr.message);
+      logger.error({ err: dbErr }, 'DB user lookup error');
       // Still allow the request — JWT is valid, but downstream should check req.user.db
       next();
     }
   });
-}
-
-/**
- * Check if the current request user is an admin (from DB record).
- */
-function isAdmin(req) {
-  const role = String(req.user?.db?.role || '').toLowerCase();
-  return role === 'admin';
-}
-
-/**
- * Express middleware: reject with 403 if user is not an admin.
- * Use after `authenticate` on routes that require admin access.
- *
- *   router.post('/', requireAdmin, handler);
- */
-function requireAdmin(req, res, next) {
-  if (!isAdmin(req)) {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
 }
 
 /**
@@ -123,15 +105,13 @@ async function getUserFromApiKey(apiKey) {
       apiKeyName: keys[0].key_name,
     };
   } catch (error) {
-    console.error('Error getting user from API key:', error);
+    logger.error({ err: error }, 'Error getting user from API key');
     return null;
   }
 }
 
 module.exports = {
   authenticate,
-  isAdmin,
-  requireAdmin,
   getUserFromApiKey,
 };
 

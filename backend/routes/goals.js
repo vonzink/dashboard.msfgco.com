@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { goalsUpdate, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -40,7 +41,7 @@ router.get('/', async (req, res, next) => {
 });
 
 // PUT /api/goals - Update or create goals
-router.put('/', async (req, res, next) => {
+router.put('/', validate(goalsUpdate), async (req, res, next) => {
   try {
     const goals = Array.isArray(req.body) ? req.body : [req.body];
     const results = [];

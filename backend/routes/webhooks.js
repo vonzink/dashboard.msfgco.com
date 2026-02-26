@@ -3,132 +3,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { validateApiKey, logWebhookCall } = require('../middleware/apiKeyAuth');
+const {
+  isTerminalStatus, isDeleteStatus, isFundedStatus,
+  moveLoanToFunded, deletePipelineLoan,
+} = require('../services/loanLifecycle');
+const logger = require('../lib/logger');
 
 // Apply API key authentication to all webhook routes
 router.use(validateApiKey);
 router.use(logWebhookCall);
-
-// ========================================
-// TERMINAL STATUS CONSTANTS
-// ========================================
-const TERMINAL_STATUSES = {
-  FUNDED: 'funded',
-  WITHDRAWN: 'withdrawn',
-  INCOMPLETE: 'incomplete',
-  DENIED: 'denied',
-  NOT_ACCEPTED: 'not accepted'
-};
-
-// Statuses that trigger deletion (no archive)
-const DELETE_STATUSES = [
-  TERMINAL_STATUSES.WITHDRAWN,
-  TERMINAL_STATUSES.INCOMPLETE,
-  TERMINAL_STATUSES.DENIED,
-  TERMINAL_STATUSES.NOT_ACCEPTED
-];
-
-/**
- * Check if a status is terminal (funded or delete-worthy)
- */
-function isTerminalStatus(status) {
-  if (!status) return false;
-  const normalized = status.toLowerCase().trim();
-  return normalized === TERMINAL_STATUSES.FUNDED || DELETE_STATUSES.includes(normalized);
-}
-
-/**
- * Check if status should trigger deletion
- */
-function isDeleteStatus(status) {
-  if (!status) return false;
-  const normalized = status.toLowerCase().trim();
-  return DELETE_STATUSES.includes(normalized);
-}
-
-/**
- * Check if status is funded
- */
-function isFundedStatus(status) {
-  if (!status) return false;
-  return status.toLowerCase().trim() === TERMINAL_STATUSES.FUNDED;
-}
-
-/**
- * Move a pipeline loan to funded_loans table
- */
-async function moveLoanToFunded(pipelineId, fundedDate = null) {
-  // Get the pipeline record
-  const [loans] = await db.query('SELECT * FROM pipeline WHERE id = ?', [pipelineId]);
-  
-  if (loans.length === 0) {
-    throw new Error('Pipeline loan not found');
-  }
-  
-  const loan = loans[0];
-  
-  // Insert into funded_loans
-  const [result] = await db.query(
-    `INSERT INTO funded_loans 
-     (client_name, loan_amount, loan_type, funded_date, assigned_lo_id, assigned_lo_name, 
-      assigned_processor_id, investor, investor_id, property_address, notes, 
-      original_pipeline_id, source_system, external_loan_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      loan.client_name,
-      loan.loan_amount,
-      loan.loan_type,
-      fundedDate || new Date().toISOString().split('T')[0], // Use provided date or today
-      loan.assigned_lo_id,
-      loan.assigned_lo_name,
-      null, // assigned_processor_id - we'll look this up
-      loan.investor,
-      loan.investor_id,
-      null, // property_address - not in current pipeline schema
-      loan.notes,
-      loan.id,
-      loan.source_system || 'Zapier',
-      loan.external_loan_id
-    ]
-  );
-  
-  // If LO has an assigned processor, update the funded_loan record
-  if (loan.assigned_lo_id) {
-    const [assignments] = await db.query(
-      'SELECT processor_user_id FROM processor_lo_assignments WHERE lo_user_id = ?',
-      [loan.assigned_lo_id]
-    );
-    
-    if (assignments.length > 0) {
-      await db.query(
-        'UPDATE funded_loans SET assigned_processor_id = ? WHERE id = ?',
-        [assignments[0].processor_user_id, result.insertId]
-      );
-    }
-  }
-  
-  // Delete from pipeline
-  await db.query('DELETE FROM pipeline WHERE id = ?', [pipelineId]);
-  
-  // Return the funded loan record
-  const [fundedLoans] = await db.query('SELECT * FROM funded_loans WHERE id = ?', [result.insertId]);
-  return fundedLoans[0];
-}
-
-/**
- * Delete a pipeline loan (for withdrawn, incomplete, denied, not accepted)
- */
-async function deletePipelineLoan(pipelineId) {
-  const [loans] = await db.query('SELECT * FROM pipeline WHERE id = ?', [pipelineId]);
-  
-  if (loans.length === 0) {
-    return null;
-  }
-  
-  const loan = loans[0];
-  await db.query('DELETE FROM pipeline WHERE id = ?', [pipelineId]);
-  
-  return loan;
-}
 
 // ========================================
 // TASK WEBHOOKS
@@ -315,7 +198,7 @@ router.post('/pipeline', async (req, res, next) => {
         assignedLoId = users[0].id;
         assignedLoName = users[0].name;
       } else {
-        console.warn('No user found matching "' + assigned_lo + '", using API key owner');
+        logger.warn({ assigned_lo }, 'No user found matching name, using API key owner');
         assignedLoName = assigned_lo;
       }
     }
