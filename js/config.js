@@ -157,7 +157,7 @@
 
       keyword_explorer: "https://keywords.msfgco.com",
 
-      loan_calc_hub: "https://msfginfo.com/",
+      loan_calc_hub: "/calc/",
 
       ratesheet: "https://email.msfginfo.com"
     }
