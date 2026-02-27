@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/connection');
-const { getUserId, requireDbUser } = require('../middleware/userContext');
+const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 
 router.use(requireDbUser);
 
@@ -105,39 +105,45 @@ router.post('/', async (req, res, next) => {
 
 // PUT /api/calendar-events/:id - Update a calendar event
 // Query param: ?scope=single|all (default: single)
+// RBAC: owner or admin only
 router.put('/:id', async (req, res, next) => {
   try {
     const { title, who, start, end, allDay, notes, color } = req.body;
     const scope = req.query.scope || 'single';
+    const userId = getUserId(req);
 
-    if (scope === 'all') {
-      // Get the recurrence_group_id of this event
-      const [[event]] = await db.query('SELECT recurrence_group_id FROM calendar_events WHERE id=?', [req.params.id]);
-      if (!event || !event.recurrence_group_id) {
-        // No group — fall through to single update
-      } else {
-        // Update all in group (title, who, color, notes — not dates)
-        const [result] = await db.query(
-          `UPDATE calendar_events
-           SET title=?, who=?, notes=?, color=?
-           WHERE recurrence_group_id=?`,
-          [title, who || '', notes || '', color || '#104547', event.recurrence_group_id]
-        );
-        return res.json({ success: true, updated: result.affectedRows });
-      }
+    // Fetch event for ownership check
+    const [[event]] = await db.query(
+      'SELECT created_by, recurrence_group_id FROM calendar_events WHERE id=?',
+      [req.params.id]
+    );
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
     }
 
-    // Single update (original behavior)
+    // Ownership: must be creator or admin
+    if (event.created_by !== userId && !isAdmin(req)) {
+      return res.status(403).json({ error: 'You can only edit your own events' });
+    }
+
+    if (scope === 'all' && event.recurrence_group_id) {
+      // Update all in group (title, who, color, notes — not dates)
+      const [result] = await db.query(
+        `UPDATE calendar_events
+         SET title=?, who=?, notes=?, color=?
+         WHERE recurrence_group_id=?`,
+        [title, who || '', notes || '', color || '#104547', event.recurrence_group_id]
+      );
+      return res.json({ success: true, updated: result.affectedRows });
+    }
+
+    // Single update
     const [result] = await db.query(
       `UPDATE calendar_events
        SET title=?, who=?, start=?, end=?, allDay=?, notes=?, color=?
        WHERE id=?`,
       [title, who || '', start, end || null, allDay ? 1 : 0, notes || '', color || '#104547', req.params.id]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
 
     res.json({ success: true });
   } catch (error) {
@@ -147,19 +153,32 @@ router.put('/:id', async (req, res, next) => {
 
 // DELETE /api/calendar-events/:id - Delete a calendar event
 // Query param: ?scope=single|all (default: single)
+// RBAC: owner or admin only
 router.delete('/:id', async (req, res, next) => {
   try {
     const scope = req.query.scope || 'single';
+    const userId = getUserId(req);
 
-    if (scope === 'all') {
-      const [[event]] = await db.query('SELECT recurrence_group_id FROM calendar_events WHERE id=?', [req.params.id]);
-      if (event && event.recurrence_group_id) {
-        const [result] = await db.query(
-          'DELETE FROM calendar_events WHERE recurrence_group_id=?',
-          [event.recurrence_group_id]
-        );
-        return res.json({ success: true, deleted: result.affectedRows });
-      }
+    // Fetch event for ownership check
+    const [[event]] = await db.query(
+      'SELECT created_by, recurrence_group_id FROM calendar_events WHERE id=?',
+      [req.params.id]
+    );
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Ownership: must be creator or admin
+    if (event.created_by !== userId && !isAdmin(req)) {
+      return res.status(403).json({ error: 'You can only delete your own events' });
+    }
+
+    if (scope === 'all' && event.recurrence_group_id) {
+      const [result] = await db.query(
+        'DELETE FROM calendar_events WHERE recurrence_group_id=?',
+        [event.recurrence_group_id]
+      );
+      return res.json({ success: true, deleted: result.affectedRows });
     }
 
     // Single delete
@@ -167,10 +186,6 @@ router.delete('/:id', async (req, res, next) => {
       'DELETE FROM calendar_events WHERE id=?',
       [req.params.id]
     );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Event not found' });
-    }
 
     res.json({ success: true });
   } catch (error) {

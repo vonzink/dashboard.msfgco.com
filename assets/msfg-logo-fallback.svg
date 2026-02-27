@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80" fill="none">
+  <rect width="200" height="80" rx="8" fill="#104547"/>
+  <text x="100" y="36" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="28" fill="#8cc63e">MSFG</text>
+  <text x="100" y="56" text-anchor="middle" font-family="Arial,sans-serif" font-weight="400" font-size="11" fill="#ffffff" opacity="0.8">Home Loans</text>
+</svg>

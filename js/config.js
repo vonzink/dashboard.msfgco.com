@@ -94,6 +94,21 @@
     },
 
     // ========================================
+    // ASSETS
+    // ========================================
+    assets: {
+      logoFallback: '/assets/msfg-logo-fallback.svg',
+      logoMain: 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG+Home+Loans/MSFG+Clear+backdrop.png',
+    },
+
+    // ========================================
+    // ANNOUNCEMENTS
+    // ========================================
+    announcements: {
+      carouselMax: 10,
+    },
+
+    // ========================================
     // FEATURE FLAGS
     // ========================================
     features: {
@@ -158,6 +173,8 @@
   Object.freeze(CONFIG.chat);
   // NOTE: currentUser is NOT frozen — it is populated at runtime from /api/me
   // Object.freeze(CONFIG.currentUser);
+  Object.freeze(CONFIG.assets);
+  Object.freeze(CONFIG.announcements);
   Object.freeze(CONFIG.features);
   Object.freeze(CONFIG.storage);
   Object.freeze(CONFIG.links);

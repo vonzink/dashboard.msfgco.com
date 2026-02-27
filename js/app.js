@@ -22,6 +22,7 @@ const App = {
             ['Modals',         () => this.initModals()],
             ['Monday',         () => this.initMondaySettings()],
             ['Progress Bars',  () => this.initProgressBars()],
+            ['Collapsible',    () => this.initCollapsible()],
         ];
 
         for (const [name, initFn] of modules) {
@@ -92,6 +93,12 @@ const App = {
                 bar.style.transition = 'width 1s ease-out';
             });
         }, 500);
+    },
+
+    initCollapsible() {
+        if (typeof CollapsibleSections !== 'undefined') {
+            CollapsibleSections.init();
+        }
     },
 
     // ========================================

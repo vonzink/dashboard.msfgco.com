@@ -1,9 +1,10 @@
 // Investors API routes — full CRUD with admin guards
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const db = require('../db/connection');
 const { requireDbUser, isAdmin, requireAdmin } = require('../middleware/userContext');
-const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject, buildMediaKey } = require('../services/s3');
+const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../services/s3');
 
 router.use(requireDbUser);
 
@@ -251,15 +252,30 @@ router.delete('/:idOrKey', requireAdmin, async (req, res, next) => {
 
 // ──────────────────────────────────────────────
 // POST /api/investors/:id/logo/upload-url — Get presigned upload URL (admin only)
+// Accepts PNG, JPG/JPEG, SVG only. Max 5 MB.
 // ──────────────────────────────────────────────
+const ALLOWED_LOGO_TYPES = {
+  'image/png':      '.png',
+  'image/jpeg':     '.jpg',
+  'image/svg+xml':  '.svg',
+};
+const MAX_LOGO_BYTES = 5 * 1024 * 1024; // 5 MB
+
 router.post('/:id/logo/upload-url', requireAdmin, async (req, res, next) => {
   try {
     const investorId = req.params.id;
-    const { fileName, fileType } = req.body;
+    const { fileName, fileType, fileSize } = req.body;
 
     if (!fileName) return res.status(400).json({ error: 'fileName is required' });
-    if (!fileType || !fileType.startsWith('image/')) {
-      return res.status(400).json({ error: 'File must be an image' });
+
+    // Validate MIME type
+    if (!fileType || !ALLOWED_LOGO_TYPES[fileType]) {
+      return res.status(400).json({ error: 'Only PNG, JPG, and SVG images are allowed' });
+    }
+
+    // Validate file size (client-reported — enforced as a guard)
+    if (fileSize && fileSize > MAX_LOGO_BYTES) {
+      return res.status(400).json({ error: 'Logo must be under 5 MB' });
     }
 
     // Verify investor exists
@@ -268,7 +284,10 @@ router.post('/:id/logo/upload-url', requireAdmin, async (req, res, next) => {
       return res.status(404).json({ error: 'Investor not found' });
     }
 
-    const fileKey = buildMediaKey('investor-logos', investorId, fileName);
+    // Build S3 key: vendor/<investorId>/<uuid><ext>
+    const ext = ALLOWED_LOGO_TYPES[fileType];
+    const fileKey = `vendor/${investorId}/${crypto.randomUUID()}${ext}`;
+
     const result = await getUploadUrl(BUCKETS.media, fileKey, fileType);
     res.json(result);
   } catch (error) {
@@ -301,8 +320,8 @@ router.put('/:id/logo/confirm', requireAdmin, async (req, res, next) => {
     }
 
     // Return presigned URL for immediate display
-    const logoUrl = await resolveLogoUrl(fileKey);
-    res.json({ success: true, fileKey, logoUrl });
+    const logo_url = await resolveLogoUrl(fileKey);
+    res.json({ success: true, fileKey, logo_url });
   } catch (error) {
     next(error);
   }

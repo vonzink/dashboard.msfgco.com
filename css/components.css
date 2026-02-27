@@ -65,6 +65,54 @@
 
 .section-body {
     padding: var(--spacing-lg);
+    overflow: hidden;
+    transition: max-height 0.35s ease-in-out, padding-top 0.3s ease, padding-bottom 0.3s ease, opacity 0.25s ease;
+}
+
+.section-card.collapsed .section-body {
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+}
+
+/* ── Collapse Toggle Button ── */
+.section-collapse-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    transition: all var(--transition-fast);
+    flex-shrink: 0;
+    order: 99; /* push to end of section-actions */
+    margin-left: var(--spacing-sm);
+}
+
+.section-collapse-btn:hover {
+    background: var(--bg-primary);
+    color: var(--green-bright);
+    border-color: var(--green-bright);
+}
+
+.section-collapse-btn i {
+    transition: transform var(--transition-normal);
+}
+
+.section-card.collapsed .section-collapse-btn i {
+    transform: rotate(180deg);
+}
+
+.section-header[role="button"] {
+    cursor: pointer;
+}
+
+.section-title {
+    cursor: pointer;
 }
 
 /* ========================================

@@ -173,13 +173,15 @@ const Investors = {
     const nameEl = modal.querySelector('.investor-name');
     if (nameEl) nameEl.textContent = investor.name || 'Investor';
 
-    // Logo
+    // Logo — show investor logo or fallback to MSFG logo
     const logoEl = modal.querySelector('.investor-logo');
     if (logoEl) {
       const logoSrc = investor.logoUrl || investor.logo_url || '';
-      logoEl.src = logoSrc;
+      const fallback = (CONFIG && CONFIG.assets && CONFIG.assets.logoFallback) || '/assets/msfg-logo-fallback.svg';
+      logoEl.src = logoSrc || fallback;
       logoEl.alt = investor.name ? investor.name + ' Logo' : 'Investor Logo';
-      logoEl.style.display = logoSrc ? '' : 'none';
+      logoEl.style.display = '';
+      logoEl.onerror = function() { this.onerror = null; this.src = fallback; };
     }
 
     // Account Executive (read-only)

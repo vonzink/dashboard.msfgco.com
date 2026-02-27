@@ -41,6 +41,7 @@
           src="https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG+Home+Loans/MSFG+Clear+backdrop.png"
           alt="MSFG Logo"
           class="logo"
+          onerror="this.onerror=null;this.src='/assets/msfg-logo-fallback.svg';"
         />
       </div>
 
@@ -265,23 +266,42 @@
   <main class="main-content" id="mainContent" tabindex="-1">
 
     <!-- News + Quick Links -->
-    <section class="section-card animate-in">
+    <section class="section-card animate-in" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-newspaper"></i> Daily News & Announcements</h2>
         <div class="section-actions">
           <button type="button" class="btn btn-secondary" data-action="open-add-announcement">
             <i class="fas fa-plus"></i> Add Announcement
           </button>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-news" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
         </div>
       </div>
 
-      <div class="section-body">
-        <div class="news-feed" id="newsFeed"></div>
+      <div class="section-body" id="sectionBody-news">
+        <div class="news-carousel" id="newsCarousel">
+          <div class="news-carousel-track" id="newsCarouselTrack"></div>
+          <div class="news-carousel-controls">
+            <button type="button" class="carousel-btn carousel-prev" id="carouselPrev" title="Previous" aria-label="Previous announcement">
+              <i class="fas fa-chevron-left"></i>
+            </button>
+            <div class="carousel-dots" id="carouselDots"></div>
+            <button type="button" class="carousel-btn carousel-next" id="carouselNext" title="Next" aria-label="Next announcement">
+              <i class="fas fa-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+        <div class="news-history-link">
+          <a href="/announcements-history.html" class="btn btn-sm btn-outline">
+            <i class="fas fa-history"></i> View Announcement History
+          </a>
+        </div>
       </div>
     </section>
 
     <!-- Pre-Approvals (Monday.com Sync) -->
-    <section class="section-card animate-in" id="preApprovalsSection">
+    <section class="section-card animate-in" id="preApprovalsSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Pre-Approvals</h2>
         <div class="section-actions">
@@ -289,10 +309,13 @@
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
           </button>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-preapprovals" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
         </div>
       </div>
 
-      <div class="section-body">
+      <div class="section-body" id="sectionBody-preapprovals">
         <div class="table-responsive">
           <table class="data-table" id="preApprovalsTable">
             <thead>
@@ -320,7 +343,7 @@
     </section>
 
     <!-- Pipeline (Monday.com Sync) -->
-    <section class="section-card animate-in" id="pipelineSection">
+    <section class="section-card animate-in" id="pipelineSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-chart-line"></i> Loan Pipeline</h2>
         <div class="section-actions">
@@ -331,10 +354,13 @@
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
           </button>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-pipeline" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
         </div>
       </div>
 
-      <div class="section-body">
+      <div class="section-body" id="sectionBody-pipeline">
         <div class="sync-status-bar" id="syncStatusBar" style="display:none;">
           <i class="fas fa-info-circle"></i>
           <span id="syncStatusText">Last synced: Never</span>
@@ -357,7 +383,7 @@
     </section>
 
     <!-- Loans Funded -->
-    <section class="section-card animate-in" id="fundedLoansSection">
+    <section class="section-card animate-in" id="fundedLoansSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-hand-holding-usd"></i> Loans Funded</h2>
         <div class="section-actions">
@@ -374,10 +400,13 @@
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
           </button>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-funded" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
         </div>
       </div>
 
-      <div class="section-body">
+      <div class="section-body" id="sectionBody-funded">
         <!-- Summary bar -->
         <div class="funded-summary-bar" id="fundedSummaryBar">
           <div class="funded-stat">
@@ -414,7 +443,7 @@
     </section>
 
     <!-- Performance & Goals -->
-    <section class="section-card animate-in">
+    <section class="section-card animate-in" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-trophy"></i> Performance & Goals</h2>
         <div class="section-actions">
@@ -424,10 +453,13 @@
             <option value="quarterly">Quarterly</option>
             <option value="yearly">Yearly</option>
           </select>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-goals" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
         </div>
       </div>
 
-      <div class="section-body">
+      <div class="section-body" id="sectionBody-goals">
         <div class="goals-grid" id="goalsGrid">
           <div class="goal-card" data-goal="loans-closed">
             <div class="goal-icon"><i class="fas fa-file-signature"></i></div>
@@ -465,16 +497,19 @@
     </section>
 
     <!-- Chat -->
-    <section class="section-card animate-in" id="chatSection">
+    <section class="section-card animate-in" id="chatSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-comments"></i> Team Chat</h2>
         <div class="section-actions">
           <button type="button" class="btn btn-sm btn-outline" id="chatManageTagsBtn" title="Manage Tags">
             <i class="fas fa-tags"></i> Manage Tags
           </button>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-chat" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
         </div>
       </div>
-      <div class="section-body">
+      <div class="section-body" id="sectionBody-chat">
         <div class="chat-container">
           <!-- Tag filter bar -->
           <div class="chat-tag-filter-bar" id="chatTagFilter"></div>
@@ -508,7 +543,7 @@
 
         <div class="modal-header">
           <div class="investor-header-content">
-            <img class="investor-logo" alt="Investor Logo" />
+            <img class="investor-logo" alt="Investor Logo" onerror="this.onerror=null;this.src='/assets/msfg-logo-fallback.svg';" />
             <h2 class="investor-name">Investor</h2>
           </div>
         </div>
@@ -696,6 +731,7 @@
   <script src="js/funded-loans.js?v=20260224-2"></script>
   <script src="js/goals.js?v=20260224-2"></script>
   <script src="js/modals.js?v=20260224-2"></script>
+  <script src="js/collapsible.js?v=20260227-1"></script>
 
   <!-- Accessibility -->
   <script src="js/a11y.js?v=20260224-2"></script>

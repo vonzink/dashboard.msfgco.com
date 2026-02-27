@@ -298,8 +298,8 @@ const ServerAPI = {
     },
 
     /** Get presigned upload URL for an investor logo */
-    getInvestorLogoUploadUrl(investorId, fileName, fileType) {
-        return this.post(`/investors/${investorId}/logo/upload-url`, { fileName, fileType });
+    getInvestorLogoUploadUrl(investorId, fileName, fileType, fileSize) {
+        return this.post(`/investors/${investorId}/logo/upload-url`, { fileName, fileType, fileSize });
     },
 
     /** Confirm logo upload — saves S3 key in DB */

@@ -458,16 +458,19 @@ const ModalsManager = {
     });
   },
 
-  addAnnouncementToUI(announcement) {
-    const newsFeed = document.getElementById('newsFeed');
-    if (!newsFeed) return;
+  // ========================================
+  // CAROUSEL STATE
+  // ========================================
+  _carouselIndex: 0,
+  _carouselAnnouncements: [],
 
+  buildAnnouncementCard(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
     const relativeTime = Utils.getRelativeTime(announcement.createdAt);
-
     const safeLink = announcement.link ? Utils.escapeHtml(announcement.link) : null;
+    const fallbackLogo = (window.CONFIG && CONFIG.assets && CONFIG.assets.logoFallback) || '/assets/msfg-logo-fallback.svg';
 
-    const announcementHTML = `
+    return `
       <div class="news-item" data-id="${announcement.id}">
         <div class="news-icon"><i class="fas ${iconClass}"></i></div>
         <div class="news-content">
@@ -512,8 +515,96 @@ const ModalsManager = {
         </div>
       </div>
     `;
+  },
 
-    newsFeed.insertAdjacentHTML('afterbegin', announcementHTML);
+  renderCarousel() {
+    const track = document.getElementById('newsCarouselTrack');
+    const dots = document.getElementById('carouselDots');
+    if (!track) return;
+
+    const maxSlides = (window.CONFIG && CONFIG.announcements && CONFIG.announcements.carouselMax) || 10;
+    const slides = this._carouselAnnouncements.slice(0, maxSlides);
+
+    if (slides.length === 0) {
+      track.innerHTML = '<div class="news-carousel-slide"><div class="news-item"><div class="news-content"><p style="text-align:center;color:var(--text-muted);">No announcements yet.</p></div></div></div>';
+      if (dots) dots.innerHTML = '';
+      return;
+    }
+
+    track.innerHTML = slides.map(a =>
+      `<div class="news-carousel-slide">${this.buildAnnouncementCard(a)}</div>`
+    ).join('');
+
+    // Render dots
+    if (dots) {
+      dots.innerHTML = slides.map((_, i) =>
+        `<button type="button" class="carousel-dot${i === 0 ? ' active' : ''}" data-index="${i}" aria-label="Slide ${i + 1}"></button>`
+      ).join('');
+    }
+
+    this._carouselIndex = 0;
+    this.updateCarouselPosition();
+  },
+
+  updateCarouselPosition() {
+    const track = document.getElementById('newsCarouselTrack');
+    if (!track) return;
+
+    track.style.transform = `translateX(-${this._carouselIndex * 100}%)`;
+
+    // Update dots
+    document.querySelectorAll('#carouselDots .carousel-dot').forEach((dot, i) => {
+      dot.classList.toggle('active', i === this._carouselIndex);
+    });
+
+    // Update prev/next button state
+    const maxSlides = Math.min(this._carouselAnnouncements.length,
+      (window.CONFIG && CONFIG.announcements && CONFIG.announcements.carouselMax) || 10);
+    const prev = document.getElementById('carouselPrev');
+    const next = document.getElementById('carouselNext');
+    if (prev) prev.disabled = this._carouselIndex <= 0;
+    if (next) next.disabled = this._carouselIndex >= maxSlides - 1;
+  },
+
+  initCarouselControls() {
+    const prev = document.getElementById('carouselPrev');
+    const next = document.getElementById('carouselNext');
+    const dots = document.getElementById('carouselDots');
+
+    if (prev) {
+      prev.addEventListener('click', () => {
+        if (this._carouselIndex > 0) {
+          this._carouselIndex--;
+          this.updateCarouselPosition();
+        }
+      });
+    }
+
+    if (next) {
+      next.addEventListener('click', () => {
+        const maxSlides = Math.min(this._carouselAnnouncements.length,
+          (window.CONFIG && CONFIG.announcements && CONFIG.announcements.carouselMax) || 10);
+        if (this._carouselIndex < maxSlides - 1) {
+          this._carouselIndex++;
+          this.updateCarouselPosition();
+        }
+      });
+    }
+
+    if (dots) {
+      dots.addEventListener('click', (e) => {
+        const dot = e.target.closest('.carousel-dot');
+        if (!dot) return;
+        this._carouselIndex = Number(dot.dataset.index);
+        this.updateCarouselPosition();
+      });
+    }
+  },
+
+  addAnnouncementToUI(announcement) {
+    // Add to carousel data and re-render
+    this._carouselAnnouncements.unshift(announcement);
+    this.renderCarousel();
   },
 
   async deleteAnnouncement(announcementId) {
@@ -522,13 +613,12 @@ const ModalsManager = {
     try {
       await ServerAPI.deleteAnnouncement(announcementId);
 
-      const newsItem = document.querySelector(`.news-item[data-id="${announcementId}"]`);
-      if (newsItem) {
-        newsItem.style.transition = 'opacity 0.3s, transform 0.3s';
-        newsItem.style.opacity = '0';
-        newsItem.style.transform = 'translateX(-20px)';
-        setTimeout(() => newsItem.remove(), 300);
+      // Remove from carousel data
+      this._carouselAnnouncements = this._carouselAnnouncements.filter(a => a.id !== announcementId);
+      if (this._carouselIndex >= this._carouselAnnouncements.length && this._carouselIndex > 0) {
+        this._carouselIndex--;
       }
+      this.renderCarousel();
     } catch (error) {
       console.error('Failed to delete announcement:', error);
       alert('Failed to delete announcement. Please try again.');
@@ -536,31 +626,33 @@ const ModalsManager = {
   },
 
   async loadAnnouncements() {
-    const newsFeed = document.getElementById('newsFeed');
-    if (!newsFeed) return;
+    const track = document.getElementById('newsCarouselTrack');
+    if (!track) return;
+
+    this.initCarouselControls();
 
     try {
       const announcements = await ServerAPI.getAnnouncements();
 
-      announcements.forEach((a) => {
-        const uiAnnouncement = {
-          id: a.id,
-          title: a.title,
-          content: a.content,
-          link: a.link,
-          icon: a.icon,
-          author: a.author_name || 'Unknown',
-          createdAt: a.created_at,
-          fileName: a.file_name
-        };
-        this.addAnnouncementToUI(uiAnnouncement);
-      });
+      // announcements come newest-first from API
+      this._carouselAnnouncements = announcements.map(a => ({
+        id: a.id,
+        title: a.title,
+        content: a.content,
+        link: a.link,
+        icon: a.icon,
+        author: a.author_name || 'Unknown',
+        createdAt: a.created_at,
+        fileName: a.file_name
+      }));
+
+      this.renderCarousel();
     } catch (error) {
       console.error('Failed to load announcements:', error);
 
-      // Fallback to local storage cache if you use it
       const cached = Utils.getStorage ? Utils.getStorage('announcements', []) : [];
-      cached.forEach((a) => this.addAnnouncementToUI(a));
+      this._carouselAnnouncements = cached;
+      this.renderCarousel();
     }
   }
 };

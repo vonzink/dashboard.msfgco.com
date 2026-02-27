@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <script src="js/auth-gate.js?v=20260224-2"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Announcement History | MSFG Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+
+  <link rel="stylesheet" href="css/variables.css?v=20260227-1" />
+  <link rel="stylesheet" href="css/base.css?v=20260227-1" />
+  <link rel="stylesheet" href="css/layout.css?v=20260227-1" />
+  <link rel="stylesheet" href="css/components.css?v=20260227-1" />
+  <link rel="stylesheet" href="css/sections.css?v=20260227-1" />
+
+  <style>
+    .history-page { max-width: 900px; margin: 0 auto; padding: var(--spacing-xl); }
+    .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-xl); }
+    .history-header h1 { font-size: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-sm); }
+    .history-header h1 i { color: var(--green-bright); }
+    .back-link { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--green-teal); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color var(--transition-fast); }
+    .back-link:hover { color: var(--green-bright); }
+    .history-list { display: flex; flex-direction: column; gap: var(--spacing-md); }
+    .history-empty { text-align: center; padding: var(--spacing-xl); color: var(--text-muted); }
+    .load-more-btn { display: block; margin: var(--spacing-xl) auto 0; }
+    .history-loading { text-align: center; padding: var(--spacing-xl); color: var(--text-muted); }
+  </style>
+</head>
+
+<body>
+  <div class="history-page">
+    <div class="history-header">
+      <h1><i class="fas fa-bullhorn"></i> Announcement History</h1>
+      <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+
+    <div class="history-list" id="historyList">
+      <div class="history-loading"><i class="fas fa-spinner fa-spin"></i> Loading announcements...</div>
+    </div>
+
+    <button type="button" class="btn btn-secondary load-more-btn" id="loadMoreBtn" style="display:none;">
+      <i class="fas fa-arrow-down"></i> Load More
+    </button>
+  </div>
+
+  <script src="js/config.js?v=20260227-1"></script>
+  <script src="js/api-server.js?v=20260227-1"></script>
+  <script src="js/utils.js?v=20260227-1"></script>
+  <script>
+    (function() {
+      const PAGE_SIZE = 20;
+      let allAnnouncements = [];
+      let displayed = 0;
+
+      function buildCard(a) {
+        const iconClass = a.icon || 'fa-bullhorn';
+        const relativeTime = Utils.getRelativeTime(a.created_at);
+        const author = Utils.escapeHtml(a.author_name || 'Unknown');
+        const title = Utils.escapeHtml(a.title);
+        const content = Utils.escapeHtml(a.content);
+        const safeLink = a.link ? Utils.escapeHtml(a.link) : null;
+
+        return `
+          <div class="news-item" data-id="${a.id}">
+            <div class="news-icon"><i class="fas ${iconClass}"></i></div>
+            <div class="news-content">
+              <div class="news-header"><h4>${title}</h4></div>
+              <p>${content}</p>
+              ${safeLink ? `<div style="margin-top:0.5rem;"><a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="news-link-external"><i class="fas fa-external-link-alt"></i> ${safeLink}</a></div>` : ''}
+              ${a.file_name ? `<div class="news-file"><i class="fas fa-file"></i> ${Utils.escapeHtml(a.file_name)}</div>` : ''}
+              <div class="news-meta">
+                <span><i class="fas fa-user"></i> ${author}</span>
+                <span><i class="fas fa-clock"></i> ${relativeTime}</span>
+              </div>
+            </div>
+          </div>`;
+      }
+
+      function renderPage() {
+        const list = document.getElementById('historyList');
+        const btn = document.getElementById('loadMoreBtn');
+        const end = Math.min(displayed + PAGE_SIZE, allAnnouncements.length);
+        const batch = allAnnouncements.slice(displayed, end);
+
+        if (displayed === 0 && batch.length === 0) {
+          list.innerHTML = '<div class="history-empty"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>No announcements found.</div>';
+          btn.style.display = 'none';
+          return;
+        }
+
+        if (displayed === 0) list.innerHTML = '';
+
+        list.insertAdjacentHTML('beforeend', batch.map(buildCard).join(''));
+        displayed = end;
+        btn.style.display = displayed < allAnnouncements.length ? '' : 'none';
+      }
+
+      async function init() {
+        try {
+          allAnnouncements = await ServerAPI.getAnnouncements();
+          renderPage();
+        } catch (err) {
+          document.getElementById('historyList').innerHTML = '<div class="history-empty">Failed to load announcements. Please try again.</div>';
+          console.error(err);
+        }
+
+        document.getElementById('loadMoreBtn').addEventListener('click', renderPage);
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

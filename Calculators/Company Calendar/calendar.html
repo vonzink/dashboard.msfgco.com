@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="/js/auth-gate.js?v=20260227-1"></script>
   <meta charset="utf-8" />
   <title>MSFG Company Calendar</title>
 
@@ -11,6 +12,8 @@
 </head>
 
 <body class="calendarPage">
+  <div id="calToast" class="cal-toast"></div>
+
   <div class="pageHeader">
     <h2>MSFG Team Calendar</h2>
   </div>
@@ -114,10 +117,16 @@
 
       const res = await fetch(API_BASE + path, { ...opts, headers });
       if (res.status === 401) {
-        alert('Session expired. Please log in again.');
-        return;
+        throw new Error('Session expired. Please log in again.');
       }
-      if (!res.ok) throw new Error(await res.text());
+      if (res.status === 403) {
+        const body = await res.json().catch(function() { return {}; });
+        throw new Error(body.error || 'You do not have permission to perform this action.');
+      }
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Request failed');
+      }
       return res.json();
     }
 
@@ -128,7 +137,17 @@
       return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
+    /* ── Toast notification ── */
+    function showToast(msg, type) {
+      var el = document.getElementById('calToast');
+      if (!el) return alert(msg);
+      el.textContent = msg;
+      el.className = 'cal-toast cal-toast-' + (type || 'info') + ' cal-toast-show';
+      clearTimeout(el._tid);
+      el._tid = setTimeout(function() { el.classList.remove('cal-toast-show'); }, 4000);
+    }
+
+    document.addEventListener('DOMContentLoaded', async function () {
       const panel      = document.getElementById('eventPanel');
       const modalTitle = document.getElementById('modalTitle');
       const fTitle     = document.getElementById('f_title');
@@ -153,6 +172,24 @@
       const scopeSingle = document.getElementById('scopeSingle');
       const scopeAll    = document.getElementById('scopeAll');
       const scopeCancel = document.getElementById('scopeCancel');
+
+      /* ── Current user (for RBAC) ── */
+      var currentUser = { id: null, role: 'user' };
+      try {
+        var me = await api('/me');
+        if (me) {
+          currentUser.id = me.id;
+          currentUser.role = (me.role || 'user').toLowerCase();
+        }
+      } catch (e) {
+        console.warn('Could not load current user:', e.message);
+      }
+
+      function canEditEvent(event) {
+        if (currentUser.role === 'admin') return true;
+        var createdBy = event.extendedProps ? event.extendedProps.created_by : null;
+        return createdBy === currentUser.id;
+      }
 
       /* ── Color picker ── */
       function setActiveColor(hex) {
@@ -219,6 +256,7 @@
       function primeFormForCreate(startDate, endDate) {
         editingEvent = null;
         btnDelete.style.display = 'none';
+        btnSave.style.display = 'inline-block';
         modalTitle.textContent = 'Add Event';
         fTitle.value = '';
         fWho.value   = '';
@@ -230,12 +268,15 @@
         fRecurrenceEnd.value = '';
         recurrenceLabel.style.display = 'block';
         recurrenceEndWrap.style.display = 'none';
+        setFormEditable(true);
       }
 
       function primeFormForEdit(event) {
         editingEvent = event;
-        btnDelete.style.display = 'inline-block';
-        modalTitle.textContent = 'Edit Event';
+        var editable = canEditEvent(event);
+        modalTitle.textContent = editable ? 'Edit Event' : 'View Event';
+        btnDelete.style.display = editable ? 'inline-block' : 'none';
+        btnSave.style.display = editable ? 'inline-block' : 'none';
         fTitle.value = event.title || '';
         fWho.value   = event.extendedProps.who || '';
         fNotes.value = event.extendedProps.notes || '';
@@ -247,6 +288,17 @@
         fRecurrenceEnd.value = '';
         recurrenceLabel.style.display = 'none';
         recurrenceEndWrap.style.display = 'none';
+        setFormEditable(editable);
+      }
+
+      function setFormEditable(editable) {
+        fTitle.readOnly = !editable;
+        fWho.readOnly = !editable;
+        fStart.readOnly = !editable;
+        fEnd.readOnly = !editable;
+        fNotes.readOnly = !editable;
+        colorPicker.style.pointerEvents = editable ? '' : 'none';
+        colorPicker.style.opacity = editable ? '' : '0.5';
       }
 
       /* ── Scope dialog ── */
@@ -311,11 +363,15 @@
                   notes: r.notes || '',
                   color: c,
                   recurrence_group_id: r.recurrence_group_id || null,
-                  recurrence_rule: r.recurrence_rule || 'none'
+                  recurrence_rule: r.recurrence_rule || 'none',
+                  created_by: r.created_by
                 }
               };
             }));
-          } catch (e) { failure(e); }
+          } catch (e) {
+            console.error('Failed to load events:', e);
+            failure(e);
+          }
         },
 
         eventClick: function(info) {
@@ -323,20 +379,30 @@
           openPanel();
         },
 
+        /* Allow drag-drop only for owned events */
+        eventAllow: function(dropInfo, draggedEvent) {
+          return canEditEvent(draggedEvent);
+        },
+
         eventChange: async function(changeInfo) {
           var e = changeInfo.event;
-          await api('/calendar-events/' + e.id, {
-            method: 'PUT',
-            body: JSON.stringify({
-              title: e.title,
-              who: e.extendedProps.who || '',
-              notes: e.extendedProps.notes || '',
-              start: e.start.toISOString(),
-              end: e.end ? e.end.toISOString() : null,
-              allDay: e.allDay,
-              color: e.extendedProps.color || '#104547'
-            })
-          });
+          try {
+            await api('/calendar-events/' + e.id, {
+              method: 'PUT',
+              body: JSON.stringify({
+                title: e.title,
+                who: e.extendedProps.who || '',
+                notes: e.extendedProps.notes || '',
+                start: e.start.toISOString(),
+                end: e.end ? e.end.toISOString() : null,
+                allDay: e.allDay,
+                color: e.extendedProps.color || '#104547'
+              })
+            });
+          } catch (err) {
+            showToast(err.message, 'error');
+            changeInfo.revert();
+          }
         },
 
         eventContent: function(arg) {
@@ -361,54 +427,60 @@
         };
 
         if (!payload.title || !payload.start) {
-          alert('Title and Start are required.');
+          showToast('Title and Start are required.', 'error');
           return;
         }
 
-        if (!editingEvent) {
-          // New event
-          var rule = fRecurrence.value;
-          if (rule !== 'none') {
-            if (!fRecurrenceEnd.value) {
-              alert('Please set a "Repeat Until" date.');
-              return;
+        try {
+          if (!editingEvent) {
+            // New event
+            var rule = fRecurrence.value;
+            if (rule !== 'none') {
+              if (!fRecurrenceEnd.value) {
+                showToast('Please set a "Repeat Until" date.', 'error');
+                return;
+              }
+              payload.recurrence_rule = rule;
+              payload.recurrence_end = fRecurrenceEnd.value;
             }
-            payload.recurrence_rule = rule;
-            payload.recurrence_end = fRecurrenceEnd.value;
-          }
 
-          await api('/calendar-events', { method: 'POST', body: JSON.stringify(payload) });
-          calendar.refetchEvents();
-        } else {
-          // Edit existing
-          var groupId = editingEvent.extendedProps.recurrence_group_id;
-          var scope = 'single';
-
-          if (groupId) {
-            scope = await askScope('Edit recurring event');
-            if (!scope) return;
-          }
-
-          await api('/calendar-events/' + editingEvent.id + '?scope=' + scope, {
-            method: 'PUT',
-            body: JSON.stringify(payload)
-          });
-
-          if (scope === 'all') {
+            await api('/calendar-events', { method: 'POST', body: JSON.stringify(payload) });
             calendar.refetchEvents();
           } else {
-            editingEvent.setProp('title', payload.title);
-            editingEvent.setStart(payload.start);
-            editingEvent.setEnd(payload.end);
-            editingEvent.setProp('backgroundColor', payload.color);
-            editingEvent.setProp('borderColor', payload.color);
-            editingEvent.setExtendedProp('who', payload.who);
-            editingEvent.setExtendedProp('notes', payload.notes);
-            editingEvent.setExtendedProp('color', payload.color);
-          }
-        }
+            // Edit existing
+            var groupId = editingEvent.extendedProps.recurrence_group_id;
+            var scope = 'single';
 
-        closePanel();
+            if (groupId) {
+              scope = await askScope('Edit recurring event');
+              if (!scope) return;
+            }
+
+            await api('/calendar-events/' + editingEvent.id + '?scope=' + scope, {
+              method: 'PUT',
+              body: JSON.stringify(payload)
+            });
+
+            if (scope === 'all') {
+              calendar.refetchEvents();
+            } else {
+              editingEvent.setProp('title', payload.title);
+              editingEvent.setStart(payload.start);
+              editingEvent.setEnd(payload.end);
+              editingEvent.setProp('backgroundColor', payload.color);
+              editingEvent.setProp('borderColor', payload.color);
+              editingEvent.setExtendedProp('who', payload.who);
+              editingEvent.setExtendedProp('notes', payload.notes);
+              editingEvent.setExtendedProp('color', payload.color);
+            }
+          }
+
+          closePanel();
+          showToast('Event saved.', 'success');
+        } catch (err) {
+          console.error('Save failed:', err);
+          showToast(err.message, 'error');
+        }
       };
 
       /* ── Delete ── */
@@ -425,15 +497,21 @@
           if (!confirm('Delete this event?')) return;
         }
 
-        await api('/calendar-events/' + editingEvent.id + '?scope=' + scope, { method: 'DELETE' });
+        try {
+          await api('/calendar-events/' + editingEvent.id + '?scope=' + scope, { method: 'DELETE' });
 
-        if (scope === 'all') {
-          calendar.refetchEvents();
-        } else {
-          editingEvent.remove();
+          if (scope === 'all') {
+            calendar.refetchEvents();
+          } else {
+            editingEvent.remove();
+          }
+
+          closePanel();
+          showToast('Event deleted.', 'success');
+        } catch (err) {
+          console.error('Delete failed:', err);
+          showToast(err.message, 'error');
         }
-
-        closePanel();
       };
 
       calendar.render();

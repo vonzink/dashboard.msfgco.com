@@ -384,7 +384,7 @@
               <button class="btn btn-sm btn-secondary" id="invLogoUploadBtn2"><i class="fas fa-camera"></i> Upload</button>
               <button class="btn btn-sm btn-danger" id="invLogoRemoveBtn2" style="display:none;"><i class="fas fa-trash"></i></button>
             </div>
-            <input type="file" id="invLogoFileInput2" accept="image/*" style="display:none;" />
+            <input type="file" id="invLogoFileInput2" accept="image/png,image/jpeg,image/svg+xml" style="display:none;" />
             <p id="invProfileName" style="font-size:16px; font-weight:700; margin:12px 0 0; color:#104547;"></p>
           </div>
           <!-- Editable Fields -->
@@ -1684,6 +1684,7 @@
 
       if (data.logo_url) {
         img.src = data.logo_url;
+        img.onerror = function() { this.onerror = null; this.src = '/assets/msfg-logo-fallback.svg'; };
         img.style.display = 'block';
         placeholder.style.display = 'none';
         removeBtn.style.display = '';
@@ -1702,10 +1703,24 @@
     document.getElementById('invLogoFileInput2').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file || !currentInvestorId) return;
+
+      // Client-side validation
+      const ALLOWED = ['image/png', 'image/jpeg', 'image/svg+xml'];
+      if (!ALLOWED.includes(file.type)) {
+        alert('Only PNG, JPG, and SVG images are allowed.');
+        e.target.value = '';
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Logo must be under 5 MB.');
+        e.target.value = '';
+        return;
+      }
+
       try {
         const { uploadUrl, fileKey } = await api('/investors/' + currentInvestorId + '/logo/upload-url', {
           method: 'POST',
-          body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+          body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size }),
         });
         await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
         const result = await api('/investors/' + currentInvestorId + '/logo/confirm', {
