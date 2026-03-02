@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS guideline_files (
   file_size     BIGINT UNSIGNED DEFAULT NULL,
   status        ENUM('processing','ready','error') NOT NULL DEFAULT 'processing',
   error_message TEXT          DEFAULT NULL,
-  uploaded_by   INT UNSIGNED  DEFAULT NULL,
+  uploaded_by   INT           DEFAULT NULL,
   created_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
