@@ -1,6 +1,3 @@
--- 013_guidelines.sql
--- Guideline file + chunk tables for searchable lending guidelines
-
 CREATE TABLE IF NOT EXISTS guideline_files (
   id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   file_name     VARCHAR(500)  NOT NULL,
