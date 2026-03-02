@@ -1067,6 +1067,18 @@ textarea.form-input {
     min-width: 260px;
 }
 
+/* Generic scrollable dropdown (Systems, HR, etc.) */
+.dropdown-menu-scrollable {
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* Contacts list inside a parent dropdown (e.g. HR) */
+.dropdown-contacts-list {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
 .investor-dropdown-search {
     padding: 0.375rem 0.75rem;
     position: sticky;

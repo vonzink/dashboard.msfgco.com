@@ -105,25 +105,19 @@ router.post('/', async (req, res, next) => {
 
 // PUT /api/calendar-events/:id - Update a calendar event
 // Query param: ?scope=single|all (default: single)
-// RBAC: owner or admin only
+// Any authenticated user can edit any event
 router.put('/:id', async (req, res, next) => {
   try {
     const { title, who, start, end, allDay, notes, color } = req.body;
     const scope = req.query.scope || 'single';
-    const userId = getUserId(req);
 
-    // Fetch event for ownership check
+    // Fetch event (for recurrence group check)
     const [[event]] = await db.query(
       'SELECT created_by, recurrence_group_id FROM calendar_events WHERE id=?',
       [req.params.id]
     );
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
-    }
-
-    // Ownership: must be creator or admin
-    if (event.created_by !== userId && !isAdmin(req)) {
-      return res.status(403).json({ error: 'You can only edit your own events' });
     }
 
     if (scope === 'all' && event.recurrence_group_id) {
@@ -153,24 +147,18 @@ router.put('/:id', async (req, res, next) => {
 
 // DELETE /api/calendar-events/:id - Delete a calendar event
 // Query param: ?scope=single|all (default: single)
-// RBAC: owner or admin only
+// Any authenticated user can delete any event
 router.delete('/:id', async (req, res, next) => {
   try {
     const scope = req.query.scope || 'single';
-    const userId = getUserId(req);
 
-    // Fetch event for ownership check
+    // Fetch event (for recurrence group check)
     const [[event]] = await db.query(
       'SELECT created_by, recurrence_group_id FROM calendar_events WHERE id=?',
       [req.params.id]
     );
     if (!event) {
       return res.status(404).json({ error: 'Event not found' });
-    }
-
-    // Ownership: must be creator or admin
-    if (event.created_by !== userId && !isAdmin(req)) {
-      return res.status(403).json({ error: 'You can only delete your own events' });
     }
 
     if (scope === 'all' && event.recurrence_group_id) {

@@ -186,9 +186,8 @@
       }
 
       function canEditEvent(event) {
-        if (currentUser.role === 'admin') return true;
-        var createdBy = event.extendedProps ? event.extendedProps.created_by : null;
-        return createdBy === currentUser.id;
+        // All authenticated users can edit any event
+        return true;
       }
 
       /* ── Color picker ── */

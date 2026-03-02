@@ -88,14 +88,14 @@
     <nav class="nav-container" aria-label="Primary">
       <ul class="main-nav">
 
-        <!-- HR -->
+        <!-- HR + Team Directory -->
         <li class="nav-item">
           <button type="button" class="nav-button">
             <i class="fas fa-users"></i>
             HR
             <i class="fas fa-chevron-down"></i>
           </button>
-          <div class="dropdown-menu">
+          <div class="dropdown-menu dropdown-menu-scrollable">
             <div class="dropdown-header">Human Resources</div>
 
             <a data-link-key="payroll_new" class="dropdown-item">
@@ -112,19 +112,10 @@
             <button type="button" class="dropdown-item" data-action="open-training">
               <i class="fas fa-graduation-cap"></i> Training
             </button>
-          </div>
-        </li>
 
-        <!-- MSFG Contacts -->
-        <li class="nav-item">
-          <button type="button" class="nav-button">
-            <i class="fas fa-address-book"></i>
-            MSFG Contacts
-            <i class="fas fa-chevron-down"></i>
-          </button>
-          <div class="dropdown-menu dropdown-menu-contacts">
+            <div class="dropdown-divider"></div>
             <div class="dropdown-header">Team Directory</div>
-            <div id="contactsEmployeeList">
+            <div id="contactsEmployeeList" class="dropdown-contacts-list">
               <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
             </div>
           </div>
@@ -137,7 +128,7 @@
             Systems
             <i class="fas fa-chevron-down"></i>
           </button>
-          <div class="dropdown-menu">
+          <div class="dropdown-menu dropdown-menu-scrollable">
             <div class="dropdown-header">Core Systems</div>
 
             <a data-link-key="gohighlevel" class="dropdown-item"><i class="fas fa-rocket"></i> Go High Level</a>
