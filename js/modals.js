@@ -381,6 +381,13 @@ const ModalsManager = {
 
       const saved = await ServerAPI.createAnnouncement(announcementData);
 
+      // Remove any auto-archived announcements from the carousel
+      if (saved.archivedIds && saved.archivedIds.length > 0) {
+        this._carouselAnnouncements = this._carouselAnnouncements.filter(
+          a => !saved.archivedIds.includes(a.id)
+        );
+      }
+
       const uiAnnouncement = {
         id: saved.id,
         title: saved.title,
@@ -464,11 +471,22 @@ const ModalsManager = {
   _carouselIndex: 0,
   _carouselAnnouncements: [],
 
+  _canCreate() {
+    const role = String(CONFIG.currentUser?.role || '').toLowerCase();
+    return ['admin', 'manager', 'lo', 'processor'].includes(role);
+  },
+
+  _canDelete() {
+    const role = String(CONFIG.currentUser?.role || '').toLowerCase();
+    return ['admin', 'manager'].includes(role);
+  },
+
   buildAnnouncementCard(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
     const relativeTime = Utils.getRelativeTime(announcement.createdAt);
     const safeLink = announcement.link ? Utils.escapeHtml(announcement.link) : null;
     const fallbackLogo = (window.CONFIG && CONFIG.assets && CONFIG.assets.logoFallback) || '/assets/msfg-logo-fallback.svg';
+    const showDelete = this._canDelete();
 
     return `
       <div class="news-item" data-id="${announcement.id}">
@@ -476,9 +494,9 @@ const ModalsManager = {
         <div class="news-content">
           <div class="news-header">
             <h4>${Utils.escapeHtml(announcement.title)}</h4>
-            <button class="news-delete-btn" data-id="${announcement.id}" title="Delete announcement" type="button">
+            ${showDelete ? `<button class="news-delete-btn" data-id="${announcement.id}" title="Delete announcement" type="button">
               <i class="fas fa-trash"></i>
-            </button>
+            </button>` : ''}
           </div>
 
           <p>${Utils.escapeHtml(announcement.content)}</p>
@@ -625,14 +643,22 @@ const ModalsManager = {
     }
   },
 
+  _updateAddButtonVisibility() {
+    const btn = document.getElementById('addAnnouncementBtn');
+    if (btn) {
+      btn.style.display = this._canCreate() ? '' : 'none';
+    }
+  },
+
   async loadAnnouncements() {
     const track = document.getElementById('newsCarouselTrack');
     if (!track) return;
 
     this.initCarouselControls();
+    this._updateAddButtonVisibility();
 
     try {
-      const announcements = await ServerAPI.getAnnouncements();
+      const announcements = await ServerAPI.getAnnouncements('active');
 
       // announcements come newest-first from API
       this._carouselAnnouncements = announcements.map(a => ({

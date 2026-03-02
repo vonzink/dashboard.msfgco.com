@@ -11,6 +11,14 @@ function isAdmin(req) {
   return role === 'admin';
 }
 
+function getUserRole(req) {
+  return String(req.user?.db?.role || '').toLowerCase();
+}
+
+function hasRole(req, ...roles) {
+  return roles.includes(getUserRole(req));
+}
+
 function requireDbUser(req, res, next) {
   if (!req.user?.db) {
     return res.status(401).json({ error: 'User mapping not found' });
@@ -34,6 +42,8 @@ function requireAdmin(req, res, next) {
 module.exports = {
   getDbUser,
   getUserId,
+  getUserRole,
+  hasRole,
   isAdmin,
   requireAdmin,
   requireDbUser,

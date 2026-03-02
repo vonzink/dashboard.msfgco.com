@@ -5,7 +5,7 @@
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Announcement History | MSFG Dashboard</title>
+  <title>Announcement Archive | MSFG Dashboard</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -35,7 +35,7 @@
 <body>
   <div class="history-page">
     <div class="history-header">
-      <h1><i class="fas fa-bullhorn"></i> Announcement History</h1>
+      <h1><i class="fas fa-archive"></i> Announcement Archive</h1>
       <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
     </div>
 
@@ -88,7 +88,7 @@
         const batch = allAnnouncements.slice(displayed, end);
 
         if (displayed === 0 && batch.length === 0) {
-          list.innerHTML = '<div class="history-empty"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>No announcements found.</div>';
+          list.innerHTML = '<div class="history-empty"><i class="fas fa-archive" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>No archived announcements yet.</div>';
           btn.style.display = 'none';
           return;
         }
@@ -102,7 +102,7 @@
 
       async function init() {
         try {
-          allAnnouncements = await ServerAPI.getAnnouncements();
+          allAnnouncements = await ServerAPI.getAnnouncements('archived');
           renderPage();
         } catch (err) {
           document.getElementById('historyList').innerHTML = '<div class="history-empty">Failed to load announcements. Please try again.</div>';

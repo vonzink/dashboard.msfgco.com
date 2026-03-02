@@ -224,8 +224,8 @@ const ServerAPI = {
         return query ? `?${query}` : "";
     },
 
-    getAnnouncements() {
-        return this.get("/announcements");
+    getAnnouncements(status = 'active') {
+        return this.get(`/announcements?status=${encodeURIComponent(status)}`);
     },
 
     createAnnouncement(data) {
