@@ -19,6 +19,7 @@ const App = {
             ['Investors',      () => this.initInvestors()],
             ['Funded Loans',   () => this.initFundedLoans()],
             ['Goals',          () => this.initGoals()],
+            ['Gauges',         () => this.initGauges()],
             ['Modals',         () => this.initModals()],
             ['Monday',         () => this.initMondaySettings()],
             ['Progress Bars',  () => this.initProgressBars()],
@@ -74,6 +75,12 @@ const App = {
 
     initGoals() {
         GoalsManager.init();
+    },
+
+    initGauges() {
+        if (typeof DashboardGauges !== 'undefined') {
+            DashboardGauges.init();
+        }
     },
 
     initModals() {

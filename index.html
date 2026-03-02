@@ -307,6 +307,40 @@
       </div>
     </section>
 
+    <!-- Performance Snapshot Gauges -->
+    <section class="section-card animate-in" id="gaugesSection">
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-tachometer-alt"></i> Performance Snapshot</h2>
+      </div>
+      <div class="gauges-grid" id="gaugesGrid">
+        <div class="gauge-card" id="gaugePreApprovals">
+          <div class="gauge-label">Pre-Approvals</div>
+          <div class="gauge-svg-container"></div>
+          <div class="gauge-stats">
+            <span class="gauge-units">0 Units</span>
+            <span class="gauge-volume">$0</span>
+          </div>
+        </div>
+        <div class="gauge-card" id="gaugePipeline">
+          <div class="gauge-label">Pipeline</div>
+          <div class="gauge-svg-container"></div>
+          <div class="gauge-stats">
+            <span class="gauge-units">0 Units</span>
+            <span class="gauge-volume">$0</span>
+          </div>
+        </div>
+        <div class="gauge-card" id="gaugeFunded">
+          <div class="gauge-label">Funded Loans</div>
+          <div class="gauge-svg-container"></div>
+          <div class="gauge-stats">
+            <span class="gauge-units">0 Units</span>
+            <span class="gauge-volume">$0</span>
+            <span class="gauge-pull-through">0% Pull-Through</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Pre-Approvals (Monday.com Sync) -->
     <section class="section-card animate-in" id="preApprovalsSection" data-collapsible>
       <div class="section-header">
@@ -482,6 +516,38 @@
             </div>
             <div class="progress-bar"><div class="progress-fill on-track" id="loansClosedProgress" data-progress="0"></div></div>
             <div class="goal-progress-text" id="loansClosedProgressText">0% complete</div>
+          </div>
+
+          <div class="goal-card" data-goal="volume-closed">
+            <div class="goal-icon"><i class="fas fa-dollar-sign"></i></div>
+            <div class="goal-label">Volume Closed</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="volumeClosedValue">$0M</div>
+              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="volume-closed"><i class="fas fa-edit"></i></button>
+            </div>
+            <div class="goal-target">of $<span class="goal-target-value" id="volumeClosedTarget">0</span>M target</div>
+            <div class="goal-slider-container u-hidden">
+              <input type="range" class="goal-slider" id="volumeClosedSlider" min="0" max="50" value="0" step="0.5" />
+              <div class="slider-value-display">$<span class="slider-value">0</span>M</div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="volumeClosedProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="volumeClosedProgressText">0% complete</div>
+          </div>
+
+          <div class="goal-card" data-goal="pipeline">
+            <div class="goal-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="goal-label">Pipeline</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="pipelineValue">$0M</div>
+              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="pipeline"><i class="fas fa-edit"></i></button>
+            </div>
+            <div class="goal-target">of $<span class="goal-target-value" id="pipelineTarget">0</span>M target</div>
+            <div class="goal-slider-container u-hidden">
+              <input type="range" class="goal-slider" id="pipelineSlider" min="0" max="50" value="0" step="0.5" />
+              <div class="slider-value-display">$<span class="slider-value">0</span>M</div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="pipelineProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="pipelineProgressText">0% complete</div>
           </div>
 
           <div class="goal-card" data-goal="pull-through">
@@ -737,6 +803,7 @@
   <script src="js/investors.js?v=20260224-2"></script>
   <script src="js/funded-loans.js?v=20260224-2"></script>
   <script src="js/goals.js?v=20260224-2"></script>
+  <script src="js/gauges.js?v=20260302-1"></script>
   <script src="js/modals.js?v=20260224-2"></script>
   <script src="js/collapsible.js?v=20260227-1"></script>
 

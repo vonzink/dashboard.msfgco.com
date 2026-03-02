@@ -687,6 +687,110 @@
 }
 
 /* ========================================
+   PERFORMANCE SNAPSHOT GAUGES
+======================================== */
+.gauges-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+    padding: var(--spacing-md) 0;
+}
+
+.gauge-card {
+    text-align: center;
+    padding: var(--spacing-lg) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gauge-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.gauge-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-sm);
+}
+
+.gauge-svg-container {
+    width: 160px;
+    height: 90px;
+    margin: 0 auto;
+}
+
+.gauge-svg {
+    overflow: visible;
+}
+
+.gauge-arc {
+    transition: stroke 0.3s ease;
+}
+
+.gauge-arc.gauge-exceeded {
+    stroke: var(--green-forest, #16a34a);
+}
+
+.gauge-arc.gauge-on-track {
+    stroke: var(--primary, #0d7377);
+}
+
+.gauge-arc.gauge-warning {
+    stroke: var(--amber, #f59e0b);
+}
+
+.gauge-arc.gauge-behind {
+    stroke: var(--red, #ef4444);
+}
+
+.gauge-center-value {
+    font-size: 28px;
+    font-weight: 700;
+    fill: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+}
+
+.gauge-center-label {
+    font-size: 11px;
+    fill: var(--text-muted);
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.gauge-stats {
+    margin-top: var(--spacing-sm);
+}
+
+.gauge-units {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: block;
+}
+
+.gauge-volume {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+}
+
+.gauge-pull-through {
+    font-size: 0.8rem;
+    color: var(--primary, #0d7377);
+    display: block;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+/* ========================================
    RESPONSIVE ADJUSTMENTS
 ======================================== */
 @media (max-width: 1400px) {
@@ -697,6 +801,16 @@
 
 @media (max-width: 1200px) {
     .tasks-container {
+        grid-template-columns: 1fr;
+    }
+
+    .gauges-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .gauges-grid {
         grid-template-columns: 1fr;
     }
 }

@@ -46,6 +46,35 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// GET /api/pipeline/summary - Get summary stats (units + volume)
+router.get('/summary', async (req, res, next) => {
+  try {
+    let whereClause = 'WHERE 1=1';
+    const params = [];
+
+    if (!isAdmin(req)) {
+      whereClause += ' AND assigned_lo_id = ?';
+      params.push(getUserId(req));
+    }
+
+    const [summary] = await db.query(
+      `SELECT
+        COUNT(*) as units,
+        COALESCE(SUM(loan_amount), 0) as total_amount
+       FROM pipeline
+       ${whereClause}`,
+      params
+    );
+
+    res.json({
+      units: summary[0].units,
+      total_amount: parseFloat(summary[0].total_amount) || 0,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/pipeline/:id - Get specific pipeline item
 router.get('/:id', async (req, res, next) => {
   try {

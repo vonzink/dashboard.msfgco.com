@@ -20,6 +20,7 @@ const VALID_PRE_APPROVAL_FIELDS = [
 const VALID_FUNDED_LOAN_FIELDS = [
   'assigned_lo_name', 'loan_amount', 'loan_type',
   'funded_date', 'investor', 'property_address',
+  'client_name', 'notes', 'loan_number', 'status',
 ];
 
 const VALID_FIELDS_BY_SECTION = {
@@ -108,6 +109,13 @@ const DEFAULT_TITLE_MAP = {
   'funding amount':       'loan_amount',
   'sbj address':          'property_address',
   'subject address':      'property_address',
+  'client name':          'client_name',
+  'client':               'client_name',
+  'borrower':             'client_name',
+  'borrower name':        'client_name',
+  'loan #':               'loan_number',
+  'loan no':              'loan_number',
+  'notes':                'notes',
 };
 
 const DATE_FIELDS = [

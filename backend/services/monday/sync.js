@@ -119,10 +119,16 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap) {
     funded_date: row.funded_date,
     investor: row.investor || null,
     property_address: row.property_address || null,
+    notes: row.notes || null,
     group_name: row.stage || null,
     source_system: 'monday',
     last_synced_at: new Date(),
   };
+
+  // Map loan_number to external_loan_id (funded_loans uses external_loan_id column)
+  if (row.loan_number) {
+    flRow.external_loan_id = row.loan_number;
+  }
 
   if (row.assigned_lo_name) {
     flRow.assigned_lo_name = row.assigned_lo_name;

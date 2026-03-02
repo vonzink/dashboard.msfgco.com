@@ -267,6 +267,14 @@ const ServerAPI = {
         return this.get(`/pipeline${query}`);
     },
 
+    getPipelineSummary() {
+        return this.get('/pipeline/summary');
+    },
+
+    getPreApprovalsSummary() {
+        return this.get('/pre-approvals/summary');
+    },
+
     // ========================================
     // CURRENT USER
     // ========================================
