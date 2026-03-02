@@ -494,6 +494,38 @@ const ServerAPI = {
     getEmployeeDocDownloadUrl(userId, docId) {
         return this.get(`/admin/users/${userId}/documents/${docId}/download-url`);
     },
+
+    // ========================================
+    // GUIDELINES
+    // ========================================
+    searchGuidelines(q, productType, page, limit) {
+        const qs = this.buildQuery({ q, product_type: productType, page, limit });
+        return this.get(`/guidelines/search${qs}`);
+    },
+
+    getGuidelineFiles() {
+        return this.get('/guidelines/files');
+    },
+
+    getGuidelineChunk(chunkId) {
+        return this.get(`/guidelines/chunks/${chunkId}`);
+    },
+
+    getGuidelineUploadUrl(data) {
+        return this.post('/guidelines/upload-url', data);
+    },
+
+    processGuideline(data) {
+        return this.post('/guidelines/process', data);
+    },
+
+    deleteGuidelineFile(fileId) {
+        return this.delete(`/guidelines/files/${fileId}`);
+    },
+
+    getGuidelineFileStatus(fileId) {
+        return this.get(`/guidelines/files/${fileId}/status`);
+    },
 };
 
 window.ServerAPI = ServerAPI;

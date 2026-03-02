@@ -164,6 +164,13 @@
         MondaySettings.triggerSyncFromToolbar(el);
       }
     },
+
+    // =====================
+    // Guidelines
+    // =====================
+    'open-guidelines': () => {
+      window.location.href = '/guidelines';
+    },
   };
 
   document.addEventListener('click', (e) => {

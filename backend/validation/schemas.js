@@ -83,6 +83,30 @@ const goal = z.object({
 
 const goalsUpdate = z.union([goal, z.array(goal).min(1).max(50)]);
 
+// ── Guidelines ──────────────────────────────────
+const PRODUCT_TYPES = ['conventional', 'fha', 'va', 'usda', 'jumbo', 'non-qm', 'other'];
+
+const guidelineUpload = z.object({
+  fileName: trimmedString(500),
+  fileType: z.string().trim().max(100).optional().default('application/pdf'),
+  fileSize: z.number().int().positive(),
+  productType: z.enum(PRODUCT_TYPES),
+  versionLabel: optionalString(100),
+});
+
+const guidelineProcess = z.object({
+  fileId: z.number().int().positive(),
+  s3Key: trimmedString(1000),
+  productType: z.enum(PRODUCT_TYPES),
+});
+
+const guidelineSearch = z.object({
+  q: z.string().trim().min(1).max(200),
+  product_type: z.enum(PRODUCT_TYPES).optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(20),
+});
+
 // ── Validate helper ─────────────────────────────
 function validate(schema) {
   return (req, res, next) => {
@@ -98,6 +122,24 @@ function validate(schema) {
   };
 }
 
+/**
+ * Validate query parameters (for GET requests).
+ * Parses req.query through the Zod schema.
+ */
+function validateQuery(schema) {
+  return (req, res, next) => {
+    const result = schema.safeParse(req.query);
+    if (!result.success) {
+      return res.status(400).json({
+        error: result.error.issues[0].message,
+        field: result.error.issues[0].path.join('.') || undefined,
+      });
+    }
+    req.query = result.data;
+    next();
+  };
+}
+
 module.exports = {
   chatMessage,
   announcement,
@@ -105,5 +147,10 @@ module.exports = {
   pipelineUpdate,
   goal,
   goalsUpdate,
+  guidelineUpload,
+  guidelineProcess,
+  guidelineSearch,
+  PRODUCT_TYPES,
   validate,
+  validateQuery,
 };

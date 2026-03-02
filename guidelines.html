@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <script src="js/auth-gate.js?v=20260224-2"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lending Guidelines | MSFG Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+
+  <link rel="stylesheet" href="css/variables.css?v=20260302-1" />
+  <link rel="stylesheet" href="css/base.css?v=20260302-1" />
+  <link rel="stylesheet" href="css/layout.css?v=20260302-1" />
+  <link rel="stylesheet" href="css/components.css?v=20260302-1" />
+  <link rel="stylesheet" href="css/sections.css?v=20260302-1" />
+
+  <style>
+    .gl-page { max-width: 1000px; margin: 0 auto; padding: var(--spacing-xl); }
+    .gl-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-xl); flex-wrap: wrap; gap: var(--spacing-md); }
+    .gl-header h1 { font-size: 1.5rem; color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-sm); margin: 0; }
+    .gl-header h1 i { color: var(--green-bright); }
+    .back-link { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--green-teal); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color var(--transition-fast); }
+    .back-link:hover { color: var(--green-bright); }
+
+    /* Search bar */
+    .gl-search-bar { display: flex; gap: var(--spacing-sm); margin-bottom: var(--spacing-lg); flex-wrap: wrap; }
+    .gl-search-input-wrap { flex: 1; min-width: 250px; position: relative; }
+    .gl-search-input-wrap i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem; }
+    .gl-search-input { width: 100%; padding: 10px 14px 10px 40px; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.95rem; font-family: inherit; transition: border-color var(--transition-fast); }
+    .gl-search-input:focus { outline: none; border-color: var(--green-bright); box-shadow: 0 0 0 3px rgba(140,198,62,0.15); }
+    .gl-filter-select { padding: 10px 14px; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.9rem; font-family: inherit; min-width: 160px; cursor: pointer; }
+    .gl-search-btn { padding: 10px 20px; background: var(--green-teal); color: #fff; border: none; border-radius: var(--radius-md, 8px); font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: var(--spacing-sm); transition: background var(--transition-fast); }
+    .gl-search-btn:hover { background: var(--green-dark); }
+    .gl-search-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* Results */
+    .gl-results { display: flex; flex-direction: column; gap: var(--spacing-md); }
+    .gl-result-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); padding: var(--spacing-lg); cursor: pointer; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+    .gl-result-card:hover { border-color: var(--green-bright); box-shadow: var(--shadow-md); }
+    .gl-result-meta { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; margin-bottom: var(--spacing-sm); font-size: 0.8rem; }
+    .gl-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
+    .gl-badge-conv { background: rgba(59,130,246,0.12); color: #3b82f6; }
+    .gl-badge-fha { background: rgba(139,92,246,0.12); color: #8b5cf6; }
+    .gl-badge-va { background: rgba(34,197,94,0.12); color: #16a34a; }
+    .gl-badge-usda { background: rgba(245,158,11,0.12); color: #d97706; }
+    .gl-badge-jumbo { background: rgba(236,72,153,0.12); color: #db2777; }
+    .gl-badge-other { background: rgba(107,114,128,0.12); color: #6b7280; }
+    .gl-result-file { color: var(--text-muted); font-size: 0.8rem; }
+    .gl-result-file i { margin-right: 3px; }
+    .gl-result-page { color: var(--text-muted); font-size: 0.8rem; }
+    .gl-result-page i { margin-right: 3px; }
+    .gl-result-section { font-weight: 600; color: var(--text-primary); font-size: 1rem; margin-bottom: 4px; }
+    .gl-result-section code { font-family: 'SF Mono', 'Fira Code', monospace; background: var(--bg-tertiary); padding: 1px 6px; border-radius: 4px; font-size: 0.85rem; margin-right: 6px; }
+    .gl-result-snippet { color: var(--text-secondary); font-size: 0.88rem; line-height: 1.55; }
+    .gl-result-snippet mark { background: rgba(140,198,62,0.25); color: inherit; padding: 1px 2px; border-radius: 2px; }
+
+    /* Expanded chunk content */
+    .gl-chunk-content { margin-top: var(--spacing-md); padding-top: var(--spacing-md); border-top: 1px solid var(--border-color); font-size: 0.88rem; line-height: 1.7; color: var(--text-secondary); white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+    .gl-chunk-loading { color: var(--text-muted); font-style: italic; }
+
+    /* Pagination */
+    .gl-pagination { display: flex; justify-content: center; align-items: center; gap: var(--spacing-md); margin-top: var(--spacing-xl); }
+    .gl-pagination button { padding: 8px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem; cursor: pointer; transition: all var(--transition-fast); }
+    .gl-pagination button:hover:not(:disabled) { border-color: var(--green-bright); color: var(--green-bright); }
+    .gl-pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .gl-pagination span { font-size: 0.85rem; color: var(--text-muted); }
+
+    /* Status states */
+    .gl-empty, .gl-loading { text-align: center; padding: var(--spacing-xl) var(--spacing-lg); color: var(--text-muted); }
+    .gl-empty i, .gl-loading i { display: block; font-size: 2rem; margin-bottom: var(--spacing-sm); }
+    .gl-results-count { font-size: 0.85rem; color: var(--text-muted); margin-bottom: var(--spacing-md); }
+
+    /* Admin upload section */
+    .gl-admin-section { margin-top: var(--spacing-xl); padding-top: var(--spacing-xl); border-top: 2px solid var(--border-color); }
+    .gl-admin-section h2 { font-size: 1.15rem; color: var(--text-primary); margin-bottom: var(--spacing-lg); display: flex; align-items: center; gap: var(--spacing-sm); }
+    .gl-admin-section h2 i { color: var(--status-warning); }
+    .gl-upload-form { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: flex-end; margin-bottom: var(--spacing-lg); }
+    .gl-upload-form .field { display: flex; flex-direction: column; gap: 4px; }
+    .gl-upload-form label { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; }
+    .gl-upload-form input, .gl-upload-form select { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md, 8px); background: var(--bg-secondary); color: var(--text-primary); font-size: 0.88rem; font-family: inherit; }
+    .gl-upload-btn { padding: 8px 18px; background: var(--green-bright); color: #fff; border: none; border-radius: var(--radius-md, 8px); font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: background var(--transition-fast); }
+    .gl-upload-btn:hover { background: var(--green-medium); }
+    .gl-upload-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* File list */
+    .gl-file-list { display: flex; flex-direction: column; gap: var(--spacing-sm); }
+    .gl-file-row { display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-sm) var(--spacing-md); background: var(--bg-tertiary); border-radius: var(--radius-md, 8px); font-size: 0.85rem; flex-wrap: wrap; }
+    .gl-file-row .name { flex: 1; font-weight: 500; color: var(--text-primary); min-width: 200px; }
+    .gl-file-row .info { color: var(--text-muted); font-size: 0.8rem; }
+    .gl-status-badge { display: inline-flex; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+    .gl-status-ready { background: rgba(34,197,94,0.12); color: #16a34a; }
+    .gl-status-processing { background: rgba(245,158,11,0.12); color: #d97706; }
+    .gl-status-error { background: rgba(239,68,68,0.12); color: #ef4444; }
+    .gl-delete-btn { background: none; border: none; color: var(--status-danger); cursor: pointer; font-size: 0.85rem; padding: 4px 8px; border-radius: 4px; transition: background var(--transition-fast); }
+    .gl-delete-btn:hover { background: rgba(239,68,68,0.1); }
+  </style>
+</head>
+
+<body>
+  <div class="gl-page">
+    <div class="gl-header">
+      <h1><i class="fas fa-book-open"></i> Lending Guidelines</h1>
+      <a href="/" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="gl-search-bar">
+      <div class="gl-search-input-wrap">
+        <i class="fas fa-search"></i>
+        <input type="text" class="gl-search-input" id="searchInput" placeholder="Search guidelines (e.g. LTV ratio, gift funds, DTI)..." autocomplete="off" />
+      </div>
+      <select class="gl-filter-select" id="productFilter">
+        <option value="">All Product Types</option>
+        <option value="conventional">Conventional</option>
+        <option value="fha">FHA</option>
+        <option value="va">VA</option>
+        <option value="usda">USDA</option>
+        <option value="jumbo">Jumbo</option>
+        <option value="non-qm">Non-QM</option>
+        <option value="other">Other</option>
+      </select>
+      <button type="button" class="gl-search-btn" id="searchBtn">
+        <i class="fas fa-search"></i> Search
+      </button>
+    </div>
+
+    <!-- Results Count -->
+    <div class="gl-results-count" id="resultsCount" style="display:none;"></div>
+
+    <!-- Results List -->
+    <div class="gl-results" id="resultsList">
+      <div class="gl-empty">
+        <i class="fas fa-book-open"></i>
+        Search through uploaded lending guidelines by keyword.
+      </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="gl-pagination" id="pagination" style="display:none;">
+      <button type="button" id="prevBtn"><i class="fas fa-chevron-left"></i> Previous</button>
+      <span id="pageInfo"></span>
+      <button type="button" id="nextBtn">Next <i class="fas fa-chevron-right"></i></button>
+    </div>
+
+    <!-- Admin Upload Section (hidden for non-admins) -->
+    <div class="gl-admin-section" id="adminSection" style="display:none;">
+      <h2><i class="fas fa-shield-alt"></i> Admin: Upload Guidelines</h2>
+
+      <div class="gl-upload-form" id="uploadForm">
+        <div class="field">
+          <label>PDF File</label>
+          <input type="file" id="fileInput" accept=".pdf" />
+        </div>
+        <div class="field">
+          <label>Product Type</label>
+          <select id="uploadProductType">
+            <option value="conventional">Conventional</option>
+            <option value="fha">FHA</option>
+            <option value="va">VA</option>
+            <option value="usda">USDA</option>
+            <option value="jumbo">Jumbo</option>
+            <option value="non-qm">Non-QM</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Version Label</label>
+          <input type="text" id="versionLabel" placeholder="e.g. Feb 2026" />
+        </div>
+        <button type="button" class="gl-upload-btn" id="uploadBtn">
+          <i class="fas fa-upload"></i> Upload & Process
+        </button>
+      </div>
+
+      <div id="uploadStatus" style="display:none; margin-bottom: var(--spacing-md); font-size: 0.88rem; color: var(--text-muted);"></div>
+
+      <h3 style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: var(--spacing-sm);">Uploaded Files</h3>
+      <div class="gl-file-list" id="fileList">
+        <div class="gl-loading"><i class="fas fa-spinner fa-spin"></i> Loading files...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/config.js?v=20260302-1"></script>
+  <script src="js/api-server.js?v=20260302-1"></script>
+  <script src="js/utils.js?v=20260302-1"></script>
+  <script>
+    (function() {
+      'use strict';
+
+      // ── State ──
+      let currentPage = 1;
+      let currentQuery = '';
+      let currentProductType = '';
+      let totalPages = 0;
+      let expandedChunkId = null;
+      let isAdmin = false;
+
+      // ── Product type badge helpers ──
+      const BADGE_CLASSES = {
+        conventional: 'gl-badge-conv',
+        fha: 'gl-badge-fha',
+        va: 'gl-badge-va',
+        usda: 'gl-badge-usda',
+        jumbo: 'gl-badge-jumbo',
+        'non-qm': 'gl-badge-other',
+        other: 'gl-badge-other',
+      };
+
+      function badgeClass(type) {
+        return BADGE_CLASSES[type] || 'gl-badge-other';
+      }
+
+      function escapeHtml(str) {
+        return typeof Utils !== 'undefined' && Utils.escapeHtml
+          ? Utils.escapeHtml(str)
+          : String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m]);
+      }
+
+      // ── Highlight search terms in snippet ──
+      function highlightSnippet(snippet, query) {
+        if (!snippet || !query) return escapeHtml(snippet || '');
+        const escaped = escapeHtml(snippet);
+        const words = query.split(/\s+/).filter(w => w.length > 1);
+        if (words.length === 0) return escaped;
+        const regex = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+        return escaped.replace(regex, '<mark>$1</mark>');
+      }
+
+      // ── Build result card HTML ──
+      function buildResultCard(r) {
+        const type = escapeHtml(r.product_type || 'other');
+        const sectionId = r.section_id ? `<code>${escapeHtml(r.section_id)}</code>` : '';
+        const title = escapeHtml(r.section_title || 'Untitled Section');
+        const fileName = escapeHtml(r.file_name || '');
+        const pageNum = r.page_number || '?';
+        const snippet = highlightSnippet(r.snippet || '', currentQuery);
+
+        return `
+          <div class="gl-result-card" data-chunk-id="${r.id}">
+            <div class="gl-result-meta">
+              <span class="gl-badge ${badgeClass(r.product_type)}">${type}</span>
+              <span class="gl-result-file"><i class="fas fa-file-pdf"></i> ${fileName}</span>
+              <span class="gl-result-page"><i class="fas fa-bookmark"></i> Page ${pageNum}</span>
+            </div>
+            <div class="gl-result-section">${sectionId}${title}</div>
+            <div class="gl-result-snippet">${snippet}...</div>
+            <div class="gl-chunk-content" id="chunk-${r.id}" style="display:none;"></div>
+          </div>`;
+      }
+
+      // ── Search ──
+      async function doSearch(page) {
+        const q = document.getElementById('searchInput').value.trim();
+        if (!q) return;
+
+        currentQuery = q;
+        currentProductType = document.getElementById('productFilter').value;
+        currentPage = page || 1;
+
+        const resultsList = document.getElementById('resultsList');
+        resultsList.innerHTML = '<div class="gl-loading"><i class="fas fa-spinner fa-spin"></i> Searching...</div>';
+        document.getElementById('resultsCount').style.display = 'none';
+        document.getElementById('pagination').style.display = 'none';
+
+        try {
+          const data = await ServerAPI.searchGuidelines(currentQuery, currentProductType || undefined, currentPage, 20);
+          const { results, pagination } = data;
+          totalPages = pagination.totalPages;
+
+          if (results.length === 0) {
+            resultsList.innerHTML = '<div class="gl-empty"><i class="fas fa-search"></i> No results found. Try different keywords.</div>';
+            return;
+          }
+
+          // Results count
+          const countEl = document.getElementById('resultsCount');
+          const start = (pagination.page - 1) * pagination.limit + 1;
+          const end = Math.min(pagination.page * pagination.limit, pagination.total);
+          countEl.textContent = `Showing ${start}\u2013${end} of ${pagination.total} results`;
+          countEl.style.display = '';
+
+          // Render cards
+          resultsList.innerHTML = results.map(buildResultCard).join('');
+
+          // Pagination
+          if (totalPages > 1) {
+            const pag = document.getElementById('pagination');
+            pag.style.display = '';
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+          }
+        } catch (err) {
+          resultsList.innerHTML = '<div class="gl-empty"><i class="fas fa-exclamation-triangle"></i> Search failed. Please try again.</div>';
+          console.error('Search error:', err);
+        }
+      }
+
+      // ── Expand chunk ──
+      async function toggleChunk(chunkId) {
+        const el = document.getElementById('chunk-' + chunkId);
+        if (!el) return;
+
+        if (el.style.display !== 'none') {
+          el.style.display = 'none';
+          expandedChunkId = null;
+          return;
+        }
+
+        // Collapse any previously expanded
+        if (expandedChunkId) {
+          const prev = document.getElementById('chunk-' + expandedChunkId);
+          if (prev) prev.style.display = 'none';
+        }
+
+        el.style.display = '';
+        el.innerHTML = '<div class="gl-chunk-loading"><i class="fas fa-spinner fa-spin"></i> Loading full content...</div>';
+        expandedChunkId = chunkId;
+
+        try {
+          const chunk = await ServerAPI.getGuidelineChunk(chunkId);
+          el.textContent = chunk.content || '(No content)';
+        } catch (err) {
+          el.innerHTML = '<div class="gl-chunk-loading" style="color:var(--status-danger);">Failed to load content.</div>';
+        }
+      }
+
+      // ── Admin: Load files ──
+      async function loadFiles() {
+        const list = document.getElementById('fileList');
+        try {
+          const files = await ServerAPI.getGuidelineFiles();
+          if (files.length === 0) {
+            list.innerHTML = '<div style="color:var(--text-muted); font-size:0.85rem; padding:var(--spacing-sm);">No guideline files uploaded yet.</div>';
+            return;
+          }
+
+          list.innerHTML = files.map(f => {
+            const statusClass = f.status === 'ready' ? 'gl-status-ready' : f.status === 'processing' ? 'gl-status-processing' : 'gl-status-error';
+            const size = f.file_size ? (f.file_size / 1024 / 1024).toFixed(1) + ' MB' : '';
+            const sections = f.total_sections ? f.total_sections + ' sections' : '';
+            const pages = f.total_pages ? f.total_pages + ' pages' : '';
+            const info = [size, pages, sections].filter(Boolean).join(' \u00b7 ');
+
+            return `
+              <div class="gl-file-row" data-file-id="${f.id}">
+                <span class="name"><i class="fas fa-file-pdf" style="color:var(--status-danger); margin-right:6px;"></i>${escapeHtml(f.file_name)}</span>
+                <span class="gl-badge ${badgeClass(f.product_type)}">${escapeHtml(f.product_type)}</span>
+                <span class="gl-status-badge ${statusClass}">${f.status}</span>
+                <span class="info">${info}</span>
+                ${f.status === 'error' ? `<span class="info" style="color:var(--status-danger);" title="${escapeHtml(f.error_message || '')}"><i class="fas fa-exclamation-circle"></i> Error</span>` : ''}
+                <button type="button" class="gl-delete-btn" data-delete-file="${f.id}" title="Delete file"><i class="fas fa-trash-alt"></i></button>
+              </div>`;
+          }).join('');
+        } catch (err) {
+          list.innerHTML = '<div style="color:var(--status-danger); font-size:0.85rem;">Failed to load files.</div>';
+          console.error(err);
+        }
+      }
+
+      // ── Admin: Upload + Process ──
+      async function handleUpload() {
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        if (!file) return alert('Please select a PDF file.');
+        if (!file.name.toLowerCase().endsWith('.pdf')) return alert('Only PDF files are supported.');
+
+        const productType = document.getElementById('uploadProductType').value;
+        const versionLabel = document.getElementById('versionLabel').value.trim();
+        const statusEl = document.getElementById('uploadStatus');
+        const btn = document.getElementById('uploadBtn');
+
+        btn.disabled = true;
+        statusEl.style.display = '';
+        statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Getting upload URL...';
+
+        try {
+          // 1. Get presigned upload URL
+          const upload = await ServerAPI.getGuidelineUploadUrl({
+            fileName: file.name,
+            fileType: file.type || 'application/pdf',
+            fileSize: file.size,
+            productType,
+            versionLabel: versionLabel || undefined,
+          });
+
+          // 2. Upload to S3
+          statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading PDF to S3...';
+          await ServerAPI.uploadToS3(upload.uploadUrl, file);
+
+          // 3. Trigger processing
+          statusEl.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing PDF (this may take a minute)...';
+          await ServerAPI.processGuideline({
+            fileId: upload.fileId,
+            s3Key: upload.s3Key,
+            productType,
+          });
+
+          statusEl.innerHTML = '<i class="fas fa-check" style="color:var(--status-success);"></i> Upload complete! Processing in background...';
+          fileInput.value = '';
+          document.getElementById('versionLabel').value = '';
+
+          // Poll for status
+          pollFileStatus(upload.fileId);
+
+          // Refresh file list
+          setTimeout(loadFiles, 1000);
+        } catch (err) {
+          statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--status-danger);"></i> Upload failed: ' + escapeHtml(err.message);
+          console.error(err);
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      // ── Poll file processing status ──
+      function pollFileStatus(fileId) {
+        const statusEl = document.getElementById('uploadStatus');
+        let attempts = 0;
+        const maxAttempts = 60; // 5 minutes max
+
+        const interval = setInterval(async () => {
+          attempts++;
+          try {
+            const status = await ServerAPI.getGuidelineFileStatus(fileId);
+
+            if (status.status === 'ready') {
+              clearInterval(interval);
+              statusEl.innerHTML = `<i class="fas fa-check-circle" style="color:var(--status-success);"></i> Processing complete! ${status.total_pages} pages, ${status.total_sections} sections indexed.`;
+              loadFiles();
+            } else if (status.status === 'error') {
+              clearInterval(interval);
+              statusEl.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:var(--status-danger);"></i> Processing failed: ' + escapeHtml(status.error_message || 'Unknown error');
+              loadFiles();
+            } else if (attempts >= maxAttempts) {
+              clearInterval(interval);
+              statusEl.innerHTML = '<i class="fas fa-clock" style="color:var(--status-warning);"></i> Still processing. Refresh the page to check status.';
+            }
+          } catch (err) {
+            // Silently continue polling
+          }
+        }, 5000);
+      }
+
+      // ── Admin: Delete file ──
+      async function deleteFile(fileId) {
+        if (!confirm('Delete this guideline file and all its indexed sections? This cannot be undone.')) return;
+        try {
+          await ServerAPI.deleteGuidelineFile(fileId);
+          loadFiles();
+        } catch (err) {
+          alert('Failed to delete: ' + err.message);
+        }
+      }
+
+      // ── Event Listeners ──
+      function bindEvents() {
+        // Search
+        document.getElementById('searchBtn').addEventListener('click', () => doSearch(1));
+        document.getElementById('searchInput').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') doSearch(1);
+        });
+
+        // Pagination
+        document.getElementById('prevBtn').addEventListener('click', () => {
+          if (currentPage > 1) doSearch(currentPage - 1);
+        });
+        document.getElementById('nextBtn').addEventListener('click', () => {
+          if (currentPage < totalPages) doSearch(currentPage + 1);
+        });
+
+        // Result card click → expand chunk
+        document.getElementById('resultsList').addEventListener('click', (e) => {
+          const card = e.target.closest('.gl-result-card');
+          if (!card) return;
+          const chunkId = card.dataset.chunkId;
+          if (chunkId) toggleChunk(chunkId);
+        });
+
+        // Admin: upload
+        document.getElementById('uploadBtn').addEventListener('click', handleUpload);
+
+        // Admin: delete file
+        document.getElementById('fileList').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-delete-file]');
+          if (btn) deleteFile(btn.dataset.deleteFile);
+        });
+      }
+
+      // ── Init ──
+      async function init() {
+        bindEvents();
+
+        // Check if user is admin
+        try {
+          const me = await ServerAPI.getMe();
+          const role = String(me.role || '').toLowerCase();
+          isAdmin = role === 'admin';
+
+          if (isAdmin) {
+            document.getElementById('adminSection').style.display = '';
+            loadFiles();
+          }
+        } catch (err) {
+          console.error('Failed to get user info:', err);
+        }
+
+        // Check for search query in URL
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('q')) {
+          document.getElementById('searchInput').value = params.get('q');
+          if (params.get('product_type')) {
+            document.getElementById('productFilter').value = params.get('product_type');
+          }
+          doSearch(1);
+        }
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -159,7 +159,11 @@
 
       loan_calc_hub: "/calc/",
 
-      ratesheet: "https://email.msfginfo.com"
+      ratesheet: "https://email.msfginfo.com",
+
+      angelai: "https://www.swmc.com/angelai",
+      chatgpt: "https://chatgpt.com",
+      claude: "https://claude.ai"
     }
   };
 

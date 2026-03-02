@@ -19,6 +19,10 @@ function handler(event) {
     request.uri = "/login-callback.html";
   }
 
+  if (uri === "/guidelines" || uri === "/guidelines/") {
+    request.uri = "/guidelines.html";
+  }
+
   // Redirect bare /calc to /calc/ (matches calc/* cache behavior)
   if (uri === "/calc") {
     return {

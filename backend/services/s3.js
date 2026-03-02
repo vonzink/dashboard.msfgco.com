@@ -79,6 +79,25 @@ async function deleteObject(bucket, key) {
   }
 }
 
+/**
+ * Download an S3 object and return its contents as a Buffer.
+ *
+ * @param {string} bucket
+ * @param {string} key
+ * @returns {Promise<Buffer>}
+ */
+async function getObject(bucket, key) {
+  const client = clientForBucket(bucket);
+  const { Body } = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+
+  // Body is a Readable stream — collect all chunks into a Buffer
+  const chunks = [];
+  for await (const chunk of Body) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 // ── Higher-Level Helpers ─────────────────────────────────────────
 
 /**
@@ -112,6 +131,7 @@ module.exports = {
   BUCKETS,
   getUploadUrl,
   getDownloadUrl,
+  getObject,
   deleteObject,
   sanitizeFileName,
   buildMediaKey,
