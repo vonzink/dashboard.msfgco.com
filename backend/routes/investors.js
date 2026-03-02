@@ -98,16 +98,19 @@ router.get('/:key', async (req, res, next) => {
 router.post('/', requireAdmin, async (req, res, next) => {
   try {
     const {
-      investor_key, name,
+      investor_key: rawKey, name,
       account_executive_name, account_executive_email, account_executive_mobile, account_executive_address,
       states, best_programs, minimum_fico, in_house_dpa,
       epo, max_comp, doc_review_wire, remote_closing_review,
       website_url, logo_url, login_url, notes
     } = req.body;
 
-    if (!investor_key || !name) {
-      return res.status(400).json({ error: 'investor_key and name are required' });
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
     }
+
+    // Auto-generate investor_key from name if not provided
+    const investor_key = rawKey || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
     await db.query(
       `INSERT INTO investors
