@@ -137,15 +137,8 @@ const App = {
                     });
                 }
 
-                // Show LO filter on funded loans for admin/manager
-                if (role === 'admin' || role === 'manager') {
-                    const fundedLO = document.getElementById('fundedLOSelect');
-                    if (fundedLO) fundedLO.style.display = '';
-                }
-
-                // Show group filter for all users (populated dynamically)
-                const fundedGroup = document.getElementById('fundedGroupSelect');
-                if (fundedGroup) fundedGroup.style.display = '';
+                // Board/group filters are shown dynamically when data loads
+                // (see api.js _populatePreApprovalFilters and funded-loans.js _renderBoardFilter/_renderGroupFilter)
             }
         } catch (err) {
             console.warn('Could not load current user:', err);

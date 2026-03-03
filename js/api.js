@@ -105,38 +105,101 @@ const API = {
     // ========================================
     // PRE-APPROVALS
     // ========================================
+    preApprovalData: [],
+    preApprovalBoards: [],
+    preApprovalGroups: [],
+    _paFiltersInitialized: false,
+
     async loadPreApprovals() {
         try {
-            const data = await ServerAPI.get('/pre-approvals');
-            this.renderPreApprovals(Array.isArray(data) ? data : data?.data || []);
+            // Build query params from filters
+            const boardSelect = document.getElementById('preApprovalBoardSelect');
+            const groupSelect = document.getElementById('preApprovalGroupSelect');
+            const params = new URLSearchParams();
+            if (boardSelect?.value) params.set('board_id', boardSelect.value);
+            if (groupSelect?.value) params.set('group', groupSelect.value);
+            const qs = params.toString() ? '?' + params.toString() : '';
+
+            const result = await ServerAPI.get('/pre-approvals' + qs);
+            // Backend returns { data, boards, groups }
+            if (result && !Array.isArray(result)) {
+                this.preApprovalData = result.data || [];
+                this.preApprovalBoards = result.boards || [];
+                this.preApprovalGroups = result.groups || [];
+            } else {
+                this.preApprovalData = Array.isArray(result) ? result : [];
+            }
+            this.renderPreApprovals(this.preApprovalData);
+            this._populatePreApprovalFilters();
         } catch (err) {
             console.warn('Pre-approvals load failed:', err.message);
         }
     },
 
+    _populatePreApprovalFilters() {
+        const boardSelect = document.getElementById('preApprovalBoardSelect');
+        const groupSelect = document.getElementById('preApprovalGroupSelect');
+
+        if (boardSelect && this.preApprovalBoards.length > 0) {
+            const currentVal = boardSelect.value;
+            boardSelect.innerHTML = '<option value="">All Boards</option>' +
+                this.preApprovalBoards.map(b =>
+                    `<option value="${Utils.escapeHtml(b.board_id)}">${Utils.escapeHtml(b.board_name || b.board_id)}</option>`
+                ).join('');
+            boardSelect.value = currentVal;
+            boardSelect.style.display = '';
+            if (!this._paFiltersInitialized) {
+                boardSelect.addEventListener('change', () => this.loadPreApprovals());
+            }
+        }
+
+        if (groupSelect && this.preApprovalGroups.length > 0) {
+            const currentVal = groupSelect.value;
+            groupSelect.innerHTML = '<option value="">All Groups</option>' +
+                this.preApprovalGroups.map(g =>
+                    `<option value="${Utils.escapeHtml(g)}">${Utils.escapeHtml(g)}</option>`
+                ).join('');
+            groupSelect.value = currentVal;
+            groupSelect.style.display = '';
+            if (!this._paFiltersInitialized) {
+                groupSelect.addEventListener('change', () => this.loadPreApprovals());
+            }
+        }
+
+        this._paFiltersInitialized = true;
+    },
+
     renderPreApprovals(data) {
         const tbody = document.getElementById('preApprovalsBody');
-        if (!tbody || !data?.length) return;
+        if (!tbody) return;
+
+        if (!data?.length) {
+            tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
+                <i class="fas fa-database"></i>
+                <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
+            </td></tr>`;
+            return;
+        }
 
         tbody.innerHTML = data.map(item => `
             <tr data-id="${item.id}">
-                <td><strong>${Utils.escapeHtml(item.clientName)}</strong></td>
-                <td class="currency">${Utils.formatCurrency(item.loanAmount)}</td>
-                <td>${Utils.formatDate(item.preApprovalDate)}</td>
-                <td>${Utils.formatDate(item.expirationDate)}</td>
+                <td><strong>${Utils.escapeHtml(item.client_name || '')}</strong></td>
+                <td class="currency">${Utils.formatCurrency(item.loan_amount)}</td>
+                <td>${Utils.formatDate(item.pre_approval_date)}</td>
+                <td>${Utils.formatDate(item.expiration_date)}</td>
                 <td>
-                    <span class="status-badge ${item.status.toLowerCase()}">
-                        ${Utils.capitalize(item.status)}
+                    <span class="status-badge ${(item.status || '').toLowerCase().replace(/[^a-z]/g, '-')}">
+                        ${Utils.escapeHtml(item.status || 'Unknown')}
                     </span>
                 </td>
                 <td>
                     <div class="lo-cell">
-                        <span class="lo-avatar">${Utils.getInitials(item.assignedLO)}</span>
-                        ${Utils.escapeHtml(item.assignedLO)}
+                        <span class="lo-avatar">${Utils.getInitials(item.assigned_lo_name)}</span>
+                        ${Utils.escapeHtml(item.assigned_lo_name || 'Unassigned')}
                     </div>
                 </td>
-                <td>${Utils.escapeHtml(item.propertyAddress || 'TBD')}</td>
-                <td>${Utils.escapeHtml(item.loanType)}</td>
+                <td>${Utils.escapeHtml(item.property_address || 'TBD')}</td>
+                <td>${Utils.escapeHtml(item.loan_type || '')}</td>
                 <td class="notes-cell" title="${Utils.escapeHtml(item.notes || '')}">
                     ${Utils.escapeHtml(item.notes || '')}
                 </td>

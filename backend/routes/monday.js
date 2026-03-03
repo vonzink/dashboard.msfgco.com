@@ -29,7 +29,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getUserId, requireDbUser, requireAdmin } = require('../middleware/userContext');
+const { getUserId, isAdmin, requireDbUser, requireAdmin } = require('../middleware/userContext');
 
 const {
   VALID_FIELDS_BY_SECTION,
@@ -46,14 +46,86 @@ const {
 
 router.use(requireDbUser);
 
-// ── GET /boards — list all registered boards ──────────────────────
+// ── GET /boards — list all registered boards (with assigned users) ──
 router.get('/boards', async (req, res, next) => {
   try {
     const [boards] = await db.query(
       'SELECT * FROM monday_boards ORDER BY display_order, board_name'
     );
+
+    // Fetch assigned users for all boards
+    const [accessRows] = await db.query(
+      `SELECT ba.board_id, u.id as user_id, u.name, u.email
+       FROM monday_board_access ba
+       JOIN users u ON ba.user_id = u.id
+       ORDER BY u.name`
+    );
+
+    // Group by board_id
+    const accessByBoard = {};
+    for (const row of accessRows) {
+      if (!accessByBoard[row.board_id]) accessByBoard[row.board_id] = [];
+      accessByBoard[row.board_id].push({ id: row.user_id, name: row.name, email: row.email });
+    }
+
+    // Attach to each board
+    for (const board of boards) {
+      board.assignedUsers = accessByBoard[board.board_id] || [];
+    }
+
     const boardIds = boards.filter(b => b.is_active).map(b => b.board_id);
     res.json({ boards, boardIds });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── GET /boards/my-boards — boards accessible to current user ─────
+router.get('/boards/my-boards', async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    let boards;
+
+    if (isAdmin(req)) {
+      // Admins see all active boards
+      [boards] = await db.query(
+        'SELECT board_id, board_name, target_section FROM monday_boards WHERE is_active = 1 ORDER BY display_order, board_name'
+      );
+    } else {
+      // Non-admins see only boards they have access to
+      [boards] = await db.query(
+        `SELECT mb.board_id, mb.board_name, mb.target_section
+         FROM monday_boards mb
+         JOIN monday_board_access ba ON mb.board_id = ba.board_id
+         WHERE mb.is_active = 1 AND ba.user_id = ?
+         ORDER BY mb.display_order, mb.board_name`,
+        [userId]
+      );
+    }
+
+    // Get available groups for each section from the actual data
+    const boardIds = boards.map(b => b.board_id);
+    let groups = [];
+
+    if (boardIds.length > 0) {
+      // Collect groups from both pre_approvals and funded_loans
+      const [paGroups] = await db.query(
+        `SELECT DISTINCT group_name FROM pre_approvals
+         WHERE source_board_id IN (?) AND group_name IS NOT NULL AND group_name != ''
+         ORDER BY group_name`,
+        [boardIds]
+      );
+      const [flGroups] = await db.query(
+        `SELECT DISTINCT group_name FROM funded_loans
+         WHERE source_board_id IN (?) AND group_name IS NOT NULL AND group_name != ''
+         ORDER BY group_name`,
+        [boardIds]
+      );
+      const groupSet = new Set([...paGroups.map(r => r.group_name), ...flGroups.map(r => r.group_name)]);
+      groups = [...groupSet].sort();
+    }
+
+    res.json({ boards, groups });
   } catch (error) {
     next(error);
   }
@@ -62,7 +134,7 @@ router.get('/boards', async (req, res, next) => {
 // ── POST /boards — add a new board (admin) ──────────────────────
 router.post('/boards', requireAdmin, async (req, res, next) => {
   try {
-    const { boardId, boardName, targetSection } = req.body;
+    const { boardId, boardName, targetSection, assignedUsers } = req.body;
     if (!boardId) {
       return res.status(400).json({ error: 'boardId is required' });
     }
@@ -70,11 +142,33 @@ router.post('/boards', requireAdmin, async (req, res, next) => {
     const validSections = ['pipeline', 'pre_approvals', 'funded_loans'];
     const section = validSections.includes(targetSection) ? targetSection : 'pipeline';
 
-    await db.query(
-      `INSERT INTO monday_boards (board_id, board_name, target_section) VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE board_name = VALUES(board_name), target_section = VALUES(target_section), is_active = 1`,
-      [boardId, boardName || '', section]
-    );
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      await connection.query(
+        `INSERT INTO monday_boards (board_id, board_name, target_section) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE board_name = VALUES(board_name), target_section = VALUES(target_section), is_active = 1`,
+        [boardId, boardName || '', section]
+      );
+
+      // Save user access assignments
+      if (Array.isArray(assignedUsers) && assignedUsers.length > 0) {
+        for (const userId of assignedUsers) {
+          await connection.query(
+            'INSERT IGNORE INTO monday_board_access (board_id, user_id) VALUES (?, ?)',
+            [boardId, userId]
+          );
+        }
+      }
+
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
 
     const [boards] = await db.query('SELECT * FROM monday_boards ORDER BY display_order, board_name');
     res.status(201).json({ success: true, boards });
@@ -86,7 +180,7 @@ router.post('/boards', requireAdmin, async (req, res, next) => {
 // ── PUT /boards/:boardId — update board config (admin) ──────────
 router.put('/boards/:boardId', requireAdmin, async (req, res, next) => {
   try {
-    const { boardName, targetSection, isActive, displayOrder } = req.body;
+    const { boardName, targetSection, isActive, displayOrder, assignedUsers } = req.body;
     const updates = [];
     const values = [];
 
@@ -100,18 +194,47 @@ router.put('/boards/:boardId', requireAdmin, async (req, res, next) => {
     if (isActive !== undefined) { updates.push('is_active = ?'); values.push(isActive ? 1 : 0); }
     if (displayOrder !== undefined) { updates.push('display_order = ?'); values.push(displayOrder); }
 
-    if (updates.length === 0) {
+    const hasFieldUpdates = updates.length > 0;
+    const hasUserUpdates = Array.isArray(assignedUsers);
+
+    if (!hasFieldUpdates && !hasUserUpdates) {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    values.push(req.params.boardId);
-    const [result] = await db.query(
-      `UPDATE monday_boards SET ${updates.join(', ')} WHERE board_id = ?`,
-      values
-    );
+    const boardId = req.params.boardId;
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Board not found' });
+      if (hasFieldUpdates) {
+        values.push(boardId);
+        const [result] = await connection.query(
+          `UPDATE monday_boards SET ${updates.join(', ')} WHERE board_id = ?`,
+          values
+        );
+        if (result.affectedRows === 0) {
+          await connection.rollback();
+          return res.status(404).json({ error: 'Board not found' });
+        }
+      }
+
+      // Replace user access assignments
+      if (hasUserUpdates) {
+        await connection.query('DELETE FROM monday_board_access WHERE board_id = ?', [boardId]);
+        for (const userId of assignedUsers) {
+          await connection.query(
+            'INSERT INTO monday_board_access (board_id, user_id) VALUES (?, ?)',
+            [boardId, userId]
+          );
+        }
+      }
+
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
     }
 
     const [boards] = await db.query('SELECT * FROM monday_boards ORDER BY display_order, board_name');
@@ -129,6 +252,7 @@ router.delete('/boards/:boardId', requireAdmin, async (req, res, next) => {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
+      await connection.query('DELETE FROM monday_board_access WHERE board_id = ?', [boardId]);
       await connection.query('DELETE FROM monday_column_mappings WHERE board_id = ?', [boardId]);
       await connection.query('DELETE FROM monday_sync_log WHERE board_id = ?', [boardId]);
       await connection.query('DELETE FROM monday_boards WHERE board_id = ?', [boardId]);

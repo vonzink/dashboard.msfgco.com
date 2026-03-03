@@ -1,6 +1,7 @@
 /* ============================================
-   MSFG Dashboard - Performance Gauge Displays
-   SVG arc gauges for Pre-Approvals, Pipeline, Funded Loans
+   MSFG Dashboard - Header Mini Speedometer Gauges
+   Compact SVG arc gauges in header bar, fed from
+   the same data as Performance & Goals section
    ============================================ */
 
 const DashboardGauges = {
@@ -10,14 +11,19 @@ const DashboardGauges = {
     funded:       { units: 0, total_amount: 0 },
   },
 
+  // Arc geometry constants (tiny semicircle)
+  CX: 22,
+  CY: 24,
+  R: 18,
+
   // ========================================
   // INITIALIZATION
   // ========================================
   async init() {
     await this.fetchAllSummaries();
-    this.renderAllGauges();
+    this.renderHeaderMetrics();
     this.bindPeriodListener();
-    console.log('DashboardGauges initialized');
+    console.log('HeaderMetrics initialized');
   },
 
   // ========================================
@@ -25,17 +31,21 @@ const DashboardGauges = {
   // ========================================
   async fetchAllSummaries() {
     try {
+      // Map GoalsManager period to funded-loans API period param
+      const goalPeriod = window.GoalsManager?.currentPeriod || 'monthly';
+      const fundedPeriod = goalPeriod === 'yearly' ? 'ytd' : 'mtd';
+
       const [preApprovals, pipeline, funded] = await Promise.all([
         ServerAPI.getPreApprovalsSummary().catch(() => ({ units: 0, total_amount: 0 })),
         ServerAPI.getPipelineSummary().catch(() => ({ units: 0, total_amount: 0 })),
-        ServerAPI.getFundedLoansSummary().catch(() => ({ units: 0, total_amount: 0 })),
+        ServerAPI.getFundedLoansSummary({ period: fundedPeriod }).catch(() => ({ units: 0, total_amount: 0 })),
       ]);
 
       this.data.preApprovals = preApprovals;
       this.data.pipeline     = pipeline;
       this.data.funded        = funded;
     } catch (err) {
-      console.error('DashboardGauges: failed to fetch summaries', err);
+      console.error('HeaderMetrics: failed to fetch summaries', err);
     }
   },
 
@@ -47,7 +57,6 @@ const DashboardGauges = {
     if (!periodSelect) return;
 
     periodSelect.addEventListener('change', () => {
-      // Re-fetch after a short delay to let GoalsManager update first
       setTimeout(() => this.refresh(), 300);
     });
   },
@@ -57,160 +66,136 @@ const DashboardGauges = {
   // ========================================
   async refresh() {
     await this.fetchAllSummaries();
-    this.renderAllGauges();
+    this.renderHeaderMetrics();
   },
 
   // ========================================
-  // RENDER ALL GAUGES
+  // RENDER ALL HEADER METRICS + GAUGES
   // ========================================
-  renderAllGauges() {
-    this.renderGauge('gaugePreApprovals', {
-      units: this.data.preApprovals.units,
-      volume: this.data.preApprovals.total_amount,
-      target: null, // No goal target for pre-approvals
-      label: 'Pre-Approvals',
-      color: 'var(--primary, #0d7377)',
-    });
-
-    const pipelineGoal = window.GoalsManager?.getGoal?.('pipeline');
-    this.renderGauge('gaugePipeline', {
-      units: this.data.pipeline.units,
-      volume: this.data.pipeline.total_amount,
-      target: pipelineGoal ? pipelineGoal.target * 1000000 : null, // Target is in $M
-      label: 'Pipeline',
-      color: 'var(--primary, #0d7377)',
-    });
-
-    const fundedGoal = window.GoalsManager?.getGoal?.('loans-closed');
-    const pullThroughGoal = window.GoalsManager?.getGoal?.('pull-through');
-    const pullThroughActual = this.data.pipeline.units > 0
+  renderHeaderMetrics() {
+    const gm = window.GoalsManager;
+    const pullThrough = this.data.pipeline.units > 0
       ? Math.round((this.data.funded.units / this.data.pipeline.units) * 100)
       : 0;
 
-    this.renderGauge('gaugeFunded', {
-      units: this.data.funded.units,
-      volume: this.data.funded.total_amount,
-      target: fundedGoal ? fundedGoal.target : null,
-      label: 'Funded Loans',
-      color: 'var(--primary, #0d7377)',
-      pullThrough: pullThroughActual,
-      pullThroughTarget: pullThroughGoal ? pullThroughGoal.target : null,
-    });
+    // Pre-Approvals — no goal target, show as full or proportional to 20
+    const paTarget = 20;
+    const paPct = Math.min(100, (this.data.preApprovals.units / paTarget) * 100);
+    this.renderMiniGauge('hdrGaugePreApprovals', paPct);
+    this.setText('hdrPreApprovalUnits', this.data.preApprovals.units);
 
-    // Also update GoalsManager current values if available
-    if (window.GoalsManager) {
-      if (fundedGoal) {
-        window.GoalsManager.goals['loans-closed'].current = this.data.funded.units;
-      }
-      const volGoal = window.GoalsManager.goals['volume-closed'];
-      if (volGoal) {
-        volGoal.current = this.data.funded.total_amount / 1000000; // Convert to $M
-      }
-      const pipGoal = window.GoalsManager.goals['pipeline'];
-      if (pipGoal) {
-        pipGoal.current = this.data.pipeline.total_amount / 1000000; // Convert to $M
-      }
-      const ptGoal = window.GoalsManager.goals['pull-through'];
-      if (ptGoal) {
-        ptGoal.current = pullThroughActual;
-      }
-      window.GoalsManager.updateAllGoals();
+    // Pipeline — use goal target if set
+    const pipGoal = gm?.getGoal?.('pipeline');
+    const pipVal = this.data.pipeline.total_amount / 1000000;
+    const pipTarget = pipGoal?.target || 10;
+    const pipPct = Math.min(100, (pipVal / pipTarget) * 100);
+    this.renderMiniGauge('hdrGaugePipeline', pipPct);
+    this.setText('hdrPipelineUnits', this.data.pipeline.units);
+
+    // Funded Units — use loans-closed goal target
+    const fundedGoal = gm?.getGoal?.('loans-closed');
+    const fundedTarget = fundedGoal?.target || 25;
+    const fundedPct = Math.min(100, (this.data.funded.units / fundedTarget) * 100);
+    this.renderMiniGauge('hdrGaugeFunded', fundedPct);
+    this.setText('hdrFundedUnits', this.data.funded.units);
+
+    // Volume — use volume-closed goal target
+    const volGoal = gm?.getGoal?.('volume-closed');
+    const volVal = this.data.funded.total_amount / 1000000;
+    const volTarget = volGoal?.target || 10;
+    const volPct = Math.min(100, (volVal / volTarget) * 100);
+    this.renderMiniGauge('hdrGaugeVolume', volPct);
+    this.setText('hdrFundedVolume', this.formatVolume(this.data.funded.total_amount));
+
+    // Pull-Through — use pull-through goal target
+    const ptGoal = gm?.getGoal?.('pull-through');
+    const ptTarget = ptGoal?.target || 80;
+    const ptPct = Math.min(100, (pullThrough / ptTarget) * 100);
+    this.renderMiniGauge('hdrGaugePullThrough', ptPct);
+    this.setText('hdrPullThrough', pullThrough + '%');
+
+    // Feed current values back into GoalsManager
+    if (gm) {
+      if (gm.goals['loans-closed'])  gm.goals['loans-closed'].current = this.data.funded.units;
+      if (gm.goals['volume-closed']) gm.goals['volume-closed'].current = volVal;
+      if (gm.goals['pipeline'])      gm.goals['pipeline'].current = pipVal;
+      if (gm.goals['pull-through'])  gm.goals['pull-through'].current = pullThrough;
+      gm.updateAllGoals();
     }
   },
 
   // ========================================
-  // RENDER SINGLE GAUGE
+  // RENDER MINI SPEEDOMETER GAUGE
   // ========================================
-  renderGauge(containerId, opts) {
+  renderMiniGauge(containerId, percent) {
     const container = document.getElementById(containerId);
     if (!container) return;
+    const svg = container.querySelector('.hdr-gauge-svg');
+    if (!svg) return;
 
-    const svgContainer = container.querySelector('.gauge-svg-container');
-    const unitsEl      = container.querySelector('.gauge-units');
-    const volumeEl     = container.querySelector('.gauge-volume');
-    const pullEl       = container.querySelector('.gauge-pull-through');
+    const cx = this.CX;
+    const cy = this.CY;
+    const r = this.R;
+    const pct = Math.max(0, Math.min(100, percent));
 
-    if (!svgContainer) return;
+    // Arc path (180° semicircle, left to right)
+    const startX = cx - r;
+    const startY = cy;
+    const endX   = cx + r;
+    const endY   = cy;
+    const arcPath = `M ${startX} ${startY} A ${r} ${r} 0 0 1 ${endX} ${endY}`;
 
-    // Calculate progress percentage
-    let progress = 100; // Default: full arc if no target
-    if (opts.target && opts.target > 0) {
-      progress = Math.min(100, (opts.units / opts.target) * 100);
-    }
+    // Total arc length for dash animation
+    const arcLen = Math.PI * r; // semicircle circumference
+    const fillLen = (pct / 100) * arcLen;
 
-    // Determine color class
-    let colorClass = 'gauge-on-track';
-    if (opts.target && opts.target > 0) {
-      if (progress >= 100) colorClass = 'gauge-exceeded';
-      else if (progress >= 75) colorClass = 'gauge-on-track';
-      else if (progress >= 50) colorClass = 'gauge-warning';
-      else colorClass = 'gauge-behind';
-    }
+    // Color based on progress
+    let color;
+    if (pct >= 100)     color = '#4ade80'; // green
+    else if (pct >= 75) color = '#22d3ee'; // cyan/teal
+    else if (pct >= 50) color = '#fbbf24'; // amber
+    else if (pct >= 25) color = '#fb923c'; // orange
+    else                color = '#f87171'; // red
 
-    // SVG arc parameters
-    const width = 160;
-    const height = 90;
-    const cx = width / 2;
-    const cy = height - 5;
-    const radius = 65;
-    const startAngle = Math.PI;       // 180° (left)
-    const endAngle   = 0;             // 0° (right)
-    const totalArc   = Math.PI;       // 180° semicircle
+    // Needle angle: 180° (left) at 0%, 0° (right) at 100%
+    const needleAngle = 180 - (pct / 100) * 180;
+    const needleRad = (needleAngle * Math.PI) / 180;
+    const needleLen = r - 4;
+    const nx = cx + needleLen * Math.cos(needleRad);
+    const ny = cy - needleLen * Math.sin(needleRad);
 
-    // Background arc path (full semicircle)
-    const bgPath = this.describeArc(cx, cy, radius, startAngle, endAngle);
-    // Progress arc path
-    const progressAngle = startAngle - (totalArc * (progress / 100));
-    const fgPath = this.describeArc(cx, cy, radius, startAngle, Math.max(progressAngle, endAngle));
-
-    // Build SVG
-    svgContainer.innerHTML = `
-      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" class="gauge-svg">
-        <path d="${bgPath}" fill="none" stroke="var(--border-color, #e0e0e0)" stroke-width="12" stroke-linecap="round" />
-        <path d="${fgPath}" fill="none" class="gauge-arc ${colorClass}" stroke-width="12" stroke-linecap="round" />
-        <text x="${cx}" y="${cy - 20}" text-anchor="middle" class="gauge-center-value">${opts.units}</text>
-        <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="gauge-center-label">Units</text>
-      </svg>
-    `;
-
-    // Update text stats
-    if (unitsEl) {
-      unitsEl.textContent = `${opts.units} Unit${opts.units !== 1 ? 's' : ''}`;
-    }
-    if (volumeEl) {
-      volumeEl.textContent = this.formatVolume(opts.volume);
-    }
-    if (pullEl && opts.pullThrough !== undefined) {
-      pullEl.textContent = `${opts.pullThrough}% Pull-Through`;
-    }
+    svg.innerHTML =
+      // Background arc
+      `<path d="${arcPath}" class="hdr-gauge-bg" />` +
+      // Colored fill arc
+      `<path d="${arcPath}" class="hdr-gauge-fill" ` +
+        `stroke="${color}" ` +
+        `stroke-dasharray="${arcLen}" ` +
+        `stroke-dashoffset="${arcLen - fillLen}" />` +
+      // Needle line
+      `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" class="hdr-gauge-needle" />` +
+      // Center dot
+      `<circle cx="${cx}" cy="${cy}" r="1.5" fill="#fff" />`;
   },
 
   // ========================================
-  // SVG ARC HELPER
+  // HELPERS
   // ========================================
-  describeArc(cx, cy, radius, startAngle, endAngle) {
-    const startX = cx + radius * Math.cos(startAngle);
-    const startY = cy - radius * Math.sin(startAngle);
-    const endX   = cx + radius * Math.cos(endAngle);
-    const endY   = cy - radius * Math.sin(endAngle);
-
-    const largeArcFlag = (startAngle - endAngle) > Math.PI ? 1 : 0;
-
-    return `M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`;
+  setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
   },
 
-  // ========================================
-  // FORMAT HELPERS
-  // ========================================
   formatVolume(amount) {
     if (!amount || amount === 0) return '$0';
-    if (amount >= 1000000) {
-      return `$${(amount / 1000000).toFixed(1)}M`;
-    }
-    if (amount >= 1000) {
-      return `$${(amount / 1000).toFixed(0)}K`;
-    }
+    if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+    if (amount >= 1000) return `$${(amount / 1000).toFixed(0)}K`;
     return `$${amount.toLocaleString()}`;
+  },
+
+  // Legacy API bridge
+  getGoal(id) {
+    return window.GoalsManager?.getGoal?.(id) || null;
   },
 };
 

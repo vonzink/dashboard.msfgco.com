@@ -472,13 +472,13 @@ const ModalsManager = {
   _carouselAnnouncements: [],
 
   _canCreate() {
-    const role = String(CONFIG.currentUser?.role || '').toLowerCase();
-    return ['admin', 'manager', 'lo', 'processor'].includes(role);
+    // All authenticated users can create announcements
+    return !!CONFIG.currentUser;
   },
 
   _canDelete() {
     const role = String(CONFIG.currentUser?.role || '').toLowerCase();
-    return ['admin', 'manager'].includes(role);
+    return role === 'admin';
   },
 
   buildAnnouncementCard(announcement) {

@@ -125,6 +125,92 @@
     margin: 0 4px;
 }
 
+/* Header Performance Metrics with Mini Speedometers */
+.header-metrics {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0;
+    background: rgba(255,255,255,0.06);
+    border-radius: var(--radius-lg);
+    padding: 0.25rem 0.4rem;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+.header-metric {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3px;
+    padding: 0 0.4rem;
+    border-right: 1px solid rgba(255,255,255,0.1);
+}
+
+.header-metric:last-child {
+    border-right: none;
+}
+
+.hdr-gauge-svg {
+    width: 32px;
+    height: 20px;
+    overflow: visible;
+    display: block;
+    flex-shrink: 0;
+}
+
+.hdr-gauge-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.15);
+    stroke-width: 3;
+    stroke-linecap: round;
+}
+
+.hdr-gauge-fill {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
+}
+
+.hdr-gauge-needle {
+    stroke: #fff;
+    stroke-width: 1;
+    stroke-linecap: round;
+}
+
+.hdr-metric-text {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    line-height: 1;
+}
+
+.header-metric-value {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.15;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+}
+
+.header-metric-label {
+    font-size: 0.5rem;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 500;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+@media (max-width: 1100px) {
+    .header-metrics {
+        display: none;
+    }
+}
+
 /* ========================================
    NAVIGATION
 ======================================== */

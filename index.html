@@ -45,6 +45,45 @@
         />
       </div>
 
+      <!-- Performance Metrics with mini speedometer gauges -->
+      <div class="header-metrics" id="headerMetrics">
+        <div class="header-metric" id="hdrGaugePreApprovals">
+          <svg class="hdr-gauge-svg" viewBox="0 0 44 26"></svg>
+          <div class="hdr-metric-text">
+            <span class="header-metric-value" id="hdrPreApprovalUnits">0</span>
+            <span class="header-metric-label">Pre-Approvals</span>
+          </div>
+        </div>
+        <div class="header-metric" id="hdrGaugePipeline">
+          <svg class="hdr-gauge-svg" viewBox="0 0 44 26"></svg>
+          <div class="hdr-metric-text">
+            <span class="header-metric-value" id="hdrPipelineUnits">0</span>
+            <span class="header-metric-label">Pipeline</span>
+          </div>
+        </div>
+        <div class="header-metric" id="hdrGaugeFunded">
+          <svg class="hdr-gauge-svg" viewBox="0 0 44 26"></svg>
+          <div class="hdr-metric-text">
+            <span class="header-metric-value" id="hdrFundedUnits">0</span>
+            <span class="header-metric-label">Funded</span>
+          </div>
+        </div>
+        <div class="header-metric" id="hdrGaugeVolume">
+          <svg class="hdr-gauge-svg" viewBox="0 0 44 26"></svg>
+          <div class="hdr-metric-text">
+            <span class="header-metric-value" id="hdrFundedVolume">$0</span>
+            <span class="header-metric-label">Volume</span>
+          </div>
+        </div>
+        <div class="header-metric" id="hdrGaugePullThrough">
+          <svg class="hdr-gauge-svg" viewBox="0 0 44 26"></svg>
+          <div class="hdr-metric-text">
+            <span class="header-metric-value" id="hdrPullThrough">0%</span>
+            <span class="header-metric-label">Pull-Through</span>
+          </div>
+        </div>
+      </div>
+
       <div class="header-right">
         <!-- Utility Toolbar -->
         <div class="header-utils">
@@ -298,45 +337,17 @@
       </div>
     </section>
 
-    <!-- Performance Snapshot Gauges -->
-    <section class="section-card animate-in" id="gaugesSection">
-      <div class="section-header">
-        <h2 class="section-title"><i class="fas fa-tachometer-alt"></i> Performance Snapshot</h2>
-      </div>
-      <div class="gauges-grid" id="gaugesGrid">
-        <div class="gauge-card" id="gaugePreApprovals">
-          <div class="gauge-label">Pre-Approvals</div>
-          <div class="gauge-svg-container"></div>
-          <div class="gauge-stats">
-            <span class="gauge-units">0 Units</span>
-            <span class="gauge-volume">$0</span>
-          </div>
-        </div>
-        <div class="gauge-card" id="gaugePipeline">
-          <div class="gauge-label">Pipeline</div>
-          <div class="gauge-svg-container"></div>
-          <div class="gauge-stats">
-            <span class="gauge-units">0 Units</span>
-            <span class="gauge-volume">$0</span>
-          </div>
-        </div>
-        <div class="gauge-card" id="gaugeFunded">
-          <div class="gauge-label">Funded Loans</div>
-          <div class="gauge-svg-container"></div>
-          <div class="gauge-stats">
-            <span class="gauge-units">0 Units</span>
-            <span class="gauge-volume">$0</span>
-            <span class="gauge-pull-through">0% Pull-Through</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- Pre-Approvals (Monday.com Sync) -->
     <section class="section-card animate-in" id="preApprovalsSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Pre-Approvals</h2>
         <div class="section-actions">
+          <select id="preApprovalGroupSelect" class="filter-select" style="display:none;">
+            <option value="">All Groups</option>
+          </select>
+          <select id="preApprovalBoardSelect" class="filter-select" style="display:none;">
+            <option value="">All Boards</option>
+          </select>
           <input type="text" id="preApprovalSearch" class="search-input" placeholder="Search pre-approvals..." />
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
@@ -422,8 +433,8 @@
           <select class="filter-select" id="fundedGroupSelect" style="display:none;">
             <option value="">All Groups</option>
           </select>
-          <select class="filter-select" id="fundedLOSelect" style="display:none;">
-            <option value="">All Loan Officers</option>
+          <select class="filter-select" id="fundedBoardSelect" style="display:none;">
+            <option value="">All Boards</option>
           </select>
           <select class="filter-select" id="fundedPeriodSelect">
             <option value="ytd" selected>Year to Date</option>

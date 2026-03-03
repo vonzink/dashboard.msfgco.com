@@ -27,12 +27,9 @@ router.get('/', async (req, res, next) => {
   }
 });
 
-// POST /api/announcements - Create announcement (admin, manager, lo, processor)
+// POST /api/announcements - Create announcement (any authenticated user)
 router.post('/', validate(announcement), async (req, res, next) => {
   try {
-    if (!hasRole(req, 'admin', 'manager', 'lo', 'processor')) {
-      return res.status(403).json({ error: 'You do not have permission to create announcements' });
-    }
 
     const { title, content, link, icon, file_s3_key, file_name, file_size, file_type } = req.body;
     const authorId = getUserId(req);
@@ -78,11 +75,11 @@ router.post('/', validate(announcement), async (req, res, next) => {
   }
 });
 
-// DELETE /api/announcements/:id - Delete announcement (admin, manager only)
+// DELETE /api/announcements/:id - Delete announcement (admin only)
 router.delete('/:id', async (req, res, next) => {
   try {
-    if (!hasRole(req, 'admin', 'manager')) {
-      return res.status(403).json({ error: 'Only managers and admins can delete announcements' });
+    if (!hasRole(req, 'admin')) {
+      return res.status(403).json({ error: 'Only admins can delete announcements' });
     }
 
     const [result] = await db.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);

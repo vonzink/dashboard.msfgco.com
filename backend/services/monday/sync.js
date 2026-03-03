@@ -63,7 +63,7 @@ async function upsertPipelineRow(mondayItemId, row) {
   }
 }
 
-async function upsertPreApprovalRow(mondayItemId, row, userNameMap) {
+async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
   const paRow = {
     monday_item_id: String(mondayItemId),
     client_name: row.client_name || 'Unnamed',
@@ -74,13 +74,16 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap) {
     property_address: row.property_address || null,
     loan_type: row.loan_type || null,
     notes: row.notes || null,
+    source_board_id: boardId || null,
+    group_name: row.stage || null,
     source_system: 'monday',
     last_synced_at: new Date(),
   };
 
   if (row.assigned_lo_name) {
     paRow.assigned_lo_name = row.assigned_lo_name;
-    const loId = userNameMap[row.assigned_lo_name.toLowerCase().trim()];
+    // Use pre-resolved ID (from board-level inference) or look up by name
+    const loId = row.assigned_lo_id || userNameMap[row.assigned_lo_name.toLowerCase().trim()];
     if (loId) paRow.assigned_lo_id = loId;
   }
 
@@ -105,7 +108,7 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap) {
   }
 }
 
-async function upsertFundedLoanRow(mondayItemId, row, userNameMap) {
+async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
   if (!row.funded_date) {
     logger.info({ mondayItemId }, 'Monday sync: skipping funded loan item — no funded_date');
     return 'skipped';
@@ -121,6 +124,7 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap) {
     property_address: row.property_address || null,
     notes: row.notes || null,
     group_name: row.stage || null,
+    source_board_id: boardId || null,
     source_system: 'monday',
     last_synced_at: new Date(),
   };
@@ -132,7 +136,7 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap) {
 
   if (row.assigned_lo_name) {
     flRow.assigned_lo_name = row.assigned_lo_name;
-    const loId = userNameMap[row.assigned_lo_name.toLowerCase().trim()];
+    const loId = row.assigned_lo_id || userNameMap[row.assigned_lo_name.toLowerCase().trim()];
     if (loId) flRow.assigned_lo_id = loId;
   }
 
@@ -182,6 +186,20 @@ async function syncAllBoards(userId) {
     funded_loans: new Set(),
   };
 
+  // Build a reverse map: first name (lowercase) → { id, name } for board-name LO inference
+  const firstNameToUser = {};
+  // Common nickname → full name mappings
+  const NICKNAMES = { josh: 'joshua', mike: 'michael', jess: 'jessica', rob: 'robert', zach: 'zachary' };
+  for (const u of users) {
+    if (!u.name) continue;
+    const firstName = u.name.split(' ')[0].toLowerCase().trim();
+    firstNameToUser[firstName] = { id: u.id, name: u.name };
+    // Also register common nicknames pointing to the same user
+    for (const [nick, full] of Object.entries(NICKNAMES)) {
+      if (firstName === full) firstNameToUser[nick] = { id: u.id, name: u.name };
+    }
+  }
+
   for (const board of activeBoards) {
     const boardId = board.board_id;
     const section = board.target_section || 'pipeline';
@@ -201,8 +219,20 @@ async function syncAllBoards(userId) {
     }
 
     const columnMap = {};
+    let hasLOMapped = false;
     for (const m of mappings) {
       columnMap[m.monday_column_id] = m.pipeline_field;
+      if (m.pipeline_field === 'assigned_lo_name') hasLOMapped = true;
+    }
+
+    // Infer board-level LO from board name when no assigned_lo_name column is mapped
+    let boardLO = null;
+    if (!hasLOMapped && board.board_name) {
+      // Extract first word from board name (e.g. "Kray Pre-approvals" → "kray")
+      const boardFirstWord = board.board_name.split(/[\s']/)[0].toLowerCase().trim();
+      if (firstNameToUser[boardFirstWord]) {
+        boardLO = firstNameToUser[boardFirstWord];
+      }
     }
 
     const [logResult] = await db.query(
@@ -223,6 +253,12 @@ async function syncAllBoards(userId) {
         const row = mapItemToRow(item, columnMap, userNameMap);
         if (!row.client_name && section === 'pipeline') continue;
 
+        // Apply board-level LO when no per-item LO was mapped
+        if (boardLO && !row.assigned_lo_name) {
+          row.assigned_lo_name = boardLO.name;
+          row.assigned_lo_id = boardLO.id;
+        }
+
         syncedIdsBySection[section]?.add(String(item.id));
 
         try {
@@ -230,9 +266,9 @@ async function syncAllBoards(userId) {
           if (section === 'pipeline') {
             result = await upsertPipelineRow(item.id, row);
           } else if (section === 'pre_approvals') {
-            result = await upsertPreApprovalRow(item.id, row, userNameMap);
+            result = await upsertPreApprovalRow(item.id, row, userNameMap, boardId);
           } else if (section === 'funded_loans') {
-            result = await upsertFundedLoanRow(item.id, row, userNameMap);
+            result = await upsertFundedLoanRow(item.id, row, userNameMap, boardId);
           }
           if (result === 'created') created++;
           else if (result === 'updated') updated++;

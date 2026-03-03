@@ -8,11 +8,12 @@ const FundedLoans = {
   // STATE
   // ========================================
   _period: 'ytd',
-  _loFilter: '',
+  _boardFilter: '',
   _groupFilter: '',
   _data: [],
   _summary: { count: 0, total_amount: 0 },
   _availableGroups: [],
+  _availableBoards: [],
 
   // ========================================
   // INITIALIZATION
@@ -32,11 +33,11 @@ const FundedLoans = {
       });
     }
 
-    // LO filter (admin/manager only)
-    const loSelect = document.getElementById('fundedLOSelect');
-    if (loSelect) {
-      loSelect.addEventListener('change', () => {
-        this._loFilter = loSelect.value;
+    // Board filter
+    const boardSelect = document.getElementById('fundedBoardSelect');
+    if (boardSelect) {
+      boardSelect.addEventListener('change', () => {
+        this._boardFilter = boardSelect.value;
         this.load();
       });
     }
@@ -68,7 +69,7 @@ const FundedLoans = {
 
     try {
       const params = { period: this._period };
-      if (this._loFilter) params.lo_id = this._loFilter;
+      if (this._boardFilter) params.board_id = this._boardFilter;
       if (this._groupFilter) params.group = this._groupFilter;
 
       const result = await ServerAPI.getFundedLoans(params);
@@ -78,10 +79,12 @@ const FundedLoans = {
       this._data = result.data || [];
       this._summary = result.summary || { count: 0, total_amount: 0 };
       this._availableGroups = result.groups || [];
+      this._availableBoards = result.boards || [];
 
       this._renderTable();
       this._renderSummary();
       this._renderGroupFilter();
+      this._renderBoardFilter();
     } catch (err) {
       console.error('Funded loans load error:', err);
       if (tbody) {
@@ -159,6 +162,25 @@ const FundedLoans = {
       opt.textContent = g;
       if (g === current) opt.selected = true;
       groupSelect.appendChild(opt);
+    });
+  },
+
+  _renderBoardFilter() {
+    const boardSelect = document.getElementById('fundedBoardSelect');
+    if (!boardSelect) return;
+
+    if (this._availableBoards.length > 0) {
+      boardSelect.style.display = '';
+    }
+
+    const current = boardSelect.value;
+    boardSelect.innerHTML = '<option value="">All Boards</option>';
+    this._availableBoards.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b.board_id;
+      opt.textContent = b.board_name || b.board_id;
+      if (b.board_id === current) opt.selected = true;
+      boardSelect.appendChild(opt);
     });
   },
 };

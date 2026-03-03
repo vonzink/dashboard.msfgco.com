@@ -656,6 +656,12 @@
             </select>
           </div>
         </div>
+        <div class="form-group" style="margin-top:12px;">
+          <label>Assigned Users <span style="font-weight:normal; color:#999;">(who can view this board's data)</span></label>
+          <div id="mondayBoardUserPicker" class="user-picker-list" style="max-height:180px; overflow-y:auto; border:1px solid var(--border-color, #333); border-radius:6px; padding:8px;">
+            <div style="color:#999; font-size:13px;">Loading users...</div>
+          </div>
+        </div>
         <div class="form-actions">
           <button class="btn btn-secondary" id="mondayBoardFormCancelBtn">Cancel</button>
           <button class="btn btn-primary" id="mondayBoardFormSaveBtn"><i class="fas fa-save"></i> Save Board</button>
@@ -668,12 +674,13 @@
             <th>Board ID</th>
             <th>Name</th>
             <th>Section</th>
+            <th>Assigned Users</th>
             <th>Status</th>
             <th style="width:120px;">Actions</th>
           </tr>
         </thead>
         <tbody id="mondayBoardsBody">
-          <tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+          <tr><td colspan="6" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
         </tbody>
       </table>
     </div>
@@ -2098,7 +2105,7 @@
     // ── Board Management ──
     async function loadMondayBoards() {
       const tbody = document.getElementById('mondayBoardsBody');
-      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
 
       try {
         const data = await api('/monday/boards');
@@ -2106,7 +2113,7 @@
         mondayBoards = data.boards || [];
 
         if (mondayBoards.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">No boards registered. Click "Add Board" to get started.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">No boards registered. Click "Add Board" to get started.</td></tr>';
           populateBoardSelect([]);
           return;
         }
@@ -2114,18 +2121,23 @@
         const sectionLabels = { pipeline: 'Loan Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Loans Funded' };
         const sectionClasses = { pipeline: 'section-pipeline', pre_approvals: 'section-preapprovals', funded_loans: 'section-funded' };
 
-        tbody.innerHTML = mondayBoards.map(b =>
-          '<tr data-board-id="' + escHtml(b.board_id) + '">' +
+        tbody.innerHTML = mondayBoards.map(b => {
+          const assignedNames = (b.assignedUsers || []).map(u => escHtml(u.name || u.email));
+          const usersCell = assignedNames.length > 0
+            ? assignedNames.join(', ')
+            : '<span style="color:#999;">None</span>';
+          return '<tr data-board-id="' + escHtml(b.board_id) + '">' +
           '<td><code style="font-size:12px;">' + escHtml(b.board_id) + '</code></td>' +
           '<td><strong>' + escHtml(b.board_name || 'Unnamed') + '</strong></td>' +
           '<td><span class="badge ' + (sectionClasses[b.target_section] || '') + '">' + escHtml(sectionLabels[b.target_section] || b.target_section) + '</span></td>' +
+          '<td style="font-size:12px;">' + usersCell + '</td>' +
           '<td>' + (b.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>') + '</td>' +
           '<td>' +
             '<button class="btn btn-sm btn-secondary monday-edit-board" data-bid="' + escHtml(b.board_id) + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
             '<button class="btn btn-sm btn-danger monday-delete-board" data-bid="' + escHtml(b.board_id) + '" title="Remove"><i class="fas fa-trash"></i></button>' +
           '</td>' +
-          '</tr>'
-        ).join('');
+          '</tr>';
+        }).join('');
 
         // Bind edit buttons
         tbody.querySelectorAll('.monday-edit-board').forEach(btn => {
@@ -2143,7 +2155,7 @@
         populateBoardSelect(mondayBoards);
       } catch (err) {
         console.error('Load boards error:', err);
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#e74c3c;">Failed to load boards.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#e74c3c;">Failed to load boards.</td></tr>';
       }
     }
 
@@ -2153,7 +2165,7 @@
         boards.map(b => '<option value="' + escHtml(b.board_id) + '">' + escHtml(b.board_name || b.board_id) + ' (' + escHtml(b.board_id) + ')</option>').join('');
     }
 
-    function showBoardForm(board) {
+    async function showBoardForm(board) {
       const form = document.getElementById('mondayBoardForm');
       const title = document.getElementById('mondayBoardFormTitle');
       if (board) {
@@ -2172,6 +2184,28 @@
         document.getElementById('mondayBoardSectionSelect').value = 'pipeline';
       }
       form.classList.add('active');
+
+      // Populate user picker
+      const picker = document.getElementById('mondayBoardUserPicker');
+      picker.innerHTML = '<div style="color:#999; font-size:13px;"><i class="fas fa-spinner fa-spin"></i> Loading users...</div>';
+      try {
+        const usersData = await api('/users/directory');
+        const users = usersData || [];
+        const assignedIds = (board && board.assignedUsers) ? board.assignedUsers.map(u => u.id) : [];
+        if (users.length === 0) {
+          picker.innerHTML = '<div style="color:#999; font-size:13px;">No users found.</div>';
+        } else {
+          picker.innerHTML = users.map(u =>
+            '<label style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; font-size:13px;">' +
+              '<input type="checkbox" class="board-user-cb" value="' + u.id + '"' + (assignedIds.includes(u.id) ? ' checked' : '') + '> ' +
+              escHtml(u.name || u.email) +
+              (u.role ? ' <span style="color:#888; font-size:11px;">(' + escHtml(u.role) + ')</span>' : '') +
+            '</label>'
+          ).join('');
+        }
+      } catch (err) {
+        picker.innerHTML = '<div style="color:#e74c3c; font-size:13px;">Failed to load users.</div>';
+      }
     }
 
     function hideBoardForm() {
@@ -2186,16 +2220,19 @@
 
       if (!boardId) return alert('Board ID is required');
 
+      const assignedUsers = Array.from(document.querySelectorAll('#mondayBoardUserPicker .board-user-cb:checked'))
+        .map(cb => parseInt(cb.value, 10));
+
       try {
         if (mondayEditingBoardId) {
           await api('/monday/boards/' + mondayEditingBoardId, {
             method: 'PUT',
-            body: JSON.stringify({ boardName, targetSection }),
+            body: JSON.stringify({ boardName, targetSection, assignedUsers }),
           });
         } else {
           await api('/monday/boards', {
             method: 'POST',
-            body: JSON.stringify({ boardId, boardName, targetSection }),
+            body: JSON.stringify({ boardId, boardName, targetSection, assignedUsers }),
           });
         }
         hideBoardForm();

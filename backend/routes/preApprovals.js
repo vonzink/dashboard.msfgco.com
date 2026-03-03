@@ -7,32 +7,96 @@ const { preApproval, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
-// GET /api/pre-approvals - Get all pre-approvals (optionally filtered)
+/**
+ * Get board IDs accessible to a user (from monday_board_access)
+ */
+async function getAccessibleBoardIds(userId) {
+  const [rows] = await db.query(
+    'SELECT board_id FROM monday_board_access WHERE user_id = ?',
+    [userId]
+  );
+  return rows.map(r => r.board_id);
+}
+
+// GET /api/pre-approvals - Get all pre-approvals (filtered by board access)
 router.get('/', async (req, res, next) => {
   try {
-    const { status, loan_type } = req.query;
-    
-    let query = 'SELECT * FROM pre_approvals WHERE 1=1';
+    const { status, loan_type, board_id, group } = req.query;
+
+    let query = `SELECT pa.*, mb.board_name as source_board_name
+                 FROM pre_approvals pa
+                 LEFT JOIN monday_boards mb ON pa.source_board_id = mb.board_id
+                 WHERE 1=1`;
     const params = [];
-    
+
     if (!isAdmin(req)) {
-      query += ' AND assigned_lo_id = ?';
-      params.push(getUserId(req));
+      // Non-admin: only see pre-approvals from boards they have access to
+      const boardIds = await getAccessibleBoardIds(getUserId(req));
+      if (boardIds.length === 0) {
+        return res.json({ data: [], boards: [], groups: [] });
+      }
+      query += ` AND pa.source_board_id IN (${boardIds.map(() => '?').join(',')})`;
+      params.push(...boardIds);
     }
-    
+
+    // Optional board filter
+    if (board_id) {
+      query += ' AND pa.source_board_id = ?';
+      params.push(board_id);
+    }
+
+    // Optional group filter
+    if (group) {
+      query += ' AND pa.group_name = ?';
+      params.push(group);
+    }
+
     if (status) {
-      query += ' AND status = ?';
+      query += ' AND pa.status = ?';
       params.push(status);
     }
     if (loan_type) {
-      query += ' AND loan_type = ?';
+      query += ' AND pa.loan_type = ?';
       params.push(loan_type);
     }
-    
-    query += ' ORDER BY pre_approval_date DESC, expiration_date';
-    
+
+    query += ' ORDER BY pa.pre_approval_date DESC, pa.expiration_date';
+
     const [preApprovals] = await db.query(query, params);
-    res.json(preApprovals);
+
+    // Get available boards for filter dropdown
+    let boardQuery, boardParams;
+    if (isAdmin(req)) {
+      boardQuery = `SELECT DISTINCT mb.board_id, mb.board_name
+                    FROM monday_boards mb
+                    WHERE mb.is_active = 1 AND mb.target_section = 'pre_approvals'
+                    ORDER BY mb.board_name`;
+      boardParams = [];
+    } else {
+      const boardIds = await getAccessibleBoardIds(getUserId(req));
+      if (boardIds.length === 0) {
+        return res.json({ data: preApprovals, boards: [], groups: [] });
+      }
+      boardQuery = `SELECT DISTINCT mb.board_id, mb.board_name
+                    FROM monday_boards mb
+                    JOIN monday_board_access ba ON mb.board_id = ba.board_id
+                    WHERE mb.is_active = 1 AND mb.target_section = 'pre_approvals' AND ba.user_id = ?
+                    ORDER BY mb.board_name`;
+      boardParams = [getUserId(req)];
+    }
+    const [boards] = await db.query(boardQuery, boardParams);
+
+    // Get available groups for filter dropdown
+    const [groupRows] = await db.query(
+      `SELECT DISTINCT group_name FROM pre_approvals
+       WHERE group_name IS NOT NULL AND group_name != ''
+       ${!isAdmin(req) ? 'AND source_board_id IN (?)' : ''}
+       ORDER BY group_name`,
+      !isAdmin(req) ? [await getAccessibleBoardIds(getUserId(req))] : []
+    );
+    const groups = groupRows.map(r => r.group_name);
+
+    res.json({ data: preApprovals, boards, groups });
   } catch (error) {
     next(error);
   }
@@ -45,8 +109,12 @@ router.get('/summary', async (req, res, next) => {
     const params = [];
 
     if (!isAdmin(req)) {
-      whereClause += ' AND assigned_lo_id = ?';
-      params.push(getUserId(req));
+      const boardIds = await getAccessibleBoardIds(getUserId(req));
+      if (boardIds.length === 0) {
+        return res.json({ units: 0, total_amount: 0, active_count: 0 });
+      }
+      whereClause += ` AND source_board_id IN (${boardIds.map(() => '?').join(',')})`;
+      params.push(...boardIds);
     }
 
     const [summary] = await db.query(
@@ -73,16 +141,18 @@ router.get('/summary', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const [preApprovals] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [req.params.id]);
-    
+
     if (preApprovals.length === 0) {
       return res.status(404).json({ error: 'Pre-approval not found' });
     }
-    
-    const currentUserId = getUserId(req);
-    if (!isAdmin(req) && preApprovals[0].assigned_lo_id !== currentUserId) {
-      return res.status(403).json({ error: 'Access denied' });
+
+    if (!isAdmin(req)) {
+      const boardIds = await getAccessibleBoardIds(getUserId(req));
+      if (!boardIds.includes(preApprovals[0].source_board_id)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
-    
+
     res.json(preApprovals[0]);
   } catch (error) {
     next(error);
@@ -93,19 +163,19 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', validate(preApproval), async (req, res, next) => {
   try {
     const { client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes } = req.body;
-    
+
     const dbUser = getDbUser(req);
     const currentUserId = getUserId(req);
     const finalAssignedLoId = isAdmin(req) ? (assigned_lo_id || currentUserId) : currentUserId;
     const finalAssignedLoName = isAdmin(req) ? (assigned_lo_name || dbUser?.name || null) : (dbUser?.name || null);
-    
+
     const [result] = await db.query(
-      `INSERT INTO pre_approvals 
+      `INSERT INTO pre_approvals
        (client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [client_name, loan_amount, pre_approval_date, expiration_date, status || 'active', finalAssignedLoId, finalAssignedLoName, property_address || null, loan_type || null, notes || null]
     );
-    
+
     const [preApprovals] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [result.insertId]);
     res.status(201).json(preApprovals[0]);
   } catch (error) {
@@ -117,10 +187,10 @@ router.post('/', validate(preApproval), async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const { client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes } = req.body;
-    
+
     const updates = [];
     const values = [];
-    
+
     if (assigned_lo_id !== undefined) {
       if (!isAdmin(req) && assigned_lo_id !== getUserId(req)) {
         return res.status(403).json({ error: 'Access denied' });
@@ -128,7 +198,7 @@ router.put('/:id', async (req, res, next) => {
       updates.push('assigned_lo_id = ?');
       values.push(assigned_lo_id);
     }
-    
+
     if (client_name !== undefined) { updates.push('client_name = ?'); values.push(client_name); }
     if (loan_amount !== undefined) { updates.push('loan_amount = ?'); values.push(loan_amount); }
     if (pre_approval_date !== undefined) { updates.push('pre_approval_date = ?'); values.push(pre_approval_date); }
@@ -138,18 +208,18 @@ router.put('/:id', async (req, res, next) => {
     if (property_address !== undefined) { updates.push('property_address = ?'); values.push(property_address); }
     if (loan_type !== undefined) { updates.push('loan_type = ?'); values.push(loan_type); }
     if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
-    
+
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
-    
+
     values.push(req.params.id);
-    
+
     await db.query(
       `UPDATE pre_approvals SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
       values
     );
-    
+
     const [preApprovals] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [req.params.id]);
     res.json(preApprovals[0]);
   } catch (error) {
@@ -160,22 +230,25 @@ router.put('/:id', async (req, res, next) => {
 // DELETE /api/pre-approvals/:id - Delete pre-approval
 router.delete('/:id', async (req, res, next) => {
   try {
-    const [existing] = await db.query('SELECT assigned_lo_id FROM pre_approvals WHERE id = ?', [req.params.id]);
-    
+    const [existing] = await db.query('SELECT source_board_id, assigned_lo_id FROM pre_approvals WHERE id = ?', [req.params.id]);
+
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Pre-approval not found' });
     }
-    
-    if (!isAdmin(req) && existing[0].assigned_lo_id !== getUserId(req)) {
-      return res.status(403).json({ error: 'Access denied' });
+
+    if (!isAdmin(req)) {
+      const boardIds = await getAccessibleBoardIds(getUserId(req));
+      if (!boardIds.includes(existing[0].source_board_id)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
-    
+
     const [result] = await db.query('DELETE FROM pre_approvals WHERE id = ?', [req.params.id]);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Pre-approval not found' });
     }
-    
+
     res.json({ message: 'Pre-approval deleted successfully' });
   } catch (error) {
     next(error);
@@ -183,4 +256,3 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 module.exports = router;
-

@@ -116,6 +116,19 @@ const DEFAULT_TITLE_MAP = {
   'loan #':               'loan_number',
   'loan no':              'loan_number',
   'notes':                'notes',
+  'notes on loan':        'notes',
+  'app date':             'application_date',
+  'interest rate':        'rate',
+  'loan occupancy':       'occupancy',
+  'loan status':          'stage',
+  'subject property address': 'subject_property',
+  'lock date':            'lock_expiration_date',
+  'lo':                   'assigned_lo_name',
+  'pre-approval date':    'pre_approval_date',
+  'pre approval':         'pre_approval_date',
+  'funded':               'funded_date',
+  'funded amount':        'loan_amount',
+  'address':              'property_address',
 };
 
 const DATE_FIELDS = [
@@ -181,11 +194,13 @@ async function autoMapColumns(token, boardId) {
 
   const columns = data.boards?.[0]?.columns || [];
   const mappings = [];
+  const usedFields = new Set();
 
   for (const col of columns) {
     const normalizedTitle = col.title.toLowerCase().trim();
     const field = DEFAULT_TITLE_MAP[normalizedTitle];
-    if (field) {
+    if (field && !usedFields.has(field)) {
+      usedFields.add(field);
       mappings.push({ monday_column_id: col.id, pipeline_field: field });
     }
   }

@@ -1,5 +1,5 @@
 // Funded Loans API Routes
-// Query funded loans with YTD/MTD filters, role-based access
+// Query funded loans with YTD/MTD filters, board-access-based access control
 
 const express = require('express');
 const router = express.Router();
@@ -17,7 +17,6 @@ router.use(requireDbUser);
  */
 function getUserGroup(req) {
   const groups = req.user?.groups || [];
-  // Return the highest priority group (first one, since Cognito sorts by precedence)
   return groups.length > 0 ? groups[0].toLowerCase() : null;
 }
 
@@ -34,6 +33,17 @@ function isAdminOrManager(req) {
  */
 function isAdmin(req) {
   return getUserGroup(req) === 'admin';
+}
+
+/**
+ * Get board IDs accessible to a user (from monday_board_access)
+ */
+async function getAccessibleBoardIds(userId) {
+  const [rows] = await db.query(
+    'SELECT board_id FROM monday_board_access WHERE user_id = ?',
+    [userId]
+  );
+  return rows.map(r => r.board_id);
 }
 
 /**
@@ -54,7 +64,7 @@ function getDateFilter(period) {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
-  
+
   if (period === 'ytd') {
     return {
       start: `${year}-01-01`,
@@ -67,7 +77,6 @@ function getDateFilter(period) {
       end: `${year}-${month}-${lastDay}`
     };
   } else if (period) {
-    // Custom period: expect YYYY-MM format
     const [customYear, customMonth] = period.split('-');
     if (customYear && customMonth) {
       const lastDay = new Date(parseInt(customYear), parseInt(customMonth), 0).getDate();
@@ -77,8 +86,7 @@ function getDateFilter(period) {
       };
     }
   }
-  
-  // Default to YTD
+
   return {
     start: `${year}-01-01`,
     end: `${year}-12-31`
@@ -91,7 +99,7 @@ function getDateFilter(period) {
 // ========================================
 router.get('/', async (req, res, next) => {
   try {
-    const { period, lo_id, group, start_date, end_date } = req.query;
+    const { period, board_id, group, start_date, end_date } = req.query;
     const userGroup = getUserGroup(req);
     const userId = req.user?.db?.id;
 
@@ -99,33 +107,55 @@ router.get('/', async (req, res, next) => {
     const params = [];
 
     // ========================================
-    // ROLE-BASED DATA FILTERING
+    // ROLE-BASED + BOARD-ACCESS DATA FILTERING
     // ========================================
 
     if (userGroup === 'admin' || userGroup === 'manager') {
       // Admin/Manager: See all funded loans
-      // Optional filter by specific LO
-      if (lo_id) {
-        whereClause += ' AND fl.assigned_lo_id = ?';
-        params.push(lo_id);
+      // Optional filter by specific board
+      if (board_id) {
+        whereClause += ' AND fl.source_board_id = ?';
+        params.push(board_id);
       }
     } else if (userGroup === 'processor') {
-      // Processor: See only loans from their assigned LOs
+      // Processor: See loans from their assigned LOs (fallback for non-Monday data)
+      // AND loans from boards they have access to
       const loIds = await getProcessorLOIds(userId);
+      const boardIds = await getAccessibleBoardIds(userId);
 
-      if (loIds.length === 0) {
-        // No LOs assigned, return empty
-        return res.json({ data: [], summary: { count: 0, total_amount: 0 }, groups: [] });
+      const conditions = [];
+      if (loIds.length > 0) {
+        conditions.push(`fl.assigned_lo_id IN (${loIds.map(() => '?').join(',')})`);
+        params.push(...loIds);
+      }
+      if (boardIds.length > 0) {
+        conditions.push(`fl.source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
       }
 
-      whereClause += ` AND fl.assigned_lo_id IN (${loIds.map(() => '?').join(',')})`;
-      params.push(...loIds);
+      if (conditions.length === 0) {
+        return res.json({ data: [], summary: { count: 0, total_amount: 0 }, groups: [], boards: [] });
+      }
+      whereClause += ` AND (${conditions.join(' OR ')})`;
+
+      if (board_id) {
+        whereClause += ' AND fl.source_board_id = ?';
+        params.push(board_id);
+      }
     } else if (userGroup === 'lo') {
-      // LO: See only their own loans
-      whereClause += ' AND fl.assigned_lo_id = ?';
-      params.push(userId);
+      // LO: See only loans from boards they have access to
+      const boardIds = await getAccessibleBoardIds(userId);
+      if (boardIds.length === 0) {
+        return res.json({ data: [], summary: { count: 0, total_amount: 0 }, groups: [], boards: [] });
+      }
+      whereClause += ` AND fl.source_board_id IN (${boardIds.map(() => '?').join(',')})`;
+      params.push(...boardIds);
+
+      if (board_id) {
+        whereClause += ' AND fl.source_board_id = ?';
+        params.push(board_id);
+      }
     } else {
-      // External or unknown: No access to funded loans
       return res.status(403).json({ error: 'Access denied to funded loans' });
     }
 
@@ -134,11 +164,9 @@ router.get('/', async (req, res, next) => {
     // ========================================
 
     if (start_date && end_date) {
-      // Custom date range
       whereClause += ' AND fl.funded_date >= ? AND fl.funded_date <= ?';
       params.push(start_date, end_date);
     } else {
-      // Use period filter (ytd, mtd, or YYYY-MM)
       const dateFilter = getDateFilter(period);
       whereClause += ' AND fl.funded_date >= ? AND fl.funded_date <= ?';
       params.push(dateFilter.start, dateFilter.end);
@@ -161,9 +189,11 @@ router.get('/', async (req, res, next) => {
       `SELECT
         fl.*,
         u.name as lo_name,
-        u.email as lo_email
+        u.email as lo_email,
+        mb.board_name as source_board_name
        FROM funded_loans fl
        LEFT JOIN users u ON fl.assigned_lo_id = u.id
+       LEFT JOIN monday_boards mb ON fl.source_board_id = mb.board_id
        ${whereClause}
        ORDER BY fl.funded_date DESC`,
       params
@@ -193,6 +223,28 @@ router.get('/', async (req, res, next) => {
     );
     const groups = groupRows.map(r => r.group_name);
 
+    // ========================================
+    // AVAILABLE BOARDS (for filter dropdown)
+    // ========================================
+    let boardsForFilter;
+    if (isAdminOrManager(req)) {
+      [boardsForFilter] = await db.query(
+        `SELECT DISTINCT mb.board_id, mb.board_name
+         FROM monday_boards mb
+         WHERE mb.is_active = 1 AND mb.target_section = 'funded_loans'
+         ORDER BY mb.board_name`
+      );
+    } else {
+      [boardsForFilter] = await db.query(
+        `SELECT DISTINCT mb.board_id, mb.board_name
+         FROM monday_boards mb
+         JOIN monday_board_access ba ON mb.board_id = ba.board_id
+         WHERE mb.is_active = 1 AND mb.target_section = 'funded_loans' AND ba.user_id = ?
+         ORDER BY mb.board_name`,
+        [userId]
+      );
+    }
+
     res.json({
       data: loans,
       summary: {
@@ -200,9 +252,10 @@ router.get('/', async (req, res, next) => {
         total_amount: parseFloat(summary[0].total_amount) || 0
       },
       groups,
+      boards: boardsForFilter,
       filters: {
         period: period || 'ytd',
-        lo_id: lo_id || null,
+        board_id: board_id || null,
         group: group || null,
         start_date: start_date || null,
         end_date: end_date || null
@@ -220,53 +273,66 @@ router.get('/', async (req, res, next) => {
 // ========================================
 router.get('/summary', async (req, res, next) => {
   try {
-    const { period, lo_id } = req.query;
+    const { period, board_id } = req.query;
     const userGroup = getUserGroup(req);
     const userId = req.user?.db?.id;
-    
+
     let whereClause = 'WHERE 1=1';
     const params = [];
-    
-    // Role-based filtering (same as above)
+
+    // Role-based + board-access filtering
     if (userGroup === 'admin' || userGroup === 'manager') {
-      if (lo_id) {
-        whereClause += ' AND assigned_lo_id = ?';
-        params.push(lo_id);
+      if (board_id) {
+        whereClause += ' AND source_board_id = ?';
+        params.push(board_id);
       }
     } else if (userGroup === 'processor') {
       const loIds = await getProcessorLOIds(userId);
-      if (loIds.length === 0) {
+      const boardIds = await getAccessibleBoardIds(userId);
+      const conditions = [];
+      if (loIds.length > 0) {
+        conditions.push(`assigned_lo_id IN (${loIds.map(() => '?').join(',')})`);
+        params.push(...loIds);
+      }
+      if (boardIds.length > 0) {
+        conditions.push(`source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
+      if (conditions.length === 0) {
         return res.json({ units: 0, total_amount: 0 });
       }
-      whereClause += ` AND assigned_lo_id IN (${loIds.map(() => '?').join(',')})`;
-      params.push(...loIds);
+      whereClause += ` AND (${conditions.join(' OR ')})`;
     } else if (userGroup === 'lo') {
-      whereClause += ' AND assigned_lo_id = ?';
-      params.push(userId);
+      const boardIds = await getAccessibleBoardIds(userId);
+      if (boardIds.length === 0) {
+        return res.json({ units: 0, total_amount: 0 });
+      }
+      whereClause += ` AND source_board_id IN (${boardIds.map(() => '?').join(',')})`;
+      params.push(...boardIds);
     } else {
       return res.status(403).json({ error: 'Access denied' });
     }
-    
+
     // Date filtering
     const dateFilter = getDateFilter(period);
     whereClause += ' AND funded_date >= ? AND funded_date <= ?';
     params.push(dateFilter.start, dateFilter.end);
-    
+
     const [summary] = await db.query(
-      `SELECT 
+      `SELECT
         COUNT(*) as units,
         COALESCE(SUM(loan_amount), 0) as total_amount
        FROM funded_loans
        ${whereClause}`,
       params
     );
-    
+
     res.json({
       units: summary[0].units,
       total_amount: parseFloat(summary[0].total_amount) || 0,
       period: period || 'ytd'
     });
-    
+
   } catch (error) {
     next(error);
   }
@@ -280,7 +346,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const userGroup = getUserGroup(req);
     const userId = req.user?.db?.id;
-    
+
     const [loans] = await db.query(
       `SELECT fl.*, u.name as lo_name, u.email as lo_email
        FROM funded_loans fl
@@ -288,31 +354,33 @@ router.get('/:id', async (req, res, next) => {
        WHERE fl.id = ?`,
       [req.params.id]
     );
-    
+
     if (loans.length === 0) {
       return res.status(404).json({ error: 'Funded loan not found' });
     }
-    
+
     const loan = loans[0];
-    
-    // Check access based on role
+
+    // Check access based on role + board access
     if (userGroup === 'admin' || userGroup === 'manager') {
       // Full access
     } else if (userGroup === 'processor') {
       const loIds = await getProcessorLOIds(userId);
-      if (!loIds.includes(loan.assigned_lo_id)) {
+      const boardIds = await getAccessibleBoardIds(userId);
+      if (!loIds.includes(loan.assigned_lo_id) && !boardIds.includes(loan.source_board_id)) {
         return res.status(403).json({ error: 'Access denied to this loan' });
       }
     } else if (userGroup === 'lo') {
-      if (loan.assigned_lo_id !== userId) {
+      const boardIds = await getAccessibleBoardIds(userId);
+      if (!boardIds.includes(loan.source_board_id)) {
         return res.status(403).json({ error: 'Access denied to this loan' });
       }
     } else {
       return res.status(403).json({ error: 'Access denied' });
     }
-    
+
     res.json({ data: loan });
-    
+
   } catch (error) {
     next(error);
   }
@@ -327,21 +395,21 @@ router.delete('/:id', async (req, res, next) => {
     if (!isAdmin(req)) {
       return res.status(403).json({ error: 'Only admins can delete funded loans' });
     }
-    
+
     const [loans] = await db.query('SELECT * FROM funded_loans WHERE id = ?', [req.params.id]);
-    
+
     if (loans.length === 0) {
       return res.status(404).json({ error: 'Funded loan not found' });
     }
-    
+
     await db.query('DELETE FROM funded_loans WHERE id = ?', [req.params.id]);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'Funded loan deleted',
       data: loans[0]
     });
-    
+
   } catch (error) {
     next(error);
   }
@@ -356,12 +424,12 @@ router.get('/by-lo/summary', async (req, res, next) => {
     if (!isAdminOrManager(req)) {
       return res.status(403).json({ error: 'Admin or Manager access required' });
     }
-    
+
     const { period } = req.query;
     const dateFilter = getDateFilter(period);
-    
+
     const [summary] = await db.query(
-      `SELECT 
+      `SELECT
         fl.assigned_lo_id,
         fl.assigned_lo_name,
         u.email as lo_email,
@@ -374,12 +442,12 @@ router.get('/by-lo/summary', async (req, res, next) => {
        ORDER BY total_amount DESC`,
       [dateFilter.start, dateFilter.end]
     );
-    
+
     res.json({
       data: summary,
       period: period || 'ytd'
     });
-    
+
   } catch (error) {
     next(error);
   }
