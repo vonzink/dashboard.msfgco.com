@@ -202,6 +202,12 @@ router.get('/', async (req, res, next) => {
     }
 
     // ========================================
+    // SNAPSHOT BASE FILTERS (for groups dropdown — before group filter)
+    // ========================================
+    const baseWhereClause = whereClause;
+    const baseParams = [...params];
+
+    // ========================================
     // GROUP FILTERING
     // ========================================
 
@@ -243,12 +249,16 @@ router.get('/', async (req, res, next) => {
 
     // ========================================
     // AVAILABLE GROUPS (for filter dropdown)
+    // Uses base filters (role + board + date) but NOT the group filter itself
+    // so the dropdown shows all groups available in the current board/period
     // ========================================
 
     const [groupRows] = await db.query(
-      `SELECT DISTINCT group_name FROM funded_loans
-       WHERE group_name IS NOT NULL AND group_name != ''
-       ORDER BY group_name`
+      `SELECT DISTINCT fl.group_name FROM funded_loans fl
+       ${baseWhereClause}
+       AND fl.group_name IS NOT NULL AND fl.group_name != ''
+       ORDER BY fl.group_name`,
+      baseParams
     );
     const groups = groupRows.map(r => r.group_name);
 
