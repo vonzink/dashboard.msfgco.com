@@ -11,8 +11,8 @@ async function executeSqlFile(connection, filePath) {
 
   const statements = sql
     .split(';')
-    .map(s => s.trim())
-    .filter(s => s.length > 0 && !s.startsWith('--'));
+    .map(s => s.replace(/^--.*$/gm, '').trim())
+    .filter(s => s.length > 0);
 
   for (const statement of statements) {
     if (statement.trim()) {
