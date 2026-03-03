@@ -276,6 +276,7 @@ const API = {
             this.pipelineData = data || [];
             this.renderPipeline(data);
             this.populatePipelineFilters(data);
+            this.updatePipelineSummary(data);
             this.loadSyncStatus();
         } catch (error) {
             console.error('Error loading pipeline:', error);
@@ -291,6 +292,28 @@ const API = {
                     <i class="fas fa-exclamation-triangle"></i>
                     <p>Failed to load pipeline data. <button type="button" class="btn btn-secondary btn-sm" onclick="API.loadPipeline()" style="margin-top:0.5rem;"><i class="fas fa-redo"></i> Retry</button></p>
                 </td></tr>`;
+            }
+        }
+    },
+
+    updatePipelineSummary(data) {
+        const units = data?.length || 0;
+        const totalVolume = (data || []).reduce((sum, item) => {
+            const amount = parseFloat(item.loan_amount) || 0;
+            return sum + amount;
+        }, 0);
+
+        const unitsEl = document.getElementById('pipelineTotalUnits');
+        const volumeEl = document.getElementById('pipelineTotalVolume');
+        if (unitsEl) unitsEl.textContent = Utils.formatNumber(units);
+        if (volumeEl) volumeEl.textContent = Utils.formatCurrency(totalVolume);
+
+        // Update pipeline goal with current data
+        if (typeof GoalsManager !== 'undefined') {
+            const pipelineGoal = GoalsManager.goals['pipeline'];
+            if (pipelineGoal) {
+                pipelineGoal.current = parseFloat((totalVolume / 1000000).toFixed(2));
+                GoalsManager.updateGoalCard('pipeline');
             }
         }
     },

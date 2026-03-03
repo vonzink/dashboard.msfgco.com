@@ -1,13 +1,13 @@
 /* ============================================
    MSFG Dashboard - Funded Loans Module
-   Displays funded loans table with YTD/MTD + group filters
+   Displays funded loans table with board, group, and timeframe filters
    ============================================ */
 
 const FundedLoans = {
   // ========================================
   // STATE
   // ========================================
-  _period: 'ytd',
+  _period: 'monthly',
   _boardFilter: '',
   _groupFilter: '',
   _data: [],
@@ -33,11 +33,15 @@ const FundedLoans = {
       });
     }
 
-    // Board filter
+    // Board filter — changing board reloads data (groups may change per board)
     const boardSelect = document.getElementById('fundedBoardSelect');
     if (boardSelect) {
       boardSelect.addEventListener('change', () => {
         this._boardFilter = boardSelect.value;
+        // Reset group filter when board changes
+        this._groupFilter = '';
+        const groupSelect = document.getElementById('fundedGroupSelect');
+        if (groupSelect) groupSelect.value = '';
         this.load();
       });
     }
@@ -85,6 +89,9 @@ const FundedLoans = {
       this._renderSummary();
       this._renderGroupFilter();
       this._renderBoardFilter();
+
+      // Update goals with funded loans data
+      this._updateGoalsFromFunded();
     } catch (err) {
       console.error('Funded loans load error:', err);
       if (tbody) {
@@ -182,6 +189,44 @@ const FundedLoans = {
       if (b.board_id === current) opt.selected = true;
       boardSelect.appendChild(opt);
     });
+  },
+
+  // ========================================
+  // GOALS INTEGRATION
+  // ========================================
+  _updateGoalsFromFunded() {
+    if (typeof GoalsManager === 'undefined') return;
+
+    // Only update goals if the Goals period matches the funded loans period
+    const goalPeriod = GoalsManager.currentPeriod;
+    if (goalPeriod !== this._period) return;
+
+    // Loans Closed = unit count from funded loans
+    const units = this._summary.count || 0;
+    const loansGoal = GoalsManager.goals['loans-closed'];
+    if (loansGoal) {
+      loansGoal.current = units;
+      GoalsManager.updateGoalCard('loans-closed');
+    }
+
+    // Volume Closed = total amount from funded loans (in millions)
+    const volumeM = (this._summary.total_amount || 0) / 1000000;
+    const volumeGoal = GoalsManager.goals['volume-closed'];
+    if (volumeGoal) {
+      volumeGoal.current = parseFloat(volumeM.toFixed(2));
+      GoalsManager.updateGoalCard('volume-closed');
+    }
+  },
+
+  /**
+   * Get the current summary data (used by GoalsManager to pull data on period change)
+   */
+  getSummary() {
+    return { ...this._summary };
+  },
+
+  getPeriod() {
+    return this._period;
   },
 };
 

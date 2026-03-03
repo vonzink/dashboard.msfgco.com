@@ -1,6 +1,8 @@
 /* ============================================
    MSFG Dashboard - Goals Management
-   Time period selection and editable goal sliders
+   Time period selection and editable goal sliders.
+   Loans Closed + Volume Closed from Funded Loans.
+   Pipeline from Pipeline data.
    ============================================ */
 
 const GoalsManager = {
@@ -10,26 +12,26 @@ const GoalsManager = {
     currentPeriod: 'monthly',
     goals: {
         'loans-closed': {
-            current: 18,
-            target: 25,
+            current: 0,
+            target: 0,
             type: 'number',
             format: (val) => Math.round(val).toString()
         },
         'volume-closed': {
-            current: 7.2,
-            target: 10,
+            current: 0,
+            target: 0,
             type: 'currency',
             format: (val) => `$${val.toFixed(1)}M`
         },
         'pipeline': {
-            current: 5.8,
-            target: 5.8,
+            current: 0,
+            target: 0,
             type: 'currency',
             format: (val) => `$${val.toFixed(1)}M`
         },
         'pull-through': {
-            current: 84,
-            target: 80,
+            current: 0,
+            target: 0,
             type: 'percentage',
             format: (val) => `${Math.round(val)}%`
         }
@@ -62,10 +64,30 @@ const GoalsManager = {
         selector.addEventListener('change', async (e) => {
             this.currentPeriod = e.target.value;
             Utils.setStorage('goal_period', this.currentPeriod);
-            await this.loadSavedGoals(); // Reload goals for new period
+            await this.loadSavedGoals(); // Reload goal targets for new period
+
+            // Sync the funded loans period to match and reload data
+            this._syncFundedLoansPeriod();
+
             this.updateAllGoals();
             console.log(`Period changed to: ${this.currentPeriod}`);
         });
+    },
+
+    /**
+     * Sync the funded loans dropdown + data to match the goals period.
+     * This ensures Loans Closed / Volume Closed reflect the same timeframe.
+     */
+    _syncFundedLoansPeriod() {
+        if (typeof FundedLoans === 'undefined') return;
+
+        // Update the funded loans period select dropdown to match
+        const fundedPeriodSelect = document.getElementById('fundedPeriodSelect');
+        if (fundedPeriodSelect && fundedPeriodSelect.value !== this.currentPeriod) {
+            fundedPeriodSelect.value = this.currentPeriod;
+            FundedLoans._period = this.currentPeriod;
+            FundedLoans.load(); // Reload with new period → will call _updateGoalsFromFunded
+        }
     },
 
     // ========================================
@@ -281,7 +303,6 @@ const GoalsManager = {
         const textEl = document.getElementById(this.getProgressTextId(goalId));
         if (!textEl) return;
 
-        const goal = this.goals[goalId];
         let text = '';
 
         if (goalId === 'pipeline') {
@@ -312,7 +333,7 @@ const GoalsManager = {
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
-        
+
         switch(this.currentPeriod) {
             case 'weekly':
                 // Week number (ISO week)
@@ -325,6 +346,8 @@ const GoalsManager = {
                 return `${year}-Q${quarter}`;
             case 'yearly':
                 return String(year);
+            case 'all':
+                return 'all-time';
             default:
                 return `${year}-${month}`;
         }
@@ -348,7 +371,7 @@ const GoalsManager = {
         try {
             const userId = CONFIG.currentUser?.id || null;
             const periodValue = this.getPeriodValue();
-            
+
             const goalData = {
                 user_id: userId,
                 period_type: this.currentPeriod,
@@ -357,7 +380,7 @@ const GoalsManager = {
                 current_value: goal.current,
                 target_value: goal.target
             };
-            
+
             await ServerAPI.updateGoals(goalData);
         } catch (error) {
             console.error('Failed to save goal:', error);
@@ -374,15 +397,15 @@ const GoalsManager = {
         try {
             const userId = CONFIG.currentUser?.id || null;
             const periodValue = this.getPeriodValue();
-            
+
             const goals = await ServerAPI.getGoals(userId, this.currentPeriod, periodValue);
-            
-            // Update local goals from API response
+
+            // Update local goal targets from API response (current values come from live data)
             goals.forEach(apiGoal => {
                 const goalId = apiGoal.goal_type;
                 if (this.goals[goalId]) {
                     this.goals[goalId].target = parseFloat(apiGoal.target_value) || this.goals[goalId].target;
-                    this.goals[goalId].current = parseFloat(apiGoal.current_value) || this.goals[goalId].current;
+                    // Don't override current — it comes from live funded loans / pipeline data
                 }
             });
         } catch (error) {
@@ -393,7 +416,6 @@ const GoalsManager = {
                 const saved = Utils.getStorage(key);
                 if (saved) {
                     this.goals[goalId].target = saved.target;
-                    this.goals[goalId].current = saved.current;
                 }
             });
         }
@@ -405,7 +427,7 @@ const GoalsManager = {
     setGoal(goalId, current, target) {
         if (this.goals[goalId]) {
             this.goals[goalId].current = current;
-            this.goals[goalId].target = target;
+            if (target !== undefined) this.goals[goalId].target = target;
             this.updateGoalCard(goalId);
             this.saveGoal(goalId);
         }
@@ -418,4 +440,3 @@ const GoalsManager = {
 
 // Export to global scope
 window.GoalsManager = GoalsManager;
-

@@ -58,23 +58,47 @@ async function getProcessorLOIds(processorUserId) {
 }
 
 /**
- * Build date filter for YTD or MTD
+ * Build date filter for various periods
  */
 function getDateFilter(period) {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
 
-  if (period === 'ytd') {
+  if (period === 'all') {
+    // All time — no date restriction
+    return null;
+  } else if (period === 'weekly') {
+    // Current week (Monday to Sunday)
+    const day = now.getDay(); // 0=Sun, 1=Mon, ...
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diffToMonday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
     return {
-      start: `${year}-01-01`,
-      end: `${year}-12-31`
+      start: monday.toISOString().split('T')[0],
+      end: sunday.toISOString().split('T')[0]
     };
-  } else if (period === 'mtd') {
+  } else if (period === 'monthly' || period === 'mtd') {
     const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
     return {
       start: `${year}-${month}-01`,
       end: `${year}-${month}-${lastDay}`
+    };
+  } else if (period === 'quarterly') {
+    const quarter = Math.ceil((now.getMonth() + 1) / 3);
+    const qStartMonth = String((quarter - 1) * 3 + 1).padStart(2, '0');
+    const qEndMonth = String(quarter * 3).padStart(2, '0');
+    const qEndLastDay = new Date(year, quarter * 3, 0).getDate();
+    return {
+      start: `${year}-${qStartMonth}-01`,
+      end: `${year}-${qEndMonth}-${qEndLastDay}`
+    };
+  } else if (period === 'yearly' || period === 'ytd') {
+    return {
+      start: `${year}-01-01`,
+      end: `${year}-12-31`
     };
   } else if (period) {
     const [customYear, customMonth] = period.split('-');
@@ -87,9 +111,11 @@ function getDateFilter(period) {
     }
   }
 
+  // Default: monthly
+  const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
   return {
-    start: `${year}-01-01`,
-    end: `${year}-12-31`
+    start: `${year}-${month}-01`,
+    end: `${year}-${month}-${lastDay}`
   };
 }
 
@@ -168,8 +194,11 @@ router.get('/', async (req, res, next) => {
       params.push(start_date, end_date);
     } else {
       const dateFilter = getDateFilter(period);
-      whereClause += ' AND fl.funded_date >= ? AND fl.funded_date <= ?';
-      params.push(dateFilter.start, dateFilter.end);
+      if (dateFilter) {
+        whereClause += ' AND fl.funded_date >= ? AND fl.funded_date <= ?';
+        params.push(dateFilter.start, dateFilter.end);
+      }
+      // If dateFilter is null (all time), no date restriction
     }
 
     // ========================================
@@ -315,8 +344,10 @@ router.get('/summary', async (req, res, next) => {
 
     // Date filtering
     const dateFilter = getDateFilter(period);
-    whereClause += ' AND funded_date >= ? AND funded_date <= ?';
-    params.push(dateFilter.start, dateFilter.end);
+    if (dateFilter) {
+      whereClause += ' AND funded_date >= ? AND funded_date <= ?';
+      params.push(dateFilter.start, dateFilter.end);
+    }
 
     const [summary] = await db.query(
       `SELECT
@@ -330,7 +361,7 @@ router.get('/summary', async (req, res, next) => {
     res.json({
       units: summary[0].units,
       total_amount: parseFloat(summary[0].total_amount) || 0,
-      period: period || 'ytd'
+      period: period || 'monthly'
     });
 
   } catch (error) {

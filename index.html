@@ -342,13 +342,12 @@
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Pre-Approvals</h2>
         <div class="section-actions">
-          <select id="preApprovalGroupSelect" class="filter-select" style="display:none;">
-            <option value="">All Groups</option>
-          </select>
           <select id="preApprovalBoardSelect" class="filter-select" style="display:none;">
             <option value="">All Boards</option>
           </select>
-          <input type="text" id="preApprovalSearch" class="search-input" placeholder="Search pre-approvals..." />
+          <select id="preApprovalGroupSelect" class="filter-select" style="display:none;">
+            <option value="">All Groups</option>
+          </select>
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
           </button>
@@ -409,6 +408,18 @@
           <span id="syncStatusText">Last synced: Never</span>
         </div>
 
+        <!-- Pipeline summary -->
+        <div class="funded-summary-bar" id="pipelineSummaryBar">
+          <div class="funded-stat">
+            <span class="funded-stat-label">Units in Pipeline</span>
+            <span class="funded-stat-value" id="pipelineTotalUnits">0</span>
+          </div>
+          <div class="funded-stat">
+            <span class="funded-stat-label">Total Volume</span>
+            <span class="funded-stat-value" id="pipelineTotalVolume">$0</span>
+          </div>
+        </div>
+
         <div class="table-responsive">
           <table class="data-table" id="pipelineTable">
             <thead id="pipelineHead">
@@ -430,15 +441,18 @@
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-hand-holding-usd"></i> Loans Funded</h2>
         <div class="section-actions">
-          <select class="filter-select" id="fundedGroupSelect" style="display:none;">
-            <option value="">All Groups</option>
-          </select>
           <select class="filter-select" id="fundedBoardSelect" style="display:none;">
             <option value="">All Boards</option>
           </select>
+          <select class="filter-select" id="fundedGroupSelect" style="display:none;">
+            <option value="">All Groups</option>
+          </select>
           <select class="filter-select" id="fundedPeriodSelect">
-            <option value="ytd" selected>Year to Date</option>
-            <option value="mtd">Month to Date</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="yearly">Yearly</option>
+            <option value="all">All Time</option>
           </select>
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
@@ -495,6 +509,7 @@
             <option value="monthly" selected>Monthly</option>
             <option value="quarterly">Quarterly</option>
             <option value="yearly">Yearly</option>
+            <option value="all">All Time</option>
           </select>
           <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-goals" title="Toggle section">
             <i class="fas fa-chevron-up"></i>
