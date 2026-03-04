@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="/js/auth-gate.js?v=20260303-1"></script>
+  <meta charset="utf-8" />
+  <title>LendingPad Loans</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="pageHeader">
+    <h2>LendingPad Loan Data</h2>
+    <div class="header-actions">
+      <span id="loanCount" class="loan-count"></span>
+      <button id="btnRefresh" class="btn-refresh" title="Refresh">&#x21bb; Refresh</button>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">Loading loans...</div>
+  <div id="error" class="error" style="display:none;"></div>
+
+  <div id="loansContainer" class="loans-container" style="display:none;">
+    <!-- Loan cards rendered here -->
+  </div>
+
+  <!-- Raw JSON modal -->
+  <div id="jsonModal" class="json-modal" style="display:none;">
+    <div class="json-modal-content">
+      <div class="json-modal-header">
+        <h3 id="jsonModalTitle">Raw JSON</h3>
+        <button class="closeX" id="jsonModalClose">&#10005;</button>
+      </div>
+      <pre id="jsonModalBody" class="json-body"></pre>
+    </div>
+  </div>
+
+  <script src="/js/config.js"></script>
+  <script src="/js/api-server.js"></script>
+  <script src="lendingpad.js"></script>
+</body>
+</html>

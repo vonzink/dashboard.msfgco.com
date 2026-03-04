@@ -1,0 +1,213 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #0e1117;
+  color: #e0e0e0;
+  padding: 20px;
+}
+
+.pageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #1e2633;
+}
+
+.pageHeader h2 {
+  font-size: 22px;
+  color: #fff;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.loan-count {
+  font-size: 13px;
+  color: #8899aa;
+}
+
+.btn-refresh {
+  background: #104547;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.btn-refresh:hover { background: #186668; }
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: #8899aa;
+  font-size: 15px;
+}
+
+.error {
+  background: #2a1520;
+  color: #ff6b6b;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.loans-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.loan-card {
+  background: #161b22;
+  border: 1px solid #1e2633;
+  border-radius: 10px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.loan-card:hover {
+  border-color: #104547;
+}
+
+.loan-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.loan-number {
+  font-weight: 600;
+  font-size: 15px;
+  color: #fff;
+}
+
+.loan-lender {
+  font-size: 13px;
+  color: #58a6ff;
+}
+
+.loan-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 20px;
+}
+
+.loan-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.loan-field-label {
+  font-size: 11px;
+  color: #6a7a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.loan-field-value {
+  font-size: 14px;
+  color: #cdd6e0;
+}
+
+.loan-card-footer {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.loan-timestamp {
+  font-size: 11px;
+  color: #555;
+}
+
+.btn-json {
+  background: #1e2633;
+  color: #8899aa;
+  border: 1px solid #2a3444;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.btn-json:hover { background: #2a3444; color: #fff; }
+
+/* JSON Modal */
+.json-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.json-modal-content {
+  background: #161b22;
+  border: 1px solid #1e2633;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.json-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #1e2633;
+}
+
+.json-modal-header h3 {
+  font-size: 16px;
+  color: #fff;
+}
+
+.closeX {
+  background: none;
+  border: none;
+  color: #8899aa;
+  font-size: 18px;
+  cursor: pointer;
+}
+.closeX:hover { color: #fff; }
+
+.json-body {
+  padding: 20px;
+  overflow: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cdd6e0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  color: #6a7a8a;
+}
+
+.empty-state h3 {
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: #8899aa;
+}
+
+.empty-state p {
+  font-size: 14px;
+}

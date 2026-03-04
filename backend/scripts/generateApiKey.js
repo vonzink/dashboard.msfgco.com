@@ -2,9 +2,10 @@
 // Usage: node scripts/generateApiKey.js [key-name] [user-id] [created-by-user-id]
 // Example: node scripts/generateApiKey.js "Zapier for John" 2 1
 
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const crypto = require('crypto');
 const db = require('../db/connection');
-require('dotenv').config();
 
 async function generateApiKey(keyName, userId, createdByUserId = null) {
   try {
