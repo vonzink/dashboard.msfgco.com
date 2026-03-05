@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="/js/auth-gate.js?v=20260224-2"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Processing | MSFG Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css">
+
+  <style>
+    /* ---- Reset & Base ---- */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      color: #1a1a2e;
+      background: #f5f7fa;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+    h1, h2, h3 { font-family: 'Poppins', 'Inter', sans-serif; font-weight: 600; margin: 0; }
+    a { color: #2d6a4f; text-decoration: none; }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+    /* ---- Layout ---- */
+    .proc-layout { display: grid; grid-template-columns: 200px 1fr; min-height: 100vh; }
+
+    /* ---- Sidebar ---- */
+    .proc-sidebar {
+      background: #104547;
+      padding: 1.25rem 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .proc-sidebar__brand {
+      padding: 0 1.25rem 1.25rem;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 0.75rem;
+    }
+    .proc-sidebar__brand h2 {
+      color: #fff;
+      font-size: 0.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .proc-sidebar__brand h2 i { opacity: 0.7; }
+    .proc-sidebar__nav { display: flex; flex-direction: column; gap: 2px; padding: 0 0.5rem; }
+    .proc-sidebar__link {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: rgba(255,255,255,0.75);
+      transition: all 0.15s ease;
+    }
+    .proc-sidebar__link:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .proc-sidebar__link.active { background: rgba(255,255,255,0.15); color: #fff; font-weight: 600; }
+    .proc-sidebar__link i { width: 18px; text-align: center; font-size: 0.8rem; }
+    .proc-sidebar__back {
+      margin-top: auto;
+      padding: 1rem 1.25rem 0;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .proc-sidebar__back a {
+      color: rgba(255,255,255,0.6);
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .proc-sidebar__back a:hover { color: #fff; }
+
+    /* ---- Main ---- */
+    .proc-main { padding: 1.5rem 2rem; overflow-y: auto; }
+
+    /* ---- Header ---- */
+    .proc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+    .proc-header h1 { font-size: 1.35rem; display: flex; align-items: center; gap: 0.5rem; }
+    .proc-header__desc { color: #6c757d; font-size: 0.88rem; margin: 0.25rem 0 0; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600; transition: all 0.15s ease; white-space: nowrap; }
+    .btn-primary { background: #104547; color: #fff; }
+    .btn-primary:hover { background: #0d3a3c; box-shadow: 0 2px 8px rgba(16,69,71,0.3); }
+    .btn-secondary { background: #e8ecf1; color: #4a4a68; }
+    .btn-secondary:hover { background: #dde1e8; }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; }
+
+    /* ---- Toolbar ---- */
+    .proc-toolbar { display: flex; gap: 0.75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .proc-search { flex: 1; min-width: 240px; position: relative; }
+    .proc-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #8888a4; pointer-events: none; font-size: 0.85rem; }
+    .proc-search input {
+      width: 100%; padding: 0.5rem 0.75rem 0.5rem 34px; border: 1.5px solid #e0e4ea; border-radius: 6px;
+      font-size: 0.88rem; font-family: inherit; color: #1a1a2e; background: #fff; transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .proc-search input:focus { outline: none; border-color: #2d6a4f; box-shadow: 0 0 0 3px rgba(45,106,79,0.12); }
+    .proc-filter-select {
+      padding: 0.45rem 0.75rem; border: 1.5px solid #e0e4ea; border-radius: 6px; font-size: 0.83rem;
+      font-family: inherit; color: #4a4a68; background: #fff; cursor: pointer;
+    }
+    .proc-filter-select:focus { outline: none; border-color: #2d6a4f; }
+
+    /* ---- Table ---- */
+    .proc-results { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
+    .proc-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .proc-table thead { background: #f5f7fa; border-bottom: 2px solid #e0e4ea; }
+    .proc-table th { text-align: left; padding: 0.6rem 1rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8888a4; white-space: nowrap; }
+    .proc-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #f0f2f5; color: #4a4a68; vertical-align: middle; }
+    .proc-table tbody tr { transition: background 0.12s; cursor: pointer; }
+    .proc-table tbody tr:hover { background: #f8f9fb; }
+    .proc-table tbody tr:last-child td { border-bottom: none; }
+    .proc-table td:first-child { font-weight: 600; color: #1a1a2e; }
+
+    /* ---- Status badges ---- */
+    .proc-status { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; white-space: nowrap; }
+    .proc-status--ordered   { background: #e3f2fd; color: #1565c0; }
+    .proc-status--received  { background: #e8f5e9; color: #2e7d32; }
+    .proc-status--pending   { background: #fff3e0; color: #e65100; }
+    .proc-status--in-review { background: #f3e5f5; color: #7b1fa2; }
+    .proc-status--complete  { background: #e8f5e9; color: #1b5e20; }
+    .proc-status--issue     { background: #ffebee; color: #c62828; }
+
+    /* ---- Row actions ---- */
+    .proc-row-actions { display: flex; gap: 2px; justify-content: flex-end; }
+    .proc-row-action { padding: 5px; color: #8888a4; border-radius: 4px; transition: all 0.12s; }
+    .proc-row-action:hover { background: #f0f2f5; color: #104547; }
+    .proc-delete-btn:hover { color: #ef4444; }
+
+    /* ---- Empty / loading ---- */
+    .proc-empty { text-align: center; padding: 3rem 1.5rem; color: #8888a4; }
+    .proc-empty i { font-size: 2.5rem; margin-bottom: 0.75rem; opacity: 0.35; display: block; }
+    .proc-empty h3 { color: #4a4a68; margin-bottom: 0.25rem; font-size: 1rem; }
+    .proc-empty p { font-size: 0.88rem; margin: 0; }
+    .proc-loading { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 3rem; color: #8888a4; font-size: 0.88rem; }
+    .proc-spinner { width: 18px; height: 18px; border: 2.5px solid #e0e4ea; border-top-color: #104547; border-radius: 50%; animation: spin 0.6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ---- Pagination ---- */
+    .proc-pagination { display: flex; align-items: center; justify-content: center; gap: 0.75rem; margin-top: 1rem; }
+    .proc-pagination__info { font-size: 0.82rem; color: #8888a4; }
+
+    /* ---- Modal ---- */
+    .proc-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 2000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; animation: fadeIn 0.15s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .proc-modal { background: #fff; border-radius: 12px; box-shadow: 0 12px 48px rgba(0,0,0,0.18); width: 100%; max-width: 620px; max-height: 90vh; overflow-y: auto; animation: slideUp 0.2s ease; }
+    @keyframes slideUp { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .proc-modal__header { display: flex; align-items: center; justify-content: space-between; padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid #f0f2f5; }
+    .proc-modal__header h2 { font-size: 1.05rem; }
+    .proc-modal__close { font-size: 1.5rem; color: #8888a4; padding: 0 4px; line-height: 1; border-radius: 4px; transition: all 0.12s; }
+    .proc-modal__close:hover { background: #f0f2f5; color: #1a1a2e; }
+    .proc-modal__body { padding: 1.25rem 1.5rem; }
+    .proc-modal__footer { display: flex; justify-content: flex-end; gap: 0.5rem; padding: 0.75rem 1.5rem; border-top: 1px solid #f0f2f5; background: #f8f9fb; border-radius: 0 0 12px 12px; }
+
+    /* ---- Form (modal) ---- */
+    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.25rem; }
+    .form-group label { font-size: 0.8rem; font-weight: 600; color: #4a4a68; }
+    .form-group input, .form-group select, .form-group textarea {
+      padding: 0.45rem 0.65rem; border: 1.5px solid #e0e4ea; border-radius: 6px; font-size: 0.88rem;
+      font-family: inherit; color: #1a1a2e; background: #fff; transition: border-color 0.15s, box-shadow 0.15s; width: 100%;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #2d6a4f; box-shadow: 0 0 0 3px rgba(45,106,79,0.12); }
+    .form-group textarea { resize: vertical; }
+    .form-full { grid-column: 1 / -1; }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 768px) {
+      .proc-layout { grid-template-columns: 1fr; }
+      .proc-sidebar { flex-direction: row; overflow-x: auto; padding: 0.75rem; }
+      .proc-sidebar__brand { display: none; }
+      .proc-sidebar__nav { flex-direction: row; gap: 0.25rem; }
+      .proc-sidebar__back { display: none; }
+      .proc-sidebar__link { white-space: nowrap; padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+      .proc-main { padding: 1rem; }
+      .proc-header { flex-direction: column; }
+      .form-grid { grid-template-columns: 1fr; }
+      .proc-table thead { display: none; }
+      .proc-table, .proc-table tbody, .proc-table tr, .proc-table td { display: block; width: 100%; }
+      .proc-table tr { padding: 0.5rem 1rem; border-bottom: 1px solid #f0f2f5; }
+      .proc-table td { padding: 2px 0; border-bottom: none; }
+      .proc-table td::before { content: attr(data-label); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8888a4; display: block; }
+      .proc-table td:last-child { text-align: right; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="proc-layout">
+
+    <!-- Sidebar -->
+    <aside class="proc-sidebar">
+      <div class="proc-sidebar__brand">
+        <h2><i class="fas fa-clipboard-check"></i> Processing</h2>
+      </div>
+      <nav class="proc-sidebar__nav" id="procSidebarNav">
+        <button class="proc-sidebar__link" data-type="title"><i class="fas fa-file-contract"></i> Title</button>
+        <button class="proc-sidebar__link" data-type="insurance"><i class="fas fa-shield-alt"></i> Insurance</button>
+        <button class="proc-sidebar__link" data-type="voe"><i class="fas fa-user-check"></i> VOE</button>
+        <button class="proc-sidebar__link" data-type="taxes"><i class="fas fa-receipt"></i> Taxes</button>
+        <button class="proc-sidebar__link" data-type="amc"><i class="fas fa-home"></i> AMC</button>
+        <button class="proc-sidebar__link" data-type="payoffs"><i class="fas fa-credit-card"></i> Payoffs</button>
+        <button class="proc-sidebar__link" data-type="other"><i class="fas fa-folder-open"></i> Other</button>
+      </nav>
+      <div class="proc-sidebar__back">
+        <a href="#" onclick="window.close(); return false;"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="proc-main">
+      <div class="proc-header">
+        <div>
+          <h1 id="procTitle"><i class="fas fa-file-contract"></i> Title</h1>
+          <p class="proc-header__desc" id="procDesc">Title company orders, commitments, and status tracking</p>
+        </div>
+        <button class="btn btn-primary" id="procAddNew"><i class="fas fa-plus"></i> New Record</button>
+      </div>
+
+      <div class="proc-toolbar">
+        <div class="proc-search">
+          <i class="fas fa-search"></i>
+          <input type="text" id="procSearchInput" placeholder="Search by borrower, loan #, or address..." autocomplete="off">
+        </div>
+        <select id="procStatusFilter" class="proc-filter-select">
+          <option value="">All Statuses</option>
+          <option value="ordered">Ordered</option>
+          <option value="received">Received</option>
+          <option value="pending">Pending</option>
+          <option value="in-review">In Review</option>
+          <option value="complete">Complete</option>
+          <option value="issue">Issue</option>
+        </select>
+        <select id="procSortBy" class="proc-filter-select">
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="borrower">Borrower A–Z</option>
+          <option value="status">Status</option>
+        </select>
+      </div>
+
+      <div class="proc-results" id="procResults">
+        <table class="proc-table">
+          <thead>
+            <tr>
+              <th>Borrower</th>
+              <th>Loan #</th>
+              <th>Property</th>
+              <th>Vendor</th>
+              <th>Status</th>
+              <th>Ordered</th>
+              <th>Updated</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="procTableBody"></tbody>
+        </table>
+        <div class="proc-empty" id="procEmpty">
+          <i class="fas fa-search"></i>
+          <h3>No records yet</h3>
+          <p>Click <strong>New Record</strong> to add one.</p>
+        </div>
+        <div class="proc-loading" id="procLoading" style="display:none;">
+          <div class="proc-spinner"></div>
+          <span>Loading...</span>
+        </div>
+      </div>
+
+      <div class="proc-pagination" id="procPagination" style="display:none;">
+        <button class="btn btn-sm btn-secondary" id="procPrevPage" disabled>Previous</button>
+        <span class="proc-pagination__info" id="procPageInfo">Page 1</span>
+        <button class="btn btn-sm btn-secondary" id="procNextPage">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal -->
+  <div class="proc-modal-overlay" id="procModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="procModalTitle">New Record</h2>
+        <button class="proc-modal__close" id="procModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Borrower Name</label>
+            <input type="text" id="procFieldBorrower" placeholder="Last, First">
+          </div>
+          <div class="form-group">
+            <label>Loan Number</label>
+            <input type="text" id="procFieldLoan" placeholder="e.g. 2025-001234">
+          </div>
+          <div class="form-group form-full">
+            <label>Property Address</label>
+            <input type="text" id="procFieldAddress" placeholder="123 Main St, City, ST 00000">
+          </div>
+          <div class="form-group">
+            <label>Vendor / Company</label>
+            <input type="text" id="procFieldVendor" placeholder="Company name">
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select id="procFieldStatus">
+              <option value="ordered">Ordered</option>
+              <option value="pending">Pending</option>
+              <option value="received">Received</option>
+              <option value="in-review">In Review</option>
+              <option value="complete">Complete</option>
+              <option value="issue">Issue</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Order Date</label>
+            <input type="date" id="procFieldDate">
+          </div>
+          <div class="form-group">
+            <label>Reference / Tracking #</label>
+            <input type="text" id="procFieldRef" placeholder="Optional">
+          </div>
+          <div class="form-group form-full">
+            <label>Notes</label>
+            <textarea id="procFieldNotes" rows="3" placeholder="Additional details..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="procModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="procModalSave">Save Record</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/config.js?v=20260224-2"></script>
+  <script>
+  (function() {
+    'use strict';
+
+    var TYPE_META = {
+      title:     { name: 'Title',     icon: 'fa-file-contract', desc: 'Title company orders, commitments, and status tracking' },
+      insurance: { name: 'Insurance', icon: 'fa-shield-alt',    desc: 'Homeowner insurance policies, binders, and verification' },
+      voe:       { name: 'VOE',       icon: 'fa-user-check',    desc: 'Verification of Employment requests and results' },
+      taxes:     { name: 'Taxes',     icon: 'fa-receipt',       desc: 'Tax transcript requests and property tax records' },
+      amc:       { name: 'AMC',       icon: 'fa-home',          desc: 'Appraisal management company orders and reports' },
+      payoffs:   { name: 'Payoffs',   icon: 'fa-credit-card',   desc: 'Payoff statement requests and lien tracking' },
+      other:     { name: 'Other',     icon: 'fa-folder-open',   desc: 'Miscellaneous processing items and documents' }
+    };
+
+    var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
+    if (!TYPE_META[currentType]) currentType = 'title';
+
+    var currentPage = 1;
+    var totalPages = 1;
+    var editingId = null;
+    var debounceTimer = null;
+
+    var API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.api)
+      ? CONFIG.api.baseUrl
+      : (window.location.protocol === 'https:' ? 'https://api.msfgco.com/api' : 'http://54.175.238.145:8080/api');
+
+    function getToken() {
+      var m = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+      return localStorage.getItem('auth_token') || (m ? decodeURIComponent(m[1]) : null) || sessionStorage.getItem('auth_token');
+    }
+
+    function apiRequest(method, path, body) {
+      var opts = {
+        method: method,
+        headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }
+      };
+      if (body) opts.body = JSON.stringify(body);
+      return fetch(API_BASE + path, opts).then(function(r) { return r.json(); });
+    }
+
+    // DOM refs
+    var searchInput, statusFilter, sortSelect, tableBody, emptyState, loadingState;
+    var modalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn, saveBtn, modalTitle;
+
+    document.addEventListener('DOMContentLoaded', function() {
+      searchInput    = document.getElementById('procSearchInput');
+      statusFilter   = document.getElementById('procStatusFilter');
+      sortSelect     = document.getElementById('procSortBy');
+      tableBody      = document.getElementById('procTableBody');
+      emptyState     = document.getElementById('procEmpty');
+      loadingState   = document.getElementById('procLoading');
+      modalOverlay   = document.getElementById('procModalOverlay');
+      paginationWrap = document.getElementById('procPagination');
+      pageInfo       = document.getElementById('procPageInfo');
+      prevBtn        = document.getElementById('procPrevPage');
+      nextBtn        = document.getElementById('procNextPage');
+      saveBtn        = document.getElementById('procModalSave');
+      modalTitle     = document.getElementById('procModalTitle');
+
+      setActiveType(currentType);
+
+      // Sidebar nav
+      document.querySelectorAll('#procSidebarNav .proc-sidebar__link').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          currentType = this.dataset.type;
+          currentPage = 1;
+          setActiveType(currentType);
+          window.history.replaceState(null, '', '?type=' + currentType);
+          runSearch();
+        });
+      });
+
+      // Search
+      searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function() { currentPage = 1; runSearch(); }, 300);
+      });
+      searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { clearTimeout(debounceTimer); currentPage = 1; runSearch(); }
+      });
+      statusFilter.addEventListener('change', function() { currentPage = 1; runSearch(); });
+      sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
+
+      // Modal
+      document.getElementById('procAddNew').addEventListener('click', function() { openModal(); });
+      document.getElementById('procModalClose').addEventListener('click', closeModal);
+      document.getElementById('procModalCancel').addEventListener('click', closeModal);
+      saveBtn.addEventListener('click', saveRecord);
+      modalOverlay.addEventListener('click', function(e) { if (e.target === modalOverlay) closeModal(); });
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && modalOverlay.style.display !== 'none') closeModal(); });
+
+      // Pagination
+      prevBtn.addEventListener('click', function() { if (currentPage > 1) { currentPage--; runSearch(); } });
+      nextBtn.addEventListener('click', function() { if (currentPage < totalPages) { currentPage++; runSearch(); } });
+
+      document.getElementById('procFieldDate').value = todayISO();
+      runSearch();
+    });
+
+    function setActiveType(type) {
+      var meta = TYPE_META[type];
+      document.getElementById('procTitle').innerHTML = '<i class="fas ' + meta.icon + '"></i> ' + meta.name;
+      document.getElementById('procDesc').textContent = meta.desc;
+      document.querySelectorAll('#procSidebarNav .proc-sidebar__link').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.type === type);
+      });
+    }
+
+    function runSearch() {
+      showLoading();
+      var params = new URLSearchParams({
+        q: (searchInput.value || '').trim(),
+        status: statusFilter.value,
+        sort: sortSelect.value,
+        page: currentPage
+      });
+      apiRequest('GET', '/processing/' + currentType + '?' + params.toString())
+        .then(function(data) {
+          if (!data.success) { showEmpty(data.error || 'Search failed.'); return; }
+          totalPages = data.totalPages || 1;
+          currentPage = data.page || 1;
+          updatePagination(data.total);
+          renderResults(data.results);
+        })
+        .catch(function() { showEmpty('Connection error — please try again.'); });
+    }
+
+    function renderResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty(); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      results.forEach(function(rec) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="Borrower">' + esc(rec.borrower) + '</td>' +
+          '<td data-label="Loan #">' + esc(rec.loan_number) + '</td>' +
+          '<td data-label="Property">' + esc(rec.address) + '</td>' +
+          '<td data-label="Vendor">' + esc(rec.vendor) + '</td>' +
+          '<td data-label="Status">' + statusBadge(rec.status) + '</td>' +
+          '<td data-label="Ordered">' + fmtDate(rec.ordered_date) + '</td>' +
+          '<td data-label="Updated">' + fmtDate(rec.updated_at) + '</td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteRecord(rec.id, rec.borrower); });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function statusBadge(s) {
+      var slug = (s || '').toLowerCase().replace(/\s+/g, '-');
+      var label = s ? s.charAt(0).toUpperCase() + s.slice(1).replace('-', ' ') : 'Unknown';
+      return '<span class="proc-status proc-status--' + esc(slug) + '">' + esc(label) + '</span>';
+    }
+    function fmtDate(d) {
+      if (!d) return '—';
+      try { var dt = new Date(d + (d.length === 10 ? 'T00:00:00' : '')); return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+      catch(e) { return d; }
+    }
+    function esc(s) { if (s == null) return ''; var el = document.createElement('span'); el.textContent = String(s); return el.innerHTML; }
+    function todayISO() { return new Date().toISOString().split('T')[0]; }
+
+    function updatePagination(total) {
+      if (total <= 25 && currentPage === 1) { paginationWrap.style.display = 'none'; return; }
+      paginationWrap.style.display = '';
+      pageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages + ' (' + total + ' records)';
+      prevBtn.disabled = currentPage <= 1;
+      nextBtn.disabled = currentPage >= totalPages;
+    }
+    function showEmpty(msg) { hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = ''; if (msg) emptyState.querySelector('p').innerHTML = msg; else emptyState.querySelector('p').innerHTML = 'Click <strong>New Record</strong> to add one.'; }
+    function showLoading() { emptyState.style.display = 'none'; tableBody.innerHTML = ''; loadingState.style.display = ''; }
+    function hideLoading() { loadingState.style.display = 'none'; }
+
+    function openModal(record) {
+      editingId = record ? record.id : null;
+      var meta = TYPE_META[currentType];
+      if (record) {
+        modalTitle.textContent = 'Edit ' + meta.name + ' Record';
+        saveBtn.textContent = 'Update Record';
+        document.getElementById('procFieldBorrower').value = record.borrower || '';
+        document.getElementById('procFieldLoan').value = record.loan_number || '';
+        document.getElementById('procFieldAddress').value = record.address || '';
+        document.getElementById('procFieldVendor').value = record.vendor || '';
+        document.getElementById('procFieldStatus').value = record.status || 'ordered';
+        document.getElementById('procFieldDate').value = record.ordered_date ? record.ordered_date.split('T')[0] : '';
+        document.getElementById('procFieldRef').value = record.reference || '';
+        document.getElementById('procFieldNotes').value = record.notes || '';
+      } else {
+        modalTitle.textContent = 'New ' + meta.name + ' Record';
+        saveBtn.textContent = 'Save Record';
+        resetForm();
+      }
+      modalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('procFieldBorrower').focus(); }, 100);
+    }
+    function closeModal() { modalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+    function resetForm() {
+      ['procFieldBorrower','procFieldLoan','procFieldAddress','procFieldVendor','procFieldRef','procFieldNotes'].forEach(function(id) { document.getElementById(id).value = ''; });
+      document.getElementById('procFieldStatus').value = 'ordered';
+      document.getElementById('procFieldDate').value = todayISO();
+    }
+
+    function saveRecord() {
+      var borrower = (document.getElementById('procFieldBorrower').value || '').trim();
+      if (!borrower) { document.getElementById('procFieldBorrower').focus(); return; }
+      var payload = {
+        borrower: borrower,
+        loanNumber: (document.getElementById('procFieldLoan').value || '').trim(),
+        address: (document.getElementById('procFieldAddress').value || '').trim(),
+        vendor: (document.getElementById('procFieldVendor').value || '').trim(),
+        status: document.getElementById('procFieldStatus').value,
+        orderedDate: document.getElementById('procFieldDate').value,
+        reference: (document.getElementById('procFieldRef').value || '').trim(),
+        notes: (document.getElementById('procFieldNotes').value || '').trim()
+      };
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/' + currentType + '/' + editingId : '/processing/' + currentType;
+      apiRequest(method, path, payload)
+        .then(function(data) {
+          saveBtn.disabled = false;
+          if (!data.success) { alert(data.error || 'Failed to save.'); return; }
+          closeModal();
+          runSearch();
+        })
+        .catch(function() { saveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteRecord(id, name) {
+      if (!confirm('Delete record for "' + name + '"? This cannot be undone.')) return;
+      apiRequest('DELETE', '/processing/' + currentType + '/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed to delete.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+  })();
+  </script>
+</body>
+</html>

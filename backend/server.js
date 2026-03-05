@@ -38,6 +38,7 @@ const calendarEventsRoutes = require('./routes/calendarEvents');
 const usersRoutes = require('./routes/users');
 const guidelinesRoutes = require('./routes/guidelines');
 const lendingpadRoutes = require('./routes/lendingpad');
+const processingRoutes = require('./routes/processing');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -150,6 +151,9 @@ app.use('/api/guidelines', authenticate, guidelinesRoutes);
 
 // LendingPad integration
 app.use('/api/lendingpad', authenticate, lendingpadRoutes);
+
+// Processing order tracking
+app.use('/api/processing', authenticate, processingRoutes);
 
 // ======================
 // ERROR HANDLING
