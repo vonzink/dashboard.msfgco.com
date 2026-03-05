@@ -534,6 +534,34 @@ const ServerAPI = {
     getGuidelineFileStatus(fileId) {
         return this.get(`/guidelines/files/${fileId}/status`);
     },
+
+    // ========================================
+    // HANDBOOK
+    // ========================================
+    getHandbookDocuments() {
+        return this.get('/handbook/documents');
+    },
+
+    getHandbookSectionBySlugs(docSlug, sectionSlug) {
+        return this.get(`/handbook/sections/by-slug/${encodeURIComponent(docSlug)}/${encodeURIComponent(sectionSlug)}`);
+    },
+
+    searchHandbook(q, limit) {
+        const qs = this.buildQuery({ q, limit });
+        return this.get(`/handbook/search${qs}`);
+    },
+
+    updateHandbookSection(id, data) {
+        return this.put(`/handbook/sections/${id}`, data);
+    },
+
+    createHandbookSection(docId, data) {
+        return this.post(`/handbook/documents/${docId}/sections`, data);
+    },
+
+    deleteHandbookSection(id) {
+        return this.delete(`/handbook/sections/${id}`);
+    },
 };
 
 window.ServerAPI = ServerAPI;

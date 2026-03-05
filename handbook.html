@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <script src="js/auth-gate.js?v=20260305-1"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Employee Handbook | MSFG Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+
+  <link rel="stylesheet" href="css/variables.css?v=20260305-1" />
+  <link rel="stylesheet" href="css/base.css?v=20260305-1" />
+
+  <style>
+    /* ── Page layout ── */
+    .hb-page { display: grid; grid-template-columns: 280px 1fr; gap: var(--spacing-lg); max-width: 1200px; margin: 0 auto; padding: var(--spacing-xl); align-items: start; }
+    .hb-back { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--green-teal); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color var(--transition-fast); grid-column: 1 / -1; margin-bottom: var(--spacing-sm); }
+    .hb-back:hover { color: var(--green-bright); }
+
+    /* ── Sidebar ── */
+    .hb-sidebar { background: var(--bg-secondary); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--spacing-md); position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; }
+    .hb-sidebar__title { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: var(--spacing-sm); padding: 0 var(--spacing-sm); }
+
+    /* Search */
+    .hb-search { position: relative; margin-bottom: var(--spacing-md); }
+    .hb-search__icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none; font-size: 0.85rem; }
+    .hb-search input { width: 100%; padding: 8px 10px 8px 34px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 0.8125rem; background: var(--bg-tertiary); color: var(--text-primary); transition: border-color var(--transition-fast); font-family: inherit; }
+    .hb-search input:focus { outline: none; border-color: var(--green-bright); background: var(--bg-secondary); box-shadow: 0 0 0 3px rgba(140,198,62,0.15); }
+
+    /* Sidebar nav */
+    .hb-sidebar__nav { display: flex; flex-direction: column; gap: 2px; }
+    .hb-sidebar__group { margin-bottom: 2px; }
+    .hb-sidebar__doc-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 8px var(--spacing-sm); border: none; background: none; border-radius: var(--radius-md); font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; transition: all var(--transition-fast); text-align: left; }
+    .hb-sidebar__doc-toggle:hover { background: var(--bg-tertiary); color: var(--green-teal); }
+    .hb-sidebar__chevron { transition: transform 0.2s; flex-shrink: 0; }
+    .hb-sidebar__doc-toggle.open .hb-sidebar__chevron { transform: rotate(0deg); }
+    .hb-sidebar__doc-toggle:not(.open) .hb-sidebar__chevron { transform: rotate(-90deg); }
+    .hb-sidebar__sections { display: none; flex-direction: column; gap: 1px; padding-left: 18px; }
+    .hb-sidebar__sections.open { display: flex; }
+    .hb-sidebar__link { display: block; padding: 5px var(--spacing-sm); border-radius: var(--radius-sm); font-size: 0.8rem; color: var(--text-muted); transition: all var(--transition-fast); line-height: 1.4; text-decoration: none; cursor: pointer; }
+    .hb-sidebar__link:hover { background: var(--bg-tertiary); color: var(--green-teal); }
+    .hb-sidebar__link.active { background: rgba(140,198,62,0.12); color: var(--green-teal); font-weight: 600; }
+    .hb-sidebar__add { color: var(--green-bright); font-weight: 500; font-size: 0.75rem; margin-top: 4px; opacity: 0.7; cursor: pointer; text-decoration: none; display: block; padding: 4px var(--spacing-sm); }
+    .hb-sidebar__add:hover { opacity: 1; }
+
+    /* ── Main content ── */
+    .hb-main { min-width: 0; }
+
+    /* TOC */
+    .hb-toc__doc { background: var(--bg-secondary); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--spacing-lg); margin-bottom: var(--spacing-md); }
+    .hb-toc__doc-title { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); margin-bottom: var(--spacing-md); padding-bottom: var(--spacing-sm); border-bottom: 2px solid rgba(140,198,62,0.2); }
+    .hb-toc__sections { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px; }
+    .hb-toc__link { display: block; padding: 8px 12px; border-radius: var(--radius-md); font-size: 0.875rem; color: var(--text-secondary); transition: all var(--transition-fast); text-decoration: none; cursor: pointer; }
+    .hb-toc__link:hover { background: rgba(140,198,62,0.08); color: var(--green-teal); }
+
+    /* Section view */
+    .hb-breadcrumb { font-size: 0.8125rem; color: var(--text-muted); margin-bottom: var(--spacing-md); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .hb-breadcrumb a { color: var(--green-teal); text-decoration: none; }
+    .hb-breadcrumb a:hover { text-decoration: underline; }
+    .hb-breadcrumb__sep { color: var(--border-color); }
+
+    .hb-section { background: var(--bg-secondary); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--spacing-xl); }
+    .hb-section__header { display: flex; align-items: center; gap: var(--spacing-md); flex-wrap: wrap; margin-bottom: var(--spacing-lg); padding-bottom: var(--spacing-md); border-bottom: 2px solid rgba(140,198,62,0.2); }
+    .hb-section__header h1 { font-size: 1.375rem; font-weight: 700; color: var(--text-primary); margin: 0; }
+    .hb-section__doc-badge { font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--green-teal); background: rgba(140,198,62,0.12); padding: 3px 10px; border-radius: var(--radius-full); }
+    .hb-section__content { font-size: 0.9375rem; line-height: 1.75; color: var(--text-secondary); word-wrap: break-word; }
+    .hb-section__nav { display: flex; justify-content: space-between; gap: var(--spacing-md); margin-top: var(--spacing-xl); padding-top: var(--spacing-md); border-top: 1px solid var(--border-color); }
+    .hb-section__nav-link { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--green-teal); font-weight: 500; max-width: 45%; cursor: pointer; text-decoration: none; }
+    .hb-section__nav-link:hover { text-decoration: underline; }
+    .hb-section__nav-next { margin-left: auto; text-align: right; }
+
+    /* Admin edit button */
+    .hb-edit-btn { padding: 6px 14px; background: var(--green-teal); color: #fff; border: none; border-radius: var(--radius-md); font-size: 0.8125rem; font-weight: 500; cursor: pointer; transition: background var(--transition-fast); }
+    .hb-edit-btn:hover { background: var(--green-dark); }
+    .hb-delete-btn { padding: 6px 14px; background: var(--status-danger); color: #fff; border: none; border-radius: var(--radius-md); font-size: 0.8125rem; font-weight: 500; cursor: pointer; transition: background var(--transition-fast); }
+    .hb-delete-btn:hover { background: #dc2626; }
+
+    /* Admin edit form */
+    .hb-edit-form { display: none; }
+    .hb-edit-form.active { display: block; }
+    .hb-edit-form label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; }
+    .hb-edit-form input, .hb-edit-form textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: var(--bg-tertiary); color: var(--text-primary); font-size: 0.875rem; font-family: inherit; transition: border-color var(--transition-fast); box-sizing: border-box; }
+    .hb-edit-form input:focus, .hb-edit-form textarea:focus { outline: none; border-color: var(--green-bright); background: var(--bg-secondary); }
+    .hb-edit-form textarea { resize: vertical; min-height: 300px; line-height: 1.6; }
+    .hb-edit-form__actions { display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-md); }
+    .hb-edit-form__group { margin-bottom: var(--spacing-md); }
+    .hb-edit-form__divider { margin: var(--spacing-xl) 0 var(--spacing-md); border: none; border-top: 1px solid var(--border-color); }
+
+    /* Search results */
+    .hb-search-results { display: none; }
+    .hb-search-results__title { font-size: 1rem; font-weight: 600; color: var(--text-secondary); margin-bottom: var(--spacing-md); }
+    .hb-search-results__list { display: flex; flex-direction: column; gap: var(--spacing-sm); }
+    .hb-search-result { display: block; background: var(--bg-secondary); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--spacing-md); transition: box-shadow var(--transition-fast); text-decoration: none; cursor: pointer; }
+    .hb-search-result:hover { box-shadow: var(--shadow-md); }
+    .hb-search-result__title { font-weight: 600; color: var(--text-primary); font-size: 0.9375rem; }
+    .hb-search-result__doc { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+    .hb-search-result__snippet { font-size: 0.8125rem; color: var(--text-secondary); margin-top: 6px; line-height: 1.5; }
+    .hb-search-result__snippet mark { background: rgba(140,198,62,0.25); padding: 0 2px; border-radius: 2px; }
+
+    /* Loading/empty */
+    .hb-loading, .hb-empty { text-align: center; padding: var(--spacing-xl); color: var(--text-muted); }
+    .hb-loading i, .hb-empty i { display: block; font-size: 2rem; margin-bottom: var(--spacing-sm); }
+
+    /* Mobile toggle */
+    .hb-mobile-toggle { display: none; position: fixed; bottom: 20px; right: 20px; width: 48px; height: 48px; border-radius: 50%; background: var(--green-teal); color: white; border: none; box-shadow: var(--shadow-lg); cursor: pointer; z-index: 100; align-items: center; justify-content: center; font-size: 1.2rem; }
+
+    @media (max-width: 768px) {
+      .hb-page { grid-template-columns: 1fr; }
+      .hb-sidebar { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 200; border-radius: 0; max-height: 100vh; padding: var(--spacing-lg); }
+      .hb-sidebar.open { display: block; }
+      .hb-mobile-toggle { display: flex; }
+    }
+
+    @media print {
+      .hb-sidebar, .hb-mobile-toggle, .hb-breadcrumb, .hb-section__nav, .hb-edit-btn, .hb-back { display: none !important; }
+      .hb-page { display: block; }
+      .hb-section { box-shadow: none; padding: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hb-page">
+  <a href="/" class="hb-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+  <!-- Sidebar -->
+  <aside class="hb-sidebar" id="hbSidebar">
+    <div class="hb-sidebar__title">Employee Handbook</div>
+    <div class="hb-search">
+      <i class="fas fa-search hb-search__icon"></i>
+      <input type="text" id="hbSearchInput" placeholder="Search handbook..." autocomplete="off" />
+    </div>
+    <nav class="hb-sidebar__nav" id="hbSidebarNav">
+      <!-- Populated by JS -->
+    </nav>
+  </aside>
+
+  <!-- Main content -->
+  <main class="hb-main" id="hbMain">
+    <div class="hb-loading" id="hbLoading">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>Loading handbook...</p>
+    </div>
+
+    <!-- TOC (default view) -->
+    <div id="hbToc" style="display:none;"></div>
+
+    <!-- Section view -->
+    <div id="hbSectionView" style="display:none;"></div>
+
+    <!-- Search results -->
+    <div class="hb-search-results" id="hbSearchResults">
+      <div class="hb-search-results__title">Search Results</div>
+      <div class="hb-search-results__list" id="hbSearchResultsList"></div>
+    </div>
+  </main>
+</div>
+
+<button class="hb-mobile-toggle" id="hbMobileToggle" aria-label="Toggle sidebar">
+  <i class="fas fa-bars"></i>
+</button>
+
+<script src="js/config.js?v=20260305-1"></script>
+<script src="js/api-server.js?v=20260305-1"></script>
+<script src="js/utils.js?v=20260305-1"></script>
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──
+  let documents = [];
+  let isAdmin = false;
+  let currentDocSlug = null;
+  let currentSectionSlug = null;
+
+  // ── DOM refs ──
+  const sidebar = document.getElementById('hbSidebar');
+  const sidebarNav = document.getElementById('hbSidebarNav');
+  const searchInput = document.getElementById('hbSearchInput');
+  const loadingEl = document.getElementById('hbLoading');
+  const tocEl = document.getElementById('hbToc');
+  const sectionViewEl = document.getElementById('hbSectionView');
+  const searchResultsEl = document.getElementById('hbSearchResults');
+  const searchResultsList = document.getElementById('hbSearchResultsList');
+  const mobileToggle = document.getElementById('hbMobileToggle');
+
+  // ── Init ──
+  async function init() {
+    // Check admin role
+    try {
+      const me = await ServerAPI.getMe();
+      isAdmin = me.role === 'admin';
+    } catch (e) { /* ignore */ }
+
+    await loadDocuments();
+
+    // Parse URL params
+    const params = new URLSearchParams(window.location.search);
+    const doc = params.get('doc');
+    const section = params.get('section');
+    if (doc && section) {
+      await loadSection(doc, section);
+    } else {
+      showToc();
+    }
+
+    bindEvents();
+  }
+
+  // ── Load documents (sidebar + TOC) ──
+  async function loadDocuments() {
+    try {
+      documents = await ServerAPI.getHandbookDocuments();
+      renderSidebar();
+    } catch (err) {
+      console.error('Failed to load handbook:', err);
+      loadingEl.innerHTML = '<i class="fas fa-exclamation-triangle"></i><p>Failed to load handbook. Please try again.</p>';
+    }
+  }
+
+  // ── Render sidebar ──
+  function renderSidebar() {
+    sidebarNav.innerHTML = documents.map(function(doc, di) {
+      var isOpen = di === 0 ? ' open' : '';
+      return '<div class="hb-sidebar__group" data-doc-slug="' + esc(doc.slug) + '">' +
+        '<button class="hb-sidebar__doc-toggle' + isOpen + '" data-target="hbSections-' + di + '">' +
+          '<svg class="hb-sidebar__chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>' +
+          esc(doc.title) +
+        '</button>' +
+        '<div class="hb-sidebar__sections' + isOpen + '" id="hbSections-' + di + '">' +
+          doc.sections.map(function(sec) {
+            var activeClass = sec.slug === currentSectionSlug && doc.slug === currentDocSlug ? ' active' : '';
+            return '<a class="hb-sidebar__link' + activeClass + '" data-doc="' + esc(doc.slug) + '" data-section="' + esc(sec.slug) + '" data-title="' + esc(sec.title.toLowerCase()) + '">' +
+              esc(sec.title) +
+            '</a>';
+          }).join('') +
+          (isAdmin ? '<a class="hb-sidebar__add" data-add-doc-id="' + doc.id + '">+ Add Section</a>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // ── Show TOC ──
+  function showToc() {
+    loadingEl.style.display = 'none';
+    tocEl.style.display = '';
+    sectionViewEl.style.display = 'none';
+    searchResultsEl.style.display = 'none';
+    currentDocSlug = null;
+    currentSectionSlug = null;
+
+    tocEl.innerHTML = '<h1 style="font-size:1.5rem;font-weight:700;color:var(--text-primary);margin-bottom:var(--spacing-lg);">Employee Handbook</h1>' +
+      '<p style="color:var(--text-muted);font-size:0.875rem;margin-bottom:var(--spacing-xl);">Browse sections by document or use the search to find specific policies.</p>' +
+      documents.map(function(doc) {
+        return '<div class="hb-toc__doc">' +
+          '<div class="hb-toc__doc-title">' + esc(doc.title) + '</div>' +
+          '<div class="hb-toc__sections">' +
+            doc.sections.map(function(sec) {
+              return '<a class="hb-toc__link" data-doc="' + esc(doc.slug) + '" data-section="' + esc(sec.slug) + '">' + esc(sec.title) + '</a>';
+            }).join('') +
+          '</div>' +
+        '</div>';
+      }).join('');
+
+    updateSidebarActive();
+    history.pushState(null, '', '/handbook.html');
+  }
+
+  // ── Load section ──
+  async function loadSection(docSlug, sectionSlug) {
+    loadingEl.style.display = 'none';
+    tocEl.style.display = 'none';
+    searchResultsEl.style.display = 'none';
+    sectionViewEl.style.display = '';
+    sectionViewEl.innerHTML = '<div class="hb-loading"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></div>';
+
+    try {
+      var section = await ServerAPI.getHandbookSectionBySlugs(docSlug, sectionSlug);
+      currentDocSlug = docSlug;
+      currentSectionSlug = sectionSlug;
+
+      var contentHtml = esc(section.content).replace(/\n/g, '<br>');
+
+      sectionViewEl.innerHTML =
+        '<div class="hb-breadcrumb">' +
+          '<a href="#" id="hbBreadcrumbHome">Handbook</a>' +
+          '<span class="hb-breadcrumb__sep">/</span>' +
+          '<span>' + esc(section.doc_title) + '</span>' +
+          '<span class="hb-breadcrumb__sep">/</span>' +
+          '<span>' + esc(section.title) + '</span>' +
+        '</div>' +
+        '<div class="hb-section">' +
+          '<div class="hb-section__header">' +
+            '<h1>' + esc(section.title) + '</h1>' +
+            '<span class="hb-section__doc-badge">' + esc(section.doc_title) + '</span>' +
+            (isAdmin ? '<button class="hb-edit-btn" id="hbEditBtn" data-section-id="' + section.id + '"><i class="fas fa-edit"></i> Edit</button>' : '') +
+          '</div>' +
+          '<div class="hb-section__content" id="hbSectionContent">' + contentHtml + '</div>' +
+
+          // Edit form (hidden by default)
+          (isAdmin ? renderEditForm(section) : '') +
+
+          '<div class="hb-section__nav">' +
+            (section.prev ? '<a class="hb-section__nav-link" data-doc="' + esc(docSlug) + '" data-section="' + esc(section.prev.slug) + '"><i class="fas fa-arrow-left"></i> ' + esc(section.prev.title) + '</a>' : '<span></span>') +
+            (section.next ? '<a class="hb-section__nav-link hb-section__nav-next" data-doc="' + esc(docSlug) + '" data-section="' + esc(section.next.slug) + '">' + esc(section.next.title) + ' <i class="fas fa-arrow-right"></i></a>' : '<span></span>') +
+          '</div>' +
+        '</div>';
+
+      updateSidebarActive();
+      history.pushState(null, '', '/handbook.html?doc=' + encodeURIComponent(docSlug) + '&section=' + encodeURIComponent(sectionSlug));
+      window.scrollTo(0, 0);
+
+      // Close mobile sidebar
+      sidebar.classList.remove('open');
+    } catch (err) {
+      console.error('Failed to load section:', err);
+      sectionViewEl.innerHTML = '<div class="hb-empty"><i class="fas fa-exclamation-triangle"></i><p>Section not found.</p></div>';
+    }
+  }
+
+  function renderEditForm(section) {
+    return '<div class="hb-edit-form" id="hbEditForm">' +
+      '<hr class="hb-edit-form__divider">' +
+      '<div class="hb-edit-form__group">' +
+        '<label for="hbEditTitle">Title</label>' +
+        '<input type="text" id="hbEditTitle" value="' + esc(section.title).replace(/"/g, '&quot;') + '">' +
+      '</div>' +
+      '<div class="hb-edit-form__group">' +
+        '<label for="hbEditContent">Content</label>' +
+        '<textarea id="hbEditContent" rows="20">' + esc(section.content) + '</textarea>' +
+      '</div>' +
+      '<div class="hb-edit-form__actions">' +
+        '<button class="hb-edit-btn" id="hbSaveBtn">Save</button>' +
+        '<button class="hb-edit-btn" id="hbCancelBtn" style="background:var(--text-muted);">Cancel</button>' +
+        '<button class="hb-delete-btn" id="hbDeleteBtn" style="margin-left:auto;">Delete Section</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ── Sidebar active state ──
+  function updateSidebarActive() {
+    var links = sidebarNav.querySelectorAll('.hb-sidebar__link');
+    for (var i = 0; i < links.length; i++) {
+      var link = links[i];
+      if (link.dataset.doc === currentDocSlug && link.dataset.section === currentSectionSlug) {
+        link.classList.add('active');
+        // Expand parent group
+        var group = link.closest('.hb-sidebar__group');
+        if (group) {
+          var toggle = group.querySelector('.hb-sidebar__doc-toggle');
+          var sections = group.querySelector('.hb-sidebar__sections');
+          if (toggle && !toggle.classList.contains('open')) {
+            toggle.classList.add('open');
+          }
+          if (sections && !sections.classList.contains('open')) {
+            sections.classList.add('open');
+          }
+        }
+      } else {
+        link.classList.remove('active');
+      }
+    }
+  }
+
+  // ── Search ──
+  var debounceTimer;
+
+  function handleSearch() {
+    var q = searchInput.value.trim();
+    clearTimeout(debounceTimer);
+
+    // Sidebar filtering (immediate)
+    var sidebarLinks = sidebarNav.querySelectorAll('.hb-sidebar__link');
+    if (!q) {
+      for (var i = 0; i < sidebarLinks.length; i++) sidebarLinks[i].style.display = '';
+      searchResultsEl.style.display = 'none';
+      if (!currentSectionSlug) { tocEl.style.display = ''; }
+      return;
+    }
+
+    var lower = q.toLowerCase();
+    for (var j = 0; j < sidebarLinks.length; j++) {
+      var title = sidebarLinks[j].getAttribute('data-title') || '';
+      sidebarLinks[j].style.display = title.indexOf(lower) !== -1 ? '' : 'none';
+    }
+
+    // Expand all groups when searching
+    var toggles = sidebarNav.querySelectorAll('.hb-sidebar__doc-toggle');
+    for (var k = 0; k < toggles.length; k++) {
+      toggles[k].classList.add('open');
+      var target = document.getElementById(toggles[k].getAttribute('data-target'));
+      if (target) target.classList.add('open');
+    }
+
+    // API search (debounced)
+    debounceTimer = setTimeout(function() {
+      if (q.length < 2) return;
+      ServerAPI.searchHandbook(q, 30).then(function(data) {
+        if (!data.results || !data.results.length) {
+          searchResultsEl.style.display = 'none';
+          return;
+        }
+
+        tocEl.style.display = 'none';
+        sectionViewEl.style.display = 'none';
+        searchResultsEl.style.display = '';
+
+        searchResultsList.innerHTML = data.results.map(function(r) {
+          var snippet = r.snippet ? getSnippet(r.snippet, q) : '';
+          return '<a class="hb-search-result" data-doc="' + esc(r.doc_slug) + '" data-section="' + esc(r.slug) + '">' +
+            '<div class="hb-search-result__title">' + esc(r.title) + '</div>' +
+            '<div class="hb-search-result__doc">' + esc(r.doc_title) + '</div>' +
+            (snippet ? '<div class="hb-search-result__snippet">' + snippet + '</div>' : '') +
+          '</a>';
+        }).join('');
+      }).catch(function() { /* ignore */ });
+    }, 300);
+  }
+
+  function getSnippet(raw, query) {
+    if (!raw) return '';
+    var snippet = esc(raw.replace(/\n/g, ' '));
+    var escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    snippet = snippet.replace(new RegExp('(' + escaped + ')', 'gi'), '<mark>$1</mark>');
+    return snippet;
+  }
+
+  // ── Admin: add section ──
+  async function addSection(docId) {
+    var title = prompt('Enter section title:');
+    if (!title || !title.trim()) return;
+
+    try {
+      var result = await ServerAPI.createHandbookSection(docId, { title: title.trim(), content: '' });
+      await loadDocuments();
+      // Find the doc slug
+      var doc = documents.find(function(d) { return d.id === parseInt(docId); });
+      if (doc && result.slug) {
+        await loadSection(doc.slug, result.slug);
+      }
+    } catch (err) {
+      alert('Failed to add section: ' + (err.message || 'Unknown error'));
+    }
+  }
+
+  // ── Events ──
+  function bindEvents() {
+    // Click delegation for section links, TOC links, search results
+    document.addEventListener('click', function(e) {
+      // Section link (sidebar, TOC, search result, nav)
+      var link = e.target.closest('[data-doc][data-section]');
+      if (link) {
+        e.preventDefault();
+        searchInput.value = '';
+        searchResultsEl.style.display = 'none';
+        loadSection(link.dataset.doc, link.dataset.section);
+        return;
+      }
+
+      // Breadcrumb home
+      if (e.target.closest('#hbBreadcrumbHome')) {
+        e.preventDefault();
+        searchInput.value = '';
+        showToc();
+        return;
+      }
+
+      // Sidebar toggle
+      var toggle = e.target.closest('.hb-sidebar__doc-toggle');
+      if (toggle) {
+        var targetId = toggle.getAttribute('data-target');
+        var sec = document.getElementById(targetId);
+        if (!sec) return;
+        var wasOpen = toggle.classList.contains('open');
+        toggle.classList.toggle('open', !wasOpen);
+        sec.classList.toggle('open', !wasOpen);
+        return;
+      }
+
+      // Admin: add section
+      var addBtn = e.target.closest('[data-add-doc-id]');
+      if (addBtn) {
+        e.preventDefault();
+        addSection(addBtn.dataset.addDocId);
+        return;
+      }
+
+      // Admin: edit button
+      if (e.target.closest('#hbEditBtn')) {
+        var form = document.getElementById('hbEditForm');
+        var content = document.getElementById('hbSectionContent');
+        if (form && content) {
+          form.classList.add('active');
+          content.style.display = 'none';
+        }
+        return;
+      }
+
+      // Admin: cancel edit
+      if (e.target.closest('#hbCancelBtn')) {
+        var form2 = document.getElementById('hbEditForm');
+        var content2 = document.getElementById('hbSectionContent');
+        if (form2 && content2) {
+          form2.classList.remove('active');
+          content2.style.display = '';
+        }
+        return;
+      }
+
+      // Admin: save
+      if (e.target.closest('#hbSaveBtn')) {
+        var editBtn = document.getElementById('hbEditBtn');
+        var sectionId = editBtn ? editBtn.dataset.sectionId : null;
+        if (!sectionId) return;
+
+        var newTitle = document.getElementById('hbEditTitle').value.trim();
+        var newContent = document.getElementById('hbEditContent').value;
+        if (!newTitle) { alert('Title is required.'); return; }
+
+        ServerAPI.updateHandbookSection(sectionId, { title: newTitle, content: newContent })
+          .then(function() {
+            loadDocuments().then(function() {
+              loadSection(currentDocSlug, currentSectionSlug);
+            });
+          })
+          .catch(function(err) { alert('Save failed: ' + (err.message || 'Unknown error')); });
+        return;
+      }
+
+      // Admin: delete
+      if (e.target.closest('#hbDeleteBtn')) {
+        if (!confirm('Are you sure you want to delete this section? This cannot be undone.')) return;
+        var editBtn2 = document.getElementById('hbEditBtn');
+        var sectionId2 = editBtn2 ? editBtn2.dataset.sectionId : null;
+        if (!sectionId2) return;
+
+        ServerAPI.deleteHandbookSection(sectionId2)
+          .then(function() {
+            loadDocuments().then(function() { showToc(); });
+          })
+          .catch(function(err) { alert('Delete failed: ' + (err.message || 'Unknown error')); });
+        return;
+      }
+    });
+
+    // Search
+    searchInput.addEventListener('input', handleSearch);
+
+    // Keyboard shortcut: / to focus search
+    document.addEventListener('keydown', function(e) {
+      if (e.key === '/' && document.activeElement !== searchInput &&
+          document.activeElement.tagName !== 'INPUT' &&
+          document.activeElement.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInput.focus();
+      }
+    });
+
+    // Mobile sidebar toggle
+    if (mobileToggle) {
+      mobileToggle.addEventListener('click', function() {
+        sidebar.classList.toggle('open');
+      });
+    }
+
+    // Browser back/forward
+    window.addEventListener('popstate', function() {
+      var params = new URLSearchParams(window.location.search);
+      var doc = params.get('doc');
+      var section = params.get('section');
+      if (doc && section) {
+        loadSection(doc, section);
+      } else {
+        showToc();
+      }
+    });
+  }
+
+  // ── Helpers ──
+  function esc(str) {
+    if (!str) return '';
+    if (typeof Utils !== 'undefined' && Utils.escapeHtml) return Utils.escapeHtml(str);
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // ── Start ──
+  init();
+})();
+</script>
+</body>
+</html>

@@ -63,7 +63,7 @@
     // =====================
     // HR / Docs
     // =====================
-    'open-handbook': () => comingSoon('Employee Handbook'),
+    'open-handbook': () => { window.location.href = '/handbook.html'; },
     'open-401k': () => comingSoon('401(k) Portal'),
     'open-training': () => comingSoon('Training Center'),
 

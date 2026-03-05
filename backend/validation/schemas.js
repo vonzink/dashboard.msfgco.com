@@ -107,6 +107,22 @@ const guidelineSearch = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(20),
 });
 
+// ── Handbook ────────────────────────────────────
+const handbookSearch = z.object({
+  q: z.string().trim().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+});
+
+const handbookSectionUpdate = z.object({
+  title: trimmedString(500),
+  content: z.string().trim().max(500000),
+});
+
+const handbookSectionCreate = z.object({
+  title: trimmedString(500),
+  content: z.string().trim().max(500000).optional().default(''),
+});
+
 // ── Validate helper ─────────────────────────────
 function validate(schema) {
   return (req, res, next) => {
@@ -151,6 +167,9 @@ module.exports = {
   guidelineProcess,
   guidelineSearch,
   PRODUCT_TYPES,
+  handbookSearch,
+  handbookSectionUpdate,
+  handbookSectionCreate,
   validate,
   validateQuery,
 };
