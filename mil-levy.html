@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <script src="js/auth-gate.js?v=20260305-2"></script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Property Tax Calculator | MSFG Dashboard</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+
+  <link rel="stylesheet" href="css/variables.css?v=20260305-2" />
+  <link rel="stylesheet" href="css/base.css?v=20260305-2" />
+
+  <style>
+    .ml-page { max-width: 1100px; margin: 0 auto; padding: var(--spacing-xl); }
+    .ml-back { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--green-teal); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color var(--transition-fast); margin-bottom: var(--spacing-lg); }
+    .ml-back:hover { color: var(--green-bright); }
+
+    .ml-header { display: flex; gap: var(--spacing-md); align-items: flex-end; justify-content: space-between; flex-wrap: wrap; padding-bottom: var(--spacing-md); border-bottom: 2px solid rgba(140,198,62,0.2); margin-bottom: var(--spacing-lg); }
+    .ml-header h1 { margin: 0; font-size: 1.375rem; font-weight: 700; color: var(--text-primary); }
+    .ml-header__sub { margin: 4px 0 0; color: var(--text-muted); font-size: 0.8125rem; }
+    .ml-tip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-color); padding: 6px 12px; border-radius: var(--radius-full); color: var(--text-muted); font-size: 0.75rem; white-space: nowrap; }
+    .ml-tip .ml-kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: var(--bg-tertiary); border: 1px solid var(--border-color); padding: 1px 6px; border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.75rem; }
+
+    .ml-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: var(--spacing-lg); }
+    @media (max-width: 920px) { .ml-grid { grid-template-columns: 1fr; } }
+
+    .ml-card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--spacing-lg); box-shadow: var(--shadow-sm); }
+
+    .ml-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md); }
+    @media (max-width: 560px) { .ml-row { grid-template-columns: 1fr; } }
+
+    .ml-card label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; margin: var(--spacing-md) 0 6px; }
+    .ml-card select,
+    .ml-card input {
+      width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border-color);
+      background: var(--bg-tertiary); color: var(--text-primary); padding: 10px 12px;
+      outline: none; font-size: 0.875rem; font-family: inherit;
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .ml-card select:focus,
+    .ml-card input:focus { border-color: var(--green-bright); box-shadow: 0 0 0 3px rgba(140,198,62,0.15); background: var(--bg-secondary); }
+    .ml-card input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+    .ml-btnbar { display: flex; gap: 10px; margin-top: var(--spacing-lg); flex-wrap: wrap; }
+    .ml-btn {
+      border: 0; border-radius: var(--radius-md); padding: 10px 20px; font-weight: 600; cursor: pointer;
+      font-size: 0.875rem; font-family: inherit; transition: all var(--transition-fast);
+      background: var(--green-teal); color: #fff;
+    }
+    .ml-btn:hover { background: var(--green-dark); }
+    .ml-btn--secondary { background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); }
+    .ml-btn--secondary:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+
+    .ml-state-help { font-size: 0.8125rem; color: var(--text-muted); border-top: 1px solid var(--border-color); margin-top: var(--spacing-md); padding-top: var(--spacing-md); line-height: 1.6; }
+    .ml-state-help strong { color: var(--text-primary); }
+    .ml-state-help .ml-kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: var(--bg-tertiary); border: 1px solid var(--border-color); padding: 1px 6px; border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.75rem; }
+
+    .ml-result h2 { margin: 0 0 6px; font-size: 1rem; font-weight: 700; color: var(--text-primary); }
+    .ml-big { font-size: 2rem; font-weight: 700; margin: var(--spacing-sm) 0 2px; color: var(--green-teal); letter-spacing: 0.2px; }
+    .ml-small { color: var(--text-muted); font-size: 0.8125rem; }
+    .ml-math {
+      margin-top: var(--spacing-md); border-top: 1px dashed var(--border-color); padding-top: var(--spacing-md);
+      color: var(--text-secondary); line-height: 1.6; font-size: 0.8125rem; white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .ml-note { margin-top: var(--spacing-sm); font-size: 0.75rem; color: var(--text-muted); }
+    .ml-warn { color: var(--status-danger); }
+
+    @media print {
+      .ml-back, .ml-btnbar { display: none !important; }
+      .ml-card { box-shadow: none; border: 1px solid #ddd; }
+    }
+  </style>
+</head>
+<body>
+<div class="ml-page">
+  <a href="/" class="ml-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+  <div class="ml-header">
+    <div>
+      <h1>Property Tax Calculator</h1>
+      <div class="ml-header__sub">Select a state, enter the required variables, and get an estimated annual tax + step-by-step math.</div>
+    </div>
+    <div class="ml-tip">Tip: mills are entered as <span class="ml-kbd">80</span> not <span class="ml-kbd">0.08</span></div>
+  </div>
+
+  <div class="ml-grid">
+    <div class="ml-card">
+      <div class="ml-row">
+        <div>
+          <label for="state">State</label>
+          <select id="state">
+            <option value="CO">Colorado (CO)</option>
+            <option value="ND">North Dakota (ND)</option>
+            <option value="SD">South Dakota (SD)</option>
+            <option value="MN">Minnesota (MN)</option>
+            <option value="MI">Michigan (MI)</option>
+            <option value="IL">Illinois (IL)</option>
+            <option value="TX">Texas (TX)</option>
+          </select>
+        </div>
+        <div>
+          <label for="marketValue">Market / Appraised Value ($)</label>
+          <input id="marketValue" type="number" min="0" step="100" placeholder="e.g., 400000" />
+        </div>
+      </div>
+
+      <div id="dynamicFields"></div>
+
+      <div class="ml-btnbar">
+        <button class="ml-btn" id="calcBtn">Calculate</button>
+        <button class="ml-btn ml-btn--secondary" id="resetBtn">Reset</button>
+      </div>
+
+      <div class="ml-state-help" id="stateHelp"></div>
+    </div>
+
+    <div class="ml-card ml-result">
+      <h2>Result</h2>
+      <div class="ml-big" id="taxOut">$0</div>
+      <div class="ml-small" id="taxOut2">Estimated annual property tax</div>
+      <div class="ml-math" id="mathOut">Pick a state and enter values to see the math.</div>
+      <div class="ml-note ml-warn" id="warnOut"></div>
+      <div class="ml-note" style="margin-top:12px">
+        You can copy the math into an underwriter note or an internal calculator.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  const money = (n) => {
+    if (!isFinite(n)) return "$0";
+    return n.toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  };
+
+  const num = (v) => {
+    const x = parseFloat(v);
+    return isFinite(x) ? x : 0;
+  };
+
+  const millsToRate = (mills) => num(mills) / 1000;
+
+  const states = {
+    CO: {
+      name: "Colorado",
+      fields: [
+        { id:"assessmentRate", label:"Residential Assessment Rate (decimal)", placeholder:"e.g., 0.067", default: "0.067" },
+        { id:"millLevy", label:"Total Mill Levy (mills)", placeholder:"e.g., 80", default: "80" },
+        { id:"schoolExemption", label:"Apply CO school exemption? (optional)", type:"select",
+          options: [
+            {v:"none", t:"No / ignore"},
+            {v:"co20k", t:"Yes: reduce statewide 20 mills on first $20,000 appraised value"}
+          ],
+          default:"none"
+        },
+        { id:"stateSchoolMills", label:"Statewide school mills (only if using exemption)", placeholder:"e.g., 20", default:"20", dependsOn: {field:"schoolExemption", value:"co20k"} },
+        { id:"exemptAmount", label:"Exempt appraised value amount (only if using exemption)", placeholder:"e.g., 20000", default:"20000", dependsOn: {field:"schoolExemption", value:"co20k"} }
+      ],
+      help: 'Colorado uses: <span class="ml-kbd">Tax = Actual Value &times; Assessment Rate &times; (Mill Levy &divide; 1000)</span>. Optional: an older statewide school mill exemption is shown as a separate reduction if you choose it.',
+      calc: (mv, f) => {
+        const ar = num(f.assessmentRate);
+        const mills = num(f.millLevy);
+        const rate = millsToRate(mills);
+        const assessed = mv * ar;
+        let tax = assessed * rate;
+        const math = [];
+        math.push('1) Assessed Value = Market Value \u00d7 Assessment Rate');
+        math.push('   = ' + money(mv) + ' \u00d7 ' + ar);
+        math.push('   = ' + money(assessed) + '\n');
+        math.push('2) Tax = Assessed Value \u00d7 (Mill Levy \u00f7 1000)');
+        math.push('   = ' + money(assessed) + ' \u00d7 (' + mills + ' \u00f7 1000)');
+        math.push('   = ' + money(tax) + '\n');
+        if (f.schoolExemption === "co20k") {
+          const schoolMills = num(f.stateSchoolMills);
+          const exemptAppraised = Math.min(num(f.exemptAmount), mv);
+          const exemptAssessed = exemptAppraised * ar;
+          const reduction = exemptAssessed * millsToRate(schoolMills);
+          tax = Math.max(0, tax - reduction);
+          math.push('3) Optional reduction (statewide school mills on first ' + money(num(f.exemptAmount)) + ' appraised value):');
+          math.push('   Exempt Assessed = min(' + money(num(f.exemptAmount)) + ', ' + money(mv) + ') \u00d7 ' + ar + ' = ' + money(exemptAssessed));
+          math.push('   Reduction = Exempt Assessed \u00d7 (' + schoolMills + ' \u00f7 1000) = ' + money(reduction));
+          math.push('   Final Tax = ' + money(tax) + '\n');
+        }
+        return { tax, math: math.join("\n"), warn: "" };
+      }
+    },
+    ND: {
+      name: "North Dakota",
+      fields: [
+        { id:"millLevy", label:"Total Mill Levy (mills)", placeholder:"e.g., 250", default:"250" },
+        { id:"taxablePct", label:"Taxable % of market value (decimal)", placeholder:"e.g., 0.045", default:"0.045" }
+      ],
+      help: 'Practical estimate: <span class="ml-kbd">Tax \u2248 Market Value \u00d7 Taxable % \u00d7 (Mills \u00f7 1000)</span>. ND technically does assessment steps, but most lenders estimate taxable value as a % of market value.',
+      calc: (mv, f) => {
+        const taxablePct = num(f.taxablePct);
+        const mills = num(f.millLevy);
+        const rate = millsToRate(mills);
+        const taxableValue = mv * taxablePct;
+        const tax = taxableValue * rate;
+        const math = [
+          '1) Taxable Value (estimate) = Market Value \u00d7 Taxable %',
+          '   = ' + money(mv) + ' \u00d7 ' + taxablePct,
+          '   = ' + money(taxableValue) + '\n',
+          '2) Tax = Taxable Value \u00d7 (Mill Levy \u00f7 1000)',
+          '   = ' + money(taxableValue) + ' \u00d7 (' + mills + ' \u00f7 1000)',
+          '   = ' + money(tax)
+        ].join("\n");
+        return { tax, math, warn: "ND has multiple statutory steps; this is a lender-style estimate using taxable % of market value." };
+      }
+    },
+    SD: {
+      name: "South Dakota",
+      fields: [
+        { id:"effectiveRate", label:"Local effective tax rate (decimal)", placeholder:"e.g., 0.0125", default:"0.012" }
+      ],
+      help: 'SD is commonly estimated as <span class="ml-kbd">Tax \u2248 Market Value \u00d7 Effective Tax Rate</span>. If you know the county/school mills and taxable value rules, you can swap in a more exact local method.',
+      calc: (mv, f) => {
+        const r = num(f.effectiveRate);
+        const tax = mv * r;
+        const math = [
+          '1) Tax (estimate) = Market Value \u00d7 Effective Tax Rate',
+          '   = ' + money(mv) + ' \u00d7 ' + r,
+          '   = ' + money(tax)
+        ].join("\n");
+        return { tax, math, warn: "SD rules vary by classification and local levies; this uses an effective-rate estimate." };
+      }
+    },
+    MN: {
+      name: "Minnesota",
+      fields: [
+        { id:"classRate", label:"Class rate (decimal)", placeholder:"e.g., 0.01", default:"0.01" },
+        { id:"localTaxRate", label:"Local tax rate on tax capacity (decimal)", placeholder:"e.g., 1.20", default:"1.20" }
+      ],
+      help: 'MN commonly uses <span class="ml-kbd">Tax Capacity = Market Value \u00d7 Class Rate</span>, then <span class="ml-kbd">Tax = Tax Capacity \u00d7 Local Tax Rate</span>. Local tax rate is often expressed as a percentage of tax capacity (e.g. 1.20 = 120%).',
+      calc: (mv, f) => {
+        const classRate = num(f.classRate);
+        const localRate = num(f.localTaxRate);
+        const taxCapacity = mv * classRate;
+        const tax = taxCapacity * localRate;
+        const math = [
+          '1) Tax Capacity = Market Value \u00d7 Class Rate',
+          '   = ' + money(mv) + ' \u00d7 ' + classRate,
+          '   = ' + money(taxCapacity) + '\n',
+          '2) Tax = Tax Capacity \u00d7 Local Tax Rate',
+          '   = ' + money(taxCapacity) + ' \u00d7 ' + localRate,
+          '   = ' + money(tax)
+        ].join("\n");
+        return { tax, math, warn: "MN has tiered class rates and credits; use county/city figures for tighter estimates." };
+      }
+    },
+    MI: {
+      name: "Michigan",
+      fields: [
+        { id:"millage", label:"Total Millage (mills)", placeholder:"e.g., 40", default:"40" },
+        { id:"useHalfValue", label:"Assessed value = 50% of market? (typical)", type:"select",
+          options: [{v:"yes", t:"Yes (use 50% of market)"},{v:"no", t:"No (enter taxable value directly)"}],
+          default:"yes"
+        },
+        { id:"taxableValue", label:"Taxable Value (if not using 50%)", placeholder:"e.g., 150000", default:"", dependsOn:{field:"useHalfValue", value:"no"} }
+      ],
+      help: 'MI commonly estimated as <span class="ml-kbd">Tax \u2248 (Market Value \u00d7 50%) \u00d7 (Mills \u00f7 1000)</span>. If you already know taxable value (capped), choose "No" and enter it directly.',
+      calc: (mv, f) => {
+        const mills = num(f.millage);
+        const rate = millsToRate(mills);
+        const math = [];
+        let taxable;
+        if (f.useHalfValue === "yes") {
+          taxable = mv * 0.5;
+          math.push('1) Assessed/Taxable (estimate) = Market Value \u00d7 50%');
+          math.push('   = ' + money(mv) + ' \u00d7 0.5');
+          math.push('   = ' + money(taxable) + '\n');
+        } else {
+          taxable = num(f.taxableValue);
+          math.push('1) Taxable Value (entered) = ' + money(taxable) + '\n');
+        }
+        const tax = taxable * rate;
+        math.push('2) Tax = Taxable Value \u00d7 (Millage \u00f7 1000)');
+        math.push('   = ' + money(taxable) + ' \u00d7 (' + mills + ' \u00f7 1000)');
+        math.push('   = ' + money(tax));
+        return { tax, math: math.join("\n"), warn: "MI taxable value can be capped by Headlee/Proposal A; use actual taxable value when available." };
+      }
+    },
+    IL: {
+      name: "Illinois",
+      fields: [
+        { id:"assessmentLevel", label:"Assessment level (decimal)", placeholder:"e.g., 0.33", default:"0.33" },
+        { id:"equalizationFactor", label:"State equalization factor (decimal)", placeholder:"e.g., 1.05", default:"1.00" },
+        { id:"localRate", label:"Local tax rate (decimal)", placeholder:"e.g., 0.085", default:"0.085" }
+      ],
+      help: 'IL uses EAV: <span class="ml-kbd">Assessed = Market \u00d7 Assessment Level</span>, <span class="ml-kbd">EAV = Assessed \u00d7 Equalization Factor</span>, <span class="ml-kbd">Tax = EAV \u00d7 Local Tax Rate</span>. Cook County residential commonly uses a different assessment level than downstate.',
+      calc: (mv, f) => {
+        const level = num(f.assessmentLevel);
+        const eq = num(f.equalizationFactor);
+        const r = num(f.localRate);
+        const assessed = mv * level;
+        const eav = assessed * eq;
+        const tax = eav * r;
+        const math = [
+          '1) Assessed Value = Market Value \u00d7 Assessment Level',
+          '   = ' + money(mv) + ' \u00d7 ' + level,
+          '   = ' + money(assessed) + '\n',
+          '2) Equalized Assessed Value (EAV) = Assessed Value \u00d7 Equalization Factor',
+          '   = ' + money(assessed) + ' \u00d7 ' + eq,
+          '   = ' + money(eav) + '\n',
+          '3) Tax = EAV \u00d7 Local Tax Rate',
+          '   = ' + money(eav) + ' \u00d7 ' + r,
+          '   = ' + money(tax)
+        ].join("\n");
+        return { tax, math, warn: "IL varies heavily by county/township; confirm local rate and assessment level (Cook County can differ)." };
+      }
+    },
+    TX: {
+      name: "Texas",
+      fields: [
+        { id:"exemptions", label:"Total exemptions ($)", placeholder:"e.g., 100000", default:"0" },
+        { id:"taxRate", label:"Total tax rate (decimal)", placeholder:"e.g., 0.022", default:"0.022" }
+      ],
+      help: 'TX is usually: <span class="ml-kbd">Tax = (Appraised Value \u2212 Exemptions) \u00d7 Tax Rate</span>. Exemptions often include homestead + other local options.',
+      calc: (mv, f) => {
+        const ex = Math.max(0, num(f.exemptions));
+        const r = num(f.taxRate);
+        const taxable = Math.max(0, mv - ex);
+        const tax = taxable * r;
+        const math = [
+          '1) Taxable Value = max(0, Appraised Value \u2212 Exemptions)',
+          '   = max(0, ' + money(mv) + ' \u2212 ' + money(ex) + ')',
+          '   = ' + money(taxable) + '\n',
+          '2) Tax = Taxable Value \u00d7 Tax Rate',
+          '   = ' + money(taxable) + ' \u00d7 ' + r,
+          '   = ' + money(tax)
+        ].join("\n");
+        return { tax, math, warn: "" };
+      }
+    }
+  };
+
+  function renderFields(stateKey) {
+    const cfg = states[stateKey];
+    $("dynamicFields").innerHTML = "";
+    cfg.fields.forEach(function(field) {
+      const wrap = document.createElement("div");
+      wrap.dataset.field = field.id;
+      if (field.dependsOn) {
+        wrap.dataset.dependsOn = field.dependsOn.field;
+        wrap.dataset.dependsValue = field.dependsOn.value;
+        wrap.style.display = "none";
+      }
+      const lab = document.createElement("label");
+      lab.htmlFor = field.id;
+      lab.textContent = field.label;
+      wrap.appendChild(lab);
+      let el;
+      if (field.type === "select") {
+        el = document.createElement("select");
+        el.id = field.id;
+        field.options.forEach(function(o) {
+          const opt = document.createElement("option");
+          opt.value = o.v;
+          opt.textContent = o.t;
+          el.appendChild(opt);
+        });
+        el.value = field.default || "";
+      } else {
+        el = document.createElement("input");
+        el.id = field.id;
+        el.type = "number";
+        el.step = "any";
+        el.min = "0";
+        el.placeholder = field.placeholder || "";
+        el.value = field.default || "";
+      }
+      wrap.appendChild(el);
+      $("dynamicFields").appendChild(wrap);
+    });
+    $("stateHelp").innerHTML = '<strong>' + cfg.name + '</strong><br/>' + cfg.help;
+    hookDependencies();
+    evaluateDependencies();
+  }
+
+  function hookDependencies() {
+    const deps = Array.from($("dynamicFields").querySelectorAll("[data-depends-on]"));
+    const needed = new Set(deps.map(function(d) { return d.dataset.dependsOn; }));
+    needed.forEach(function(id) {
+      const el = $(id);
+      if (el) {
+        el.addEventListener("input", evaluateDependencies);
+        el.addEventListener("change", evaluateDependencies);
+      }
+    });
+  }
+
+  function evaluateDependencies() {
+    const deps = Array.from($("dynamicFields").querySelectorAll("[data-depends-on]"));
+    deps.forEach(function(wrap) {
+      const depField = wrap.dataset.dependsOn;
+      const depValue = wrap.dataset.dependsValue;
+      const current = $(depField) ? $(depField).value : "";
+      wrap.style.display = (current === depValue) ? "block" : "none";
+    });
+  }
+
+  function getFieldValues(stateKey) {
+    const cfg = states[stateKey];
+    const f = {};
+    cfg.fields.forEach(function(field) {
+      const el = $(field.id);
+      if (!el) return;
+      f[field.id] = el.value;
+    });
+    return f;
+  }
+
+  function calculate() {
+    const stateKey = $("state").value;
+    const mv = num($("marketValue").value);
+    if (!mv || mv <= 0) {
+      $("taxOut").textContent = "$0";
+      $("mathOut").textContent = "Enter a market/appraised value greater than 0.";
+      $("warnOut").textContent = "";
+      return;
+    }
+    const f = getFieldValues(stateKey);
+    const result = states[stateKey].calc(mv, f);
+    $("taxOut").textContent = money(result.tax);
+    $("mathOut").textContent = result.math;
+    $("warnOut").textContent = result.warn || "";
+  }
+
+  function resetAll() {
+    $("marketValue").value = "";
+    renderFields($("state").value);
+    $("taxOut").textContent = "$0";
+    $("mathOut").textContent = "Pick a state and enter values to see the math.";
+    $("warnOut").textContent = "";
+  }
+
+  $("state").addEventListener("change", function(e) {
+    renderFields(e.target.value);
+    calculate();
+  });
+  $("calcBtn").addEventListener("click", calculate);
+  $("resetBtn").addEventListener("click", resetAll);
+
+  document.addEventListener("input", function(e) {
+    if (["marketValue","assessmentRate","millLevy","stateSchoolMills","exemptAmount",
+         "taxablePct","effectiveRate","classRate","localTaxRate","millage","taxableValue",
+         "assessmentLevel","equalizationFactor","localRate","exemptions","taxRate"].indexOf(e.target.id) !== -1) {
+      calculate();
+    }
+  });
+  document.addEventListener("change", function(e) {
+    if (["schoolExemption","useHalfValue"].indexOf(e.target.id) !== -1) {
+      evaluateDependencies();
+      calculate();
+    }
+  });
+
+  renderFields($("state").value);
+})();
+</script>
+</body>
+</html>

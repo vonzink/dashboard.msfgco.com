@@ -202,6 +202,13 @@
     'open-guidelines': () => {
       window.location.href = '/guidelines';
     },
+
+    // =====================
+    // Property Tax Calculator
+    // =====================
+    'open-mil-levy': () => {
+      window.location.href = '/mil-levy.html';
+    },
   };
 
   document.addEventListener('click', (e) => {
