@@ -12,6 +12,138 @@ function isValidType(type) {
   return VALID_TYPES.includes(type);
 }
 
+/* ========================================
+   Tax Counties Lookup Table
+   ======================================== */
+
+// GET /api/processing/tax-counties - List all counties (with optional state filter + search)
+router.get('/tax-counties', async (req, res, next) => {
+  try {
+    const { state, q } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (state) {
+      conditions.push('state = ?');
+      params.push(state.toUpperCase());
+    }
+
+    if (q && q.trim()) {
+      conditions.push('(county LIKE ? OR state LIKE ? OR known_costs_fees LIKE ?)');
+      const pattern = '%' + q.trim() + '%';
+      params.push(pattern, pattern, pattern);
+    }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await db.query(
+      `SELECT * FROM tax_counties ${where} ORDER BY state, county`,
+      params
+    );
+
+    res.json({ success: true, results: rows, total: rows.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/processing/tax-counties - Add a county (admin only)
+router.post('/tax-counties', async (req, res, next) => {
+  try {
+    const { county, state, assessorUrl, treasurerUrl, loginRequired, knownCostsFees, onlinePortal, notes } = req.body;
+
+    if (!county || !county.trim()) return res.status(400).json({ error: 'County is required.' });
+    if (!state || !state.trim()) return res.status(400).json({ error: 'State is required.' });
+
+    const [result] = await db.query(
+      `INSERT INTO tax_counties (county, state, assessor_url, treasurer_url, login_required, known_costs_fees, online_portal, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        county.trim(),
+        state.trim().toUpperCase(),
+        (assessorUrl || '').trim() || null,
+        (treasurerUrl || '').trim() || null,
+        loginRequired ? 1 : 0,
+        (knownCostsFees || '').trim() || null,
+        onlinePortal ? 1 : 0,
+        (notes || '').trim() || null
+      ]
+    );
+
+    const [rows] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, record: rows[0] });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'This county/state combination already exists.' });
+    }
+    next(error);
+  }
+});
+
+// PUT /api/processing/tax-counties/:id - Update a county
+router.put('/tax-counties/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'County not found.' });
+
+    const fieldMap = {
+      county: 'county',
+      state: 'state',
+      assessorUrl: 'assessor_url',
+      treasurerUrl: 'treasurer_url',
+      loginRequired: 'login_required',
+      knownCostsFees: 'known_costs_fees',
+      onlinePortal: 'online_portal',
+      notes: 'notes'
+    };
+
+    const updates = [];
+    const values = [];
+
+    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
+      if (req.body[bodyKey] !== undefined) {
+        let val = req.body[bodyKey];
+        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
+        if (dbCol === 'login_required' || dbCol === 'online_portal') val = val ? 1 : 0;
+        else if (typeof val === 'string') val = val.trim() || null;
+        updates.push(`${dbCol} = ?`);
+        values.push(val);
+      }
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+
+    values.push(id);
+    await db.query(`UPDATE tax_counties SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    const [rows] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
+    res.json({ success: true, record: rows[0] });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'This county/state combination already exists.' });
+    }
+    next(error);
+  }
+});
+
+// DELETE /api/processing/tax-counties/:id - Delete a county
+router.delete('/tax-counties/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'County not found.' });
+
+    await db.query('DELETE FROM tax_counties WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/* ========================================
+   Processing Records (generic order tracking)
+   ======================================== */
+
 // GET /api/processing/:type - Search records
 router.get('/:type', async (req, res, next) => {
   try {

@@ -172,6 +172,21 @@
     .form-group textarea { resize: vertical; }
     .form-full { grid-column: 1 / -1; }
 
+    /* ---- Boolean badges ---- */
+    .proc-bool { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .proc-bool--yes { background: #e8f5e9; color: #2e7d32; }
+    .proc-bool--no  { background: #f0f2f5; color: #8888a4; }
+
+    /* ---- URL links in table ---- */
+    .proc-url { color: #104547; font-size: 0.8rem; word-break: break-all; }
+    .proc-url:hover { text-decoration: underline; }
+    .proc-url i { margin-right: 3px; font-size: 0.7rem; }
+
+    /* Toggle checkbox in modal */
+    .form-check { display: flex; align-items: center; gap: 0.5rem; padding-top: 1.4rem; }
+    .form-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: #104547; cursor: pointer; }
+    .form-check label { font-size: 0.8rem; font-weight: 600; color: #4a4a68; cursor: pointer; }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .proc-layout { grid-template-columns: 1fr; }
@@ -249,7 +264,7 @@
 
       <div class="proc-results" id="procResults">
         <table class="proc-table">
-          <thead>
+          <thead id="procTableHead">
             <tr>
               <th>Borrower</th>
               <th>Loan #</th>
@@ -282,7 +297,7 @@
     </div>
   </div>
 
-  <!-- Modal -->
+  <!-- Generic Processing Modal -->
   <div class="proc-modal-overlay" id="procModalOverlay" style="display:none;">
     <div class="proc-modal">
       <div class="proc-modal__header">
@@ -339,6 +354,56 @@
     </div>
   </div>
 
+  <!-- Tax Counties Modal -->
+  <div class="proc-modal-overlay" id="taxModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="taxModalTitle">Add County</h2>
+        <button class="proc-modal__close" id="taxModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>County</label>
+            <input type="text" id="taxFieldCounty" placeholder="e.g. Denver">
+          </div>
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" id="taxFieldState" placeholder="e.g. CO" maxlength="2" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group form-full">
+            <label>Assessor / Property Records URL</label>
+            <input type="url" id="taxFieldAssessor" placeholder="https://...">
+          </div>
+          <div class="form-group form-full">
+            <label>Treasurer / Tax Cert URL</label>
+            <input type="url" id="taxFieldTreasurer" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>Known Costs / Fees</label>
+            <input type="text" id="taxFieldCosts" placeholder="e.g. $25 per parcel">
+          </div>
+          <div class="form-check">
+            <input type="checkbox" id="taxFieldLogin">
+            <label for="taxFieldLogin">Login Required?</label>
+          </div>
+          <div class="form-check">
+            <input type="checkbox" id="taxFieldPortal">
+            <label for="taxFieldPortal">Online Portal?</label>
+          </div>
+          <div class="form-group form-full">
+            <label>Notes</label>
+            <textarea id="taxFieldNotes" rows="2" placeholder="Additional details..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="taxModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="taxModalSave">Save County</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/config.js?v=20260224-2"></script>
   <script>
   (function() {
@@ -348,19 +413,19 @@
       title:     { name: 'Title',     icon: 'fa-file-contract', desc: 'Title company orders, commitments, and status tracking' },
       insurance: { name: 'Insurance', icon: 'fa-shield-alt',    desc: 'Homeowner insurance policies, binders, and verification' },
       voe:       { name: 'VOE',       icon: 'fa-user-check',    desc: 'Verification of Employment requests and results' },
-      taxes:     { name: 'Taxes',     icon: 'fa-receipt',       desc: 'Tax transcript requests and property tax records' },
+      taxes:     { name: 'Taxes',     icon: 'fa-receipt',       desc: 'County tax records, assessor portals, and treasurer links' },
       amc:       { name: 'AMC',       icon: 'fa-home',          desc: 'Appraisal management company orders and reports' },
       payoffs:   { name: 'Payoffs',   icon: 'fa-credit-card',   desc: 'Payoff statement requests and lien tracking' },
       other:     { name: 'Other',     icon: 'fa-folder-open',   desc: 'Miscellaneous processing items and documents' }
     };
 
+    var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
+    var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
+
     var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
     if (!TYPE_META[currentType]) currentType = 'title';
 
-    var currentPage = 1;
-    var totalPages = 1;
-    var editingId = null;
-    var debounceTimer = null;
+    var currentPage = 1, totalPages = 1, editingId = null, debounceTimer = null;
 
     var API_BASE = (typeof CONFIG !== 'undefined' && CONFIG.api)
       ? CONFIG.api.baseUrl
@@ -370,34 +435,37 @@
       var m = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
       return localStorage.getItem('auth_token') || (m ? decodeURIComponent(m[1]) : null) || sessionStorage.getItem('auth_token');
     }
-
     function apiRequest(method, path, body) {
-      var opts = {
-        method: method,
-        headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' }
-      };
+      var opts = { method: method, headers: { 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' } };
       if (body) opts.body = JSON.stringify(body);
       return fetch(API_BASE + path, opts).then(function(r) { return r.json(); });
     }
 
-    // DOM refs
-    var searchInput, statusFilter, sortSelect, tableBody, emptyState, loadingState;
-    var modalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn, saveBtn, modalTitle;
+    function isTaxView() { return currentType === 'taxes'; }
+
+    var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
+    var procModalOverlay, taxModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
+    var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, addNewBtn;
 
     document.addEventListener('DOMContentLoaded', function() {
-      searchInput    = document.getElementById('procSearchInput');
-      statusFilter   = document.getElementById('procStatusFilter');
-      sortSelect     = document.getElementById('procSortBy');
-      tableBody      = document.getElementById('procTableBody');
-      emptyState     = document.getElementById('procEmpty');
-      loadingState   = document.getElementById('procLoading');
-      modalOverlay   = document.getElementById('procModalOverlay');
-      paginationWrap = document.getElementById('procPagination');
-      pageInfo       = document.getElementById('procPageInfo');
-      prevBtn        = document.getElementById('procPrevPage');
-      nextBtn        = document.getElementById('procNextPage');
-      saveBtn        = document.getElementById('procModalSave');
-      modalTitle     = document.getElementById('procModalTitle');
+      searchInput      = document.getElementById('procSearchInput');
+      statusFilter     = document.getElementById('procStatusFilter');
+      sortSelect       = document.getElementById('procSortBy');
+      tableBody        = document.getElementById('procTableBody');
+      tableHead        = document.getElementById('procTableHead');
+      emptyState       = document.getElementById('procEmpty');
+      loadingState     = document.getElementById('procLoading');
+      procModalOverlay = document.getElementById('procModalOverlay');
+      taxModalOverlay  = document.getElementById('taxModalOverlay');
+      paginationWrap   = document.getElementById('procPagination');
+      pageInfo         = document.getElementById('procPageInfo');
+      prevBtn          = document.getElementById('procPrevPage');
+      nextBtn          = document.getElementById('procNextPage');
+      procSaveBtn      = document.getElementById('procModalSave');
+      procModalTitle   = document.getElementById('procModalTitle');
+      taxSaveBtn       = document.getElementById('taxModalSave');
+      taxModalTitle    = document.getElementById('taxModalTitle');
+      addNewBtn        = document.getElementById('procAddNew');
 
       setActiveType(currentType);
 
@@ -406,6 +474,7 @@
         btn.addEventListener('click', function() {
           currentType = this.dataset.type;
           currentPage = 1;
+          searchInput.value = '';
           setActiveType(currentType);
           window.history.replaceState(null, '', '?type=' + currentType);
           runSearch();
@@ -413,23 +482,29 @@
       });
 
       // Search
-      searchInput.addEventListener('input', function() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(function() { currentPage = 1; runSearch(); }, 300);
-      });
-      searchInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { clearTimeout(debounceTimer); currentPage = 1; runSearch(); }
-      });
+      searchInput.addEventListener('input', function() { clearTimeout(debounceTimer); debounceTimer = setTimeout(function() { currentPage = 1; runSearch(); }, 300); });
+      searchInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') { clearTimeout(debounceTimer); currentPage = 1; runSearch(); } });
       statusFilter.addEventListener('change', function() { currentPage = 1; runSearch(); });
       sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
 
-      // Modal
-      document.getElementById('procAddNew').addEventListener('click', function() { openModal(); });
-      document.getElementById('procModalClose').addEventListener('click', closeModal);
-      document.getElementById('procModalCancel').addEventListener('click', closeModal);
-      saveBtn.addEventListener('click', saveRecord);
-      modalOverlay.addEventListener('click', function(e) { if (e.target === modalOverlay) closeModal(); });
-      document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && modalOverlay.style.display !== 'none') closeModal(); });
+      // Generic modal
+      addNewBtn.addEventListener('click', function() { isTaxView() ? openTaxModal() : openProcModal(); });
+      document.getElementById('procModalClose').addEventListener('click', closeProcModal);
+      document.getElementById('procModalCancel').addEventListener('click', closeProcModal);
+      procSaveBtn.addEventListener('click', saveProcRecord);
+      procModalOverlay.addEventListener('click', function(e) { if (e.target === procModalOverlay) closeProcModal(); });
+
+      // Tax modal
+      document.getElementById('taxModalClose').addEventListener('click', closeTaxModal);
+      document.getElementById('taxModalCancel').addEventListener('click', closeTaxModal);
+      taxSaveBtn.addEventListener('click', saveTaxCounty);
+      taxModalOverlay.addEventListener('click', function(e) { if (e.target === taxModalOverlay) closeTaxModal(); });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Escape') return;
+        if (procModalOverlay.style.display !== 'none') closeProcModal();
+        if (taxModalOverlay.style.display !== 'none') closeTaxModal();
+      });
 
       // Pagination
       prevBtn.addEventListener('click', function() { if (currentPage > 1) { currentPage--; runSearch(); } });
@@ -446,28 +521,43 @@
       document.querySelectorAll('#procSidebarNav .proc-sidebar__link').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.type === type);
       });
+      // Switch table headers and toolbar
+      tableHead.innerHTML = isTaxView() ? TAX_THEAD : GENERIC_THEAD;
+      statusFilter.style.display = isTaxView() ? 'none' : '';
+      sortSelect.style.display = isTaxView() ? 'none' : '';
+      addNewBtn.innerHTML = isTaxView() ? '<i class="fas fa-plus"></i> Add County' : '<i class="fas fa-plus"></i> New Record';
+      searchInput.placeholder = isTaxView() ? 'Search by county or state...' : 'Search by borrower, loan #, or address...';
     }
+
+    /* ==================== SEARCH ==================== */
 
     function runSearch() {
       showLoading();
-      var params = new URLSearchParams({
-        q: (searchInput.value || '').trim(),
-        status: statusFilter.value,
-        sort: sortSelect.value,
-        page: currentPage
-      });
-      apiRequest('GET', '/processing/' + currentType + '?' + params.toString())
-        .then(function(data) {
-          if (!data.success) { showEmpty(data.error || 'Search failed.'); return; }
-          totalPages = data.totalPages || 1;
-          currentPage = data.page || 1;
-          updatePagination(data.total);
-          renderResults(data.results);
-        })
-        .catch(function() { showEmpty('Connection error — please try again.'); });
+      if (isTaxView()) {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
+        apiRequest('GET', '/processing/tax-counties?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
+            paginationWrap.style.display = 'none';
+            renderTaxResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      } else {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim(), status: statusFilter.value, sort: sortSelect.value, page: currentPage });
+        apiRequest('GET', '/processing/' + currentType + '?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Search failed.'); return; }
+            totalPages = data.totalPages || 1; currentPage = data.page || 1;
+            updatePagination(data.total);
+            renderProcResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      }
     }
 
-    function renderResults(results) {
+    /* ==================== GENERIC PROCESSING RENDER ==================== */
+
+    function renderProcResults(results) {
       hideLoading();
       if (!results || results.length === 0) { showEmpty(); return; }
       emptyState.style.display = 'none';
@@ -486,11 +576,49 @@
             '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
             '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
           '</td>';
-        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openModal(rec); });
-        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteRecord(rec.id, rec.borrower); });
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openProcModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteProcRecord(rec.id, rec.borrower); });
         tableBody.appendChild(tr);
       });
     }
+
+    /* ==================== TAX COUNTIES RENDER ==================== */
+
+    function renderTaxResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty('No counties found. Click <strong>Add County</strong> to create one.'); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      results.forEach(function(rec) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="County">' + esc(rec.county) + '</td>' +
+          '<td data-label="State">' + esc(rec.state) + '</td>' +
+          '<td data-label="Assessor URL">' + urlLink(rec.assessor_url) + '</td>' +
+          '<td data-label="Treasurer URL">' + urlLink(rec.treasurer_url) + '</td>' +
+          '<td data-label="Login Required?">' + boolBadge(rec.login_required) + '</td>' +
+          '<td data-label="Costs/Fees">' + esc(rec.known_costs_fees) + '</td>' +
+          '<td data-label="Online Portal?">' + boolBadge(rec.online_portal) + '</td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openTaxModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteTaxCounty(rec.id, rec.county); });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    function urlLink(url) {
+      if (!url) return '<span style="color:#bbb;">—</span>';
+      var display = url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0];
+      return '<a href="' + esc(url) + '" target="_blank" rel="noopener" class="proc-url"><i class="fas fa-external-link-alt"></i>' + esc(display) + '</a>';
+    }
+    function boolBadge(val) {
+      return val ? '<span class="proc-bool proc-bool--yes">Yes</span>' : '<span class="proc-bool proc-bool--no">No</span>';
+    }
+
+    /* ==================== HELPERS ==================== */
 
     function statusBadge(s) {
       var slug = (s || '').toLowerCase().replace(/\s+/g, '-');
@@ -512,16 +640,18 @@
       prevBtn.disabled = currentPage <= 1;
       nextBtn.disabled = currentPage >= totalPages;
     }
-    function showEmpty(msg) { hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = ''; if (msg) emptyState.querySelector('p').innerHTML = msg; else emptyState.querySelector('p').innerHTML = 'Click <strong>New Record</strong> to add one.'; }
+    function showEmpty(msg) { hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = ''; emptyState.querySelector('p').innerHTML = msg || 'Click <strong>New Record</strong> to add one.'; }
     function showLoading() { emptyState.style.display = 'none'; tableBody.innerHTML = ''; loadingState.style.display = ''; }
     function hideLoading() { loadingState.style.display = 'none'; }
 
-    function openModal(record) {
+    /* ==================== GENERIC PROCESSING MODAL ==================== */
+
+    function openProcModal(record) {
       editingId = record ? record.id : null;
       var meta = TYPE_META[currentType];
       if (record) {
-        modalTitle.textContent = 'Edit ' + meta.name + ' Record';
-        saveBtn.textContent = 'Update Record';
+        procModalTitle.textContent = 'Edit ' + meta.name + ' Record';
+        procSaveBtn.textContent = 'Update Record';
         document.getElementById('procFieldBorrower').value = record.borrower || '';
         document.getElementById('procFieldLoan').value = record.loan_number || '';
         document.getElementById('procFieldAddress').value = record.address || '';
@@ -531,22 +661,19 @@
         document.getElementById('procFieldRef').value = record.reference || '';
         document.getElementById('procFieldNotes').value = record.notes || '';
       } else {
-        modalTitle.textContent = 'New ' + meta.name + ' Record';
-        saveBtn.textContent = 'Save Record';
-        resetForm();
+        procModalTitle.textContent = 'New ' + meta.name + ' Record';
+        procSaveBtn.textContent = 'Save Record';
+        ['procFieldBorrower','procFieldLoan','procFieldAddress','procFieldVendor','procFieldRef','procFieldNotes'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('procFieldStatus').value = 'ordered';
+        document.getElementById('procFieldDate').value = todayISO();
       }
-      modalOverlay.style.display = '';
+      procModalOverlay.style.display = '';
       document.body.style.overflow = 'hidden';
       setTimeout(function() { document.getElementById('procFieldBorrower').focus(); }, 100);
     }
-    function closeModal() { modalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
-    function resetForm() {
-      ['procFieldBorrower','procFieldLoan','procFieldAddress','procFieldVendor','procFieldRef','procFieldNotes'].forEach(function(id) { document.getElementById(id).value = ''; });
-      document.getElementById('procFieldStatus').value = 'ordered';
-      document.getElementById('procFieldDate').value = todayISO();
-    }
+    function closeProcModal() { procModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
 
-    function saveRecord() {
+    function saveProcRecord() {
       var borrower = (document.getElementById('procFieldBorrower').value || '').trim();
       if (!borrower) { document.getElementById('procFieldBorrower').focus(); return; }
       var payload = {
@@ -559,24 +686,76 @@
         reference: (document.getElementById('procFieldRef').value || '').trim(),
         notes: (document.getElementById('procFieldNotes').value || '').trim()
       };
-      saveBtn.disabled = true;
-      saveBtn.textContent = 'Saving...';
+      procSaveBtn.disabled = true; procSaveBtn.textContent = 'Saving...';
       var method = editingId ? 'PUT' : 'POST';
       var path = editingId ? '/processing/' + currentType + '/' + editingId : '/processing/' + currentType;
       apiRequest(method, path, payload)
-        .then(function(data) {
-          saveBtn.disabled = false;
-          if (!data.success) { alert(data.error || 'Failed to save.'); return; }
-          closeModal();
-          runSearch();
-        })
-        .catch(function() { saveBtn.disabled = false; alert('Connection error.'); });
+        .then(function(data) { procSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closeProcModal(); runSearch(); })
+        .catch(function() { procSaveBtn.disabled = false; alert('Connection error.'); });
     }
 
-    function deleteRecord(id, name) {
-      if (!confirm('Delete record for "' + name + '"? This cannot be undone.')) return;
+    function deleteProcRecord(id, name) {
+      if (!confirm('Delete record for "' + name + '"?')) return;
       apiRequest('DELETE', '/processing/' + currentType + '/' + id)
-        .then(function(data) { if (!data.success) { alert(data.error || 'Failed to delete.'); return; } runSearch(); })
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== TAX COUNTIES MODAL ==================== */
+
+    function openTaxModal(record) {
+      editingId = record ? record.id : null;
+      if (record) {
+        taxModalTitle.textContent = 'Edit County';
+        taxSaveBtn.textContent = 'Update County';
+        document.getElementById('taxFieldCounty').value = record.county || '';
+        document.getElementById('taxFieldState').value = record.state || '';
+        document.getElementById('taxFieldAssessor').value = record.assessor_url || '';
+        document.getElementById('taxFieldTreasurer').value = record.treasurer_url || '';
+        document.getElementById('taxFieldCosts').value = record.known_costs_fees || '';
+        document.getElementById('taxFieldLogin').checked = !!record.login_required;
+        document.getElementById('taxFieldPortal').checked = !!record.online_portal;
+        document.getElementById('taxFieldNotes').value = record.notes || '';
+      } else {
+        taxModalTitle.textContent = 'Add County';
+        taxSaveBtn.textContent = 'Save County';
+        ['taxFieldCounty','taxFieldState','taxFieldAssessor','taxFieldTreasurer','taxFieldCosts','taxFieldNotes'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('taxFieldLogin').checked = false;
+        document.getElementById('taxFieldPortal').checked = false;
+      }
+      taxModalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('taxFieldCounty').focus(); }, 100);
+    }
+    function closeTaxModal() { taxModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+
+    function saveTaxCounty() {
+      var county = (document.getElementById('taxFieldCounty').value || '').trim();
+      var state = (document.getElementById('taxFieldState').value || '').trim().toUpperCase();
+      if (!county) { document.getElementById('taxFieldCounty').focus(); return; }
+      if (!state) { document.getElementById('taxFieldState').focus(); return; }
+      var payload = {
+        county: county,
+        state: state,
+        assessorUrl: (document.getElementById('taxFieldAssessor').value || '').trim(),
+        treasurerUrl: (document.getElementById('taxFieldTreasurer').value || '').trim(),
+        knownCostsFees: (document.getElementById('taxFieldCosts').value || '').trim(),
+        loginRequired: document.getElementById('taxFieldLogin').checked,
+        onlinePortal: document.getElementById('taxFieldPortal').checked,
+        notes: (document.getElementById('taxFieldNotes').value || '').trim()
+      };
+      taxSaveBtn.disabled = true; taxSaveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/tax-counties/' + editingId : '/processing/tax-counties';
+      apiRequest(method, path, payload)
+        .then(function(data) { taxSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closeTaxModal(); runSearch(); })
+        .catch(function() { taxSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteTaxCounty(id, name) {
+      if (!confirm('Delete "' + name + '" county?')) return;
+      apiRequest('DELETE', '/processing/tax-counties/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
         .catch(function() { alert('Connection error.'); });
     }
   })();
