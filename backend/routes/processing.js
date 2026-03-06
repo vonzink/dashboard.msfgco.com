@@ -13,6 +13,134 @@ function isValidType(type) {
 }
 
 /* ========================================
+   Title Companies Lookup Table
+   ======================================== */
+
+// GET /api/processing/title-companies - List all (with optional state filter + search)
+router.get('/title-companies', async (req, res, next) => {
+  try {
+    const { state, q } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (state) {
+      conditions.push('state = ?');
+      params.push(state.toUpperCase());
+    }
+
+    if (q && q.trim()) {
+      conditions.push('(company_name LIKE ? OR contact_name LIKE ? OR email LIKE ? OR city LIKE ?)');
+      const pattern = '%' + q.trim() + '%';
+      params.push(pattern, pattern, pattern, pattern);
+    }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await db.query(
+      `SELECT * FROM title_companies ${where} ORDER BY state, company_name`,
+      params
+    );
+
+    res.json({ success: true, results: rows, total: rows.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/processing/title-companies - Add a title company (admin only)
+router.post('/title-companies', async (req, res, next) => {
+  try {
+    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone } = req.body;
+
+    if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
+
+    const [result] = await db.query(
+      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, fax, toll_free_phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        companyName.trim(),
+        (contactName || '').trim() || null,
+        (email || '').trim() || null,
+        (workPhone || '').trim() || null,
+        (mobilePhone || '').trim() || null,
+        (street || '').trim() || null,
+        (city || '').trim() || null,
+        state ? state.trim().toUpperCase() : null,
+        (zipCode || '').trim() || null,
+        (website || '').trim() || null,
+        (fax || '').trim() || null,
+        (tollFreePhone || '').trim() || null
+      ]
+    );
+
+    const [rows] = await db.query('SELECT * FROM title_companies WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, record: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/processing/title-companies/:id - Update a title company
+router.put('/title-companies/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Title company not found.' });
+
+    const fieldMap = {
+      companyName: 'company_name',
+      contactName: 'contact_name',
+      email: 'email',
+      workPhone: 'work_phone',
+      mobilePhone: 'mobile_phone',
+      street: 'street',
+      city: 'city',
+      state: 'state',
+      zipCode: 'zip_code',
+      website: 'website',
+      fax: 'fax',
+      tollFreePhone: 'toll_free_phone'
+    };
+
+    const updates = [];
+    const values = [];
+
+    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
+      if (req.body[bodyKey] !== undefined) {
+        let val = req.body[bodyKey];
+        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
+        else if (typeof val === 'string') val = val.trim() || null;
+        updates.push(`${dbCol} = ?`);
+        values.push(val);
+      }
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+
+    values.push(id);
+    await db.query(`UPDATE title_companies SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    const [rows] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
+    res.json({ success: true, record: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/processing/title-companies/:id - Delete a title company
+router.delete('/title-companies/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Title company not found.' });
+
+    await db.query('DELETE FROM title_companies WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/* ========================================
    Tax Counties Lookup Table
    ======================================== */
 

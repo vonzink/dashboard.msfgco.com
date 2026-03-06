@@ -354,6 +354,72 @@
     </div>
   </div>
 
+  <!-- Title Companies Modal -->
+  <div class="proc-modal-overlay" id="titleModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="titleModalTitle">Add Title Company</h2>
+        <button class="proc-modal__close" id="titleModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Company Name</label>
+            <input type="text" id="titleFieldCompany" placeholder="e.g. First Integrity Title">
+          </div>
+          <div class="form-group">
+            <label>Contact Name</label>
+            <input type="text" id="titleFieldContact" placeholder="e.g. Katie Brandenburg">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="titleFieldEmail" placeholder="email@company.com">
+          </div>
+          <div class="form-group">
+            <label>Work Phone</label>
+            <input type="tel" id="titleFieldWorkPhone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Mobile Phone</label>
+            <input type="tel" id="titleFieldMobilePhone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Fax</label>
+            <input type="tel" id="titleFieldFax" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group form-full">
+            <label>Street</label>
+            <input type="text" id="titleFieldStreet" placeholder="123 Main St, Suite 100">
+          </div>
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" id="titleFieldCity" placeholder="Denver">
+          </div>
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" id="titleFieldState" placeholder="CO" maxlength="2" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Zip Code</label>
+            <input type="text" id="titleFieldZip" placeholder="80228">
+          </div>
+          <div class="form-group">
+            <label>Toll Free Phone</label>
+            <input type="tel" id="titleFieldTollFree" placeholder="(800) 123-4567">
+          </div>
+          <div class="form-group form-full">
+            <label>Website</label>
+            <input type="url" id="titleFieldWebsite" placeholder="https://...">
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="titleModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="titleModalSave">Save Company</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Tax Counties Modal -->
   <div class="proc-modal-overlay" id="taxModalOverlay" style="display:none;">
     <div class="proc-modal">
@@ -410,7 +476,7 @@
     'use strict';
 
     var TYPE_META = {
-      title:     { name: 'Title',     icon: 'fa-file-contract', desc: 'Title company orders, commitments, and status tracking' },
+      title:     { name: 'Title',     icon: 'fa-file-contract', desc: 'Title company directory — contacts, addresses, and quick links' },
       insurance: { name: 'Insurance', icon: 'fa-shield-alt',    desc: 'Homeowner insurance policies, binders, and verification' },
       voe:       { name: 'VOE',       icon: 'fa-user-check',    desc: 'Verification of Employment requests and results' },
       taxes:     { name: 'Taxes',     icon: 'fa-receipt',       desc: 'County tax records, assessor portals, and treasurer links' },
@@ -420,6 +486,7 @@
     };
 
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
+    var TITLE_THEAD = '<tr><th>Company Name</th><th>Contact</th><th>Email</th><th>Work Phone</th><th>City</th><th>State</th><th>Website</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
 
     var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
@@ -441,11 +508,13 @@
       return fetch(API_BASE + path, opts).then(function(r) { return r.json(); });
     }
 
+    function isTitleView() { return currentType === 'title'; }
     function isTaxView() { return currentType === 'taxes'; }
+    function isLookupView() { return isTitleView() || isTaxView(); }
 
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
-    var procModalOverlay, taxModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
-    var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, addNewBtn;
+    var procModalOverlay, taxModalOverlay, titleModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
+    var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, addNewBtn;
 
     document.addEventListener('DOMContentLoaded', function() {
       searchInput      = document.getElementById('procSearchInput');
@@ -455,17 +524,20 @@
       tableHead        = document.getElementById('procTableHead');
       emptyState       = document.getElementById('procEmpty');
       loadingState     = document.getElementById('procLoading');
-      procModalOverlay = document.getElementById('procModalOverlay');
-      taxModalOverlay  = document.getElementById('taxModalOverlay');
-      paginationWrap   = document.getElementById('procPagination');
-      pageInfo         = document.getElementById('procPageInfo');
-      prevBtn          = document.getElementById('procPrevPage');
-      nextBtn          = document.getElementById('procNextPage');
-      procSaveBtn      = document.getElementById('procModalSave');
-      procModalTitle   = document.getElementById('procModalTitle');
-      taxSaveBtn       = document.getElementById('taxModalSave');
-      taxModalTitle    = document.getElementById('taxModalTitle');
-      addNewBtn        = document.getElementById('procAddNew');
+      procModalOverlay  = document.getElementById('procModalOverlay');
+      taxModalOverlay   = document.getElementById('taxModalOverlay');
+      titleModalOverlay = document.getElementById('titleModalOverlay');
+      paginationWrap    = document.getElementById('procPagination');
+      pageInfo          = document.getElementById('procPageInfo');
+      prevBtn           = document.getElementById('procPrevPage');
+      nextBtn           = document.getElementById('procNextPage');
+      procSaveBtn       = document.getElementById('procModalSave');
+      procModalTitle    = document.getElementById('procModalTitle');
+      taxSaveBtn        = document.getElementById('taxModalSave');
+      taxModalTitle     = document.getElementById('taxModalTitle');
+      titleSaveBtn      = document.getElementById('titleModalSave');
+      titleModalTitle   = document.getElementById('titleModalTitle');
+      addNewBtn         = document.getElementById('procAddNew');
 
       setActiveType(currentType);
 
@@ -488,11 +560,17 @@
       sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
 
       // Generic modal
-      addNewBtn.addEventListener('click', function() { isTaxView() ? openTaxModal() : openProcModal(); });
+      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isTaxView() ? openTaxModal() : openProcModal(); });
       document.getElementById('procModalClose').addEventListener('click', closeProcModal);
       document.getElementById('procModalCancel').addEventListener('click', closeProcModal);
       procSaveBtn.addEventListener('click', saveProcRecord);
       procModalOverlay.addEventListener('click', function(e) { if (e.target === procModalOverlay) closeProcModal(); });
+
+      // Title modal
+      document.getElementById('titleModalClose').addEventListener('click', closeTitleModal);
+      document.getElementById('titleModalCancel').addEventListener('click', closeTitleModal);
+      titleSaveBtn.addEventListener('click', saveTitleCompany);
+      titleModalOverlay.addEventListener('click', function(e) { if (e.target === titleModalOverlay) closeTitleModal(); });
 
       // Tax modal
       document.getElementById('taxModalClose').addEventListener('click', closeTaxModal);
@@ -502,6 +580,7 @@
 
       document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
+        if (titleModalOverlay.style.display !== 'none') closeTitleModal();
         if (procModalOverlay.style.display !== 'none') closeProcModal();
         if (taxModalOverlay.style.display !== 'none') closeTaxModal();
       });
@@ -522,18 +601,27 @@
         btn.classList.toggle('active', btn.dataset.type === type);
       });
       // Switch table headers and toolbar
-      tableHead.innerHTML = isTaxView() ? TAX_THEAD : GENERIC_THEAD;
-      statusFilter.style.display = isTaxView() ? 'none' : '';
-      sortSelect.style.display = isTaxView() ? 'none' : '';
-      addNewBtn.innerHTML = isTaxView() ? '<i class="fas fa-plus"></i> Add County' : '<i class="fas fa-plus"></i> New Record';
-      searchInput.placeholder = isTaxView() ? 'Search by county or state...' : 'Search by borrower, loan #, or address...';
+      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : GENERIC_THEAD;
+      statusFilter.style.display = isLookupView() ? 'none' : '';
+      sortSelect.style.display = isLookupView() ? 'none' : '';
+      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : '<i class="fas fa-plus"></i> New Record';
+      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or city...' : isTaxView() ? 'Search by county or state...' : 'Search by borrower, loan #, or address...';
     }
 
     /* ==================== SEARCH ==================== */
 
     function runSearch() {
       showLoading();
-      if (isTaxView()) {
+      if (isTitleView()) {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
+        apiRequest('GET', '/processing/title-companies?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
+            paginationWrap.style.display = 'none';
+            renderTitleResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      } else if (isTaxView()) {
         var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
         apiRequest('GET', '/processing/tax-counties?' + params.toString())
           .then(function(data) {
@@ -578,6 +666,33 @@
           '</td>';
         tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openProcModal(rec); });
         tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteProcRecord(rec.id, rec.borrower); });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    /* ==================== TITLE COMPANIES RENDER ==================== */
+
+    function renderTitleResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty('No title companies found. Click <strong>Add Company</strong> to create one.'); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      results.forEach(function(rec) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="Company">' + esc(rec.company_name) + '</td>' +
+          '<td data-label="Contact">' + esc(rec.contact_name) + '</td>' +
+          '<td data-label="Email">' + (rec.email ? '<a href="mailto:' + esc(rec.email) + '" class="proc-url">' + esc(rec.email) + '</a>' : '<span style="color:#bbb;">—</span>') + '</td>' +
+          '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : '<span style="color:#bbb;">—</span>') + '</td>' +
+          '<td data-label="City">' + esc(rec.city) + '</td>' +
+          '<td data-label="State">' + esc(rec.state) + '</td>' +
+          '<td data-label="Website">' + urlLink(rec.website) + '</td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openTitleModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteTitleCompany(rec.id, rec.company_name); });
         tableBody.appendChild(tr);
       });
     }
@@ -697,6 +812,68 @@
     function deleteProcRecord(id, name) {
       if (!confirm('Delete record for "' + name + '"?')) return;
       apiRequest('DELETE', '/processing/' + currentType + '/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== TITLE COMPANIES MODAL ==================== */
+
+    function openTitleModal(record) {
+      editingId = record ? record.id : null;
+      if (record) {
+        titleModalTitle.textContent = 'Edit Title Company';
+        titleSaveBtn.textContent = 'Update Company';
+        document.getElementById('titleFieldCompany').value = record.company_name || '';
+        document.getElementById('titleFieldContact').value = record.contact_name || '';
+        document.getElementById('titleFieldEmail').value = record.email || '';
+        document.getElementById('titleFieldWorkPhone').value = record.work_phone || '';
+        document.getElementById('titleFieldMobilePhone').value = record.mobile_phone || '';
+        document.getElementById('titleFieldFax').value = record.fax || '';
+        document.getElementById('titleFieldStreet').value = record.street || '';
+        document.getElementById('titleFieldCity').value = record.city || '';
+        document.getElementById('titleFieldState').value = record.state || '';
+        document.getElementById('titleFieldZip').value = record.zip_code || '';
+        document.getElementById('titleFieldTollFree').value = record.toll_free_phone || '';
+        document.getElementById('titleFieldWebsite').value = record.website || '';
+      } else {
+        titleModalTitle.textContent = 'Add Title Company';
+        titleSaveBtn.textContent = 'Save Company';
+        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldWebsite'].forEach(function(id) { document.getElementById(id).value = ''; });
+      }
+      titleModalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('titleFieldCompany').focus(); }, 100);
+    }
+    function closeTitleModal() { titleModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+
+    function saveTitleCompany() {
+      var companyName = (document.getElementById('titleFieldCompany').value || '').trim();
+      if (!companyName) { document.getElementById('titleFieldCompany').focus(); return; }
+      var payload = {
+        companyName: companyName,
+        contactName: (document.getElementById('titleFieldContact').value || '').trim(),
+        email: (document.getElementById('titleFieldEmail').value || '').trim(),
+        workPhone: (document.getElementById('titleFieldWorkPhone').value || '').trim(),
+        mobilePhone: (document.getElementById('titleFieldMobilePhone').value || '').trim(),
+        fax: (document.getElementById('titleFieldFax').value || '').trim(),
+        street: (document.getElementById('titleFieldStreet').value || '').trim(),
+        city: (document.getElementById('titleFieldCity').value || '').trim(),
+        state: (document.getElementById('titleFieldState').value || '').trim().toUpperCase(),
+        zipCode: (document.getElementById('titleFieldZip').value || '').trim(),
+        tollFreePhone: (document.getElementById('titleFieldTollFree').value || '').trim(),
+        website: (document.getElementById('titleFieldWebsite').value || '').trim()
+      };
+      titleSaveBtn.disabled = true; titleSaveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/title-companies/' + editingId : '/processing/title-companies';
+      apiRequest(method, path, payload)
+        .then(function(data) { titleSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closeTitleModal(); runSearch(); })
+        .catch(function() { titleSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteTitleCompany(id, name) {
+      if (!confirm('Delete "' + name + '"?')) return;
+      apiRequest('DELETE', '/processing/title-companies/' + id)
         .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
         .catch(function() { alert('Connection error.'); });
     }
