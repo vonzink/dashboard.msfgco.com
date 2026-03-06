@@ -187,6 +187,46 @@
     .form-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: #104547; cursor: pointer; }
     .form-check label { font-size: 0.8rem; font-weight: 600; color: #4a4a68; cursor: pointer; }
 
+    /* ---- Other View: Quick Links ---- */
+    .other-view { display: none; }
+    .other-section { margin-bottom: 2rem; }
+    .other-section__title {
+      font-size: 0.95rem; font-weight: 700; color: #1a1a2e; margin-bottom: 0.75rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .other-section__title i { color: #104547; font-size: 0.85rem; }
+    .quick-links-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem;
+    }
+    .quick-link-card {
+      display: flex; align-items: center; gap: 0.75rem; padding: 0.85rem 1rem;
+      background: #fff; border-radius: 8px; border: 1.5px solid #e0e4ea;
+      text-decoration: none; color: inherit; transition: all 0.15s ease;
+    }
+    .quick-link-card:hover { border-color: #2d6a4f; box-shadow: 0 2px 8px rgba(16,69,71,0.1); transform: translateY(-1px); }
+    .quick-link-card__icon {
+      width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+      background: #104547; color: #fff; font-size: 0.9rem; flex-shrink: 0;
+    }
+    .quick-link-card__text { flex: 1; min-width: 0; }
+    .quick-link-card__name { font-size: 0.88rem; font-weight: 600; color: #1a1a2e; }
+    .quick-link-card__url { font-size: 0.72rem; color: #8888a4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .quick-link-card__arrow { color: #8888a4; font-size: 0.75rem; flex-shrink: 0; transition: transform 0.15s; }
+    .quick-link-card:hover .quick-link-card__arrow { transform: translateX(2px); color: #2d6a4f; }
+
+    /* ---- Other View: Statewide Resources ---- */
+    .state-resources-group { margin-bottom: 1.25rem; }
+    .state-resources-group__header {
+      font-size: 0.82rem; font-weight: 700; color: #104547; padding: 0.4rem 0.75rem;
+      background: #e8f0ed; border-radius: 6px 6px 0 0; display: flex; align-items: center; gap: 0.4rem;
+    }
+    .state-resources-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; background: #fff; border-radius: 0 0 6px 6px; overflow: hidden; border: 1px solid #e0e4ea; border-top: none; }
+    .state-resources-table th { text-align: left; padding: 0.45rem 0.75rem; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8888a4; background: #f5f7fa; border-bottom: 1px solid #e0e4ea; }
+    .state-resources-table td { padding: 0.45rem 0.75rem; border-bottom: 1px solid #f0f2f5; color: #4a4a68; }
+    .state-resources-table tr:last-child td { border-bottom: none; }
+    .state-resources-table a { color: #104547; font-size: 0.8rem; }
+    .state-resources-table a:hover { text-decoration: underline; }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .proc-layout { grid-template-columns: 1fr; }
@@ -294,6 +334,9 @@
         <span class="proc-pagination__info" id="procPageInfo">Page 1</span>
         <button class="btn btn-sm btn-secondary" id="procNextPage">Next</button>
       </div>
+
+      <!-- Other View: Quick Links + Statewide Resources -->
+      <div class="other-view" id="otherView"></div>
     </div>
   </div>
 
@@ -510,7 +553,8 @@
 
     function isTitleView() { return currentType === 'title'; }
     function isTaxView() { return currentType === 'taxes'; }
-    function isLookupView() { return isTitleView() || isTaxView(); }
+    function isOtherView() { return currentType === 'other'; }
+    function isLookupView() { return isTitleView() || isTaxView() || isOtherView(); }
 
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
     var procModalOverlay, taxModalOverlay, titleModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
@@ -600,6 +644,21 @@
       document.querySelectorAll('#procSidebarNav .proc-sidebar__link').forEach(function(btn) {
         btn.classList.toggle('active', btn.dataset.type === type);
       });
+      var otherView = document.getElementById('otherView');
+      var procResults = document.getElementById('procResults');
+      var toolbar = document.querySelector('.proc-toolbar');
+      if (isOtherView()) {
+        procResults.style.display = 'none';
+        toolbar.style.display = 'none';
+        addNewBtn.style.display = 'none';
+        paginationWrap.style.display = 'none';
+        otherView.style.display = 'block';
+        return;
+      }
+      otherView.style.display = 'none';
+      procResults.style.display = '';
+      toolbar.style.display = '';
+      addNewBtn.style.display = '';
       // Switch table headers and toolbar
       tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : GENERIC_THEAD;
       statusFilter.style.display = isLookupView() ? 'none' : '';
@@ -611,6 +670,7 @@
     /* ==================== SEARCH ==================== */
 
     function runSearch() {
+      if (isOtherView()) { renderOtherView(); return; }
       showLoading();
       if (isTitleView()) {
         var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
@@ -731,6 +791,103 @@
     }
     function boolBadge(val) {
       return val ? '<span class="proc-bool proc-bool--yes">Yes</span>' : '<span class="proc-bool proc-bool--no">No</span>';
+    }
+
+    /* ==================== OTHER VIEW ==================== */
+
+    function renderOtherView() {
+      var quickLinks = [
+        { name: 'Rescission Calendar', url: 'https://www.atsdocs.com/rescissioncalendar.aspx', icon: 'fa-calendar-alt' },
+        { name: 'eFax Portal', url: 'https://myportal.efax.com/login', icon: 'fa-fax' },
+        { name: 'Date Duration Calculator', url: 'https://www.timeanddate.com/date/duration.html', icon: 'fa-calculator' },
+        { name: 'IBTS (Inspections)', url: 'https://www.ibts.org/what-we-do', icon: 'fa-hard-hat' },
+        { name: 'TitlePro247', url: 'https://v3.titlepro247.com/Home?ReturnUrl=%2FAccount%2FIndex&ReturnUrl=%2FAccount%2FIndex', icon: 'fa-file-signature' },
+        { name: '3-Day Rule / TRID Guide', url: 'https://www.octitle.com/pdf/3DayRuleTRID.pdf', icon: 'fa-file-pdf' },
+        { name: 'HomeWise Docs', url: 'https://www.homewisedocs.com/', icon: 'fa-file-alt' }
+      ];
+
+      var stateResources = [
+        { state: 'Colorado', abbr: 'CO', resources: [
+          { name: 'CO Dept of Local Affairs - Property Tax', url: 'https://dpt.colorado.gov/', note: 'Links to all county assessor/treasurer offices' },
+          { name: 'Colorado County Assessors Assoc', url: 'https://coloradoassessors.org/', note: 'Directory of all county assessors' }
+        ]},
+        { state: 'North Dakota', abbr: 'ND', resources: [
+          { name: 'ND Property Tax Info Portal', url: 'https://www.stutsmancounty.gov/ndptip/', note: 'Statewide map for county parcel tax info' },
+          { name: 'ND Assessors Network', url: 'https://www.northdakotaassessors.com/', note: 'Most counties linked - standardized search' },
+          { name: 'ND GIS Hub', url: 'https://www.gis.nd.gov/', note: 'Official statewide GIS parcel dataset' },
+          { name: 'NDRIN (Recorders Info Network)', url: 'https://www.ndrin.com/', note: 'Subscription - recorded docs 2004+' },
+          { name: 'Tyler iTax Portal', url: 'https://itax.tylertech.com/', note: 'Many ND counties - add county suffix' }
+        ]},
+        { state: 'South Dakota', abbr: 'SD', resources: [
+          { name: 'SD Property Tax Portal', url: 'https://sdproptax.info/', note: 'Statewide property tax info' },
+          { name: 'SD Dept of Revenue - County Directors', url: 'https://dor.sd.gov/government/director-of-equalization/contact-county-directors-of-equalization/', note: 'All county Directors of Equalization' },
+          { name: 'SD County Treasurers Directory', url: 'https://dor.sd.gov/government/county-treasurers/', note: 'All county treasurer contacts' },
+          { name: 'South Dakota Directors Network', url: 'https://www.southdakotadirectors.com/', note: 'Property search for participating counties' },
+          { name: 'Beacon (Schneider GIS)', url: 'https://beacon.schneidercorp.com/', note: 'Brookings, Codington, Lake, Lincoln, Minnehaha, Union, Yankton' }
+        ]},
+        { state: 'Minnesota', abbr: 'MN', resources: [
+          { name: 'Minnesota Assessors Portal', url: 'https://minnesotaassessors.com/', note: 'Statewide property search - Clay, Goodhue, Lyon, Polk, Steele, Washington' },
+          { name: 'MN Dept of Revenue - Property Tax', url: 'https://www.revenue.state.mn.us/property-tax', note: 'State property tax info and resources' },
+          { name: 'Beacon (Schneider GIS)', url: 'https://beacon.schneidercorp.com/', note: 'Blue Earth, Cottonwood, Freeborn, Isanti, Nobles, Pine, Ramsey, Rice, Sherburne, Winona, Wright' },
+          { name: 'MN Assn of County Officers', url: 'https://www.mncounty.org/', note: 'Directory of all county offices' },
+          { name: 'Hennepin County Property Info', url: 'https://www.hennepin.us/residents/property', note: 'Largest MN county - comprehensive property database' }
+        ]},
+        { state: 'Michigan', abbr: 'MI', resources: [
+          { name: 'BS&A Online', url: 'https://bsaonline.com/', note: 'Most MI counties use this - property search and tax lookup' },
+          { name: 'MI Dept of Treasury - Property Tax', url: 'https://www.michigan.gov/treasury/local/property-tax', note: 'State property tax info and resources' },
+          { name: 'MI Assn of County Treasurers', url: 'https://www.michigantreasurers.org/', note: 'Directory of all county treasurers' },
+          { name: 'AccessMyGov.com', url: 'https://www.accessmygov.com/', note: 'Several MI counties - tax and assessment portal' },
+          { name: 'Wayne County Treasurer', url: 'https://www.waynecounty.com/elected/treasurer/', note: 'Largest MI county; Detroit metro; online tax auction' }
+        ]},
+        { state: 'Illinois', abbr: 'IL', resources: [
+          { name: 'Cook County Assessor', url: 'https://www.cookcountyassessor.com/', note: 'Chicago/suburbs - largest IL county; separate system' },
+          { name: 'Cook County Treasurer', url: 'https://www.cookcountytreasurer.com/', note: 'Cook County tax payments and tax cert info' },
+          { name: 'IL Property Tax Appeal Board', url: 'https://www.ptab.illinois.gov/', note: 'State property tax appeal board' },
+          { name: 'IL Dept of Revenue - Property Tax', url: 'https://tax.illinois.gov/localgovernments/property.html', note: 'State property tax resources and forms' },
+          { name: 'IL Assn of County Board Members', url: 'https://www.ilcounty.org/', note: 'Directory of all county offices' },
+          { name: 'Devnet GIS/Property Portals', url: 'https://www.devnetinc.com/', note: 'Several IL counties use Devnet for property search' }
+        ]}
+      ];
+
+      var html = '';
+
+      // Quick Links section
+      html += '<div class="other-section">';
+      html += '<div class="other-section__title"><i class="fas fa-external-link-alt"></i> Quick Links &amp; Tools</div>';
+      html += '<div class="quick-links-grid">';
+      quickLinks.forEach(function(link) {
+        var domain = link.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0];
+        html += '<a href="' + esc(link.url) + '" target="_blank" rel="noopener" class="quick-link-card">' +
+          '<div class="quick-link-card__icon"><i class="fas ' + link.icon + '"></i></div>' +
+          '<div class="quick-link-card__text">' +
+            '<div class="quick-link-card__name">' + esc(link.name) + '</div>' +
+            '<div class="quick-link-card__url">' + esc(domain) + '</div>' +
+          '</div>' +
+          '<i class="fas fa-arrow-right quick-link-card__arrow"></i>' +
+        '</a>';
+      });
+      html += '</div></div>';
+
+      // Statewide Resources section
+      html += '<div class="other-section">';
+      html += '<div class="other-section__title"><i class="fas fa-map-marked-alt"></i> Statewide Resources</div>';
+      stateResources.forEach(function(group) {
+        html += '<div class="state-resources-group">';
+        html += '<div class="state-resources-group__header"><i class="fas fa-flag"></i> ' + esc(group.state) + ' (' + esc(group.abbr) + ')</div>';
+        html += '<table class="state-resources-table"><thead><tr><th>Resource</th><th>Link</th><th>Notes</th></tr></thead><tbody>';
+        group.resources.forEach(function(r) {
+          var domain = r.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0];
+          html += '<tr>' +
+            '<td style="font-weight:600;">' + esc(r.name) + '</td>' +
+            '<td><a href="' + esc(r.url) + '" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:3px;font-size:0.7rem;"></i>' + esc(domain) + '</a></td>' +
+            '<td>' + esc(r.note) + '</td>' +
+          '</tr>';
+        });
+        html += '</tbody></table></div>';
+      });
+      html += '</div>';
+
+      document.getElementById('otherView').innerHTML = html;
     }
 
     /* ==================== HELPERS ==================== */
