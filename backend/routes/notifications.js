@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { deleted } = require('../utils/response');
 
 router.use(requireDbUser);
 
@@ -76,7 +77,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Notification not found' });
     }
     
-    res.json({ message: 'Notification deleted successfully' });
+    deleted(res, 'Notification deleted');
   } catch (error) {
     next(error);
   }

@@ -73,8 +73,6 @@
       // Show in-page contact card modal
       window.Investors?.showContactCard?.(empId);
     },
-    'open-lock-desk': () => comingSoon('Lock Desk'),
-
     // =====================
     // LendingPad
     // =====================

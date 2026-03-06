@@ -11,7 +11,6 @@ const TableManager = {
         this.initSorting();
         this.initSearch();
         this.initFilters();
-        console.log('TableManager initialized');
     },
 
     // ========================================
@@ -210,7 +209,6 @@ const TableManager = {
         const totalRows = table.querySelectorAll('tbody tr');
         
         // Could update a results count display here
-        console.log(`${tableId}: Showing ${visibleRows.length} of ${totalRows.length} rows`);
     },
 
     clearFilters(tableId) {
@@ -231,9 +229,7 @@ const TableManager = {
     },
 
     refreshTable(tableId) {
-        // Trigger data reload for specific table
-        console.log(`Refreshing table: ${tableId}`);
-        // This would call the API to reload data
+        // TODO: call the API to reload data for specific table
     }
 };
 

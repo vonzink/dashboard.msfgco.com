@@ -10,6 +10,7 @@
  */
 
 const { createRemoteJWKSet, jwtVerify } = require("jose");
+const logger = require("../lib/logger");
 
 // Env
 const REGION = process.env.COGNITO_REGION || "us-west-1";
@@ -109,7 +110,7 @@ function requireAuth(options = {}) {
       return next();
     } catch (err) {
       const msg = err?.message || String(err);
-      console.error("Auth error:", msg);
+      logger.warn({ msg }, "Auth error");
 
       // Debug: if it's an exp error, decode the token to see what we got
       if (msg.includes("exp") && token) {
@@ -118,7 +119,7 @@ function requireAuth(options = {}) {
           if (parts.length === 3) {
             const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
             const now = Math.floor(Date.now() / 1000);
-            console.error("Token debug:", {
+            logger.debug({
               token_use: payload.token_use,
               exp: payload.exp,
               iat: payload.iat,
@@ -128,7 +129,7 @@ function requireAuth(options = {}) {
               expected_issuer: ISSUER,
               client_id: payload.client_id,
               sub: payload.sub?.substring(0, 8) + "...",
-            });
+            }, "Token expiry debug");
           }
         } catch (e) { /* ignore decode errors */ }
       }

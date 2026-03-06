@@ -65,9 +65,10 @@ if [ "$DEPLOY_FRONTEND" = true ]; then
     --exclude "*.json" \
     --exclude ".gitignore" \
     --exclude ".DS_Store" \
-    --exclude "s3-policy.json" \
-    --exclude "trust-policy.json" \
-    --exclude "cors-config.json" \
+    --exclude "deploy/*" \
+    --exclude "docs/*" \
+    --exclude "tools/*" \
+    --exclude "Calculators/*" \
     --delete \
     --size-only
 

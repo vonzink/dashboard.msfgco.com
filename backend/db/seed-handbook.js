@@ -13,6 +13,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const mysql = require('mysql2/promise');
 const path = require('path');
 const fs = require('fs');
+const logger = require('../lib/logger');
 
 const DATA_DIR = path.join(__dirname, 'handbook-data');
 
@@ -224,7 +225,7 @@ function extractSections(text, headings) {
     if (match) {
       positions.push({ heading, index: match.index, matchLen: match[0].length });
     } else {
-      console.warn(`  Warning: heading not found: "${heading}"`);
+      logger.warn({ heading }, 'Heading not found in document');
     }
   }
 
@@ -271,11 +272,11 @@ async function seed() {
       const filePath = path.join(DATA_DIR, doc.file);
 
       if (!fs.existsSync(filePath)) {
-        console.error(`Missing text file: ${filePath}`);
+        logger.error({ filePath }, 'Missing text file');
         continue;
       }
 
-      console.log(`\nProcessing: ${doc.title}`);
+      logger.info({ title: doc.title }, 'Processing document');
 
       // Insert/update document
       await conn.query(
@@ -296,7 +297,7 @@ async function seed() {
       const text = fs.readFileSync(filePath, 'utf-8');
       const sections = extractSections(text, doc.sections);
 
-      console.log(`  Found ${sections.length} / ${doc.sections.length} sections`);
+      logger.info({ found: sections.length, expected: doc.sections.length }, 'Sections extracted');
 
       for (let si = 0; si < sections.length; si++) {
         const sec = sections[si];
@@ -311,7 +312,7 @@ async function seed() {
       totalSections += sections.length;
     }
 
-    console.log(`\nDone: ${documents.length} documents, ${totalSections} sections total.`);
+    logger.info({ documents: documents.length, sections: totalSections }, 'Seed complete');
   } finally {
     conn.release();
     await pool.end();
@@ -319,6 +320,6 @@ async function seed() {
 }
 
 seed().catch(err => {
-  console.error('Seed failed:', err);
+  logger.error({ err }, 'Seed failed');
   process.exit(1);
 });

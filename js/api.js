@@ -9,8 +9,6 @@ const API = {
     // LOAD ALL DATA
     // ========================================
     async loadAllData() {
-        console.log('Loading all dashboard data...');
-        
         try {
             await Promise.allSettled([
                 this.loadNews(),
@@ -19,7 +17,6 @@ const API = {
                 this.loadPipeline(),
                 this.loadGoals()
             ]);
-            console.log('Dashboard data loaded');
         } catch (error) {
             console.error('Error loading dashboard data:', error);
         }
@@ -29,10 +26,7 @@ const API = {
     // NEWS & ANNOUNCEMENTS
     // ========================================
     async loadNews() {
-        // Uncomment when API is ready
-        // const data = await this.get('/news');
-        // this.renderNews(data);
-        console.log('News: API endpoint ready at /api/news');
+        // TODO: Implement when /api/news endpoint is live
     },
 
     renderNews(data) {
@@ -60,10 +54,7 @@ const API = {
     // TASKS
     // ========================================
     async loadTasks() {
-        // Uncomment when API is ready
-        // const data = await this.get('/tasks');
-        // this.renderTasks(data);
-        console.log('Tasks: API endpoint ready at /api/tasks');
+        // TODO: Implement when /api/tasks endpoint is live
     },
 
     renderTasks(data) {
@@ -255,7 +246,7 @@ const API = {
             ? this.pipelineColumns
             : this.FALLBACK_PIPELINE_COLUMNS;
         thead.innerHTML = '<tr>' +
-            cols.map(c => `<th class="sortable">${Utils.escapeHtml(c.label || c.field)}</th>`).join('') +
+            cols.map(c => `<th class="sortable">${Utils.escapeHtml(Utils.toTitleCase(c.label || c.field))}</th>`).join('') +
             '</tr>';
         // Re-bind sorting after head rebuild
         thead.querySelectorAll('.sortable').forEach(header => {
@@ -394,34 +385,7 @@ const API = {
     // GOALS
     // ========================================
     async loadGoals() {
-        // Uncomment when API is ready
-        // const data = await this.get('/goals');
-        // this.renderGoals(data);
-        console.log('Goals: API endpoint ready at /api/goals');
-    },
-
-    renderGoals(data) {
-        if (!data) return;
-        
-        // Render company goals
-        if (data.company) {
-            this.renderCompanyGoals(data.company);
-        }
-        
-        // Render individual LO goals
-        if (data.loanOfficers) {
-            this.renderLOGoals(data.loanOfficers);
-        }
-    },
-
-    renderCompanyGoals(goals) {
-        // Update goal cards dynamically
-        // This would update the values in the existing goal cards
-    },
-
-    renderLOGoals(loGoals) {
-        // Update LO performance table
-        // This would update the individual performance rows
+        // TODO: Implement when /api/goals endpoint is live
     },
 
     // ========================================
@@ -499,7 +463,7 @@ const MondaySettings = {
                 });
             }, 2000);
         } catch (err) {
-            alert('Sync failed: ' + err.message);
+            Utils.showToast('Sync failed: ' + err.message, 'error');
             allBtns.forEach(btn => {
                 btn.innerHTML = originals.get(btn);
                 btn.disabled = false;
@@ -552,7 +516,6 @@ const DataRefresher = {
             });
         }
 
-        console.log('Auto-refresh started');
     },
 
     /** Clear intervals without removing the visibility listener */
@@ -575,7 +538,6 @@ const DataRefresher = {
 
     stop() {
         this._pause();
-        console.log('Auto-refresh stopped');
     },
 
     restart() {

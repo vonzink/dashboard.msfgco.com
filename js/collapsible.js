@@ -1,16 +1,41 @@
 /* ============================================
    MSFG Dashboard - Collapsible Sections
-   Default-open, toggleable dashboard sections
+   Toggleable dashboard sections with
+   localStorage state persistence
    ============================================ */
 
 const CollapsibleSections = {
+  STORAGE_KEY: 'msfg_collapse_state',
+  DEFAULT_COLLAPSED: ['goalsSection'],
+
   init() {
+    const savedState = this._loadState();
+    const isFirstVisit = (savedState === null);
+
     document.querySelectorAll('.section-card[data-collapsible]').forEach(section => {
       const header = section.querySelector('.section-header');
       const body = section.querySelector('.section-body');
       const btn = section.querySelector('.section-collapse-btn');
+      const sectionId = section.id;
 
       if (!header || !body) return;
+
+      // Restore or apply default collapse state
+      if (sectionId) {
+        let shouldCollapse = false;
+
+        if (isFirstVisit) {
+          shouldCollapse = this.DEFAULT_COLLAPSED.includes(sectionId);
+        } else {
+          shouldCollapse = savedState[sectionId] === true;
+        }
+
+        if (shouldCollapse) {
+          section.classList.add('collapsed');
+          body.style.maxHeight = '0px';
+          if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+      }
 
       // Header click toggles (but not clicks on other interactive elements)
       header.addEventListener('click', (e) => {
@@ -33,6 +58,10 @@ const CollapsibleSections = {
         });
       }
     });
+
+    if (isFirstVisit) {
+      this._saveCurrentState();
+    }
   },
 
   toggle(section) {
@@ -47,14 +76,13 @@ const CollapsibleSections = {
     } else {
       this.collapse(section, body, btn);
     }
+
+    this._saveCurrentState();
   },
 
   collapse(section, body, btn) {
-    // Set explicit max-height to current height so transition has a start value
     body.style.maxHeight = body.scrollHeight + 'px';
-    // Force reflow
     body.offsetHeight; // eslint-disable-line no-unused-expressions
-    // Animate to 0
     body.style.maxHeight = '0px';
     section.classList.add('collapsed');
     if (btn) btn.setAttribute('aria-expanded', 'false');
@@ -62,16 +90,37 @@ const CollapsibleSections = {
 
   expand(section, body, btn) {
     section.classList.remove('collapsed');
-    // Measure the full height and animate to it
     body.style.maxHeight = body.scrollHeight + 'px';
     if (btn) btn.setAttribute('aria-expanded', 'true');
 
-    // After transition, remove inline max-height so content can grow dynamically
     const onEnd = () => {
       body.style.maxHeight = '';
       body.removeEventListener('transitionend', onEnd);
     };
     body.addEventListener('transitionend', onEnd);
+  },
+
+  _loadState() {
+    try {
+      const raw = localStorage.getItem(this.STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  _saveCurrentState() {
+    const state = {};
+    document.querySelectorAll('.section-card[data-collapsible]').forEach(section => {
+      if (section.id) {
+        state[section.id] = section.classList.contains('collapsed');
+      }
+    });
+    try {
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
+    } catch (e) {
+      // localStorage full or unavailable
+    }
   }
 };
 

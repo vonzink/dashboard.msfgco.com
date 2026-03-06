@@ -73,8 +73,7 @@ function authenticate(req, res, next) {
       next();
     } catch (dbErr) {
       logger.error({ err: dbErr }, 'DB user lookup error');
-      // Still allow the request — JWT is valid, but downstream should check req.user.db
-      next();
+      return res.status(500).json({ error: 'Authentication service error' });
     }
   });
 }

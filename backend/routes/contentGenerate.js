@@ -17,6 +17,7 @@ const db = require('../db/connection');
 const { getUserId, requireDbUser } = require('../middleware/userContext');
 const { getCredential } = require('./integrations');
 const { buildPrompt, PLATFORM_CONSTRAINTS } = require('../utils/promptBuilder');
+const logger = require('../lib/logger');
 
 router.use(requireDbUser);
 
@@ -122,7 +123,7 @@ router.post('/', async (req, res, next) => {
 
             savedItems.push({ platform: content.platform, content_id: insertResult.insertId });
           } catch (err) {
-            console.error(`Failed to save draft for ${content.platform}:`, err.message);
+            logger.error({ err, platform: content.platform }, 'Failed to save draft');
           }
         }
       }
@@ -193,7 +194,7 @@ async function generateForPlatform(apiKey, suggestion, platform, template, addit
       template_name: template?.name || null,
     };
   } catch (error) {
-    console.error(`Generation failed for ${platform}:`, error.message);
+    logger.error({ err: error, platform }, 'Content generation failed');
     return {
       platform,
       text: '',

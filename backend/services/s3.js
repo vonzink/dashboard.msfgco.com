@@ -11,6 +11,7 @@
 
 const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const logger = require('../lib/logger');
 
 // ── Clients & Buckets ────────────────────────────────────────────
 
@@ -75,7 +76,7 @@ async function deleteObject(bucket, key) {
   try {
     await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   } catch (err) {
-    console.warn(`S3 delete failed (${bucket}/${key}):`, err.message);
+    logger.warn({ err, bucket, key }, 'S3 delete failed');
   }
 }
 

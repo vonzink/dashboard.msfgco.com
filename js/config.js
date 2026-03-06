@@ -11,13 +11,7 @@
     // API SETTINGS
     // ========================================
     api: {
-      // Prefer same-origin API proxy path if you have one (best for CSP & cookies)
-      // baseUrl: '/api',
-
-      // Otherwise use your domain for prod, and IP only for dev fallback
-      baseUrl: window.location.protocol === 'https:'
-        ? 'https://api.msfgco.com/api'
-        : 'http://54.175.238.145:8080/api',
+      baseUrl: 'https://api.msfgco.com/api',
 
       timeout: 30000,
       retryAttempts: 3,

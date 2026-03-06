@@ -4,6 +4,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/connection');
 const { requireDbUser, isAdmin, requireAdmin } = require('../middleware/userContext');
+const { buildUpdate } = require('../utils/queryBuilder');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../services/s3');
 
 router.use(requireDbUser);
@@ -164,61 +165,28 @@ router.post('/', requireAdmin, async (req, res, next) => {
 router.put('/:idOrKey', async (req, res, next) => {
   try {
     const admin = isAdmin(req);
-    const {
-      notes,
-      name,
-      account_executive_name, account_executive_mobile,
-      account_executive_email, account_executive_address,
-      states, best_programs, minimum_fico, in_house_dpa,
-      epo, max_comp, doc_review_wire, remote_closing_review,
-      website_url, logo_url, login_url
-    } = req.body;
+    const ADMIN_FIELDS = [
+      'name', 'account_executive_name', 'account_executive_mobile',
+      'account_executive_email', 'account_executive_address',
+      'states', 'best_programs', 'minimum_fico', 'in_house_dpa',
+      'epo', 'max_comp', 'doc_review_wire', 'remote_closing_review',
+      'website_url', 'logo_url', 'login_url',
+    ];
+    const allowedFields = admin ? ['notes', ...ADMIN_FIELDS] : ['notes'];
 
-    const updates = [];
-    const values = [];
+    const isNumeric = /^\d+$/.test(req.params.idOrKey);
+    const whereCol = isNumeric ? 'id = ?' : 'investor_key = ?';
 
-    // Notes — anyone can update
-    if (notes !== undefined) {
-      updates.push('notes = ?');
-      values.push(notes);
-    }
+    const update = buildUpdate('investors', allowedFields, req.body, { clause: whereCol, values: [req.params.idOrKey] });
 
-    // All other fields — admin only
-    if (admin) {
-      if (name !== undefined) { updates.push('name = ?'); values.push(name); }
-      if (account_executive_name !== undefined) { updates.push('account_executive_name = ?'); values.push(account_executive_name); }
-      if (account_executive_mobile !== undefined) { updates.push('account_executive_mobile = ?'); values.push(account_executive_mobile); }
-      if (account_executive_email !== undefined) { updates.push('account_executive_email = ?'); values.push(account_executive_email); }
-      if (account_executive_address !== undefined) { updates.push('account_executive_address = ?'); values.push(account_executive_address); }
-      if (states !== undefined) { updates.push('states = ?'); values.push(states); }
-      if (best_programs !== undefined) { updates.push('best_programs = ?'); values.push(best_programs); }
-      if (minimum_fico !== undefined) { updates.push('minimum_fico = ?'); values.push(minimum_fico); }
-      if (in_house_dpa !== undefined) { updates.push('in_house_dpa = ?'); values.push(in_house_dpa); }
-      if (epo !== undefined) { updates.push('epo = ?'); values.push(epo); }
-      if (max_comp !== undefined) { updates.push('max_comp = ?'); values.push(max_comp); }
-      if (doc_review_wire !== undefined) { updates.push('doc_review_wire = ?'); values.push(doc_review_wire); }
-      if (remote_closing_review !== undefined) { updates.push('remote_closing_review = ?'); values.push(remote_closing_review); }
-      if (website_url !== undefined) { updates.push('website_url = ?'); values.push(website_url); }
-      if (logo_url !== undefined) { updates.push('logo_url = ?'); values.push(logo_url); }
-      if (login_url !== undefined) { updates.push('login_url = ?'); values.push(login_url); }
-    }
-
-    if (updates.length === 0) {
+    if (!update) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    const isNumeric = /^\d+$/.test(req.params.idOrKey);
-    const whereClause = isNumeric ? 'WHERE id = ?' : 'WHERE investor_key = ?';
-
-    values.push(req.params.idOrKey);
-
-    await db.query(
-      `UPDATE investors SET ${updates.join(', ')}, updated_at = NOW() ${whereClause}`,
-      values
-    );
+    await db.query(update.sql, update.values);
 
     const [investors] = await db.query(
-      `SELECT * FROM investors ${whereClause}`,
+      `SELECT * FROM investors WHERE ${whereCol}`,
       [req.params.idOrKey]
     );
 

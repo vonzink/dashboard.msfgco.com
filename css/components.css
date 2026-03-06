@@ -669,23 +669,6 @@
     font-style: italic;
     font-size: 0.85rem;
 }
-
-.skip-link {
-  position: absolute;
-  left: -999px;
-  top: 0;
-  padding: 0.75rem 1rem;
-  background: #fff;
-  color: #000;
-  z-index: 9999;
-  border-radius: 0.5rem;
-}
-
-.skip-link:focus {
-  left: 1rem;
-  top: 1rem;
-  outline: 2px solid currentColor;
-}
 /* ========================================
    EDITABLE CONTENT & EDIT BUTTONS
 ======================================== */

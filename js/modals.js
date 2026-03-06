@@ -17,8 +17,6 @@ const ModalsManager = {
     this.bindDeleteButtons();          // ✅ delegated delete handler
     this.bindEmbedToggles();           // ✅ iframe preview toggle + resize
     this.loadAnnouncements();
-
-    console.log('ModalsManager initialized');
   },
 
   // ========================================
@@ -29,6 +27,19 @@ const ModalsManager = {
       if (e.key !== 'Escape') return;
 
       // Close the top-most modal (priority order)
+      // Investor modals (company contacts sits on top of investor detail)
+      if (this.isModalActive('companyContactsModal')) {
+        if (typeof Investors !== 'undefined') Investors.hideCompanyContactsModal();
+        return;
+      }
+      if (this.isModalActive('investorModal')) {
+        if (typeof Investors !== 'undefined') Investors.hideModal();
+        return;
+      }
+      if (this.isModalActive('announcementDetailOverlay')) {
+        this.hideAnnouncementDetail();
+        return;
+      }
       if (this.isModalActive('addAnnouncementModal')) {
         this.hideAnnouncementModal();
         return;
@@ -466,9 +477,8 @@ const ModalsManager = {
   },
 
   // ========================================
-  // CAROUSEL STATE
+  // ANNOUNCEMENTS STATE
   // ========================================
-  _carouselIndex: 0,
   _carouselAnnouncements: [],
 
   _canCreate() {
@@ -535,94 +545,87 @@ const ModalsManager = {
     `;
   },
 
-  renderCarousel() {
-    const track = document.getElementById('newsCarouselTrack');
-    const dots = document.getElementById('carouselDots');
-    if (!track) return;
+  buildCardPreview(announcement) {
+    const iconClass = announcement.icon || 'fa-bullhorn';
+    const relativeTime = Utils.getRelativeTime(announcement.createdAt);
 
-    const maxSlides = (window.CONFIG && CONFIG.announcements && CONFIG.announcements.carouselMax) || 10;
-    const slides = this._carouselAnnouncements.slice(0, maxSlides);
+    return `
+      <div class="news-card" data-announcement-id="${announcement.id}">
+        <div class="news-card-header">
+          <div class="news-card-icon"><i class="fas ${iconClass}"></i></div>
+          <h4 class="news-card-title">${Utils.escapeHtml(announcement.title)}</h4>
+        </div>
+        <p class="news-card-excerpt">${Utils.escapeHtml(announcement.content)}</p>
+        <div class="news-card-meta">
+          <span><i class="fas fa-user"></i> ${Utils.escapeHtml(announcement.author)}</span>
+          <span><i class="fas fa-clock"></i> ${relativeTime}</span>
+        </div>
+      </div>
+    `;
+  },
 
-    if (slides.length === 0) {
-      track.innerHTML = '<div class="news-carousel-slide"><div class="news-item"><div class="news-content"><p style="text-align:center;color:var(--text-muted);">No announcements yet.</p></div></div></div>';
-      if (dots) dots.innerHTML = '';
+  renderCardGrid() {
+    const grid = document.getElementById('newsCardGrid');
+    if (!grid) return;
+
+    const cards = this._carouselAnnouncements.slice(0, 3);
+
+    if (cards.length === 0) {
+      grid.innerHTML = '<div class="news-card-empty"><p>No announcements yet.</p></div>';
       return;
     }
 
-    track.innerHTML = slides.map(a =>
-      `<div class="news-carousel-slide">${this.buildAnnouncementCard(a)}</div>`
-    ).join('');
-
-    // Render dots
-    if (dots) {
-      dots.innerHTML = slides.map((_, i) =>
-        `<button type="button" class="carousel-dot${i === 0 ? ' active' : ''}" data-index="${i}" aria-label="Slide ${i + 1}"></button>`
-      ).join('');
-    }
-
-    this._carouselIndex = 0;
-    this.updateCarouselPosition();
+    grid.innerHTML = cards.map(a => this.buildCardPreview(a)).join('');
   },
 
-  updateCarouselPosition() {
-    const track = document.getElementById('newsCarouselTrack');
-    if (!track) return;
+  bindCardGrid() {
+    const grid = document.getElementById('newsCardGrid');
+    if (!grid) return;
 
-    track.style.transform = `translateX(-${this._carouselIndex * 100}%)`;
-
-    // Update dots
-    document.querySelectorAll('#carouselDots .carousel-dot').forEach((dot, i) => {
-      dot.classList.toggle('active', i === this._carouselIndex);
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('.news-card');
+      if (!card) return;
+      const id = Number(card.dataset.announcementId);
+      if (Number.isFinite(id)) this.showAnnouncementDetail(id);
     });
-
-    // Update prev/next button state
-    const maxSlides = Math.min(this._carouselAnnouncements.length,
-      (window.CONFIG && CONFIG.announcements && CONFIG.announcements.carouselMax) || 10);
-    const prev = document.getElementById('carouselPrev');
-    const next = document.getElementById('carouselNext');
-    if (prev) prev.disabled = this._carouselIndex <= 0;
-    if (next) next.disabled = this._carouselIndex >= maxSlides - 1;
   },
 
-  initCarouselControls() {
-    const prev = document.getElementById('carouselPrev');
-    const next = document.getElementById('carouselNext');
-    const dots = document.getElementById('carouselDots');
+  showAnnouncementDetail(id) {
+    const announcement = this._carouselAnnouncements.find(a => a.id === id);
+    if (!announcement) return;
 
-    if (prev) {
-      prev.addEventListener('click', () => {
-        if (this._carouselIndex > 0) {
-          this._carouselIndex--;
-          this.updateCarouselPosition();
-        }
-      });
+    const overlay = document.getElementById('announcementDetailOverlay');
+    const title = document.getElementById('announcementDetailTitle');
+    const body = document.getElementById('announcementDetailBody');
+    if (!overlay || !title || !body) return;
+
+    title.textContent = announcement.title;
+    body.innerHTML = this.buildAnnouncementCard(announcement);
+    overlay.classList.add('active');
+  },
+
+  hideAnnouncementDetail() {
+    const overlay = document.getElementById('announcementDetailOverlay');
+    if (overlay) overlay.classList.remove('active');
+  },
+
+  bindAnnouncementDetail() {
+    const overlay = document.getElementById('announcementDetailOverlay');
+    const close = document.getElementById('announcementDetailClose');
+
+    if (close) {
+      close.addEventListener('click', () => this.hideAnnouncementDetail());
     }
-
-    if (next) {
-      next.addEventListener('click', () => {
-        const maxSlides = Math.min(this._carouselAnnouncements.length,
-          (window.CONFIG && CONFIG.announcements && CONFIG.announcements.carouselMax) || 10);
-        if (this._carouselIndex < maxSlides - 1) {
-          this._carouselIndex++;
-          this.updateCarouselPosition();
-        }
-      });
-    }
-
-    if (dots) {
-      dots.addEventListener('click', (e) => {
-        const dot = e.target.closest('.carousel-dot');
-        if (!dot) return;
-        this._carouselIndex = Number(dot.dataset.index);
-        this.updateCarouselPosition();
+    if (overlay) {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) this.hideAnnouncementDetail();
       });
     }
   },
 
   addAnnouncementToUI(announcement) {
-    // Add to carousel data and re-render
     this._carouselAnnouncements.unshift(announcement);
-    this.renderCarousel();
+    this.renderCardGrid();
   },
 
   async deleteAnnouncement(announcementId) {
@@ -631,12 +634,8 @@ const ModalsManager = {
     try {
       await ServerAPI.deleteAnnouncement(announcementId);
 
-      // Remove from carousel data
       this._carouselAnnouncements = this._carouselAnnouncements.filter(a => a.id !== announcementId);
-      if (this._carouselIndex >= this._carouselAnnouncements.length && this._carouselIndex > 0) {
-        this._carouselIndex--;
-      }
-      this.renderCarousel();
+      this.renderCardGrid();
     } catch (error) {
       console.error('Failed to delete announcement:', error);
       alert('Failed to delete announcement. Please try again.');
@@ -651,10 +650,11 @@ const ModalsManager = {
   },
 
   async loadAnnouncements() {
-    const track = document.getElementById('newsCarouselTrack');
-    if (!track) return;
+    const grid = document.getElementById('newsCardGrid');
+    if (!grid) return;
 
-    this.initCarouselControls();
+    this.bindCardGrid();
+    this.bindAnnouncementDetail();
     this._updateAddButtonVisibility();
 
     try {
@@ -672,13 +672,13 @@ const ModalsManager = {
         fileName: a.file_name
       }));
 
-      this.renderCarousel();
+      this.renderCardGrid();
     } catch (error) {
       console.error('Failed to load announcements:', error);
 
       const cached = Utils.getStorage ? Utils.getStorage('announcements', []) : [];
       this._carouselAnnouncements = cached;
-      this.renderCarousel();
+      this.renderCardGrid();
     }
   }
 };

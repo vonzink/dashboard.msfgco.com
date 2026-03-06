@@ -14,6 +14,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { buildUpdate } = require('../utils/queryBuilder');
+const { deleted } = require('../utils/response');
 
 router.use(requireDbUser);
 
@@ -161,35 +163,23 @@ router.put('/:id', async (req, res, next) => {
       return res.status(403).json({ error: 'Access denied' });
     }
 
-    const {
-      text_content, hashtags, platform, status,
-      image_s3_key, image_source, video_s3_key, video_source,
-      review_notes, scheduled_at,
-    } = req.body;
+    const CONTENT_FIELDS = [
+      'text_content', 'hashtags', 'platform', 'status',
+      'image_s3_key', 'image_source', 'video_s3_key', 'video_source',
+      'review_notes', 'scheduled_at',
+    ];
 
-    const updates = [];
-    const values = [];
+    // Pre-process hashtags to JSON string
+    const data = { ...req.body };
+    if (data.hashtags !== undefined) data.hashtags = JSON.stringify(data.hashtags);
 
-    if (text_content !== undefined) { updates.push('text_content = ?'); values.push(text_content); }
-    if (hashtags !== undefined)     { updates.push('hashtags = ?');     values.push(JSON.stringify(hashtags)); }
-    if (platform !== undefined)     { updates.push('platform = ?');     values.push(platform); }
-    if (status !== undefined)       { updates.push('status = ?');       values.push(status); }
-    if (image_s3_key !== undefined) { updates.push('image_s3_key = ?'); values.push(image_s3_key); }
-    if (image_source !== undefined) { updates.push('image_source = ?'); values.push(image_source); }
-    if (video_s3_key !== undefined) { updates.push('video_s3_key = ?'); values.push(video_s3_key); }
-    if (video_source !== undefined) { updates.push('video_source = ?'); values.push(video_source); }
-    if (review_notes !== undefined) { updates.push('review_notes = ?'); values.push(review_notes); }
-    if (scheduled_at !== undefined) { updates.push('scheduled_at = ?'); values.push(scheduled_at); }
+    const update = buildUpdate('content_items', CONTENT_FIELDS, data, { clause: 'id = ?', values: [itemId] });
 
-    if (updates.length === 0) {
+    if (!update) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
-    values.push(itemId);
-    await db.query(
-      `UPDATE content_items SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
-      values
-    );
+    await db.query(update.sql, update.values);
 
     // Audit log
     await db.query(
@@ -328,7 +318,7 @@ router.delete('/:id', async (req, res, next) => {
       [itemId, userId, 'archived']
     );
 
-    res.json({ success: true, message: 'Content archived' });
+    deleted(res, 'Content archived');
   } catch (error) {
     next(error);
   }

@@ -82,7 +82,6 @@ const ServerAPI = {
             var newToken = tokens.id_token || tokens.access_token;
             if (newToken) {
                 this.setAuthToken(newToken, tokens.expires_in || 3600);
-                console.log("Token refreshed silently");
                 return newToken;
             }
             return null;

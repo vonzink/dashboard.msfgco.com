@@ -3,6 +3,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { buildUpdate } = require('../utils/queryBuilder');
+const { deleted } = require('../utils/response');
 
 router.use(requireDbUser);
 
@@ -85,40 +87,26 @@ router.post('/', async (req, res, next) => {
 // PUT /api/tasks/:id - Update task
 router.put('/:id', async (req, res, next) => {
   try {
-    const { title, description, priority, status, due_date, due_time, assigned_to } = req.body;
-    
-    const updates = [];
-    const values = [];
-    
-    if (title !== undefined) { updates.push('title = ?'); values.push(title); }
-    if (description !== undefined) { updates.push('description = ?'); values.push(description); }
-    if (priority !== undefined) { updates.push('priority = ?'); values.push(priority); }
-    if (status !== undefined) { updates.push('status = ?'); values.push(status); }
-    if (due_date !== undefined) { updates.push('due_date = ?'); values.push(due_date); }
-    if (due_time !== undefined) { updates.push('due_time = ?'); values.push(due_time); }
-    if (assigned_to !== undefined) { updates.push('assigned_to = ?'); values.push(assigned_to); }
-    
-    if (updates.length === 0) {
+    const TASK_FIELDS = ['title', 'description', 'priority', 'status', 'due_date', 'due_time', 'assigned_to'];
+
+    const update = buildUpdate('tasks', TASK_FIELDS, req.body, { clause: 'id = ?', values: [req.params.id] });
+
+    if (!update) {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
-    
-    values.push(req.params.id);
-    
+
     const [existingTasks] = await db.query('SELECT user_id FROM tasks WHERE id = ?', [req.params.id]);
-    
+
     if (existingTasks.length === 0) {
       return res.status(404).json({ error: 'Task not found' });
     }
-    
+
     const currentUserId = getUserId(req);
     if (!isAdmin(req) && existingTasks[0].user_id !== currentUserId) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    
-    await db.query(
-      `UPDATE tasks SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
-      values
-    );
+
+    await db.query(update.sql, update.values);
     
     const [tasks] = await db.query('SELECT * FROM tasks WHERE id = ?', [req.params.id]);
     res.json(tasks[0]);
@@ -147,7 +135,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Task not found' });
     }
     
-    res.json({ message: 'Task deleted successfully' });
+    deleted(res, 'Task deleted');
   } catch (error) {
     next(error);
   }

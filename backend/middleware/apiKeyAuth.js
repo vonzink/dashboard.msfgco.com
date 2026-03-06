@@ -4,6 +4,22 @@ const { getUserFromApiKey } = require('./auth');
 const db = require('../db/connection');
 const logger = require('../lib/logger');
 
+// Fields that may contain PII — matched case-insensitively against payload keys
+const SENSITIVE_KEYS = /ssn|social_security|tax_id|dob|date_of_birth|birth_date|password|account_number|routing_number|bank_account|credit_score/i;
+
+/**
+ * Deep-clone a payload object, replacing values of sensitive keys with '[REDACTED]'.
+ */
+function redactPayload(obj) {
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(redactPayload);
+  const out = {};
+  for (const [key, val] of Object.entries(obj)) {
+    out[key] = SENSITIVE_KEYS.test(key) ? '[REDACTED]' : redactPayload(val);
+  }
+  return out;
+}
+
 async function validateApiKey(req, res, next) {
   try {
     const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '') || req.query.api_key;
@@ -55,7 +71,7 @@ async function logRequest(req, statusCode, responseBody) {
         req.apiKeyId || null,
         req.path,
         req.method,
-        JSON.stringify(req.body),
+        JSON.stringify(redactPayload(req.body)),
         statusCode,
         typeof responseBody === 'object' ? JSON.stringify(responseBody) : responseBody,
         req.ip || req.connection.remoteAddress,

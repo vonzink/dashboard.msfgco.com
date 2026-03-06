@@ -32,8 +32,6 @@ const ThemeManager = {
         
         // Bind theme toggle button
         this.bindThemeToggle();
-        
-        console.log(`Theme initialized: ${this.currentTheme}`);
     },
 
     // ========================================

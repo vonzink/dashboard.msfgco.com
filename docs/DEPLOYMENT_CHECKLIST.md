@@ -23,7 +23,7 @@
 - `/api/webhooks/bulk/tasks` - POST (bulk create)
 
 ### 3. Files Created
-- ✅ `ADDITIONAL_TABLES.sql` - Database schema
+- ✅ `docs/legacy-sql/ADDITIONAL_TABLES.sql` - Database schema
 - ✅ `backend/routes/tasks.js` - Tasks API
 - ✅ `backend/routes/preApprovals.js` - Pre-approvals API
 - ✅ `backend/routes/pipeline.js` - Pipeline API
@@ -41,7 +41,7 @@
 On EC2 or your local machine with MySQL access:
 
 ```bash
-mysql -h msfg-mortgage-db.cghqooasg1vk.us-east-1.rds.amazonaws.com -u admin -p msfg_mortgage_db < ADDITIONAL_TABLES.sql
+mysql -h msfg-mortgage-db.cghqooasg1vk.us-east-1.rds.amazonaws.com -u admin -p msfg_mortgage_db < docs/legacy-sql/ADDITIONAL_TABLES.sql
 ```
 
 **Verify tables were created:**
@@ -166,7 +166,7 @@ See `ZAPIER_INTEGRATION.md` for detailed instructions.
 - **API Endpoints:** See route files in `backend/routes/`
 - **Zapier Integration:** See `ZAPIER_INTEGRATION.md`
 - **HTTPS Setup:** See `API_HTTPS_SETUP.md`
-- **Database Schema:** See `ADDITIONAL_TABLES.sql`
+- **Database Schema:** See `docs/legacy-sql/ADDITIONAL_TABLES.sql`
 
 ---
 

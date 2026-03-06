@@ -231,7 +231,7 @@ router.delete('/files/:id', async (req, res, next) => {
     // Best-effort S3 cleanup
     deleteObject(BUCKETS.forms, file.s3_key).catch(() => {});
 
-    res.json({ message: 'Guideline file deleted successfully' });
+    deleted(res, 'Guideline file deleted');
   } catch (error) {
     next(error);
   }

@@ -21,7 +21,7 @@ CREATE INDEX idx_user ON api_keys(user_id);
 
 ### 1.2 Create new tables
 
-Copy and paste the contents of `ADDITIONAL_TABLES.sql` (the CREATE TABLE statements for tasks, pre_approvals, pipeline, api_keys, webhook_logs)
+Copy and paste the contents of `docs/legacy-sql/ADDITIONAL_TABLES.sql` (the CREATE TABLE statements for tasks, pre_approvals, pipeline, api_keys, webhook_logs)
 
 ### 1.3 Update default user to admin role
 

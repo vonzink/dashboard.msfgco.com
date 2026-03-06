@@ -9,6 +9,16 @@ const Utils = {
     // ========================================
     
     /**
+     * Convert a string to Title Case (e.g. "client_name" → "Client Name")
+     */
+    toTitleCase(str) {
+        if (!str) return '';
+        return str
+            .replace(/_/g, ' ')
+            .replace(/\b\w/g, c => c.toUpperCase());
+    },
+
+    /**
      * Escape HTML to prevent XSS
      */
     escapeHtml(text) {
@@ -297,6 +307,23 @@ const Utils = {
     isValidEmail(email) {
         const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return re.test(email);
+    },
+
+    /**
+     * Show a brief toast notification
+     */
+    showToast(message, type = 'info') {
+        const colors = { info: '#104547', error: '#c0392b', success: '#27ae60' };
+        const bg = colors[type] || colors.info;
+        const toast = document.createElement('div');
+        toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:' + bg + ';color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-family:Inter,sans-serif;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;max-width:400px;';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => { toast.style.opacity = '1'; });
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3500);
     }
 };
 

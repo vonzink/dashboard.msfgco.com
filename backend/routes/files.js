@@ -5,6 +5,7 @@ const { S3Client, PutObjectCommand, ListObjectsV2Command, GetObjectCommand } = r
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const { requireDbUser } = require('../middleware/userContext');
+const logger = require('../lib/logger');
 
 router.use(requireDbUser);
 
@@ -73,7 +74,7 @@ router.post('/upload-url', async (req, res, next) => {
       bucket: BUCKET_NAME,
     });
   } catch (error) {
-    console.error('Error generating presigned URL:', error);
+    logger.error({ err: error }, 'Error generating presigned URL');
     next(error);
   }
 });
@@ -151,7 +152,7 @@ router.get('/browse', async (req, res, next) => {
       files,
     });
   } catch (error) {
-    console.error('Error browsing S3:', error);
+    logger.error({ err: error }, 'Error browsing S3');
     next(error);
   }
 });
@@ -191,7 +192,7 @@ router.get('/download-url', async (req, res, next) => {
       expiresIn: 900,
     });
   } catch (error) {
-    console.error('Error generating download URL:', error);
+    logger.error({ err: error }, 'Error generating download URL');
     next(error);
   }
 });

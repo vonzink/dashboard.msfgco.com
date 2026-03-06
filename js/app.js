@@ -8,7 +8,6 @@ const App = {
     // INITIALIZATION
     // ========================================
     init() {
-        console.log('🏔️ MSFG Dashboard starting...');
 
         // Initialize modules — each wrapped in try/catch so one
         // failing module doesn't prevent the rest from loading
@@ -41,8 +40,6 @@ const App = {
 
         // Start auto-refresh
         if (typeof DataRefresher !== 'undefined') DataRefresher.start();
-
-        console.log('✅ MSFG Dashboard ready!');
     },
 
     // ========================================
@@ -58,9 +55,6 @@ const App = {
 
     initChat() {
         Chat.init();
-        
-        // Connect to WebSocket (uncomment and update URL when ready)
-        // Chat.connect('wss://your-server.com/chat');
     },
 
     initInvestors() {
@@ -193,8 +187,7 @@ const App = {
     // NOTIFICATIONS
     // ========================================
     showNotification(message, type = 'info') {
-        // Could implement toast notifications here
-        console.log(`[${type.toUpperCase()}] ${message}`);
+        Utils.showToast(message, type);
     },
 
     // ========================================

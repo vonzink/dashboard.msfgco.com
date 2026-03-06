@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <!-- AUTH GATE (must be first script in head) -->
-  <script src="js/auth-gate.js?v=20260224-2"></script>
+  <script src="js/auth-gate.js?v=20260306-3"></script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -20,14 +20,14 @@
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
 
   <!-- Styles -->
-  <link rel="stylesheet" href="css/variables.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/base.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/layout.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/components.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/tables.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/sections.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/chat.css?v=20260224-2" />
-  <link rel="stylesheet" href="css/animations.css?v=20260224-2" />
+  <link rel="stylesheet" href="css/variables.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/base.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/layout.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/components.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/tables.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/sections.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/chat.css?v=20260306-3" />
+  <link rel="stylesheet" href="css/animations.css?v=20260306-3" />
 </head>
 
 <body>
@@ -89,21 +89,23 @@
         <div class="header-utils">
           <a data-link-key="ratesheet" class="header-util-btn" title="Today's Rate Sheet">
             <i class="fas fa-chart-bar"></i>
+            <span class="util-label">Rates</span>
           </a>
-          <button type="button" class="header-util-btn" data-action="open-lock-desk" title="Lock Desk">
-            <i class="fas fa-file-alt"></i>
-          </button>
           <button type="button" class="header-util-btn" data-action="open-support-ticket" title="Support Ticket">
             <i class="fas fa-headset"></i>
+            <span class="util-label">Support</span>
           </button>
           <button type="button" class="header-util-btn" data-action="open-notifications" title="Notifications">
             <i class="fas fa-bell"></i>
+            <span class="util-label">Alerts</span>
           </button>
           <button type="button" class="header-util-btn" data-action="open-settings" title="Settings">
             <i class="fas fa-cog"></i>
+            <span class="util-label">Settings</span>
           </button>
           <button type="button" class="header-util-btn admin-only-item" data-action="open-admin-settings" title="Admin Settings" style="display:none;">
             <i class="fas fa-user-shield"></i>
+            <span class="util-label">Admin</span>
           </button>
         </div>
 
@@ -320,7 +322,7 @@
   <main class="main-content" id="mainContent" tabindex="-1">
 
     <!-- News + Quick Links -->
-    <section class="section-card animate-in" data-collapsible>
+    <section class="section-card animate-in" id="newsSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-newspaper"></i> Daily News & Announcements</h2>
         <div class="section-actions">
@@ -334,18 +336,7 @@
       </div>
 
       <div class="section-body" id="sectionBody-news">
-        <div class="news-carousel" id="newsCarousel">
-          <div class="news-carousel-track" id="newsCarouselTrack"></div>
-          <div class="news-carousel-controls">
-            <button type="button" class="carousel-btn carousel-prev" id="carouselPrev" title="Previous" aria-label="Previous announcement">
-              <i class="fas fa-chevron-left"></i>
-            </button>
-            <div class="carousel-dots" id="carouselDots"></div>
-            <button type="button" class="carousel-btn carousel-next" id="carouselNext" title="Next" aria-label="Next announcement">
-              <i class="fas fa-chevron-right"></i>
-            </button>
-          </div>
-        </div>
+        <div class="news-card-grid" id="newsCardGrid"></div>
         <div class="news-history-link">
           <a href="/announcements-history.html" class="btn btn-sm btn-outline">
             <i class="fas fa-archive"></i> View Announcement Archive
@@ -517,7 +508,7 @@
     </section>
 
     <!-- Performance & Goals -->
-    <section class="section-card animate-in" data-collapsible>
+    <section class="section-card animate-in" id="goalsSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-trophy"></i> Performance & Goals</h2>
         <div class="section-actions">
@@ -603,41 +594,37 @@
       </div>
     </section>
 
-    <!-- Chat -->
-    <section class="section-card animate-in" id="chatSection" data-collapsible>
-      <div class="section-header">
-        <h2 class="section-title"><i class="fas fa-comments"></i> Team Chat</h2>
-        <div class="section-actions">
+    <!-- Floating Chat FAB + Panel -->
+    <button type="button" class="chat-fab" id="chatFab" title="Team Chat" aria-label="Toggle chat panel">
+      <i class="fas fa-comments" id="chatFabIcon"></i>
+      <span class="chat-fab-badge" id="chatFabBadge" style="display:none;">0</span>
+    </button>
+
+    <div class="chat-float-panel" id="chatFloatPanel" aria-hidden="true">
+      <div class="chat-float-header">
+        <h3 class="chat-float-title"><i class="fas fa-comments"></i> Team Chat</h3>
+        <div class="chat-float-actions">
           <button type="button" class="btn btn-sm btn-outline" id="chatManageTagsBtn" title="Manage Tags">
-            <i class="fas fa-tags"></i> Manage Tags
+            <i class="fas fa-tags"></i>
           </button>
-          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-chat" title="Toggle section">
-            <i class="fas fa-chevron-up"></i>
+          <button type="button" class="chat-float-close" id="chatFloatClose" title="Close chat" aria-label="Close chat">
+            <i class="fas fa-times"></i>
           </button>
         </div>
       </div>
-      <div class="section-body" id="sectionBody-chat">
-        <div class="chat-container">
-          <!-- Tag filter bar -->
-          <div class="chat-tag-filter-bar" id="chatTagFilter"></div>
-
-          <!-- Messages -->
-          <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
-
-          <!-- Tag picker for outgoing messages -->
-          <div class="chat-tag-picker-bar">
-            <span class="chat-tag-picker-label"><i class="fas fa-tags"></i> Attach tags:</span>
-            <div class="chat-tag-picker" id="chatTagPicker"></div>
-          </div>
-
-          <!-- Input -->
-          <form class="chat-input-row" id="chatForm">
-            <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." maxlength="1000" autocomplete="off" />
-            <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
-          </form>
+      <div class="chat-container">
+        <div class="chat-tag-filter-bar" id="chatTagFilter"></div>
+        <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
+        <div class="chat-tag-picker-bar">
+          <span class="chat-tag-picker-label"><i class="fas fa-tags"></i> Attach tags:</span>
+          <div class="chat-tag-picker" id="chatTagPicker"></div>
         </div>
+        <form class="chat-input-row" id="chatForm">
+          <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." maxlength="1000" autocomplete="off" />
+          <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
+        </form>
       </div>
-    </section>
+    </div>
 
     <!-- =========================
          MODALS
@@ -812,6 +799,17 @@
       </div>
     </div>
 
+    <!-- Announcement Detail Modal -->
+    <div class="modal-overlay" id="announcementDetailOverlay">
+      <div class="modal announcement-detail-modal" id="announcementDetailModal">
+        <div class="modal-header">
+          <h3 id="announcementDetailTitle"></h3>
+          <button type="button" class="modal-close" id="announcementDetailClose">&times;</button>
+        </div>
+        <div class="modal-body" id="announcementDetailBody"></div>
+      </div>
+    </div>
+
   </main>
 
   <footer class="footer">
@@ -824,29 +822,29 @@
   </footer>
 
   <!-- Scripts (load order matters) -->
-  <script src="js/config.js?v=20260224-2"></script>
-  <script src="js/link-init.js?v=20260224-2"></script>
-  <script src="js/action-dispatcher.js?v=20260224-2"></script>
+  <script src="js/config.js?v=20260306-3"></script>
+  <script src="js/link-init.js?v=20260306-3"></script>
+  <script src="js/action-dispatcher.js?v=20260306-3"></script>
 
-  <script src="js/api-server.js?v=20260224-2"></script>
-  <script src="js/utils.js?v=20260224-2"></script>
-  <script src="js/theme.js?v=20260224-2"></script>
-  <script src="js/tables.js?v=20260224-2"></script>
-  <script src="js/chat.js?v=20260224-2"></script>
-  <script src="js/api.js?v=20260224-2"></script>
-  <script src="js/investors.js?v=20260224-2"></script>
-  <script src="js/funded-loans.js?v=20260224-2"></script>
-  <script src="js/goals.js?v=20260224-2"></script>
-  <script src="js/gauges.js?v=20260302-1"></script>
-  <script src="js/modals.js?v=20260224-2"></script>
-  <script src="js/collapsible.js?v=20260227-1"></script>
+  <script src="js/api-server.js?v=20260306-3"></script>
+  <script src="js/utils.js?v=20260306-3"></script>
+  <script src="js/theme.js?v=20260306-3"></script>
+  <script src="js/tables.js?v=20260306-3"></script>
+  <script src="js/chat.js?v=20260306-3"></script>
+  <script src="js/api.js?v=20260306-3"></script>
+  <script src="js/investors.js?v=20260306-3"></script>
+  <script src="js/funded-loans.js?v=20260306-3"></script>
+  <script src="js/goals.js?v=20260306-3"></script>
+  <script src="js/gauges.js?v=20260306-3"></script>
+  <script src="js/modals.js?v=20260306-3"></script>
+  <script src="js/collapsible.js?v=20260306-3"></script>
 
   <!-- Accessibility -->
-  <script src="js/a11y.js?v=20260224-2"></script>
+  <script src="js/a11y.js?v=20260306-3"></script>
 
   <!-- CSP-friendly progress widths -->
-  <script src="js/progress-init.js?v=20260211-1"></script>
+  <script src="js/progress-init.js?v=20260306-3"></script>
 
-  <script src="js/app.js?v=20260211-1"></script>
+  <script src="js/app.js?v=20260306-3"></script>
 </body>
 </html>

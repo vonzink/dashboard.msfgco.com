@@ -23,3 +23,9 @@ build/
 
 # AWS/IAM policy docs are fine, but avoid local creds
 .aws/
+
+# Claude Code local settings
+.claude/
+
+# Test/debug scripts (may contain secrets)
+tools/

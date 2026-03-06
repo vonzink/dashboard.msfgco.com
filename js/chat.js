@@ -25,18 +25,21 @@ const Chat = {
   // INITIALIZATION
   // ========================================
   init() {
-    if (!CONFIG.features.chat) {
-      console.log('Chat feature disabled');
-      return;
-    }
+    if (!CONFIG.features.chat) return;
+
+    // Clear existing timer (prevents leak on re-init)
+    if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
 
     this.bindEvents();
+    this.bindFloatPanel();
     this.loadTags().then(() => this.loadMessages());
 
     // Auto-refresh messages every 15 seconds
     this._refreshTimer = setInterval(() => this.loadMessages(), CONFIG.refresh?.chat || 15000);
+  },
 
-    console.log('Chat initialized');
+  destroy() {
+    if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
   },
 
   bindEvents() {
@@ -94,6 +97,59 @@ const Chat = {
         }
       });
     }
+  },
+
+  // ========================================
+  // FLOATING PANEL CONTROLS
+  // ========================================
+  bindFloatPanel() {
+    const fab = document.getElementById('chatFab');
+    const panel = document.getElementById('chatFloatPanel');
+    const closeBtn = document.getElementById('chatFloatClose');
+
+    if (!fab || !panel) return;
+
+    // Restore saved state
+    if (localStorage.getItem('msfg_chat_open') === 'true') {
+      this._openPanel();
+    }
+
+    fab.addEventListener('click', () => {
+      if (panel.classList.contains('is-open')) {
+        this._closePanel();
+      } else {
+        this._openPanel();
+      }
+    });
+
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => this._closePanel());
+    }
+  },
+
+  _openPanel() {
+    const fab = document.getElementById('chatFab');
+    const panel = document.getElementById('chatFloatPanel');
+    if (!panel) return;
+
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+    if (fab) fab.classList.add('is-open');
+
+    localStorage.setItem('msfg_chat_open', 'true');
+    this.scrollToBottom();
+  },
+
+  _closePanel() {
+    const fab = document.getElementById('chatFab');
+    const panel = document.getElementById('chatFloatPanel');
+    if (!panel) return;
+
+    panel.classList.remove('is-open');
+    panel.setAttribute('aria-hidden', 'true');
+    if (fab) fab.classList.remove('is-open');
+
+    localStorage.setItem('msfg_chat_open', 'false');
   },
 
   // ========================================

@@ -4,6 +4,7 @@ const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, hasRole, requireDbUser } = require('../middleware/userContext');
 const { announcement, validate } = require('../validation/schemas');
+const { deleted } = require('../utils/response');
 
 const MAX_ACTIVE = 8;
 
@@ -88,7 +89,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Announcement not found' });
     }
 
-    res.json({ message: 'Announcement deleted successfully' });
+    deleted(res, 'Announcement deleted');
   } catch (error) {
     next(error);
   }

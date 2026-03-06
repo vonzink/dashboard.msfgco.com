@@ -2,6 +2,7 @@
 const db = require('./connection');
 const fs = require('fs');
 const path = require('path');
+const logger = require('../lib/logger');
 
 /**
  * Execute a SQL file: split by ';' and run each statement.
@@ -24,7 +25,7 @@ async function executeSqlFile(connection, filePath) {
           !error.message.includes('already exists') &&
           !error.message.includes('Duplicate')
         ) {
-          console.warn('⚠ Migration warning:', error.message);
+          logger.warn({ msg: error.message }, 'Migration warning');
         }
       }
     }
@@ -35,7 +36,7 @@ async function runMigrations() {
   const connection = await db.getConnection();
 
   try {
-    console.log('Running database migrations...');
+    logger.info('Running database migrations...');
 
     // ── 1. Run the main schema file ─────────────────────────────
     const possiblePaths = [
@@ -54,13 +55,13 @@ async function runMigrations() {
     }
 
     if (!schemaPath) {
-      console.warn('⚠ DATABASE_SCHEMA.sql not found in any expected location');
-      console.warn('⚠ Attempting to create tables directly...');
+      logger.warn('DATABASE_SCHEMA.sql not found in any expected location');
+      logger.warn('Attempting to create tables directly...');
       await createTablesDirectly(connection);
     } else {
-      console.log('✓ Found schema file at:', schemaPath);
+      logger.info({ schemaPath }, 'Found schema file');
       await executeSqlFile(connection, schemaPath);
-      console.log('✓ Main schema applied');
+      logger.info('Main schema applied');
     }
 
     // ── 2. Run numbered migration files in order ────────────────
@@ -73,17 +74,17 @@ async function runMigrations() {
 
       for (const file of files) {
         const filePath = path.join(migrationsDir, file);
-        console.log(`  Running migration: ${file}`);
+        logger.info({ file }, 'Running migration');
         await executeSqlFile(connection, filePath);
       }
       if (files.length > 0) {
-        console.log(`✓ ${files.length} migration file(s) applied`);
+        logger.info({ count: files.length }, 'Migration files applied');
       }
     }
 
-    console.log('✓ Migrations completed');
+    logger.info('Migrations completed');
   } catch (error) {
-    console.error('✗ Migration failed:', error);
+    logger.error({ err: error }, 'Migration failed');
     throw error;
   } finally {
     connection.release();
@@ -94,7 +95,7 @@ async function runMigrations() {
 async function createTablesDirectly(connection) {
   await connection.query('CREATE DATABASE IF NOT EXISTS msfg_mortgage_db');
   await connection.query('USE msfg_mortgage_db');
-  console.log('✓ Database ensured');
+  logger.info('Database ensured');
 }
 
 module.exports = { runMigrations };

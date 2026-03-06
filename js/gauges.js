@@ -23,7 +23,6 @@ const DashboardGauges = {
     await this.fetchAllSummaries();
     this.renderHeaderMetrics();
     this.bindPeriodListener();
-    console.log('HeaderMetrics initialized');
   },
 
   // ========================================

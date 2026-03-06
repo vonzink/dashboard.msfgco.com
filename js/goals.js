@@ -46,7 +46,6 @@ const GoalsManager = {
         this.bindEditButtons();
         this.bindSliders();
         this.updateAllGoals();
-        console.log('GoalsManager initialized');
     },
 
     // ========================================
@@ -70,7 +69,6 @@ const GoalsManager = {
             this._syncFundedLoansPeriod();
 
             this.updateAllGoals();
-            console.log(`Period changed to: ${this.currentPeriod}`);
         });
     },
 

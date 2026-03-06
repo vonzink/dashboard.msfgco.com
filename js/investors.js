@@ -17,10 +17,8 @@ const Investors = {
   init() {
     this.bindModalClose();
     this.bindCompanyContactsModalClose();
-    this.bindGlobalEscapeClose();
     // Load investor data from API, then build the dropdown
     this.loadFromAPI();
-    console.log('Investors module initializing...');
   },
 
   /** Fetch investors from API and populate this.data */
@@ -57,7 +55,6 @@ const Investors = {
 
       this._loaded = true;
       this._refreshDropdown();
-      console.log('Investors loaded from API (' + Object.keys(this.data).length + ' investors)');
     } catch (err) {
       console.error('Failed to load investors from API:', err);
       const container = document.getElementById('investorDropdownList');
@@ -66,35 +63,6 @@ const Investors = {
           '<span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Failed to load investors</span>';
       }
     }
-  },
-
-  // =========================================================
-  // HELPERS
-  // =========================================================
-  _esc(s) {
-    return (s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-  },
-
-  // =========================================================
-  // Global ESC handler
-  // =========================================================
-  bindGlobalEscapeClose() {
-    document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-
-      // Close contacts first if open
-      const contacts = document.getElementById('companyContactsModal');
-      if (contacts && contacts.classList.contains('active')) {
-        this.hideCompanyContactsModal();
-        return;
-      }
-
-      // Then investor modal
-      const investorModal = document.getElementById('investorModal');
-      if (investorModal && investorModal.classList.contains('active')) {
-        this.hideModal();
-      }
-    });
   },
 
   // =========================================================
@@ -167,7 +135,7 @@ const Investors = {
     const modal = document.getElementById('investorModal');
     if (!modal) return;
 
-    const esc = this._esc;
+    const esc = Utils.escapeHtml;
 
     // Name
     const nameEl = modal.querySelector('.investor-name');
@@ -445,7 +413,7 @@ const Investors = {
     const modal = document.getElementById('companyContactsModal');
     if (!modal) return;
 
-    const esc = this._esc;
+    const esc = Utils.escapeHtml;
 
     // Show modal with loading state
     const content = modal.querySelector('.modal-content') || modal;
@@ -536,7 +504,7 @@ const Investors = {
     const container = document.getElementById('investorDropdownList');
     if (!container) return;
 
-    const esc = this._esc;
+    const esc = Utils.escapeHtml;
 
     const sorted = Object.entries(this.data)
       .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
