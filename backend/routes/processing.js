@@ -283,7 +283,7 @@ router.get('/:type', async (req, res, next) => {
     const params = [type];
 
     // Only admins and processors see all records; others see only their own
-    if (!isAdmin(req) && !hasRole(req, 'processor')) {
+    if (!isAdmin(req) && !hasRole(req, 'processor', 'manager')) {
       conditions.push('user_id = ?');
       params.push(getUserId(req));
     }
@@ -347,7 +347,7 @@ router.get('/:type/:id', async (req, res, next) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Record not found.' });
 
     const record = rows[0];
-    if (!isAdmin(req) && !hasRole(req, 'processor') && record.user_id !== getUserId(req)) {
+    if (!isAdmin(req) && !hasRole(req, 'processor', 'manager') && record.user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -404,7 +404,7 @@ router.put('/:type/:id', async (req, res, next) => {
     const [existing] = await db.query('SELECT * FROM processing_records WHERE id = ? AND type = ?', [id, type]);
     if (existing.length === 0) return res.status(404).json({ error: 'Record not found.' });
 
-    if (!isAdmin(req) && !hasRole(req, 'processor') && existing[0].user_id !== getUserId(req)) {
+    if (!isAdmin(req) && !hasRole(req, 'processor', 'manager') && existing[0].user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -452,7 +452,7 @@ router.delete('/:type/:id', async (req, res, next) => {
     const [existing] = await db.query('SELECT * FROM processing_records WHERE id = ? AND type = ?', [id, type]);
     if (existing.length === 0) return res.status(404).json({ error: 'Record not found.' });
 
-    if (!isAdmin(req) && !hasRole(req, 'processor') && existing[0].user_id !== getUserId(req)) {
+    if (!isAdmin(req) && !hasRole(req, 'processor', 'manager') && existing[0].user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
