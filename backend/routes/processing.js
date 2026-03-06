@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { getUserId, isAdmin, hasRole, requireDbUser, requireProcessorOrAdmin } = require('../middleware/userContext');
 
 router.use(requireDbUser);
 
@@ -46,8 +46,8 @@ router.get('/title-companies', async (req, res, next) => {
   }
 });
 
-// POST /api/processing/title-companies - Add a title company (admin only)
-router.post('/title-companies', async (req, res, next) => {
+// POST /api/processing/title-companies - Add a title company
+router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) => {
   try {
     const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone } = req.body;
 
@@ -80,7 +80,7 @@ router.post('/title-companies', async (req, res, next) => {
 });
 
 // PUT /api/processing/title-companies/:id - Update a title company
-router.put('/title-companies/:id', async (req, res, next) => {
+router.put('/title-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
@@ -127,7 +127,7 @@ router.put('/title-companies/:id', async (req, res, next) => {
 });
 
 // DELETE /api/processing/title-companies/:id - Delete a title company
-router.delete('/title-companies/:id', async (req, res, next) => {
+router.delete('/title-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
@@ -174,8 +174,8 @@ router.get('/tax-counties', async (req, res, next) => {
   }
 });
 
-// POST /api/processing/tax-counties - Add a county (admin only)
-router.post('/tax-counties', async (req, res, next) => {
+// POST /api/processing/tax-counties - Add a county
+router.post('/tax-counties', requireProcessorOrAdmin, async (req, res, next) => {
   try {
     const { county, state, assessorUrl, treasurerUrl, loginRequired, knownCostsFees, onlinePortal, notes } = req.body;
 
@@ -208,7 +208,7 @@ router.post('/tax-counties', async (req, res, next) => {
 });
 
 // PUT /api/processing/tax-counties/:id - Update a county
-router.put('/tax-counties/:id', async (req, res, next) => {
+router.put('/tax-counties/:id', requireProcessorOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
@@ -255,7 +255,7 @@ router.put('/tax-counties/:id', async (req, res, next) => {
 });
 
 // DELETE /api/processing/tax-counties/:id - Delete a county
-router.delete('/tax-counties/:id', async (req, res, next) => {
+router.delete('/tax-counties/:id', requireProcessorOrAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
@@ -282,8 +282,8 @@ router.get('/:type', async (req, res, next) => {
     const conditions = ['type = ?'];
     const params = [type];
 
-    // Non-admins only see their own records
-    if (!isAdmin(req)) {
+    // Only admins and processors see all records; others see only their own
+    if (!isAdmin(req) && !hasRole(req, 'processor')) {
       conditions.push('user_id = ?');
       params.push(getUserId(req));
     }
@@ -347,7 +347,7 @@ router.get('/:type/:id', async (req, res, next) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Record not found.' });
 
     const record = rows[0];
-    if (!isAdmin(req) && record.user_id !== getUserId(req)) {
+    if (!isAdmin(req) && !hasRole(req, 'processor') && record.user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -404,7 +404,7 @@ router.put('/:type/:id', async (req, res, next) => {
     const [existing] = await db.query('SELECT * FROM processing_records WHERE id = ? AND type = ?', [id, type]);
     if (existing.length === 0) return res.status(404).json({ error: 'Record not found.' });
 
-    if (!isAdmin(req) && existing[0].user_id !== getUserId(req)) {
+    if (!isAdmin(req) && !hasRole(req, 'processor') && existing[0].user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 
@@ -452,7 +452,7 @@ router.delete('/:type/:id', async (req, res, next) => {
     const [existing] = await db.query('SELECT * FROM processing_records WHERE id = ? AND type = ?', [id, type]);
     if (existing.length === 0) return res.status(404).json({ error: 'Record not found.' });
 
-    if (!isAdmin(req) && existing[0].user_id !== getUserId(req)) {
+    if (!isAdmin(req) && !hasRole(req, 'processor') && existing[0].user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied.' });
     }
 

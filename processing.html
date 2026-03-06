@@ -275,17 +275,17 @@
       <div class="proc-header">
         <div>
           <h1 id="procTitle"><i class="fas fa-file-contract"></i> Title</h1>
-          <p class="proc-header__desc" id="procDesc">Title company orders, commitments, and status tracking</p>
+          <p class="proc-header__desc" id="procDesc">Title company directory — contacts, addresses, and quick links</p>
         </div>
-        <button class="btn btn-primary" id="procAddNew"><i class="fas fa-plus"></i> New Record</button>
+        <button class="btn btn-primary" id="procAddNew"><i class="fas fa-plus"></i> Add Company</button>
       </div>
 
       <div class="proc-toolbar">
         <div class="proc-search">
           <i class="fas fa-search"></i>
-          <input type="text" id="procSearchInput" placeholder="Search by borrower, loan #, or address..." autocomplete="off">
+          <input type="text" id="procSearchInput" placeholder="Search by company, contact, email, or city..." autocomplete="off">
         </div>
-        <select id="procStatusFilter" class="proc-filter-select">
+        <select id="procStatusFilter" class="proc-filter-select" style="display:none;">
           <option value="">All Statuses</option>
           <option value="ordered">Ordered</option>
           <option value="received">Received</option>
@@ -294,7 +294,7 @@
           <option value="complete">Complete</option>
           <option value="issue">Issue</option>
         </select>
-        <select id="procSortBy" class="proc-filter-select">
+        <select id="procSortBy" class="proc-filter-select" style="display:none;">
           <option value="newest">Newest First</option>
           <option value="oldest">Oldest First</option>
           <option value="borrower">Borrower A–Z</option>
@@ -306,13 +306,13 @@
         <table class="proc-table">
           <thead id="procTableHead">
             <tr>
-              <th>Borrower</th>
-              <th>Loan #</th>
-              <th>Property</th>
-              <th>Vendor</th>
-              <th>Status</th>
-              <th>Ordered</th>
-              <th>Updated</th>
+              <th>Company Name</th>
+              <th>Contact</th>
+              <th>Email</th>
+              <th>Work Phone</th>
+              <th>City</th>
+              <th>State</th>
+              <th>Website</th>
               <th></th>
             </tr>
           </thead>
@@ -320,8 +320,8 @@
         </table>
         <div class="proc-empty" id="procEmpty">
           <i class="fas fa-search"></i>
-          <h3>No records yet</h3>
-          <p>Click <strong>New Record</strong> to add one.</p>
+          <h3>No title companies found</h3>
+          <p>Click <strong>Add Company</strong> to create one.</p>
         </div>
         <div class="proc-loading" id="procLoading" style="display:none;">
           <div class="proc-spinner"></div>
