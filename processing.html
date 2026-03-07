@@ -513,6 +513,36 @@
     </div>
   </div>
 
+  <!-- Processing Links Modal (VOE, AMC, Payoffs, Insurance) -->
+  <div class="proc-modal-overlay" id="linksModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="linksModalTitle">Add Link</h2>
+        <button class="proc-modal__close" id="linksModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label>Name</label>
+            <input type="text" id="linksFieldName" placeholder="e.g. The Work Number">
+          </div>
+          <div class="form-group form-full">
+            <label>URL</label>
+            <input type="url" id="linksFieldUrl" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>Icon (FontAwesome class)</label>
+            <input type="text" id="linksFieldIcon" placeholder="e.g. fa-building" value="fa-link">
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="linksModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="linksModalSave">Save Link</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/config.js?v=20260224-2"></script>
   <script>
   (function() {
@@ -531,6 +561,8 @@
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
     var TITLE_THEAD = '<tr><th>Company Name</th><th>Contact</th><th>Email</th><th>Work Phone</th><th>City</th><th>State</th><th>Website</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
+    var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th></th></tr>';
+    var LINK_TYPES = ['voe', 'amc', 'payoffs', 'insurance'];
 
     var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
     if (!TYPE_META[currentType]) currentType = 'title';
@@ -554,11 +586,12 @@
     function isTitleView() { return currentType === 'title'; }
     function isTaxView() { return currentType === 'taxes'; }
     function isOtherView() { return currentType === 'other'; }
-    function isLookupView() { return isTitleView() || isTaxView() || isOtherView(); }
+    function isLinksView() { return LINK_TYPES.indexOf(currentType) !== -1; }
+    function isLookupView() { return isTitleView() || isTaxView() || isOtherView() || isLinksView(); }
 
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
-    var procModalOverlay, taxModalOverlay, titleModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
-    var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, addNewBtn;
+    var procModalOverlay, taxModalOverlay, titleModalOverlay, linksModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
+    var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, linksSaveBtn, linksModalTitle, addNewBtn;
 
     document.addEventListener('DOMContentLoaded', function() {
       searchInput      = document.getElementById('procSearchInput');
@@ -571,6 +604,7 @@
       procModalOverlay  = document.getElementById('procModalOverlay');
       taxModalOverlay   = document.getElementById('taxModalOverlay');
       titleModalOverlay = document.getElementById('titleModalOverlay');
+      linksModalOverlay = document.getElementById('linksModalOverlay');
       paginationWrap    = document.getElementById('procPagination');
       pageInfo          = document.getElementById('procPageInfo');
       prevBtn           = document.getElementById('procPrevPage');
@@ -581,6 +615,8 @@
       taxModalTitle     = document.getElementById('taxModalTitle');
       titleSaveBtn      = document.getElementById('titleModalSave');
       titleModalTitle   = document.getElementById('titleModalTitle');
+      linksSaveBtn      = document.getElementById('linksModalSave');
+      linksModalTitle   = document.getElementById('linksModalTitle');
       addNewBtn         = document.getElementById('procAddNew');
 
       setActiveType(currentType);
@@ -604,7 +640,7 @@
       sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
 
       // Generic modal
-      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isTaxView() ? openTaxModal() : openProcModal(); });
+      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
       document.getElementById('procModalClose').addEventListener('click', closeProcModal);
       document.getElementById('procModalCancel').addEventListener('click', closeProcModal);
       procSaveBtn.addEventListener('click', saveProcRecord);
@@ -622,11 +658,18 @@
       taxSaveBtn.addEventListener('click', saveTaxCounty);
       taxModalOverlay.addEventListener('click', function(e) { if (e.target === taxModalOverlay) closeTaxModal(); });
 
+      // Links modal
+      document.getElementById('linksModalClose').addEventListener('click', closeLinksModal);
+      document.getElementById('linksModalCancel').addEventListener('click', closeLinksModal);
+      linksSaveBtn.addEventListener('click', saveLink);
+      linksModalOverlay.addEventListener('click', function(e) { if (e.target === linksModalOverlay) closeLinksModal(); });
+
       document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
         if (titleModalOverlay.style.display !== 'none') closeTitleModal();
         if (procModalOverlay.style.display !== 'none') closeProcModal();
         if (taxModalOverlay.style.display !== 'none') closeTaxModal();
+        if (linksModalOverlay.style.display !== 'none') closeLinksModal();
       });
 
       // Pagination
@@ -660,11 +703,11 @@
       toolbar.style.display = '';
       addNewBtn.style.display = '';
       // Switch table headers and toolbar
-      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : GENERIC_THEAD;
+      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? LINKS_THEAD : GENERIC_THEAD;
       statusFilter.style.display = isLookupView() ? 'none' : '';
       sortSelect.style.display = isLookupView() ? 'none' : '';
-      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : '<i class="fas fa-plus"></i> New Record';
-      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or city...' : isTaxView() ? 'Search by county or state...' : 'Search by borrower, loan #, or address...';
+      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
+      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or city...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
     }
 
     /* ==================== SEARCH ==================== */
@@ -688,6 +731,15 @@
             if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
             paginationWrap.style.display = 'none';
             renderTaxResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      } else if (isLinksView()) {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
+        apiRequest('GET', '/processing/links/' + currentType + '?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
+            paginationWrap.style.display = 'none';
+            renderLinksResults(data.results);
           })
           .catch(function() { showEmpty('Connection error.'); });
       } else {
@@ -791,6 +843,31 @@
     }
     function boolBadge(val) {
       return val ? '<span class="proc-bool proc-bool--yes">Yes</span>' : '<span class="proc-bool proc-bool--no">No</span>';
+    }
+
+    /* ==================== PROCESSING LINKS RENDER (VOE, AMC, Payoffs, Insurance) ==================== */
+
+    function renderLinksResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty(); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      results.forEach(function(rec) {
+        var domain = rec.url ? rec.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0] : '';
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="Icon" style="text-align:center;width:40px;"><i class="fas ' + esc(rec.icon || 'fa-link') + '" style="color:#104547;font-size:1rem;"></i></td>' +
+          '<td data-label="Name">' + esc(rec.name) + '</td>' +
+          '<td data-label="URL"><a href="' + esc(rec.url) + '" target="_blank" rel="noopener" class="proc-url"><i class="fas fa-external-link-alt"></i>' + esc(domain) + '</a></td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openLinksModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteLink(rec.id, rec.name); });
+        tr.addEventListener('click', function() { window.open(rec.url, '_blank'); });
+        tableBody.appendChild(tr);
+      });
     }
 
     /* ==================== OTHER VIEW ==================== */
@@ -912,7 +989,13 @@
       prevBtn.disabled = currentPage <= 1;
       nextBtn.disabled = currentPage >= totalPages;
     }
-    function showEmpty(msg) { hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = ''; emptyState.querySelector('p').innerHTML = msg || 'Click <strong>New Record</strong> to add one.'; }
+    function showEmpty(msg) {
+      hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = '';
+      var heading = isTitleView() ? 'No title companies found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
+      emptyState.querySelector('h3').textContent = heading;
+      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
+      emptyState.querySelector('p').innerHTML = msg || defaultMsg;
+    }
     function showLoading() { emptyState.style.display = 'none'; tableBody.innerHTML = ''; loadingState.style.display = ''; }
     function hideLoading() { loadingState.style.display = 'none'; }
 
@@ -1089,6 +1172,55 @@
     function deleteTaxCounty(id, name) {
       if (!confirm('Delete "' + name + '" county?')) return;
       apiRequest('DELETE', '/processing/tax-counties/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== PROCESSING LINKS MODAL ==================== */
+
+    function openLinksModal(record) {
+      editingId = record ? record.id : null;
+      var meta = TYPE_META[currentType];
+      if (record) {
+        linksModalTitle.textContent = 'Edit ' + meta.name + ' Link';
+        linksSaveBtn.textContent = 'Update Link';
+        document.getElementById('linksFieldName').value = record.name || '';
+        document.getElementById('linksFieldUrl').value = record.url || '';
+        document.getElementById('linksFieldIcon').value = record.icon || 'fa-link';
+      } else {
+        linksModalTitle.textContent = 'Add ' + meta.name + ' Link';
+        linksSaveBtn.textContent = 'Save Link';
+        document.getElementById('linksFieldName').value = '';
+        document.getElementById('linksFieldUrl').value = '';
+        document.getElementById('linksFieldIcon').value = 'fa-link';
+      }
+      linksModalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('linksFieldName').focus(); }, 100);
+    }
+    function closeLinksModal() { linksModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+
+    function saveLink() {
+      var name = (document.getElementById('linksFieldName').value || '').trim();
+      var url = (document.getElementById('linksFieldUrl').value || '').trim();
+      if (!name) { document.getElementById('linksFieldName').focus(); return; }
+      if (!url) { document.getElementById('linksFieldUrl').focus(); return; }
+      var payload = {
+        name: name,
+        url: url,
+        icon: (document.getElementById('linksFieldIcon').value || '').trim() || 'fa-link'
+      };
+      linksSaveBtn.disabled = true; linksSaveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/links/' + currentType + '/' + editingId : '/processing/links/' + currentType;
+      apiRequest(method, path, payload)
+        .then(function(data) { linksSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closeLinksModal(); runSearch(); })
+        .catch(function() { linksSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteLink(id, name) {
+      if (!confirm('Delete "' + name + '"?')) return;
+      apiRequest('DELETE', '/processing/links/' + currentType + '/' + id)
         .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
         .catch(function() { alert('Connection error.'); });
     }
