@@ -531,6 +531,26 @@
             <input type="url" id="linksFieldUrl" placeholder="https://...">
           </div>
           <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="linksFieldEmail" placeholder="contact@example.com">
+          </div>
+          <div class="form-group">
+            <label>Phone</label>
+            <input type="tel" id="linksFieldPhone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Fax</label>
+            <input type="tel" id="linksFieldFax" placeholder="(555) 123-4568">
+          </div>
+          <div class="form-group" id="linksAgentNameGroup" style="display:none;">
+            <label>Agent Name</label>
+            <input type="text" id="linksFieldAgentName" placeholder="Agent name">
+          </div>
+          <div class="form-group" id="linksAgentEmailGroup" style="display:none;">
+            <label>Agent Email</label>
+            <input type="email" id="linksFieldAgentEmail" placeholder="agent@example.com">
+          </div>
+          <div class="form-group">
             <label>Icon (FontAwesome class)</label>
             <input type="text" id="linksFieldIcon" placeholder="e.g. fa-building" value="fa-link">
           </div>
@@ -561,7 +581,8 @@
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
     var TITLE_THEAD = '<tr><th>Company Name</th><th>Contact</th><th>Email</th><th>Work Phone</th><th>City</th><th>State</th><th>Website</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
-    var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th></th></tr>';
+    var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th></th></tr>';
+    var LINKS_INSURANCE_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th>Agent</th><th>Agent Email</th><th></th></tr>';
     var LINK_TYPES = ['voe', 'amc', 'payoffs', 'insurance'];
 
     var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
@@ -703,7 +724,7 @@
       toolbar.style.display = '';
       addNewBtn.style.display = '';
       // Switch table headers and toolbar
-      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? LINKS_THEAD : GENERIC_THEAD;
+      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? (currentType === 'insurance' ? LINKS_INSURANCE_THEAD : LINKS_THEAD) : GENERIC_THEAD;
       statusFilter.style.display = isLookupView() ? 'none' : '';
       sortSelect.style.display = isLookupView() ? 'none' : '';
       addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
@@ -852,17 +873,30 @@
       if (!results || results.length === 0) { showEmpty(); return; }
       emptyState.style.display = 'none';
       tableBody.innerHTML = '';
+      var isIns = currentType === 'insurance';
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
       results.forEach(function(rec) {
         var domain = rec.url ? rec.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0] : '';
+        var emailCell = rec.email ? '<a href="mailto:' + esc(rec.email) + '">' + esc(rec.email) + '</a>' : dash;
+        var phoneCell = rec.phone ? '<a href="tel:' + esc(rec.phone) + '">' + esc(rec.phone) + '</a>' : dash;
+        var faxCell = rec.fax ? esc(rec.fax) : dash;
         var tr = document.createElement('tr');
-        tr.innerHTML =
+        var html =
           '<td data-label="Icon" style="text-align:center;width:40px;"><i class="fas ' + esc(rec.icon || 'fa-link') + '" style="color:#104547;font-size:1rem;"></i></td>' +
           '<td data-label="Name">' + esc(rec.name) + '</td>' +
           '<td data-label="URL"><a href="' + esc(rec.url) + '" target="_blank" rel="noopener" class="proc-url"><i class="fas fa-external-link-alt"></i>' + esc(domain) + '</a></td>' +
-          '<td class="proc-row-actions">' +
+          '<td data-label="Email">' + emailCell + '</td>' +
+          '<td data-label="Phone">' + phoneCell + '</td>' +
+          '<td data-label="Fax">' + faxCell + '</td>';
+        if (isIns) {
+          html += '<td data-label="Agent">' + (rec.agent_name ? esc(rec.agent_name) : dash) + '</td>';
+          html += '<td data-label="Agent Email">' + (rec.agent_email ? '<a href="mailto:' + esc(rec.agent_email) + '">' + esc(rec.agent_email) + '</a>' : dash) + '</td>';
+        }
+        html += '<td class="proc-row-actions">' +
             '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
             '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
           '</td>';
+        tr.innerHTML = html;
         tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openLinksModal(rec); });
         tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteLink(rec.id, rec.name); });
         tr.addEventListener('click', function() { window.open(rec.url, '_blank'); });
@@ -1181,17 +1215,30 @@
     function openLinksModal(record) {
       editingId = record ? record.id : null;
       var meta = TYPE_META[currentType];
+      var isIns = currentType === 'insurance';
+      document.getElementById('linksAgentNameGroup').style.display = isIns ? '' : 'none';
+      document.getElementById('linksAgentEmailGroup').style.display = isIns ? '' : 'none';
       if (record) {
         linksModalTitle.textContent = 'Edit ' + meta.name + ' Link';
         linksSaveBtn.textContent = 'Update Link';
         document.getElementById('linksFieldName').value = record.name || '';
         document.getElementById('linksFieldUrl').value = record.url || '';
+        document.getElementById('linksFieldEmail').value = record.email || '';
+        document.getElementById('linksFieldPhone').value = record.phone || '';
+        document.getElementById('linksFieldFax').value = record.fax || '';
+        document.getElementById('linksFieldAgentName').value = record.agent_name || '';
+        document.getElementById('linksFieldAgentEmail').value = record.agent_email || '';
         document.getElementById('linksFieldIcon').value = record.icon || 'fa-link';
       } else {
         linksModalTitle.textContent = 'Add ' + meta.name + ' Link';
         linksSaveBtn.textContent = 'Save Link';
         document.getElementById('linksFieldName').value = '';
         document.getElementById('linksFieldUrl').value = '';
+        document.getElementById('linksFieldEmail').value = '';
+        document.getElementById('linksFieldPhone').value = '';
+        document.getElementById('linksFieldFax').value = '';
+        document.getElementById('linksFieldAgentName').value = '';
+        document.getElementById('linksFieldAgentEmail').value = '';
         document.getElementById('linksFieldIcon').value = 'fa-link';
       }
       linksModalOverlay.style.display = '';
@@ -1208,6 +1255,11 @@
       var payload = {
         name: name,
         url: url,
+        email: (document.getElementById('linksFieldEmail').value || '').trim(),
+        phone: (document.getElementById('linksFieldPhone').value || '').trim(),
+        fax: (document.getElementById('linksFieldFax').value || '').trim(),
+        agentName: (document.getElementById('linksFieldAgentName').value || '').trim(),
+        agentEmail: (document.getElementById('linksFieldAgentEmail').value || '').trim(),
         icon: (document.getElementById('linksFieldIcon').value || '').trim() || 'fa-link'
       };
       linksSaveBtn.disabled = true; linksSaveBtn.textContent = 'Saving...';
