@@ -36,9 +36,9 @@ INSERT INTO processing_links (section_type, name, url, group_label, notes, sort_
 ('statewide', 'MI Dept of Treasury - Property Tax', 'https://www.michigan.gov/treasury/local/property-tax', 'Michigan (MI)', 'State property tax info and resources', 2),
 ('statewide', 'MI Assn of County Treasurers', 'https://www.michigantreasurers.org/', 'Michigan (MI)', 'Directory of all county treasurers', 3),
 ('statewide', 'AccessMyGov.com', 'https://www.accessmygov.com/', 'Michigan (MI)', 'Several MI counties - tax and assessment portal', 4),
-('statewide', 'Wayne County Treasurer', 'https://www.waynecounty.com/elected/treasurer/', 'Michigan (MI)', 'Largest MI county; Detroit metro; online tax auction', 5),
+('statewide', 'Wayne County Treasurer', 'https://www.waynecounty.com/elected/treasurer/', 'Michigan (MI)', 'Largest MI county, Detroit metro, online tax auction', 5),
 -- Illinois
-('statewide', 'Cook County Assessor', 'https://www.cookcountyassessor.com/', 'Illinois (IL)', 'Chicago/suburbs - largest IL county; separate system', 1),
+('statewide', 'Cook County Assessor', 'https://www.cookcountyassessor.com/', 'Illinois (IL)', 'Chicago/suburbs - largest IL county, separate system', 1),
 ('statewide', 'Cook County Treasurer', 'https://www.cookcountytreasurer.com/', 'Illinois (IL)', 'Cook County tax payments and tax cert info', 2),
 ('statewide', 'IL Property Tax Appeal Board', 'https://www.ptab.illinois.gov/', 'Illinois (IL)', 'State property tax appeal board', 3),
 ('statewide', 'IL Dept of Revenue - Property Tax', 'https://tax.illinois.gov/localgovernments/property.html', 'Illinois (IL)', 'State property tax resources and forms', 4),
