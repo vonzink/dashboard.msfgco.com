@@ -272,7 +272,7 @@ router.delete('/tax-counties/:id', requireProcessorOrAdmin, async (req, res, nex
    Processing Links (VOE, AMC, Payoffs, Insurance)
    ======================================== */
 
-const VALID_LINK_TYPES = ['voe', 'amc', 'payoffs', 'insurance'];
+const VALID_LINK_TYPES = ['voe', 'amc', 'payoffs', 'insurance', 'quick_links', 'statewide'];
 
 // GET /api/processing/links/:sectionType - List links for a section
 router.get('/links/:sectionType', async (req, res, next) => {
@@ -285,14 +285,19 @@ router.get('/links/:sectionType', async (req, res, next) => {
     const params = [sectionType];
 
     if (q && q.trim()) {
-      conditions.push('(name LIKE ? OR url LIKE ? OR email LIKE ? OR phone LIKE ?)');
       const pattern = '%' + q.trim() + '%';
+      if (sectionType === 'statewide') {
+        conditions.push('(name LIKE ? OR url LIKE ? OR group_label LIKE ? OR notes LIKE ?)');
+      } else {
+        conditions.push('(name LIKE ? OR url LIKE ? OR email LIKE ? OR phone LIKE ?)');
+      }
       params.push(pattern, pattern, pattern, pattern);
     }
 
     const where = conditions.join(' AND ');
+    const orderBy = sectionType === 'statewide' ? 'group_label, sort_order, name' : 'sort_order, name';
     const [rows] = await db.query(
-      `SELECT * FROM processing_links WHERE ${where} ORDER BY sort_order, name`,
+      `SELECT * FROM processing_links WHERE ${where} ORDER BY ${orderBy}`,
       params
     );
 
@@ -308,7 +313,7 @@ router.post('/links/:sectionType', requireProcessorOrAdmin, async (req, res, nex
     const { sectionType } = req.params;
     if (!VALID_LINK_TYPES.includes(sectionType)) return res.status(400).json({ error: 'Invalid section type.' });
 
-    const { name, url, email, phone, fax, agentName, agentEmail, icon } = req.body;
+    const { name, url, email, phone, fax, agentName, agentEmail, icon, groupLabel, notes } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required.' });
     if (!url || !url.trim()) return res.status(400).json({ error: 'URL is required.' });
 
@@ -320,8 +325,8 @@ router.post('/links/:sectionType', requireProcessorOrAdmin, async (req, res, nex
 
     const trimOrNull = (v) => (v && v.trim()) || null;
     const [result] = await db.query(
-      `INSERT INTO processing_links (section_type, name, url, email, phone, fax, agent_name, agent_email, icon, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [sectionType, name.trim(), url.trim(), trimOrNull(email), trimOrNull(phone), trimOrNull(fax), trimOrNull(agentName), trimOrNull(agentEmail), (icon || '').trim() || 'fa-link', maxSort + 1]
+      `INSERT INTO processing_links (section_type, name, url, email, phone, fax, agent_name, agent_email, icon, group_label, notes, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [sectionType, name.trim(), url.trim(), trimOrNull(email), trimOrNull(phone), trimOrNull(fax), trimOrNull(agentName), trimOrNull(agentEmail), (icon || '').trim() || 'fa-link', trimOrNull(groupLabel), trimOrNull(notes), maxSort + 1]
     );
 
     const [rows] = await db.query('SELECT * FROM processing_links WHERE id = ?', [result.insertId]);
@@ -340,7 +345,7 @@ router.put('/links/:sectionType/:id', requireProcessorOrAdmin, async (req, res, 
     const [existing] = await db.query('SELECT * FROM processing_links WHERE id = ? AND section_type = ?', [id, sectionType]);
     if (existing.length === 0) return res.status(404).json({ error: 'Link not found.' });
 
-    const fieldMap = { name: 'name', url: 'url', email: 'email', phone: 'phone', fax: 'fax', agentName: 'agent_name', agentEmail: 'agent_email', icon: 'icon', sortOrder: 'sort_order' };
+    const fieldMap = { name: 'name', url: 'url', email: 'email', phone: 'phone', fax: 'fax', agentName: 'agent_name', agentEmail: 'agent_email', icon: 'icon', groupLabel: 'group_label', notes: 'notes', sortOrder: 'sort_order' };
     const updates = [];
     const values = [];
 

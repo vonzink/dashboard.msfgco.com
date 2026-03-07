@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS processing_links (
   agent_name VARCHAR(255) DEFAULT NULL,
   agent_email VARCHAR(255) DEFAULT NULL,
   icon VARCHAR(100) DEFAULT 'fa-link',
+  group_label VARCHAR(100) DEFAULT NULL,
+  notes TEXT DEFAULT NULL,
   sort_order INT DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -59,6 +61,24 @@ DEALLOCATE PREPARE alterIfNotExists;
 SET @preparedStatement = (SELECT IF(
   (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = 'agent_email') = 0,
   'ALTER TABLE processing_links ADD COLUMN agent_email VARCHAR(255) DEFAULT NULL AFTER agent_name',
+  'SELECT 1'
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = 'group_label') = 0,
+  'ALTER TABLE processing_links ADD COLUMN group_label VARCHAR(100) DEFAULT NULL AFTER icon',
+  'SELECT 1'
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
+
+SET @preparedStatement = (SELECT IF(
+  (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = 'notes') = 0,
+  'ALTER TABLE processing_links ADD COLUMN notes TEXT DEFAULT NULL AFTER group_label',
   'SELECT 1'
 ));
 PREPARE alterIfNotExists FROM @preparedStatement;

@@ -227,6 +227,22 @@
     .state-resources-table a { color: #104547; font-size: 0.8rem; }
     .state-resources-table a:hover { text-decoration: underline; }
 
+    /* ---- Other View: Section header with add button ---- */
+    .other-section__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+    .other-section__header .other-section__title { margin-bottom: 0; }
+    .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.75rem; }
+
+    /* ---- Quick Link card actions overlay ---- */
+    .quick-link-card { position: relative; }
+    .quick-link-card__actions { position: absolute; top: 6px; right: 6px; display: none; gap: 2px; }
+    .quick-link-card:hover .quick-link-card__actions { display: flex; }
+    .quick-link-card__actions button { border: none; padding: 4px 6px; border-radius: 4px; font-size: 0.7rem; color: #8888a4; background: rgba(255,255,255,0.9); cursor: pointer; transition: all 0.12s; }
+    .quick-link-card__actions button:hover { background: #f0f2f5; color: #104547; }
+    .quick-link-card__actions .ql-delete-btn:hover { color: #ef4444; }
+
+    /* ---- Statewide table row actions ---- */
+    .state-resources-table .sr-actions { width: 70px; text-align: right; }
+
     /* ---- Responsive ---- */
     @media (max-width: 768px) {
       .proc-layout { grid-template-columns: 1fr; }
@@ -563,6 +579,71 @@
     </div>
   </div>
 
+  <!-- Quick Link Modal (Other tab) -->
+  <div class="proc-modal-overlay" id="quickLinkModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="quickLinkModalTitle">Add Quick Link</h2>
+        <button class="proc-modal__close" id="quickLinkModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label>Name</label>
+            <input type="text" id="qlFieldName" placeholder="e.g. Rescission Calendar">
+          </div>
+          <div class="form-group form-full">
+            <label>URL</label>
+            <input type="url" id="qlFieldUrl" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>Icon (FontAwesome class)</label>
+            <input type="text" id="qlFieldIcon" placeholder="e.g. fa-calendar-alt" value="fa-link">
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="quickLinkModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="quickLinkModalSave">Save Link</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statewide Resource Modal (Other tab) -->
+  <div class="proc-modal-overlay" id="stateResModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="stateResModalTitle">Add Resource</h2>
+        <button class="proc-modal__close" id="stateResModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label>State / Group</label>
+            <input type="text" id="srFieldGroup" list="srGroupList" placeholder="e.g. Colorado (CO)">
+            <datalist id="srGroupList"></datalist>
+          </div>
+          <div class="form-group form-full">
+            <label>Resource Name</label>
+            <input type="text" id="srFieldName" placeholder="e.g. CO Dept of Revenue">
+          </div>
+          <div class="form-group form-full">
+            <label>URL</label>
+            <input type="url" id="srFieldUrl" placeholder="https://...">
+          </div>
+          <div class="form-group form-full">
+            <label>Notes</label>
+            <textarea id="srFieldNotes" rows="2" placeholder="Description or helpful details..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="stateResModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="stateResModalSave">Save Resource</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/config.js?v=20260224-2"></script>
   <script>
   (function() {
@@ -613,6 +694,7 @@
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
     var procModalOverlay, taxModalOverlay, titleModalOverlay, linksModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
     var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, linksSaveBtn, linksModalTitle, addNewBtn;
+    var quickLinkModalOverlay, stateResModalOverlay, qlSaveBtn, qlModalTitle, srSaveBtn, srModalTitle;
 
     document.addEventListener('DOMContentLoaded', function() {
       searchInput      = document.getElementById('procSearchInput');
@@ -638,6 +720,12 @@
       titleModalTitle   = document.getElementById('titleModalTitle');
       linksSaveBtn      = document.getElementById('linksModalSave');
       linksModalTitle   = document.getElementById('linksModalTitle');
+      quickLinkModalOverlay = document.getElementById('quickLinkModalOverlay');
+      stateResModalOverlay  = document.getElementById('stateResModalOverlay');
+      qlSaveBtn    = document.getElementById('quickLinkModalSave');
+      qlModalTitle = document.getElementById('quickLinkModalTitle');
+      srSaveBtn    = document.getElementById('stateResModalSave');
+      srModalTitle = document.getElementById('stateResModalTitle');
       addNewBtn         = document.getElementById('procAddNew');
 
       setActiveType(currentType);
@@ -685,12 +773,26 @@
       linksSaveBtn.addEventListener('click', saveLink);
       linksModalOverlay.addEventListener('click', function(e) { if (e.target === linksModalOverlay) closeLinksModal(); });
 
+      // Quick Link modal events
+      document.getElementById('quickLinkModalClose').addEventListener('click', closeQuickLinkModal);
+      document.getElementById('quickLinkModalCancel').addEventListener('click', closeQuickLinkModal);
+      qlSaveBtn.addEventListener('click', saveQuickLink);
+      quickLinkModalOverlay.addEventListener('click', function(e) { if (e.target === quickLinkModalOverlay) closeQuickLinkModal(); });
+
+      // Statewide Resource modal events
+      document.getElementById('stateResModalClose').addEventListener('click', closeStateResModal);
+      document.getElementById('stateResModalCancel').addEventListener('click', closeStateResModal);
+      srSaveBtn.addEventListener('click', saveStateResource);
+      stateResModalOverlay.addEventListener('click', function(e) { if (e.target === stateResModalOverlay) closeStateResModal(); });
+
       document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
         if (titleModalOverlay.style.display !== 'none') closeTitleModal();
         if (procModalOverlay.style.display !== 'none') closeProcModal();
         if (taxModalOverlay.style.display !== 'none') closeTaxModal();
         if (linksModalOverlay.style.display !== 'none') closeLinksModal();
+        if (quickLinkModalOverlay.style.display !== 'none') closeQuickLinkModal();
+        if (stateResModalOverlay.style.display !== 'none') closeStateResModal();
       });
 
       // Pagination
@@ -907,98 +1009,123 @@
     /* ==================== OTHER VIEW ==================== */
 
     function renderOtherView() {
-      var quickLinks = [
-        { name: 'Rescission Calendar', url: 'https://www.atsdocs.com/rescissioncalendar.aspx', icon: 'fa-calendar-alt' },
-        { name: 'eFax Portal', url: 'https://myportal.efax.com/login', icon: 'fa-fax' },
-        { name: 'Date Duration Calculator', url: 'https://www.timeanddate.com/date/duration.html', icon: 'fa-calculator' },
-        { name: 'IBTS (Inspections)', url: 'https://www.ibts.org/what-we-do', icon: 'fa-hard-hat' },
-        { name: 'TitlePro247', url: 'https://v3.titlepro247.com/Home?ReturnUrl=%2FAccount%2FIndex&ReturnUrl=%2FAccount%2FIndex', icon: 'fa-file-signature' },
-        { name: '3-Day Rule / TRID Guide', url: 'https://www.octitle.com/pdf/3DayRuleTRID.pdf', icon: 'fa-file-pdf' },
-        { name: 'HomeWise Docs', url: 'https://www.homewisedocs.com/', icon: 'fa-file-alt' }
-      ];
+      var otherEl = document.getElementById('otherView');
+      otherEl.innerHTML = '<div class="proc-loading"><div class="proc-spinner"></div><span>Loading...</span></div>';
 
-      var stateResources = [
-        { state: 'Colorado', abbr: 'CO', resources: [
-          { name: 'CO Dept of Local Affairs - Property Tax', url: 'https://dpt.colorado.gov/', note: 'Links to all county assessor/treasurer offices' },
-          { name: 'Colorado County Assessors Assoc', url: 'https://coloradoassessors.org/', note: 'Directory of all county assessors' }
-        ]},
-        { state: 'North Dakota', abbr: 'ND', resources: [
-          { name: 'ND Property Tax Info Portal', url: 'https://www.stutsmancounty.gov/ndptip/', note: 'Statewide map for county parcel tax info' },
-          { name: 'ND Assessors Network', url: 'https://www.northdakotaassessors.com/', note: 'Most counties linked - standardized search' },
-          { name: 'ND GIS Hub', url: 'https://www.gis.nd.gov/', note: 'Official statewide GIS parcel dataset' },
-          { name: 'NDRIN (Recorders Info Network)', url: 'https://www.ndrin.com/', note: 'Subscription - recorded docs 2004+' },
-          { name: 'Tyler iTax Portal', url: 'https://itax.tylertech.com/', note: 'Many ND counties - add county suffix' }
-        ]},
-        { state: 'South Dakota', abbr: 'SD', resources: [
-          { name: 'SD Property Tax Portal', url: 'https://sdproptax.info/', note: 'Statewide property tax info' },
-          { name: 'SD Dept of Revenue - County Directors', url: 'https://dor.sd.gov/government/director-of-equalization/contact-county-directors-of-equalization/', note: 'All county Directors of Equalization' },
-          { name: 'SD County Treasurers Directory', url: 'https://dor.sd.gov/government/county-treasurers/', note: 'All county treasurer contacts' },
-          { name: 'South Dakota Directors Network', url: 'https://www.southdakotadirectors.com/', note: 'Property search for participating counties' },
-          { name: 'Beacon (Schneider GIS)', url: 'https://beacon.schneidercorp.com/', note: 'Brookings, Codington, Lake, Lincoln, Minnehaha, Union, Yankton' }
-        ]},
-        { state: 'Minnesota', abbr: 'MN', resources: [
-          { name: 'Minnesota Assessors Portal', url: 'https://minnesotaassessors.com/', note: 'Statewide property search - Clay, Goodhue, Lyon, Polk, Steele, Washington' },
-          { name: 'MN Dept of Revenue - Property Tax', url: 'https://www.revenue.state.mn.us/property-tax', note: 'State property tax info and resources' },
-          { name: 'Beacon (Schneider GIS)', url: 'https://beacon.schneidercorp.com/', note: 'Blue Earth, Cottonwood, Freeborn, Isanti, Nobles, Pine, Ramsey, Rice, Sherburne, Winona, Wright' },
-          { name: 'MN Assn of County Officers', url: 'https://www.mncounty.org/', note: 'Directory of all county offices' },
-          { name: 'Hennepin County Property Info', url: 'https://www.hennepin.us/residents/property', note: 'Largest MN county - comprehensive property database' }
-        ]},
-        { state: 'Michigan', abbr: 'MI', resources: [
-          { name: 'BS&A Online', url: 'https://bsaonline.com/', note: 'Most MI counties use this - property search and tax lookup' },
-          { name: 'MI Dept of Treasury - Property Tax', url: 'https://www.michigan.gov/treasury/local/property-tax', note: 'State property tax info and resources' },
-          { name: 'MI Assn of County Treasurers', url: 'https://www.michigantreasurers.org/', note: 'Directory of all county treasurers' },
-          { name: 'AccessMyGov.com', url: 'https://www.accessmygov.com/', note: 'Several MI counties - tax and assessment portal' },
-          { name: 'Wayne County Treasurer', url: 'https://www.waynecounty.com/elected/treasurer/', note: 'Largest MI county; Detroit metro; online tax auction' }
-        ]},
-        { state: 'Illinois', abbr: 'IL', resources: [
-          { name: 'Cook County Assessor', url: 'https://www.cookcountyassessor.com/', note: 'Chicago/suburbs - largest IL county; separate system' },
-          { name: 'Cook County Treasurer', url: 'https://www.cookcountytreasurer.com/', note: 'Cook County tax payments and tax cert info' },
-          { name: 'IL Property Tax Appeal Board', url: 'https://www.ptab.illinois.gov/', note: 'State property tax appeal board' },
-          { name: 'IL Dept of Revenue - Property Tax', url: 'https://tax.illinois.gov/localgovernments/property.html', note: 'State property tax resources and forms' },
-          { name: 'IL Assn of County Board Members', url: 'https://www.ilcounty.org/', note: 'Directory of all county offices' },
-          { name: 'Devnet GIS/Property Portals', url: 'https://www.devnetinc.com/', note: 'Several IL counties use Devnet for property search' }
-        ]}
-      ];
+      Promise.all([
+        apiRequest('GET', '/processing/links/quick_links'),
+        apiRequest('GET', '/processing/links/statewide')
+      ]).then(function(results) {
+        var qlData = results[0].success ? results[0].results : [];
+        var srData = results[1].success ? results[1].results : [];
+        var html = '';
 
-      var html = '';
-
-      // Quick Links section
-      html += '<div class="other-section">';
-      html += '<div class="other-section__title"><i class="fas fa-external-link-alt"></i> Quick Links &amp; Tools</div>';
-      html += '<div class="quick-links-grid">';
-      quickLinks.forEach(function(link) {
-        var domain = link.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0];
-        html += '<a href="' + esc(link.url) + '" target="_blank" rel="noopener" class="quick-link-card">' +
-          '<div class="quick-link-card__icon"><i class="fas ' + link.icon + '"></i></div>' +
-          '<div class="quick-link-card__text">' +
-            '<div class="quick-link-card__name">' + esc(link.name) + '</div>' +
-            '<div class="quick-link-card__url">' + esc(domain) + '</div>' +
-          '</div>' +
-          '<i class="fas fa-arrow-right quick-link-card__arrow"></i>' +
-        '</a>';
-      });
-      html += '</div></div>';
-
-      // Statewide Resources section
-      html += '<div class="other-section">';
-      html += '<div class="other-section__title"><i class="fas fa-map-marked-alt"></i> Statewide Resources</div>';
-      stateResources.forEach(function(group) {
-        html += '<div class="state-resources-group">';
-        html += '<div class="state-resources-group__header"><i class="fas fa-flag"></i> ' + esc(group.state) + ' (' + esc(group.abbr) + ')</div>';
-        html += '<table class="state-resources-table"><thead><tr><th>Resource</th><th>Link</th><th>Notes</th></tr></thead><tbody>';
-        group.resources.forEach(function(r) {
-          var domain = r.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0];
-          html += '<tr>' +
-            '<td style="font-weight:600;">' + esc(r.name) + '</td>' +
-            '<td><a href="' + esc(r.url) + '" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:3px;font-size:0.7rem;"></i>' + esc(domain) + '</a></td>' +
-            '<td>' + esc(r.note) + '</td>' +
-          '</tr>';
+        // Quick Links section
+        html += '<div class="other-section">';
+        html += '<div class="other-section__header">';
+        html += '<div class="other-section__title"><i class="fas fa-external-link-alt"></i> Quick Links &amp; Tools</div>';
+        html += '<button class="btn btn-sm btn-primary" id="addQuickLinkBtn"><i class="fas fa-plus"></i> Add Quick Link</button>';
+        html += '</div>';
+        html += '<div class="quick-links-grid">';
+        qlData.forEach(function(link) {
+          var domain = link.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0];
+          html += '<div class="quick-link-card">' +
+            '<div class="quick-link-card__actions">' +
+              '<button class="ql-edit-btn" title="Edit" data-id="' + link.id + '"><i class="fas fa-pen"></i></button>' +
+              '<button class="ql-delete-btn" title="Delete" data-id="' + link.id + '"><i class="fas fa-trash"></i></button>' +
+            '</div>' +
+            '<a href="' + esc(link.url) + '" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:0.75rem;text-decoration:none;color:inherit;flex:1;min-width:0;">' +
+              '<div class="quick-link-card__icon"><i class="fas ' + esc(link.icon || 'fa-link') + '"></i></div>' +
+              '<div class="quick-link-card__text">' +
+                '<div class="quick-link-card__name">' + esc(link.name) + '</div>' +
+                '<div class="quick-link-card__url">' + esc(domain) + '</div>' +
+              '</div>' +
+              '<i class="fas fa-arrow-right quick-link-card__arrow"></i>' +
+            '</a>' +
+          '</div>';
         });
-        html += '</tbody></table></div>';
-      });
-      html += '</div>';
+        if (qlData.length === 0) html += '<p style="color:#8888a4;font-size:0.85rem;">No quick links yet.</p>';
+        html += '</div></div>';
 
-      document.getElementById('otherView').innerHTML = html;
+        // Statewide Resources section
+        html += '<div class="other-section">';
+        html += '<div class="other-section__header">';
+        html += '<div class="other-section__title"><i class="fas fa-map-marked-alt"></i> Statewide Resources</div>';
+        html += '<button class="btn btn-sm btn-primary" id="addStateResBtn"><i class="fas fa-plus"></i> Add Resource</button>';
+        html += '</div>';
+
+        // Group by group_label
+        var groups = {};
+        var groupOrder = [];
+        srData.forEach(function(r) {
+          var g = r.group_label || 'Other';
+          if (!groups[g]) { groups[g] = []; groupOrder.push(g); }
+          groups[g].push(r);
+        });
+
+        if (groupOrder.length === 0) {
+          html += '<p style="color:#8888a4;font-size:0.85rem;">No statewide resources yet.</p>';
+        }
+
+        groupOrder.forEach(function(groupLabel) {
+          html += '<div class="state-resources-group">';
+          html += '<div class="state-resources-group__header"><i class="fas fa-flag"></i> ' + esc(groupLabel) + '</div>';
+          html += '<table class="state-resources-table"><thead><tr><th>Resource</th><th>Link</th><th>Notes</th><th class="sr-actions"></th></tr></thead><tbody>';
+          groups[groupLabel].forEach(function(r) {
+            var domain = r.url ? r.url.replace(/^https?:\/\/(www\.)?/, '').split(/[/?#]/)[0] : '';
+            html += '<tr>' +
+              '<td style="font-weight:600;">' + esc(r.name) + '</td>' +
+              '<td><a href="' + esc(r.url) + '" target="_blank" rel="noopener"><i class="fas fa-external-link-alt" style="margin-right:3px;font-size:0.7rem;"></i>' + esc(domain) + '</a></td>' +
+              '<td>' + esc(r.notes || '') + '</td>' +
+              '<td class="sr-actions proc-row-actions">' +
+                '<button class="proc-row-action sr-edit-btn" title="Edit" data-id="' + r.id + '"><i class="fas fa-pen"></i></button>' +
+                '<button class="proc-row-action sr-delete-btn" title="Delete" data-id="' + r.id + '"><i class="fas fa-trash"></i></button>' +
+              '</td>' +
+            '</tr>';
+          });
+          html += '</tbody></table></div>';
+        });
+        html += '</div>';
+
+        otherEl.innerHTML = html;
+
+        // Populate datalist for state/group suggestions
+        var dlHtml = '';
+        groupOrder.forEach(function(g) { dlHtml += '<option value="' + esc(g) + '">'; });
+        document.getElementById('srGroupList').innerHTML = dlHtml;
+
+        // Bind events
+        document.getElementById('addQuickLinkBtn').addEventListener('click', function() { openQuickLinkModal(); });
+        document.getElementById('addStateResBtn').addEventListener('click', function() { openStateResModal(); });
+
+        otherEl.querySelectorAll('.ql-edit-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation();
+            var rec = qlData.find(function(r) { return r.id === parseInt(btn.dataset.id); });
+            if (rec) openQuickLinkModal(rec);
+          });
+        });
+        otherEl.querySelectorAll('.ql-delete-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation();
+            var rec = qlData.find(function(r) { return r.id === parseInt(btn.dataset.id); });
+            if (rec) deleteOtherLink('quick_links', rec.id, rec.name);
+          });
+        });
+        otherEl.querySelectorAll('.sr-edit-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) { e.stopPropagation();
+            var rec = srData.find(function(r) { return r.id === parseInt(btn.dataset.id); });
+            if (rec) openStateResModal(rec);
+          });
+        });
+        otherEl.querySelectorAll('.sr-delete-btn').forEach(function(btn) {
+          btn.addEventListener('click', function(e) { e.stopPropagation();
+            var rec = srData.find(function(r) { return r.id === parseInt(btn.dataset.id); });
+            if (rec) deleteOtherLink('statewide', rec.id, rec.name);
+          });
+        });
+
+      }).catch(function() {
+        otherEl.innerHTML = '<div class="proc-empty"><i class="fas fa-exclamation-triangle"></i><h3>Failed to load</h3><p>Check your connection and try again.</p></div>';
+      });
     }
 
     /* ==================== HELPERS ==================== */
@@ -1274,6 +1401,101 @@
       if (!confirm('Delete "' + name + '"?')) return;
       apiRequest('DELETE', '/processing/links/' + currentType + '/' + id)
         .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== OTHER TAB MODALS ==================== */
+
+    var editingQuickLinkId = null;
+    var editingStateResId = null;
+
+    function openQuickLinkModal(rec) {
+      editingQuickLinkId = rec ? rec.id : null;
+      qlModalTitle.textContent = rec ? 'Edit Quick Link' : 'Add Quick Link';
+      document.getElementById('qlFieldName').value = rec ? rec.name : '';
+      document.getElementById('qlFieldUrl').value = rec ? rec.url : '';
+      document.getElementById('qlFieldIcon').value = rec ? (rec.icon || 'fa-link') : 'fa-link';
+      quickLinkModalOverlay.style.display = 'flex';
+    }
+
+    function closeQuickLinkModal() {
+      quickLinkModalOverlay.style.display = 'none';
+      editingQuickLinkId = null;
+    }
+
+    function saveQuickLink() {
+      var name = document.getElementById('qlFieldName').value.trim();
+      var url  = document.getElementById('qlFieldUrl').value.trim();
+      var icon = document.getElementById('qlFieldIcon').value.trim() || 'fa-link';
+      if (!name || !url) { alert('Name and URL are required.'); return; }
+
+      qlSaveBtn.disabled = true;
+      var method = editingQuickLinkId ? 'PUT' : 'POST';
+      var path   = editingQuickLinkId
+        ? '/processing/links/quick_links/' + editingQuickLinkId
+        : '/processing/links/quick_links';
+      var payload = editingQuickLinkId
+        ? { name: name, url: url, icon: icon }
+        : { name: name, url: url, icon: icon };
+
+      apiRequest(method, path, payload)
+        .then(function(data) {
+          qlSaveBtn.disabled = false;
+          if (!data.success) { alert(data.error || 'Failed to save.'); return; }
+          closeQuickLinkModal();
+          renderOtherView();
+        })
+        .catch(function() { qlSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function openStateResModal(rec) {
+      editingStateResId = rec ? rec.id : null;
+      srModalTitle.textContent = rec ? 'Edit Resource' : 'Add Resource';
+      document.getElementById('srFieldGroup').value = rec ? (rec.group_label || '') : '';
+      document.getElementById('srFieldName').value  = rec ? rec.name : '';
+      document.getElementById('srFieldUrl').value   = rec ? rec.url : '';
+      document.getElementById('srFieldNotes').value  = rec ? (rec.notes || '') : '';
+      stateResModalOverlay.style.display = 'flex';
+    }
+
+    function closeStateResModal() {
+      stateResModalOverlay.style.display = 'none';
+      editingStateResId = null;
+    }
+
+    function saveStateResource() {
+      var groupLabel = document.getElementById('srFieldGroup').value.trim();
+      var name  = document.getElementById('srFieldName').value.trim();
+      var url   = document.getElementById('srFieldUrl').value.trim();
+      var notes = document.getElementById('srFieldNotes').value.trim();
+      if (!name || !url) { alert('Name and URL are required.'); return; }
+
+      srSaveBtn.disabled = true;
+      var method = editingStateResId ? 'PUT' : 'POST';
+      var path   = editingStateResId
+        ? '/processing/links/statewide/' + editingStateResId
+        : '/processing/links/statewide';
+      var payload = editingStateResId
+        ? { name: name, url: url, groupLabel: groupLabel, notes: notes }
+        : { name: name, url: url, groupLabel: groupLabel, notes: notes };
+
+      apiRequest(method, path, payload)
+        .then(function(data) {
+          srSaveBtn.disabled = false;
+          if (!data.success) { alert(data.error || 'Failed to save.'); return; }
+          closeStateResModal();
+          renderOtherView();
+        })
+        .catch(function() { srSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteOtherLink(sectionType, id, name) {
+      if (!confirm('Delete "' + name + '"?')) return;
+      apiRequest('DELETE', '/processing/links/' + sectionType + '/' + id)
+        .then(function(data) {
+          if (!data.success) { alert(data.error || 'Failed.'); return; }
+          renderOtherView();
+        })
         .catch(function() { alert('Connection error.'); });
     }
   })();
