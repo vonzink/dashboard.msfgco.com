@@ -471,6 +471,26 @@
             <label>License #</label>
             <input type="text" id="titleFieldLicense" placeholder="e.g. TL-123456">
           </div>
+          <div class="form-group">
+            <label>NMLS</label>
+            <input type="text" id="titleFieldNmls" placeholder="e.g. 123456">
+          </div>
+          <div class="form-group">
+            <label>State License</label>
+            <input type="text" id="titleFieldStateLicense" placeholder="e.g. TL-789012">
+          </div>
+          <div class="form-group">
+            <label>Contact NMLS</label>
+            <input type="text" id="titleFieldContactNmls" placeholder="e.g. 654321">
+          </div>
+          <div class="form-group">
+            <label>Contact Email</label>
+            <input type="email" id="titleFieldContactEmail" placeholder="contact@company.com">
+          </div>
+          <div class="form-group">
+            <label>Contact Phone</label>
+            <input type="tel" id="titleFieldContactPhone" placeholder="(555) 123-4567">
+          </div>
           <div class="form-group form-full">
             <label>Website</label>
             <input type="url" id="titleFieldWebsite" placeholder="https://...">
@@ -546,6 +566,76 @@
       <div class="proc-modal__footer">
         <button class="btn btn-secondary" id="realtorModalCancel">Cancel</button>
         <button class="btn btn-primary" id="realtorModalSave">Save Realtor</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Insurance Companies Modal -->
+  <div class="proc-modal-overlay" id="insuranceModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="insuranceModalTitle">Add Insurance Company</h2>
+        <button class="proc-modal__close" id="insuranceModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Company Name</label>
+            <input type="text" id="insuranceFieldCompany" placeholder="e.g. State Farm">
+          </div>
+          <div class="form-group">
+            <label>Point of Contact</label>
+            <input type="text" id="insuranceFieldContact" placeholder="e.g. John Doe">
+          </div>
+          <div class="form-group">
+            <label>Contact Phone</label>
+            <input type="tel" id="insuranceFieldContactPhone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Work Phone</label>
+            <input type="tel" id="insuranceFieldWorkPhone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Fax</label>
+            <input type="tel" id="insuranceFieldFax" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="insuranceFieldEmail" placeholder="email@company.com">
+          </div>
+          <div class="form-group">
+            <label>NMLS</label>
+            <input type="text" id="insuranceFieldNmls" placeholder="e.g. 123456">
+          </div>
+          <div class="form-group">
+            <label>State License</label>
+            <input type="text" id="insuranceFieldStateLicense" placeholder="e.g. INS-789012">
+          </div>
+          <div class="form-group">
+            <label>Contact NMLS</label>
+            <input type="text" id="insuranceFieldContactNmls" placeholder="e.g. 654321">
+          </div>
+          <div class="form-group form-full">
+            <label>Street</label>
+            <input type="text" id="insuranceFieldStreet" placeholder="123 Main St, Suite 100">
+          </div>
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" id="insuranceFieldCity" placeholder="Denver">
+          </div>
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" id="insuranceFieldState" placeholder="CO" maxlength="2" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Zip Code</label>
+            <input type="text" id="insuranceFieldZip" placeholder="80228">
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="insuranceModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="insuranceModalSave">Save Company</button>
       </div>
     </div>
   </div>
@@ -732,12 +822,13 @@
     };
 
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
-    var TITLE_THEAD = '<tr><th>Company Name</th><th>Contact</th><th>Email</th><th>Work Phone</th><th>City</th><th>State</th><th>License #</th><th>Website</th><th></th></tr>';
+    var TITLE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>NMLS</th><th>State License</th><th>Contact Email</th><th>Phone</th><th>Work Phone</th><th>Contact NMLS</th><th>State</th><th></th></tr>';
+    var INSURANCE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>Contact Phone</th><th>Work Phone</th><th>Fax</th><th>Email</th><th>NMLS</th><th>State License</th><th>Contact NMLS</th><th>State</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
     var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th></th></tr>';
     var LINKS_INSURANCE_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th>Agent</th><th>Agent Email</th><th></th></tr>';
     var REALTORS_THEAD = '<tr><th>Company Name</th><th>Agent</th><th>Co. NMLS</th><th>Email</th><th>State Lic. ID</th><th>Contact NMLS</th><th>Work Phone</th><th>Fax</th><th>State</th><th></th></tr>';
-    var LINK_TYPES = ['voe', 'amc', 'payoffs', 'insurance'];
+    var LINK_TYPES = ['voe', 'amc', 'payoffs'];
 
     var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
     if (!TYPE_META[currentType]) currentType = 'title';
@@ -759,16 +850,18 @@
     }
 
     function isTitleView() { return currentType === 'title'; }
+    function isInsuranceView() { return currentType === 'insurance'; }
     function isTaxView() { return currentType === 'taxes'; }
     function isRealtorsView() { return currentType === 'realtors'; }
     function isOtherView() { return currentType === 'other'; }
     function isLinksView() { return LINK_TYPES.indexOf(currentType) !== -1; }
-    function isLookupView() { return isTitleView() || isTaxView() || isRealtorsView() || isOtherView() || isLinksView(); }
+    function isLookupView() { return isTitleView() || isInsuranceView() || isTaxView() || isRealtorsView() || isOtherView() || isLinksView(); }
 
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
     var procModalOverlay, taxModalOverlay, titleModalOverlay, linksModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
     var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, linksSaveBtn, linksModalTitle, addNewBtn;
     var realtorModalOverlay, realtorSaveBtn, realtorModalTitle;
+    var insuranceModalOverlay, insuranceSaveBtn, insuranceModalTitle;
     var quickLinkModalOverlay, stateResModalOverlay, qlSaveBtn, qlModalTitle, srSaveBtn, srModalTitle;
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -798,6 +891,9 @@
       realtorModalOverlay = document.getElementById('realtorModalOverlay');
       realtorSaveBtn    = document.getElementById('realtorModalSave');
       realtorModalTitle = document.getElementById('realtorModalTitle');
+      insuranceModalOverlay = document.getElementById('insuranceModalOverlay');
+      insuranceSaveBtn    = document.getElementById('insuranceModalSave');
+      insuranceModalTitle = document.getElementById('insuranceModalTitle');
       quickLinkModalOverlay = document.getElementById('quickLinkModalOverlay');
       stateResModalOverlay  = document.getElementById('stateResModalOverlay');
       qlSaveBtn    = document.getElementById('quickLinkModalSave');
@@ -827,7 +923,7 @@
       sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
 
       // Generic modal
-      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isRealtorsView() ? openRealtorModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
+      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isInsuranceView() ? openInsuranceModal() : isRealtorsView() ? openRealtorModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
       document.getElementById('procModalClose').addEventListener('click', closeProcModal);
       document.getElementById('procModalCancel').addEventListener('click', closeProcModal);
       procSaveBtn.addEventListener('click', saveProcRecord);
@@ -838,6 +934,12 @@
       document.getElementById('titleModalCancel').addEventListener('click', closeTitleModal);
       titleSaveBtn.addEventListener('click', saveTitleCompany);
       titleModalOverlay.addEventListener('click', function(e) { if (e.target === titleModalOverlay) closeTitleModal(); });
+
+      // Insurance modal
+      document.getElementById('insuranceModalClose').addEventListener('click', closeInsuranceModal);
+      document.getElementById('insuranceModalCancel').addEventListener('click', closeInsuranceModal);
+      insuranceSaveBtn.addEventListener('click', saveInsuranceCompany);
+      insuranceModalOverlay.addEventListener('click', function(e) { if (e.target === insuranceModalOverlay) closeInsuranceModal(); });
 
       // Realtor modal
       document.getElementById('realtorModalClose').addEventListener('click', closeRealtorModal);
@@ -872,6 +974,7 @@
       document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
         if (titleModalOverlay.style.display !== 'none') closeTitleModal();
+        if (insuranceModalOverlay.style.display !== 'none') closeInsuranceModal();
         if (realtorModalOverlay.style.display !== 'none') closeRealtorModal();
         if (procModalOverlay.style.display !== 'none') closeProcModal();
         if (taxModalOverlay.style.display !== 'none') closeTaxModal();
@@ -911,11 +1014,11 @@
       toolbar.style.display = '';
       addNewBtn.style.display = '';
       // Switch table headers and toolbar
-      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isRealtorsView() ? REALTORS_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? (currentType === 'insurance' ? LINKS_INSURANCE_THEAD : LINKS_THEAD) : GENERIC_THEAD;
+      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isInsuranceView() ? INSURANCE_THEAD : isRealtorsView() ? REALTORS_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? LINKS_THEAD : GENERIC_THEAD;
       statusFilter.style.display = isLookupView() ? 'none' : '';
       sortSelect.style.display = isLookupView() ? 'none' : '';
-      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isRealtorsView() ? '<i class="fas fa-plus"></i> Add Realtor' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
-      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or city...' : isRealtorsView() ? 'Search by company, agent, email, or NMLS...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
+      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isInsuranceView() ? '<i class="fas fa-plus"></i> Add Company' : isRealtorsView() ? '<i class="fas fa-plus"></i> Add Realtor' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
+      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or NMLS...' : isInsuranceView() ? 'Search by company, contact, email, or NMLS...' : isRealtorsView() ? 'Search by company, agent, email, or NMLS...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
     }
 
     /* ==================== SEARCH ==================== */
@@ -930,6 +1033,15 @@
             if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
             paginationWrap.style.display = 'none';
             renderTitleResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      } else if (isInsuranceView()) {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
+        apiRequest('GET', '/processing/insurance-companies?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
+            paginationWrap.style.display = 'none';
+            renderInsuranceResults(data.results);
           })
           .catch(function() { showEmpty('Connection error.'); });
       } else if (isRealtorsView()) {
@@ -1006,23 +1118,56 @@
       if (!results || results.length === 0) { showEmpty('No title companies found. Click <strong>Add Company</strong> to create one.'); return; }
       emptyState.style.display = 'none';
       tableBody.innerHTML = '';
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
       results.forEach(function(rec) {
         var tr = document.createElement('tr');
         tr.innerHTML =
           '<td data-label="Company">' + esc(rec.company_name) + '</td>' +
-          '<td data-label="Contact">' + esc(rec.contact_name) + '</td>' +
-          '<td data-label="Email">' + (rec.email ? '<a href="mailto:' + esc(rec.email) + '" class="proc-url">' + esc(rec.email) + '</a>' : '<span style="color:#bbb;">—</span>') + '</td>' +
-          '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : '<span style="color:#bbb;">—</span>') + '</td>' +
-          '<td data-label="City">' + esc(rec.city) + '</td>' +
+          '<td data-label="Point of Contact">' + esc(rec.contact_name) + '</td>' +
+          '<td data-label="NMLS">' + (rec.nmls ? esc(rec.nmls) : dash) + '</td>' +
+          '<td data-label="State License">' + (rec.state_license ? esc(rec.state_license) : dash) + '</td>' +
+          '<td data-label="Contact Email">' + (rec.contact_email ? '<a href="mailto:' + esc(rec.contact_email) + '" class="proc-url">' + esc(rec.contact_email) + '</a>' : (rec.email ? '<a href="mailto:' + esc(rec.email) + '" class="proc-url">' + esc(rec.email) + '</a>' : dash)) + '</td>' +
+          '<td data-label="Phone">' + (rec.contact_phone ? '<a href="tel:' + esc(rec.contact_phone) + '" class="proc-url">' + esc(rec.contact_phone) + '</a>' : dash) + '</td>' +
+          '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : dash) + '</td>' +
+          '<td data-label="Contact NMLS">' + (rec.contact_nmls ? esc(rec.contact_nmls) : dash) + '</td>' +
           '<td data-label="State">' + esc(rec.state) + '</td>' +
-          '<td data-label="License #">' + esc(rec.license_number) + '</td>' +
-          '<td data-label="Website">' + urlLink(rec.website) + '</td>' +
           '<td class="proc-row-actions">' +
             '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
             '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
           '</td>';
         tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openTitleModal(rec); });
         tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteTitleCompany(rec.id, rec.company_name); });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    /* ==================== INSURANCE COMPANIES RENDER ==================== */
+
+    function renderInsuranceResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty('No insurance companies found. Click <strong>Add Company</strong> to create one.'); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
+      results.forEach(function(rec) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="Company">' + esc(rec.company_name) + '</td>' +
+          '<td data-label="Contact">' + esc(rec.point_of_contact) + '</td>' +
+          '<td data-label="Contact Phone">' + (rec.contact_phone ? '<a href="tel:' + esc(rec.contact_phone) + '" class="proc-url">' + esc(rec.contact_phone) + '</a>' : dash) + '</td>' +
+          '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : dash) + '</td>' +
+          '<td data-label="Fax">' + (rec.fax ? esc(rec.fax) : dash) + '</td>' +
+          '<td data-label="Email">' + (rec.email ? '<a href="mailto:' + esc(rec.email) + '" class="proc-url">' + esc(rec.email) + '</a>' : dash) + '</td>' +
+          '<td data-label="NMLS">' + (rec.nmls ? esc(rec.nmls) : dash) + '</td>' +
+          '<td data-label="State License">' + (rec.state_license ? esc(rec.state_license) : dash) + '</td>' +
+          '<td data-label="Contact NMLS">' + (rec.contact_nmls ? esc(rec.contact_nmls) : dash) + '</td>' +
+          '<td data-label="State">' + esc(rec.state) + '</td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openInsuranceModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteInsuranceCompany(rec.id, rec.company_name); });
         tableBody.appendChild(tr);
       });
     }
@@ -1277,9 +1422,9 @@
     }
     function showEmpty(msg) {
       hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = '';
-      var heading = isTitleView() ? 'No title companies found' : isRealtorsView() ? 'No realtors found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
+      var heading = isTitleView() ? 'No title companies found' : isInsuranceView() ? 'No insurance companies found' : isRealtorsView() ? 'No realtors found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
       emptyState.querySelector('h3').textContent = heading;
-      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isRealtorsView() ? 'Click <strong>Add Realtor</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
+      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isInsuranceView() ? 'Click <strong>Add Company</strong> to create one.' : isRealtorsView() ? 'Click <strong>Add Realtor</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
       emptyState.querySelector('p').innerHTML = msg || defaultMsg;
     }
     function showLoading() { emptyState.style.display = 'none'; tableBody.innerHTML = ''; loadingState.style.display = ''; }
@@ -1361,11 +1506,16 @@
         document.getElementById('titleFieldZip').value = record.zip_code || '';
         document.getElementById('titleFieldTollFree').value = record.toll_free_phone || '';
         document.getElementById('titleFieldLicense').value = record.license_number || '';
+        document.getElementById('titleFieldNmls').value = record.nmls || '';
+        document.getElementById('titleFieldStateLicense').value = record.state_license || '';
+        document.getElementById('titleFieldContactNmls').value = record.contact_nmls || '';
+        document.getElementById('titleFieldContactEmail').value = record.contact_email || '';
+        document.getElementById('titleFieldContactPhone').value = record.contact_phone || '';
         document.getElementById('titleFieldWebsite').value = record.website || '';
       } else {
         titleModalTitle.textContent = 'Add Title Company';
         titleSaveBtn.textContent = 'Save Company';
-        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldLicense','titleFieldWebsite'].forEach(function(id) { document.getElementById(id).value = ''; });
+        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldLicense','titleFieldNmls','titleFieldStateLicense','titleFieldContactNmls','titleFieldContactEmail','titleFieldContactPhone','titleFieldWebsite'].forEach(function(id) { document.getElementById(id).value = ''; });
       }
       titleModalOverlay.style.display = '';
       document.body.style.overflow = 'hidden';
@@ -1389,6 +1539,11 @@
         zipCode: (document.getElementById('titleFieldZip').value || '').trim(),
         tollFreePhone: (document.getElementById('titleFieldTollFree').value || '').trim(),
         licenseNumber: (document.getElementById('titleFieldLicense').value || '').trim(),
+        nmls: (document.getElementById('titleFieldNmls').value || '').trim(),
+        stateLicense: (document.getElementById('titleFieldStateLicense').value || '').trim(),
+        contactNmls: (document.getElementById('titleFieldContactNmls').value || '').trim(),
+        contactEmail: (document.getElementById('titleFieldContactEmail').value || '').trim(),
+        contactPhone: (document.getElementById('titleFieldContactPhone').value || '').trim(),
         website: (document.getElementById('titleFieldWebsite').value || '').trim()
       };
       titleSaveBtn.disabled = true; titleSaveBtn.textContent = 'Saving...';
@@ -1402,6 +1557,70 @@
     function deleteTitleCompany(id, name) {
       if (!confirm('Delete "' + name + '"?')) return;
       apiRequest('DELETE', '/processing/title-companies/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== INSURANCE COMPANIES MODAL ==================== */
+
+    function openInsuranceModal(record) {
+      editingId = record ? record.id : null;
+      if (record) {
+        insuranceModalTitle.textContent = 'Edit Insurance Company';
+        insuranceSaveBtn.textContent = 'Update Company';
+        document.getElementById('insuranceFieldCompany').value = record.company_name || '';
+        document.getElementById('insuranceFieldContact').value = record.point_of_contact || '';
+        document.getElementById('insuranceFieldContactPhone').value = record.contact_phone || '';
+        document.getElementById('insuranceFieldWorkPhone').value = record.work_phone || '';
+        document.getElementById('insuranceFieldFax').value = record.fax || '';
+        document.getElementById('insuranceFieldEmail').value = record.email || '';
+        document.getElementById('insuranceFieldNmls').value = record.nmls || '';
+        document.getElementById('insuranceFieldStateLicense').value = record.state_license || '';
+        document.getElementById('insuranceFieldContactNmls').value = record.contact_nmls || '';
+        document.getElementById('insuranceFieldStreet').value = record.street || '';
+        document.getElementById('insuranceFieldCity').value = record.city || '';
+        document.getElementById('insuranceFieldState').value = record.state || '';
+        document.getElementById('insuranceFieldZip').value = record.zip_code || '';
+      } else {
+        insuranceModalTitle.textContent = 'Add Insurance Company';
+        insuranceSaveBtn.textContent = 'Save Company';
+        ['insuranceFieldCompany','insuranceFieldContact','insuranceFieldContactPhone','insuranceFieldWorkPhone','insuranceFieldFax','insuranceFieldEmail','insuranceFieldNmls','insuranceFieldStateLicense','insuranceFieldContactNmls','insuranceFieldStreet','insuranceFieldCity','insuranceFieldState','insuranceFieldZip'].forEach(function(id) { document.getElementById(id).value = ''; });
+      }
+      insuranceModalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('insuranceFieldCompany').focus(); }, 100);
+    }
+    function closeInsuranceModal() { insuranceModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+
+    function saveInsuranceCompany() {
+      var companyName = (document.getElementById('insuranceFieldCompany').value || '').trim();
+      if (!companyName) { document.getElementById('insuranceFieldCompany').focus(); return; }
+      var payload = {
+        companyName: companyName,
+        pointOfContact: (document.getElementById('insuranceFieldContact').value || '').trim(),
+        contactPhone: (document.getElementById('insuranceFieldContactPhone').value || '').trim(),
+        workPhone: (document.getElementById('insuranceFieldWorkPhone').value || '').trim(),
+        fax: (document.getElementById('insuranceFieldFax').value || '').trim(),
+        email: (document.getElementById('insuranceFieldEmail').value || '').trim(),
+        nmls: (document.getElementById('insuranceFieldNmls').value || '').trim(),
+        stateLicense: (document.getElementById('insuranceFieldStateLicense').value || '').trim(),
+        contactNmls: (document.getElementById('insuranceFieldContactNmls').value || '').trim(),
+        street: (document.getElementById('insuranceFieldStreet').value || '').trim(),
+        city: (document.getElementById('insuranceFieldCity').value || '').trim(),
+        state: (document.getElementById('insuranceFieldState').value || '').trim().toUpperCase(),
+        zipCode: (document.getElementById('insuranceFieldZip').value || '').trim()
+      };
+      insuranceSaveBtn.disabled = true; insuranceSaveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/insurance-companies/' + editingId : '/processing/insurance-companies';
+      apiRequest(method, path, payload)
+        .then(function(data) { insuranceSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closeInsuranceModal(); runSearch(); })
+        .catch(function() { insuranceSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteInsuranceCompany(id, name) {
+      if (!confirm('Delete "' + name + '"?')) return;
+      apiRequest('DELETE', '/processing/insurance-companies/' + id)
         .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
         .catch(function() { alert('Connection error.'); });
     }

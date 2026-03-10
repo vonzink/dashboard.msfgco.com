@@ -49,13 +49,13 @@ router.get('/title-companies', async (req, res, next) => {
 // POST /api/processing/title-companies - Add a title company
 router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) => {
   try {
-    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone, licenseNumber } = req.body;
+    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone, licenseNumber, nmls, stateLicense, contactNmls, contactEmail, contactPhone } = req.body;
 
     if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
 
     const [result] = await db.query(
-      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, fax, toll_free_phone, license_number)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, fax, toll_free_phone, license_number, nmls, state_license, contact_nmls, contact_email, contact_phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyName.trim(),
         (contactName || '').trim() || null,
@@ -69,7 +69,12 @@ router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) 
         (website || '').trim() || null,
         (fax || '').trim() || null,
         (tollFreePhone || '').trim() || null,
-        (licenseNumber || '').trim() || null
+        (licenseNumber || '').trim() || null,
+        (nmls || '').trim() || null,
+        (stateLicense || '').trim() || null,
+        (contactNmls || '').trim() || null,
+        (contactEmail || '').trim() || null,
+        (contactPhone || '').trim() || null
       ]
     );
 
@@ -100,7 +105,12 @@ router.put('/title-companies/:id', requireProcessorOrAdmin, async (req, res, nex
       website: 'website',
       fax: 'fax',
       tollFreePhone: 'toll_free_phone',
-      licenseNumber: 'license_number'
+      licenseNumber: 'license_number',
+      nmls: 'nmls',
+      stateLicense: 'state_license',
+      contactNmls: 'contact_nmls',
+      contactEmail: 'contact_email',
+      contactPhone: 'contact_phone'
     };
 
     const updates = [];
@@ -264,6 +274,136 @@ router.delete('/realtors/:id', requireProcessorOrAdmin, async (req, res, next) =
     if (existing.length === 0) return res.status(404).json({ error: 'Realtor not found.' });
 
     await db.query('DELETE FROM realtors WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/* ========================================
+   Insurance Companies Lookup Table
+   ======================================== */
+
+// GET /api/processing/insurance-companies - List all (with optional state filter + search)
+router.get('/insurance-companies', async (req, res, next) => {
+  try {
+    const { state, q } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (state) {
+      conditions.push('state = ?');
+      params.push(state.toUpperCase());
+    }
+
+    if (q && q.trim()) {
+      conditions.push('(company_name LIKE ? OR point_of_contact LIKE ? OR email LIKE ? OR city LIKE ? OR nmls LIKE ? OR contact_nmls LIKE ?)');
+      const pattern = '%' + q.trim() + '%';
+      params.push(pattern, pattern, pattern, pattern, pattern, pattern);
+    }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await db.query(
+      `SELECT * FROM insurance_companies ${where} ORDER BY state, company_name`,
+      params
+    );
+
+    res.json({ success: true, results: rows, total: rows.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/processing/insurance-companies - Add an insurance company
+router.post('/insurance-companies', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { companyName, pointOfContact, contactPhone, workPhone, fax, email, nmls, stateLicense, contactNmls, street, city, state, zipCode } = req.body;
+
+    if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
+
+    const [result] = await db.query(
+      `INSERT INTO insurance_companies (company_name, point_of_contact, contact_phone, work_phone, fax, email, nmls, state_license, contact_nmls, street, city, state, zip_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        companyName.trim(),
+        (pointOfContact || '').trim() || null,
+        (contactPhone || '').trim() || null,
+        (workPhone || '').trim() || null,
+        (fax || '').trim() || null,
+        (email || '').trim() || null,
+        (nmls || '').trim() || null,
+        (stateLicense || '').trim() || null,
+        (contactNmls || '').trim() || null,
+        (street || '').trim() || null,
+        (city || '').trim() || null,
+        state ? state.trim().toUpperCase() : null,
+        (zipCode || '').trim() || null
+      ]
+    );
+
+    const [rows] = await db.query('SELECT * FROM insurance_companies WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, record: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/processing/insurance-companies/:id - Update an insurance company
+router.put('/insurance-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM insurance_companies WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Insurance company not found.' });
+
+    const fieldMap = {
+      companyName: 'company_name',
+      pointOfContact: 'point_of_contact',
+      contactPhone: 'contact_phone',
+      workPhone: 'work_phone',
+      fax: 'fax',
+      email: 'email',
+      nmls: 'nmls',
+      stateLicense: 'state_license',
+      contactNmls: 'contact_nmls',
+      street: 'street',
+      city: 'city',
+      state: 'state',
+      zipCode: 'zip_code'
+    };
+
+    const updates = [];
+    const values = [];
+
+    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
+      if (req.body[bodyKey] !== undefined) {
+        let val = req.body[bodyKey];
+        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
+        else if (typeof val === 'string') val = val.trim() || null;
+        updates.push(`${dbCol} = ?`);
+        values.push(val);
+      }
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+
+    values.push(id);
+    await db.query(`UPDATE insurance_companies SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    const [rows] = await db.query('SELECT * FROM insurance_companies WHERE id = ?', [id]);
+    res.json({ success: true, record: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/processing/insurance-companies/:id - Delete an insurance company
+router.delete('/insurance-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM insurance_companies WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Insurance company not found.' });
+
+    await db.query('DELETE FROM insurance_companies WHERE id = ?', [id]);
     res.json({ success: true });
   } catch (error) {
     next(error);
