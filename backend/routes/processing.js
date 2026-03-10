@@ -49,13 +49,13 @@ router.get('/title-companies', async (req, res, next) => {
 // POST /api/processing/title-companies - Add a title company
 router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) => {
   try {
-    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone } = req.body;
+    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone, licenseNumber } = req.body;
 
     if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
 
     const [result] = await db.query(
-      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, fax, toll_free_phone)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, fax, toll_free_phone, license_number)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyName.trim(),
         (contactName || '').trim() || null,
@@ -68,7 +68,8 @@ router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) 
         (zipCode || '').trim() || null,
         (website || '').trim() || null,
         (fax || '').trim() || null,
-        (tollFreePhone || '').trim() || null
+        (tollFreePhone || '').trim() || null,
+        (licenseNumber || '').trim() || null
       ]
     );
 
@@ -98,7 +99,8 @@ router.put('/title-companies/:id', requireProcessorOrAdmin, async (req, res, nex
       zipCode: 'zip_code',
       website: 'website',
       fax: 'fax',
-      tollFreePhone: 'toll_free_phone'
+      tollFreePhone: 'toll_free_phone',
+      licenseNumber: 'license_number'
     };
 
     const updates = [];

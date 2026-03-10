@@ -466,6 +466,10 @@
             <label>Toll Free Phone</label>
             <input type="tel" id="titleFieldTollFree" placeholder="(800) 123-4567">
           </div>
+          <div class="form-group">
+            <label>License #</label>
+            <input type="text" id="titleFieldLicense" placeholder="e.g. TL-123456">
+          </div>
           <div class="form-group form-full">
             <label>Website</label>
             <input type="url" id="titleFieldWebsite" placeholder="https://...">
@@ -660,7 +664,7 @@
     };
 
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
-    var TITLE_THEAD = '<tr><th>Company Name</th><th>Contact</th><th>Email</th><th>Work Phone</th><th>City</th><th>State</th><th>Website</th><th></th></tr>';
+    var TITLE_THEAD = '<tr><th>Company Name</th><th>Contact</th><th>Email</th><th>Work Phone</th><th>City</th><th>State</th><th>License #</th><th>Website</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
     var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th></th></tr>';
     var LINKS_INSURANCE_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th>Agent</th><th>Agent Email</th><th></th></tr>';
@@ -921,6 +925,7 @@
           '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : '<span style="color:#bbb;">—</span>') + '</td>' +
           '<td data-label="City">' + esc(rec.city) + '</td>' +
           '<td data-label="State">' + esc(rec.state) + '</td>' +
+          '<td data-label="License #">' + esc(rec.license_number) + '</td>' +
           '<td data-label="Website">' + urlLink(rec.website) + '</td>' +
           '<td class="proc-row-actions">' +
             '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
@@ -1235,11 +1240,12 @@
         document.getElementById('titleFieldState').value = record.state || '';
         document.getElementById('titleFieldZip').value = record.zip_code || '';
         document.getElementById('titleFieldTollFree').value = record.toll_free_phone || '';
+        document.getElementById('titleFieldLicense').value = record.license_number || '';
         document.getElementById('titleFieldWebsite').value = record.website || '';
       } else {
         titleModalTitle.textContent = 'Add Title Company';
         titleSaveBtn.textContent = 'Save Company';
-        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldWebsite'].forEach(function(id) { document.getElementById(id).value = ''; });
+        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldLicense','titleFieldWebsite'].forEach(function(id) { document.getElementById(id).value = ''; });
       }
       titleModalOverlay.style.display = '';
       document.body.style.overflow = 'hidden';
@@ -1262,6 +1268,7 @@
         state: (document.getElementById('titleFieldState').value || '').trim().toUpperCase(),
         zipCode: (document.getElementById('titleFieldZip').value || '').trim(),
         tollFreePhone: (document.getElementById('titleFieldTollFree').value || '').trim(),
+        licenseNumber: (document.getElementById('titleFieldLicense').value || '').trim(),
         website: (document.getElementById('titleFieldWebsite').value || '').trim()
       };
       titleSaveBtn.disabled = true; titleSaveBtn.textContent = 'Saving...';
