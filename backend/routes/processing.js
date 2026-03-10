@@ -143,6 +143,134 @@ router.delete('/title-companies/:id', requireProcessorOrAdmin, async (req, res, 
 });
 
 /* ========================================
+   Realtors Lookup Table
+   ======================================== */
+
+// GET /api/processing/realtors - List all (with optional state filter + search)
+router.get('/realtors', async (req, res, next) => {
+  try {
+    const { state, q } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (state) {
+      conditions.push('state = ?');
+      params.push(state.toUpperCase());
+    }
+
+    if (q && q.trim()) {
+      conditions.push('(company_name LIKE ? OR agent_name LIKE ? OR email LIKE ? OR city LIKE ? OR company_nmls_id LIKE ? OR contact_nmls_id LIKE ?)');
+      const pattern = '%' + q.trim() + '%';
+      params.push(pattern, pattern, pattern, pattern, pattern, pattern);
+    }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await db.query(
+      `SELECT * FROM realtors ${where} ORDER BY state, company_name, agent_name`,
+      params
+    );
+
+    res.json({ success: true, results: rows, total: rows.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/processing/realtors - Add a realtor
+router.post('/realtors', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { companyName, agentName, companyNmlsId, email, stateLicenseId, contactNmlsId, workPhone, fax, street, city, state, zipCode } = req.body;
+
+    if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
+
+    const [result] = await db.query(
+      `INSERT INTO realtors (company_name, agent_name, company_nmls_id, email, state_license_id, contact_nmls_id, work_phone, fax, street, city, state, zip_code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        companyName.trim(),
+        (agentName || '').trim() || null,
+        (companyNmlsId || '').trim() || null,
+        (email || '').trim() || null,
+        (stateLicenseId || '').trim() || null,
+        (contactNmlsId || '').trim() || null,
+        (workPhone || '').trim() || null,
+        (fax || '').trim() || null,
+        (street || '').trim() || null,
+        (city || '').trim() || null,
+        state ? state.trim().toUpperCase() : null,
+        (zipCode || '').trim() || null
+      ]
+    );
+
+    const [rows] = await db.query('SELECT * FROM realtors WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, record: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/processing/realtors/:id - Update a realtor
+router.put('/realtors/:id', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM realtors WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Realtor not found.' });
+
+    const fieldMap = {
+      companyName: 'company_name',
+      agentName: 'agent_name',
+      companyNmlsId: 'company_nmls_id',
+      email: 'email',
+      stateLicenseId: 'state_license_id',
+      contactNmlsId: 'contact_nmls_id',
+      workPhone: 'work_phone',
+      fax: 'fax',
+      street: 'street',
+      city: 'city',
+      state: 'state',
+      zipCode: 'zip_code'
+    };
+
+    const updates = [];
+    const values = [];
+
+    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
+      if (req.body[bodyKey] !== undefined) {
+        let val = req.body[bodyKey];
+        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
+        else if (typeof val === 'string') val = val.trim() || null;
+        updates.push(`${dbCol} = ?`);
+        values.push(val);
+      }
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+
+    values.push(id);
+    await db.query(`UPDATE realtors SET ${updates.join(', ')} WHERE id = ?`, values);
+
+    const [rows] = await db.query('SELECT * FROM realtors WHERE id = ?', [id]);
+    res.json({ success: true, record: rows[0] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/processing/realtors/:id - Delete a realtor
+router.delete('/realtors/:id', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM realtors WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Realtor not found.' });
+
+    await db.query('DELETE FROM realtors WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/* ========================================
    Tax Counties Lookup Table
    ======================================== */
 

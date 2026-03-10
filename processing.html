@@ -279,6 +279,7 @@
         <button class="proc-sidebar__link" data-type="taxes"><i class="fas fa-receipt"></i> Taxes</button>
         <button class="proc-sidebar__link" data-type="amc"><i class="fas fa-home"></i> AMC</button>
         <button class="proc-sidebar__link" data-type="payoffs"><i class="fas fa-credit-card"></i> Payoffs</button>
+        <button class="proc-sidebar__link" data-type="realtors"><i class="fas fa-user-tie"></i> Realtors</button>
         <button class="proc-sidebar__link" data-type="other"><i class="fas fa-folder-open"></i> Other</button>
       </nav>
       <div class="proc-sidebar__back">
@@ -483,6 +484,72 @@
     </div>
   </div>
 
+  <!-- Realtors Modal -->
+  <div class="proc-modal-overlay" id="realtorModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="realtorModalTitle">Add Realtor</h2>
+        <button class="proc-modal__close" id="realtorModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Company Name</label>
+            <input type="text" id="realtorFieldCompany" placeholder="e.g. RE/MAX Alliance">
+          </div>
+          <div class="form-group">
+            <label>Agent Name</label>
+            <input type="text" id="realtorFieldAgent" placeholder="e.g. Jane Smith">
+          </div>
+          <div class="form-group">
+            <label>Company NMLS ID</label>
+            <input type="text" id="realtorFieldCompanyNmls" placeholder="e.g. 123456">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="realtorFieldEmail" placeholder="email@company.com">
+          </div>
+          <div class="form-group">
+            <label>State License ID</label>
+            <input type="text" id="realtorFieldStateLicense" placeholder="e.g. FA.100012345">
+          </div>
+          <div class="form-group">
+            <label>Contact NMLS ID</label>
+            <input type="text" id="realtorFieldContactNmls" placeholder="e.g. 654321">
+          </div>
+          <div class="form-group">
+            <label>Work Phone</label>
+            <input type="tel" id="realtorFieldWorkPhone" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group">
+            <label>Fax</label>
+            <input type="tel" id="realtorFieldFax" placeholder="(555) 123-4567">
+          </div>
+          <div class="form-group form-full">
+            <label>Street</label>
+            <input type="text" id="realtorFieldStreet" placeholder="123 Main St, Suite 100">
+          </div>
+          <div class="form-group">
+            <label>City</label>
+            <input type="text" id="realtorFieldCity" placeholder="Denver">
+          </div>
+          <div class="form-group">
+            <label>State</label>
+            <input type="text" id="realtorFieldState" placeholder="CO" maxlength="2" style="text-transform:uppercase;">
+          </div>
+          <div class="form-group">
+            <label>Zip Code</label>
+            <input type="text" id="realtorFieldZip" placeholder="80228">
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="realtorModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="realtorModalSave">Save Realtor</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Tax Counties Modal -->
   <div class="proc-modal-overlay" id="taxModalOverlay" style="display:none;">
     <div class="proc-modal">
@@ -660,6 +727,7 @@
       taxes:     { name: 'Taxes',     icon: 'fa-receipt',       desc: 'County tax records, assessor portals, and treasurer links' },
       amc:       { name: 'AMC',       icon: 'fa-home',          desc: 'Appraisal management company orders and reports' },
       payoffs:   { name: 'Payoffs',   icon: 'fa-credit-card',   desc: 'Payoff statement requests and lien tracking' },
+      realtors:  { name: 'Realtors',  icon: 'fa-user-tie',      desc: 'Realtor directory — agents, NMLS IDs, licenses, and contact info' },
       other:     { name: 'Other',     icon: 'fa-folder-open',   desc: 'Miscellaneous processing items and documents' }
     };
 
@@ -668,6 +736,7 @@
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
     var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th></th></tr>';
     var LINKS_INSURANCE_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th>Agent</th><th>Agent Email</th><th></th></tr>';
+    var REALTORS_THEAD = '<tr><th>Company Name</th><th>Agent</th><th>Co. NMLS</th><th>Email</th><th>State Lic. ID</th><th>Contact NMLS</th><th>Work Phone</th><th>Fax</th><th>State</th><th></th></tr>';
     var LINK_TYPES = ['voe', 'amc', 'payoffs', 'insurance'];
 
     var currentType = new URLSearchParams(window.location.search).get('type') || 'title';
@@ -691,13 +760,15 @@
 
     function isTitleView() { return currentType === 'title'; }
     function isTaxView() { return currentType === 'taxes'; }
+    function isRealtorsView() { return currentType === 'realtors'; }
     function isOtherView() { return currentType === 'other'; }
     function isLinksView() { return LINK_TYPES.indexOf(currentType) !== -1; }
-    function isLookupView() { return isTitleView() || isTaxView() || isOtherView() || isLinksView(); }
+    function isLookupView() { return isTitleView() || isTaxView() || isRealtorsView() || isOtherView() || isLinksView(); }
 
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
     var procModalOverlay, taxModalOverlay, titleModalOverlay, linksModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
     var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, linksSaveBtn, linksModalTitle, addNewBtn;
+    var realtorModalOverlay, realtorSaveBtn, realtorModalTitle;
     var quickLinkModalOverlay, stateResModalOverlay, qlSaveBtn, qlModalTitle, srSaveBtn, srModalTitle;
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -724,6 +795,9 @@
       titleModalTitle   = document.getElementById('titleModalTitle');
       linksSaveBtn      = document.getElementById('linksModalSave');
       linksModalTitle   = document.getElementById('linksModalTitle');
+      realtorModalOverlay = document.getElementById('realtorModalOverlay');
+      realtorSaveBtn    = document.getElementById('realtorModalSave');
+      realtorModalTitle = document.getElementById('realtorModalTitle');
       quickLinkModalOverlay = document.getElementById('quickLinkModalOverlay');
       stateResModalOverlay  = document.getElementById('stateResModalOverlay');
       qlSaveBtn    = document.getElementById('quickLinkModalSave');
@@ -753,7 +827,7 @@
       sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
 
       // Generic modal
-      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
+      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isRealtorsView() ? openRealtorModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
       document.getElementById('procModalClose').addEventListener('click', closeProcModal);
       document.getElementById('procModalCancel').addEventListener('click', closeProcModal);
       procSaveBtn.addEventListener('click', saveProcRecord);
@@ -764,6 +838,12 @@
       document.getElementById('titleModalCancel').addEventListener('click', closeTitleModal);
       titleSaveBtn.addEventListener('click', saveTitleCompany);
       titleModalOverlay.addEventListener('click', function(e) { if (e.target === titleModalOverlay) closeTitleModal(); });
+
+      // Realtor modal
+      document.getElementById('realtorModalClose').addEventListener('click', closeRealtorModal);
+      document.getElementById('realtorModalCancel').addEventListener('click', closeRealtorModal);
+      realtorSaveBtn.addEventListener('click', saveRealtor);
+      realtorModalOverlay.addEventListener('click', function(e) { if (e.target === realtorModalOverlay) closeRealtorModal(); });
 
       // Tax modal
       document.getElementById('taxModalClose').addEventListener('click', closeTaxModal);
@@ -792,6 +872,7 @@
       document.addEventListener('keydown', function(e) {
         if (e.key !== 'Escape') return;
         if (titleModalOverlay.style.display !== 'none') closeTitleModal();
+        if (realtorModalOverlay.style.display !== 'none') closeRealtorModal();
         if (procModalOverlay.style.display !== 'none') closeProcModal();
         if (taxModalOverlay.style.display !== 'none') closeTaxModal();
         if (linksModalOverlay.style.display !== 'none') closeLinksModal();
@@ -830,11 +911,11 @@
       toolbar.style.display = '';
       addNewBtn.style.display = '';
       // Switch table headers and toolbar
-      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? (currentType === 'insurance' ? LINKS_INSURANCE_THEAD : LINKS_THEAD) : GENERIC_THEAD;
+      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isRealtorsView() ? REALTORS_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? (currentType === 'insurance' ? LINKS_INSURANCE_THEAD : LINKS_THEAD) : GENERIC_THEAD;
       statusFilter.style.display = isLookupView() ? 'none' : '';
       sortSelect.style.display = isLookupView() ? 'none' : '';
-      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
-      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or city...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
+      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isRealtorsView() ? '<i class="fas fa-plus"></i> Add Realtor' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
+      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or city...' : isRealtorsView() ? 'Search by company, agent, email, or NMLS...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
     }
 
     /* ==================== SEARCH ==================== */
@@ -849,6 +930,15 @@
             if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
             paginationWrap.style.display = 'none';
             renderTitleResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      } else if (isRealtorsView()) {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
+        apiRequest('GET', '/processing/realtors?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
+            paginationWrap.style.display = 'none';
+            renderRealtorResults(data.results);
           })
           .catch(function() { showEmpty('Connection error.'); });
       } else if (isTaxView()) {
@@ -933,6 +1023,36 @@
           '</td>';
         tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openTitleModal(rec); });
         tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteTitleCompany(rec.id, rec.company_name); });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    /* ==================== REALTORS RENDER ==================== */
+
+    function renderRealtorResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty('No realtors found. Click <strong>Add Realtor</strong> to create one.'); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
+      results.forEach(function(rec) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="Company">' + esc(rec.company_name) + '</td>' +
+          '<td data-label="Agent">' + esc(rec.agent_name) + '</td>' +
+          '<td data-label="Co. NMLS">' + (rec.company_nmls_id ? esc(rec.company_nmls_id) : dash) + '</td>' +
+          '<td data-label="Email">' + (rec.email ? '<a href="mailto:' + esc(rec.email) + '" class="proc-url">' + esc(rec.email) + '</a>' : dash) + '</td>' +
+          '<td data-label="State Lic.">' + (rec.state_license_id ? esc(rec.state_license_id) : dash) + '</td>' +
+          '<td data-label="Contact NMLS">' + (rec.contact_nmls_id ? esc(rec.contact_nmls_id) : dash) + '</td>' +
+          '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : dash) + '</td>' +
+          '<td data-label="Fax">' + (rec.fax ? esc(rec.fax) : dash) + '</td>' +
+          '<td data-label="State">' + esc(rec.state) + '</td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openRealtorModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteRealtor(rec.id, rec.company_name + (rec.agent_name ? ' - ' + rec.agent_name : '')); });
         tableBody.appendChild(tr);
       });
     }
@@ -1157,9 +1277,9 @@
     }
     function showEmpty(msg) {
       hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = '';
-      var heading = isTitleView() ? 'No title companies found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
+      var heading = isTitleView() ? 'No title companies found' : isRealtorsView() ? 'No realtors found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
       emptyState.querySelector('h3').textContent = heading;
-      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
+      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isRealtorsView() ? 'Click <strong>Add Realtor</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
       emptyState.querySelector('p').innerHTML = msg || defaultMsg;
     }
     function showLoading() { emptyState.style.display = 'none'; tableBody.innerHTML = ''; loadingState.style.display = ''; }
@@ -1282,6 +1402,68 @@
     function deleteTitleCompany(id, name) {
       if (!confirm('Delete "' + name + '"?')) return;
       apiRequest('DELETE', '/processing/title-companies/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== REALTORS MODAL ==================== */
+
+    function openRealtorModal(record) {
+      editingId = record ? record.id : null;
+      if (record) {
+        realtorModalTitle.textContent = 'Edit Realtor';
+        realtorSaveBtn.textContent = 'Update Realtor';
+        document.getElementById('realtorFieldCompany').value = record.company_name || '';
+        document.getElementById('realtorFieldAgent').value = record.agent_name || '';
+        document.getElementById('realtorFieldCompanyNmls').value = record.company_nmls_id || '';
+        document.getElementById('realtorFieldEmail').value = record.email || '';
+        document.getElementById('realtorFieldStateLicense').value = record.state_license_id || '';
+        document.getElementById('realtorFieldContactNmls').value = record.contact_nmls_id || '';
+        document.getElementById('realtorFieldWorkPhone').value = record.work_phone || '';
+        document.getElementById('realtorFieldFax').value = record.fax || '';
+        document.getElementById('realtorFieldStreet').value = record.street || '';
+        document.getElementById('realtorFieldCity').value = record.city || '';
+        document.getElementById('realtorFieldState').value = record.state || '';
+        document.getElementById('realtorFieldZip').value = record.zip_code || '';
+      } else {
+        realtorModalTitle.textContent = 'Add Realtor';
+        realtorSaveBtn.textContent = 'Save Realtor';
+        ['realtorFieldCompany','realtorFieldAgent','realtorFieldCompanyNmls','realtorFieldEmail','realtorFieldStateLicense','realtorFieldContactNmls','realtorFieldWorkPhone','realtorFieldFax','realtorFieldStreet','realtorFieldCity','realtorFieldState','realtorFieldZip'].forEach(function(id) { document.getElementById(id).value = ''; });
+      }
+      realtorModalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('realtorFieldCompany').focus(); }, 100);
+    }
+    function closeRealtorModal() { realtorModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+
+    function saveRealtor() {
+      var companyName = (document.getElementById('realtorFieldCompany').value || '').trim();
+      if (!companyName) { document.getElementById('realtorFieldCompany').focus(); return; }
+      var payload = {
+        companyName: companyName,
+        agentName: (document.getElementById('realtorFieldAgent').value || '').trim(),
+        companyNmlsId: (document.getElementById('realtorFieldCompanyNmls').value || '').trim(),
+        email: (document.getElementById('realtorFieldEmail').value || '').trim(),
+        stateLicenseId: (document.getElementById('realtorFieldStateLicense').value || '').trim(),
+        contactNmlsId: (document.getElementById('realtorFieldContactNmls').value || '').trim(),
+        workPhone: (document.getElementById('realtorFieldWorkPhone').value || '').trim(),
+        fax: (document.getElementById('realtorFieldFax').value || '').trim(),
+        street: (document.getElementById('realtorFieldStreet').value || '').trim(),
+        city: (document.getElementById('realtorFieldCity').value || '').trim(),
+        state: (document.getElementById('realtorFieldState').value || '').trim().toUpperCase(),
+        zipCode: (document.getElementById('realtorFieldZip').value || '').trim()
+      };
+      realtorSaveBtn.disabled = true; realtorSaveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/realtors/' + editingId : '/processing/realtors';
+      apiRequest(method, path, payload)
+        .then(function(data) { realtorSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closeRealtorModal(); runSearch(); })
+        .catch(function() { realtorSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deleteRealtor(id, name) {
+      if (!confirm('Delete "' + name + '"?')) return;
+      apiRequest('DELETE', '/processing/realtors/' + id)
         .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
         .catch(function() { alert('Connection error.'); });
     }
