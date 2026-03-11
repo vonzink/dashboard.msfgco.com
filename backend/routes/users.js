@@ -33,7 +33,7 @@ router.get('/:id/contact-card', async (req, res, next) => {
       `SELECT u.id, u.name, u.email, u.initials, u.role,
               p.team, p.phone, p.display_email, p.website, p.online_app_url,
               p.facebook_url, p.instagram_url, p.twitter_url, p.linkedin_url, p.tiktok_url,
-              p.avatar_s3_key, p.email_signature
+              p.avatar_s3_key, p.business_card_s3_key, p.email_signature
        FROM users u
        LEFT JOIN user_profiles p ON u.id = p.user_id
        WHERE u.id = ? AND u.is_active = 1`,
@@ -53,8 +53,18 @@ router.get('/:id/contact-card', async (req, res, next) => {
         avatar_url = await getDownloadUrl(BUCKETS.media, user.avatar_s3_key);
       } catch { /* ignore */ }
     }
+    // Generate presigned business card URL if exists
+    let business_card_url = null;
+    if (user.business_card_s3_key) {
+      try {
+        business_card_url = await getDownloadUrl(BUCKETS.media, user.business_card_s3_key);
+      } catch { /* ignore */ }
+    }
+
     delete user.avatar_s3_key;
+    delete user.business_card_s3_key;
     user.avatar_url = avatar_url;
+    user.business_card_url = business_card_url;
 
     res.json(user);
   } catch (error) {

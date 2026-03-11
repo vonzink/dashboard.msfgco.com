@@ -123,6 +123,24 @@
             <p id="profileRoleDisplay" style="font-size:12px; color:#888; margin:2px 0;"></p>
             <p id="profileEmailDisplay" style="font-size:12px; color:#888; margin:0;"></p>
           </div>
+          <!-- Business Card -->
+          <div style="flex-shrink:0; text-align:center; min-width:200px;">
+            <label style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:8px;">Business Card</label>
+            <div id="businessCardContainer" style="width:200px; height:120px; border:2px dashed #ddd; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#f9f9f9; cursor:pointer;" title="Click to upload business card">
+              <img id="businessCardImg" src="" alt="" style="display:none; width:100%; height:100%; object-fit:contain;" />
+              <div id="businessCardPlaceholder" style="color:#bbb; font-size:12px; text-align:center;">
+                <i class="fas fa-id-card" style="font-size:28px; display:block; margin-bottom:4px;"></i>
+                No business card
+              </div>
+            </div>
+            <div style="margin-top:8px; display:flex; gap:4px; justify-content:center;">
+              <button class="btn btn-sm btn-secondary" id="businessCardUploadBtn"><i class="fas fa-upload"></i> Upload</button>
+              <button class="btn btn-sm btn-info" id="businessCardDownloadBtn" style="display:none;"><i class="fas fa-download"></i></button>
+              <button class="btn btn-sm btn-danger" id="businessCardRemoveBtn" style="display:none;"><i class="fas fa-trash"></i></button>
+            </div>
+            <input type="file" id="businessCardFileInput" accept="image/*" style="display:none;" />
+          </div>
+
           <!-- Editable Fields -->
           <div style="flex:1;">
             <div class="form-grid">
@@ -1068,6 +1086,27 @@
           removeBtn.style.display = 'none';
         }
 
+        // Business card
+        const bcImg = document.getElementById('businessCardImg');
+        const bcPlaceholder = document.getElementById('businessCardPlaceholder');
+        const bcRemoveBtn = document.getElementById('businessCardRemoveBtn');
+        const bcDownloadBtn = document.getElementById('businessCardDownloadBtn');
+        const bcContainer = document.getElementById('businessCardContainer');
+        if (data.business_card_url) {
+          bcImg.src = data.business_card_url;
+          bcImg.style.display = 'block';
+          bcPlaceholder.style.display = 'none';
+          bcRemoveBtn.style.display = '';
+          bcDownloadBtn.style.display = '';
+          bcContainer.style.borderStyle = 'solid';
+        } else {
+          bcImg.style.display = 'none';
+          bcPlaceholder.style.display = '';
+          bcRemoveBtn.style.display = 'none';
+          bcDownloadBtn.style.display = 'none';
+          bcContainer.style.borderStyle = 'dashed';
+        }
+
         // AI keys status (inline in profile data)
         if (data.ai_keys) {
           updateAIStatus('openai', data.ai_keys.openai);
@@ -1175,6 +1214,85 @@
         document.getElementById('avatarRemoveBtn').style.display = 'none';
       } catch (err) {
         alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Business Card Upload ---
+    document.getElementById('businessCardUploadBtn').addEventListener('click', () => {
+      document.getElementById('businessCardFileInput').click();
+    });
+    document.getElementById('businessCardContainer').addEventListener('click', () => {
+      document.getElementById('businessCardFileInput').click();
+    });
+
+    document.getElementById('businessCardFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) return alert('Please select an image file');
+      if (file.size > 5 * 1024 * 1024) return alert('Image must be under 5 MB');
+
+      try {
+        const urlData = await api('/admin/users/' + profileUserId + '/business-card/upload-url', {
+          method: 'POST',
+          body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+        });
+        if (!urlData) return;
+
+        const uploadRes = await fetch(urlData.uploadUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+        if (!uploadRes.ok) throw new Error('Upload to S3 failed');
+
+        await api('/admin/users/' + profileUserId + '/business-card/confirm', {
+          method: 'PUT',
+          body: JSON.stringify({ fileKey: urlData.fileKey }),
+        });
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          document.getElementById('businessCardImg').src = ev.target.result;
+          document.getElementById('businessCardImg').style.display = 'block';
+          document.getElementById('businessCardPlaceholder').style.display = 'none';
+          document.getElementById('businessCardRemoveBtn').style.display = '';
+          document.getElementById('businessCardDownloadBtn').style.display = '';
+          document.getElementById('businessCardContainer').style.borderStyle = 'solid';
+        };
+        reader.readAsDataURL(file);
+      } catch (err) {
+        alert('Business card upload failed: ' + err.message);
+      }
+
+      e.target.value = '';
+    });
+
+    // --- Business Card Remove ---
+    document.getElementById('businessCardRemoveBtn').addEventListener('click', async () => {
+      if (!confirm('Remove business card?')) return;
+      try {
+        await api('/admin/users/' + profileUserId + '/business-card', { method: 'DELETE' });
+        document.getElementById('businessCardImg').style.display = 'none';
+        document.getElementById('businessCardPlaceholder').style.display = '';
+        document.getElementById('businessCardRemoveBtn').style.display = 'none';
+        document.getElementById('businessCardDownloadBtn').style.display = 'none';
+        document.getElementById('businessCardContainer').style.borderStyle = 'dashed';
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Business Card Download ---
+    document.getElementById('businessCardDownloadBtn').addEventListener('click', () => {
+      const img = document.getElementById('businessCardImg');
+      if (img.src && img.style.display !== 'none') {
+        const a = document.createElement('a');
+        a.href = img.src;
+        a.download = 'business-card.png';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
       }
     });
 
@@ -1643,14 +1761,14 @@
       document.getElementById('invEditName').value = data.name || '';
       document.getElementById('invEditAeName').value = data.account_executive_name || '';
       document.getElementById('invEditAeEmail').value = data.account_executive_email || '';
-      document.getElementById('invEditAePhone').value = data.account_executive_phone || '';
+      document.getElementById('invEditAePhone').value = data.account_executive_mobile || '';
       document.getElementById('invEditStates').value = data.states || '';
       document.getElementById('invEditBestPrograms').value = data.best_programs || '';
-      document.getElementById('invEditMinFico').value = data.min_fico || '';
+      document.getElementById('invEditMinFico').value = data.minimum_fico || '';
       document.getElementById('invEditDpa').value = data.in_house_dpa || '';
       document.getElementById('invEditEpo').value = data.epo || '';
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
-      document.getElementById('invEditDocReview').value = data.doc_review_for_wire_release || '';
+      document.getElementById('invEditDocReview').value = data.doc_review_wire || '';
       document.getElementById('invEditRemoteClosing').value = data.remote_closing_review || '';
     }
 
@@ -1664,14 +1782,14 @@
             name: document.getElementById('invEditName').value.trim(),
             account_executive_name: document.getElementById('invEditAeName').value.trim() || null,
             account_executive_email: document.getElementById('invEditAeEmail').value.trim() || null,
-            account_executive_phone: document.getElementById('invEditAePhone').value.trim() || null,
+            account_executive_mobile: document.getElementById('invEditAePhone').value.trim() || null,
             states: document.getElementById('invEditStates').value.trim() || null,
             best_programs: document.getElementById('invEditBestPrograms').value.trim() || null,
-            min_fico: document.getElementById('invEditMinFico').value.trim() || null,
+            minimum_fico: document.getElementById('invEditMinFico').value.trim() || null,
             in_house_dpa: document.getElementById('invEditDpa').value.trim() || null,
             epo: document.getElementById('invEditEpo').value.trim() || null,
             max_comp: document.getElementById('invEditMaxComp').value || null,
-            doc_review_for_wire_release: document.getElementById('invEditDocReview').value.trim() || null,
+            doc_review_wire: document.getElementById('invEditDocReview').value.trim() || null,
             remote_closing_review: document.getElementById('invEditRemoteClosing').value.trim() || null,
           }),
         });

@@ -462,6 +462,21 @@ const Investors = {
       if (user.online_app_url) infoHtml += '<div class="contact-card-item"><i class="fas fa-file-alt"></i><a href="' + user.online_app_url + '" target="_blank" rel="noopener noreferrer">Online Application</a></div>';
       infoHtml += '</div>';
 
+      // Business card download
+      let businessCardHtml = '';
+      if (user.business_card_url) {
+        businessCardHtml =
+          '<div class="contact-card-section" style="text-align:center;">' +
+            '<h4 style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px;">Business Card</h4>' +
+            '<img src="' + user.business_card_url + '" alt="Business Card" style="max-width:100%; max-height:180px; border-radius:8px; border:1px solid #eee; object-fit:contain;" />' +
+            '<div style="margin-top:8px;">' +
+              '<a href="' + user.business_card_url + '" download="business-card.png" target="_blank" class="btn btn-sm btn-secondary" style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">' +
+                '<i class="fas fa-download"></i> Download Business Card' +
+              '</a>' +
+            '</div>' +
+          '</div>';
+      }
+
       // Email signature
       let sigHtml = '';
       if (user.email_signature) {
@@ -483,6 +498,7 @@ const Investors = {
         '</div>' +
         infoHtml +
         socialHtml +
+        businessCardHtml +
         sigHtml;
 
       // Re-bind close

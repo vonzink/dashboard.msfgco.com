@@ -16,7 +16,7 @@ router.get('/:id/profile', async (req, res, next) => {
       user_id: parseInt(userId),
       team: null, phone: null, display_email: null, website: null, online_app_url: null,
       facebook_url: null, instagram_url: null, twitter_url: null, linkedin_url: null, tiktok_url: null,
-      avatar_s3_key: null, email_signature: null,
+      avatar_s3_key: null, business_card_s3_key: null, email_signature: null,
     };
 
     // Generate presigned avatar URL if exists
@@ -26,6 +26,16 @@ router.get('/:id/profile', async (req, res, next) => {
         avatar_url = await getDownloadUrl(BUCKETS.media, profile.avatar_s3_key);
       } catch (e) {
         logger.warn({ err: e }, 'Avatar URL generation failed');
+      }
+    }
+
+    // Generate presigned business card URL if exists
+    let business_card_url = null;
+    if (profile.business_card_s3_key) {
+      try {
+        business_card_url = await getDownloadUrl(BUCKETS.media, profile.business_card_s3_key);
+      } catch (e) {
+        logger.warn({ err: e }, 'Business card URL generation failed');
       }
     }
 
@@ -47,7 +57,7 @@ router.get('/:id/profile', async (req, res, next) => {
       aiKeys[row.service] = { maskedValue, is_active: row.is_active };
     }
 
-    res.json({ ...profile, avatar_url, ai_keys: aiKeys });
+    res.json({ ...profile, avatar_url, business_card_url, ai_keys: aiKeys });
   } catch (error) {
     next(error);
   }
@@ -155,6 +165,71 @@ router.delete('/:id/avatar', async (req, res, next) => {
     }
 
     await db.query('UPDATE user_profiles SET avatar_s3_key = NULL WHERE user_id = ?', [userId]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── Business Card Upload ────────────────────────
+
+// POST /users/:id/business-card/upload-url
+router.post('/:id/business-card/upload-url', async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const { fileName, fileType } = req.body;
+
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+    if (!fileType || !fileType.startsWith('image/')) {
+      return res.status(400).json({ error: 'File must be an image' });
+    }
+
+    const fileKey = buildMediaKey('employee-business-cards', userId, fileName);
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /users/:id/business-card/confirm
+router.put('/:id/business-card/confirm', async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const { fileKey } = req.body;
+    if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
+
+    const [old] = await db.query('SELECT business_card_s3_key FROM user_profiles WHERE user_id = ?', [userId]);
+    const oldKey = old[0]?.business_card_s3_key;
+
+    await db.query(
+      `INSERT INTO user_profiles (user_id, business_card_s3_key) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE business_card_s3_key = ?`,
+      [userId, fileKey, fileKey]
+    );
+
+    if (oldKey && oldKey !== fileKey) {
+      await deleteObject(BUCKETS.media, oldKey);
+    }
+
+    res.json({ success: true, fileKey });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /users/:id/business-card
+router.delete('/:id/business-card', async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const [rows] = await db.query('SELECT business_card_s3_key FROM user_profiles WHERE user_id = ?', [userId]);
+    const key = rows[0]?.business_card_s3_key;
+
+    if (key) {
+      await deleteObject(BUCKETS.media, key);
+    }
+
+    await db.query('UPDATE user_profiles SET business_card_s3_key = NULL WHERE user_id = ?', [userId]);
     res.json({ success: true });
   } catch (error) {
     next(error);
