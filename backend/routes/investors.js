@@ -35,13 +35,18 @@ async function resolveLogoUrl(logoUrl) {
 // ──────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
+    // ?all=true returns all investors (for admin manage screen)
+    // Default: only active investors (for dashboard dropdown)
+    const showAll = req.query.all === 'true' && isAdmin(req);
+    const whereClause = showAll ? '' : 'WHERE is_active = 1';
+
     const [investors] = await db.query(
       `SELECT id, investor_key, name,
               account_executive_name, account_executive_email, account_executive_mobile,
               states, best_programs, minimum_fico, in_house_dpa,
               epo, max_comp, doc_review_wire, remote_closing_review,
-              website_url, logo_url, notes
-       FROM investors ORDER BY name`
+              website_url, logo_url, notes, is_active
+       FROM investors ${whereClause} ORDER BY name`
     );
 
     // Resolve S3 keys → presigned download URLs
@@ -170,7 +175,7 @@ router.put('/:idOrKey', async (req, res, next) => {
       'account_executive_email', 'account_executive_address',
       'states', 'best_programs', 'minimum_fico', 'in_house_dpa',
       'epo', 'max_comp', 'doc_review_wire', 'remote_closing_review',
-      'website_url', 'logo_url', 'login_url',
+      'website_url', 'logo_url', 'login_url', 'is_active',
     ];
     const allowedFields = admin ? ['notes', ...ADMIN_FIELDS] : ['notes'];
 
@@ -195,6 +200,20 @@ router.put('/:idOrKey', async (req, res, next) => {
     }
 
     res.json(investors[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PATCH /api/investors/:id/toggle-active — Toggle is_active (admin only)
+// ──────────────────────────────────────────────
+router.patch('/:id/toggle-active', requireAdmin, async (req, res, next) => {
+  try {
+    await db.query('UPDATE investors SET is_active = NOT is_active WHERE id = ?', [req.params.id]);
+    const [rows] = await db.query('SELECT id, name, is_active FROM investors WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+    res.json(rows[0]);
   } catch (error) {
     next(error);
   }
