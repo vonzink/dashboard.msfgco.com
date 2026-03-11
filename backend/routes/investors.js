@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/connection');
-const { requireDbUser, isAdmin, requireAdmin } = require('../middleware/userContext');
+const { requireDbUser, isAdmin, hasRole, requireAdmin, requireManagerOrAdmin } = require('../middleware/userContext');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../services/s3');
 
@@ -37,7 +37,7 @@ router.get('/', async (req, res, next) => {
   try {
     // ?all=true returns all investors (for admin manage screen)
     // Default: only active investors (for dashboard dropdown)
-    const showAll = req.query.all === 'true' && isAdmin(req);
+    const showAll = req.query.all === 'true' && hasRole(req, 'admin', 'manager');
     const whereClause = showAll ? '' : 'WHERE is_active = 1';
 
     const [investors] = await db.query(
@@ -206,9 +206,9 @@ router.put('/:idOrKey', async (req, res, next) => {
 });
 
 // ──────────────────────────────────────────────
-// PATCH /api/investors/:id/toggle-active — Toggle is_active (admin only)
+// PATCH /api/investors/:id/toggle-active — Toggle is_active (admin or manager)
 // ──────────────────────────────────────────────
-router.patch('/:id/toggle-active', requireAdmin, async (req, res, next) => {
+router.patch('/:id/toggle-active', requireManagerOrAdmin, async (req, res, next) => {
   try {
     await db.query('UPDATE investors SET is_active = NOT is_active WHERE id = ?', [req.params.id]);
     const [rows] = await db.query('SELECT id, name, is_active FROM investors WHERE id = ?', [req.params.id]);

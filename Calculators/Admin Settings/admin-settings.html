@@ -448,12 +448,11 @@
           <th>Account Executive</th>
           <th>States</th>
           <th>Best Programs</th>
-          <th style="width:80px;">Status</th>
           <th style="width:140px;">Actions</th>
         </tr>
       </thead>
       <tbody id="investorsBody">
-        <tr><td colspan="6" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+        <tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
       </tbody>
     </table>
 
@@ -490,6 +489,14 @@
             </div>
             <input type="file" id="invLogoFileInput2" accept="image/png,image/jpeg,image/svg+xml" style="display:none;" />
             <p id="invProfileName" style="font-size:16px; font-weight:700; margin:12px 0 0; color:#104547;"></p>
+            <!-- Active Toggle -->
+            <div style="margin-top:12px; display:flex; align-items:center; gap:8px; justify-content:center;">
+              <label class="toggle-switch" style="margin:0;">
+                <input type="checkbox" id="invActiveToggle" />
+                <span class="toggle-slider"></span>
+              </label>
+              <span id="invActiveLabel" style="font-size:13px; font-weight:600; color:#888;">Inactive</span>
+            </div>
           </div>
           <!-- Editable Fields -->
           <div style="flex:1;">
@@ -1884,7 +1891,7 @@
 
     async function loadInvestors() {
       const tbody = document.getElementById('investorsBody');
-      tbody.innerHTML = '<tr><td colspan="6" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>';
 
       try {
         const investors = await api('/investors?all=true');
@@ -1892,48 +1899,23 @@
         investorsList = investors;
 
         if (investors.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" class="state-msg"><p>No investors.</p></td></tr>';
+          tbody.innerHTML = '<tr><td colspan="5" class="state-msg"><p>No investors.</p></td></tr>';
           return;
         }
 
         tbody.innerHTML = investors.map(inv => {
           const active = inv.is_active === 1 || inv.is_active === true;
           return '<tr data-inv-id="' + inv.id + '" style="' + (active ? '' : 'opacity:0.55;') + '">' +
-          '<td><strong>' + escHtml(inv.name) + '</strong></td>' +
+          '<td><strong>' + escHtml(inv.name) + '</strong>' + (active ? '' : ' <span style="font-size:11px; color:#e74c3c; font-weight:600;">(Inactive)</span>') + '</td>' +
           '<td>' + escHtml(inv.account_executive_name || '--') + '</td>' +
           '<td>' + escHtml(inv.states || '--') + '</td>' +
           '<td>' + escHtml(inv.best_programs || '--') + '</td>' +
-          '<td style="text-align:center;">' +
-            '<label class="toggle-switch" style="margin:0;">' +
-              '<input type="checkbox" class="inv-active-toggle" data-id="' + inv.id + '"' + (active ? ' checked' : '') + '>' +
-              '<span class="toggle-slider"></span>' +
-            '</label>' +
-          '</td>' +
           '<td>' +
             '<button class="btn btn-sm btn-secondary inv-edit-btn" data-key="' + escHtml(inv.investor_key) + '" title="Edit"><i class="fas fa-pen"></i></button> ' +
             '<button class="btn btn-sm btn-danger inv-delete-btn" data-id="' + inv.id + '" data-name="' + escHtml(inv.name) + '" title="Delete"><i class="fas fa-trash"></i></button>' +
           '</td>' +
           '</tr>';
         }).join('');
-
-        // Active toggle handlers
-        tbody.querySelectorAll('.inv-active-toggle').forEach(toggle => {
-          toggle.addEventListener('change', async (e) => {
-            const id = e.target.dataset.id;
-            const row = e.target.closest('tr');
-            try {
-              const result = await api('/investors/' + id + '/toggle-active', { method: 'PATCH' });
-              if (result) {
-                const nowActive = result.is_active === 1 || result.is_active === true;
-                e.target.checked = nowActive;
-                row.style.opacity = nowActive ? '' : '0.55';
-              }
-            } catch (err) {
-              console.error('Toggle active error:', err);
-              e.target.checked = !e.target.checked;
-            }
-          });
-        });
 
         // Edit buttons → open profile
         tbody.querySelectorAll('.inv-edit-btn').forEach(btn => {
@@ -1946,7 +1928,7 @@
         });
       } catch (err) {
         console.error('Load investors error:', err);
-        tbody.innerHTML = '<tr><td colspan="6" class="state-msg" style="color:#e74c3c;"><p>Failed to load investors.</p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="state-msg" style="color:#e74c3c;"><p>Failed to load investors.</p></td></tr>';
       }
     }
 
@@ -2028,6 +2010,14 @@
 
         // Logo
         loadInvestorLogo(data);
+
+        // Active toggle
+        const activeToggle = document.getElementById('invActiveToggle');
+        const activeLabel = document.getElementById('invActiveLabel');
+        const isActive = data.is_active === 1 || data.is_active === true;
+        activeToggle.checked = isActive;
+        activeLabel.textContent = isActive ? 'Active' : 'Inactive';
+        activeLabel.style.color = isActive ? '#8cc63E' : '#e74c3c';
       } catch (err) {
         alert('Error loading investor: ' + err.message);
       }
@@ -2045,6 +2035,24 @@
     document.getElementById('invProfileBackBtn').addEventListener('click', () => {
       hideInvestorProfile();
       loadInvestors();
+    });
+
+    // Active toggle in profile
+    document.getElementById('invActiveToggle').addEventListener('change', async (e) => {
+      if (!currentInvestorId) return;
+      const label = document.getElementById('invActiveLabel');
+      try {
+        const result = await api('/investors/' + currentInvestorId + '/toggle-active', { method: 'PATCH' });
+        if (result) {
+          const nowActive = result.is_active === 1 || result.is_active === true;
+          e.target.checked = nowActive;
+          label.textContent = nowActive ? 'Active' : 'Inactive';
+          label.style.color = nowActive ? '#8cc63E' : '#e74c3c';
+        }
+      } catch (err) {
+        console.error('Toggle active error:', err);
+        e.target.checked = !e.target.checked;
+      }
     });
 
     // Investor sub-tab switching (scoped to investor profile)
