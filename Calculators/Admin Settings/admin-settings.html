@@ -141,33 +141,106 @@
             <input type="file" id="businessCardFileInput" accept="image/*" style="display:none;" />
           </div>
 
-          <!-- Editable Fields -->
-          <div style="flex:1;">
-            <div class="form-grid">
-              <div class="form-group">
-                <label>Team</label>
-                <input type="text" id="profileTeam" placeholder="e.g. Sales, Operations" />
-              </div>
-              <div class="form-group">
-                <label>Phone</label>
-                <input type="tel" id="profilePhone" placeholder="(555) 123-4567" />
-              </div>
-              <div class="form-group">
-                <label>Display Email</label>
-                <input type="email" id="profileDisplayEmail" placeholder="public-facing email" />
-              </div>
-              <div class="form-group">
-                <label>Website</label>
-                <input type="url" id="profileWebsite" placeholder="https://..." />
-              </div>
-              <div class="form-group" style="grid-column: 1 / -1;">
-                <label>Online Application URL</label>
-                <input type="url" id="profileOnlineApp" placeholder="https://apply.msfgco.com/..." />
+          <!-- QR Code 1 -->
+          <div style="flex-shrink:0; text-align:center; min-width:140px;">
+            <label style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:8px;">QR Code 1</label>
+            <div id="qrCode1Container" style="width:120px; height:120px; border:2px dashed #ddd; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#f9f9f9; cursor:pointer; margin:0 auto;" title="Click to upload QR code">
+              <img id="qrCode1Img" src="" alt="" style="display:none; width:100%; height:100%; object-fit:contain;" />
+              <div id="qrCode1Placeholder" style="color:#bbb; font-size:12px; text-align:center;">
+                <i class="fas fa-qrcode" style="font-size:28px; display:block; margin-bottom:4px;"></i>
+                No QR code
               </div>
             </div>
-            <div class="form-actions">
-              <button class="btn btn-primary" id="profileBasicSaveBtn"><i class="fas fa-save"></i> Save</button>
+            <input type="text" id="qrCode1Label" placeholder="Label (optional)" style="width:120px; margin-top:6px; padding:4px 8px; border:1px solid #ddd; border-radius:6px; font-size:12px; text-align:center;" />
+            <div style="margin-top:6px; display:flex; gap:4px; justify-content:center;">
+              <button class="btn btn-sm btn-secondary" id="qrCode1UploadBtn"><i class="fas fa-upload"></i></button>
+              <button class="btn btn-sm btn-info" id="qrCode1DownloadBtn" style="display:none;"><i class="fas fa-download"></i></button>
+              <button class="btn btn-sm btn-danger" id="qrCode1RemoveBtn" style="display:none;"><i class="fas fa-trash"></i></button>
             </div>
+            <input type="file" id="qrCode1FileInput" accept="image/*" style="display:none;" />
+          </div>
+          <!-- QR Code 2 -->
+          <div style="flex-shrink:0; text-align:center; min-width:140px;">
+            <label style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:8px;">QR Code 2</label>
+            <div id="qrCode2Container" style="width:120px; height:120px; border:2px dashed #ddd; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#f9f9f9; cursor:pointer; margin:0 auto;" title="Click to upload QR code">
+              <img id="qrCode2Img" src="" alt="" style="display:none; width:100%; height:100%; object-fit:contain;" />
+              <div id="qrCode2Placeholder" style="color:#bbb; font-size:12px; text-align:center;">
+                <i class="fas fa-qrcode" style="font-size:28px; display:block; margin-bottom:4px;"></i>
+                No QR code
+              </div>
+            </div>
+            <input type="text" id="qrCode2Label" placeholder="Label (optional)" style="width:120px; margin-top:6px; padding:4px 8px; border:1px solid #ddd; border-radius:6px; font-size:12px; text-align:center;" />
+            <div style="margin-top:6px; display:flex; gap:4px; justify-content:center;">
+              <button class="btn btn-sm btn-secondary" id="qrCode2UploadBtn"><i class="fas fa-upload"></i></button>
+              <button class="btn btn-sm btn-info" id="qrCode2DownloadBtn" style="display:none;"><i class="fas fa-download"></i></button>
+              <button class="btn btn-sm btn-danger" id="qrCode2RemoveBtn" style="display:none;"><i class="fas fa-trash"></i></button>
+            </div>
+            <input type="file" id="qrCode2FileInput" accept="image/*" style="display:none;" />
+          </div>
+        </div>
+
+        <!-- Editable Fields -->
+        <div style="margin-top:20px;">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Team</label>
+              <input type="text" id="profileTeam" placeholder="e.g. Sales, Operations" />
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="tel" id="profilePhone" placeholder="(555) 123-4567" />
+            </div>
+            <div class="form-group">
+              <label>Display Email</label>
+              <input type="email" id="profileDisplayEmail" placeholder="public-facing email" />
+            </div>
+            <div class="form-group">
+              <label>Website</label>
+              <input type="url" id="profileWebsite" placeholder="https://..." />
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label>Online Application URL</label>
+              <input type="url" id="profileOnlineApp" placeholder="https://apply.msfgco.com/..." />
+            </div>
+          </div>
+
+          <!-- Licensing & Compliance -->
+          <h4 style="margin:20px 0 10px; font-size:13px; color:#104547; border-top:1px solid #eee; padding-top:16px;">
+            <i class="fas fa-id-badge"></i> Licensing & Compliance
+          </h4>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>NMLS #</label>
+              <input type="text" id="profileNmls" placeholder="e.g. 123456" />
+            </div>
+            <div class="form-group">
+              <label>Insurance Provider</label>
+              <input type="text" id="profileInsuranceProvider" placeholder="Provider name" />
+            </div>
+            <div class="form-group">
+              <label>Insurance Policy #</label>
+              <input type="text" id="profileInsurancePolicyNumber" placeholder="Policy number" />
+            </div>
+            <div class="form-group">
+              <label>Insurance Expiration</label>
+              <input type="date" id="profileInsuranceExpiration" />
+            </div>
+            <div class="form-group">
+              <label>Bond Company</label>
+              <input type="text" id="profileBondCompany" placeholder="Bonding company" />
+            </div>
+            <div class="form-group">
+              <label>Bond #</label>
+              <input type="text" id="profileBondNumber" placeholder="Bond number" />
+            </div>
+            <div class="form-group">
+              <label>Bond Expiration</label>
+              <input type="date" id="profileBondExpiration" />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="profileBasicSaveBtn"><i class="fas fa-save"></i> Save</button>
           </div>
         </div>
       </div>
@@ -195,7 +268,19 @@
             <label><i class="fab fa-tiktok"></i> TikTok</label>
             <input type="url" id="profileTiktok" placeholder="https://tiktok.com/@..." />
           </div>
+          <div class="form-group">
+            <label><i class="fab fa-youtube" style="color:#FF0000;"></i> YouTube</label>
+            <input type="url" id="profileYoutube" placeholder="https://youtube.com/@..." />
+          </div>
         </div>
+
+        <!-- Custom Links -->
+        <h4 style="margin:20px 0 10px; font-size:13px; color:#104547; border-top:1px solid #eee; padding-top:16px;">
+          <i class="fas fa-link"></i> Custom Links
+          <button class="btn btn-sm btn-secondary" id="addCustomLinkBtn" style="margin-left:12px;"><i class="fas fa-plus"></i> Add Link</button>
+        </h4>
+        <div id="customLinksContainer"></div>
+
         <div class="form-actions">
           <button class="btn btn-primary" id="profileSocialSaveBtn"><i class="fas fa-save"></i> Save</button>
         </div>
@@ -1066,6 +1151,16 @@
         document.getElementById('profileTwitter').value = data.twitter_url || '';
         document.getElementById('profileLinkedin').value = data.linkedin_url || '';
         document.getElementById('profileTiktok').value = data.tiktok_url || '';
+        document.getElementById('profileYoutube').value = data.youtube_url || '';
+
+        // Licensing fields
+        document.getElementById('profileNmls').value = data.nmls_number || '';
+        document.getElementById('profileInsuranceProvider').value = data.insurance_provider || '';
+        document.getElementById('profileInsurancePolicyNumber').value = data.insurance_policy_number || '';
+        document.getElementById('profileInsuranceExpiration').value = data.insurance_expiration || '';
+        document.getElementById('profileBondCompany').value = data.bond_company || '';
+        document.getElementById('profileBondNumber').value = data.bond_number || '';
+        document.getElementById('profileBondExpiration').value = data.bond_expiration || '';
 
         // Email signature
         document.getElementById('profileSignatureInput').value = data.email_signature || '';
@@ -1107,6 +1202,13 @@
           bcContainer.style.borderStyle = 'dashed';
         }
 
+        // QR Codes
+        loadQrCodeState(1, data.qr_code_1_url, data.qr_code_1_label);
+        loadQrCodeState(2, data.qr_code_2_url, data.qr_code_2_label);
+
+        // Custom links
+        loadCustomLinks(data.custom_links || []);
+
         // AI keys status (inline in profile data)
         if (data.ai_keys) {
           updateAIStatus('openai', data.ai_keys.openai);
@@ -1115,6 +1217,58 @@
       } catch (err) {
         console.error('Load profile error:', err);
       }
+    }
+
+    function loadQrCodeState(num, url, label) {
+      const imgEl = document.getElementById('qrCode' + num + 'Img');
+      const placeholder = document.getElementById('qrCode' + num + 'Placeholder');
+      const removeBtn = document.getElementById('qrCode' + num + 'RemoveBtn');
+      const downloadBtn = document.getElementById('qrCode' + num + 'DownloadBtn');
+      const container = document.getElementById('qrCode' + num + 'Container');
+      const labelInput = document.getElementById('qrCode' + num + 'Label');
+      labelInput.value = label || '';
+      if (url) {
+        imgEl.src = url;
+        imgEl.style.display = 'block';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = '';
+        downloadBtn.style.display = '';
+        container.style.borderStyle = 'solid';
+      } else {
+        imgEl.style.display = 'none';
+        placeholder.style.display = '';
+        removeBtn.style.display = 'none';
+        downloadBtn.style.display = 'none';
+        container.style.borderStyle = 'dashed';
+      }
+    }
+
+    function loadCustomLinks(links) {
+      const container = document.getElementById('customLinksContainer');
+      container.innerHTML = '';
+      links.forEach(link => addCustomLinkRow(link));
+    }
+
+    function addCustomLinkRow(link) {
+      const container = document.getElementById('customLinksContainer');
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px;';
+      row.dataset.linkId = link ? link.id : '';
+      row.innerHTML = `
+        <input type="text" class="cl-label" value="${link ? (link.label || '') : ''}" placeholder="Label (e.g. My Website)" style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
+        <input type="url" class="cl-url" value="${link ? (link.url || '') : ''}" placeholder="https://..." style="flex:2; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
+        <button class="btn btn-sm btn-danger cl-remove" title="Remove"><i class="fas fa-times"></i></button>
+      `;
+      row.querySelector('.cl-remove').addEventListener('click', async () => {
+        const linkId = row.dataset.linkId;
+        if (linkId) {
+          try {
+            await api('/admin/users/' + profileUserId + '/custom-links/' + linkId, { method: 'DELETE' });
+          } catch (err) { console.error(err); }
+        }
+        row.remove();
+      });
+      container.appendChild(row);
     }
 
     // --- Save Basic Info ---
@@ -1128,6 +1282,15 @@
             display_email: document.getElementById('profileDisplayEmail').value.trim(),
             website: document.getElementById('profileWebsite').value.trim(),
             online_app_url: document.getElementById('profileOnlineApp').value.trim(),
+            qr_code_1_label: document.getElementById('qrCode1Label').value.trim(),
+            qr_code_2_label: document.getElementById('qrCode2Label').value.trim(),
+            nmls_number: document.getElementById('profileNmls').value.trim(),
+            insurance_provider: document.getElementById('profileInsuranceProvider').value.trim(),
+            insurance_policy_number: document.getElementById('profileInsurancePolicyNumber').value.trim(),
+            insurance_expiration: document.getElementById('profileInsuranceExpiration').value || null,
+            bond_company: document.getElementById('profileBondCompany').value.trim(),
+            bond_number: document.getElementById('profileBondNumber').value.trim(),
+            bond_expiration: document.getElementById('profileBondExpiration').value || null,
           }),
         });
         alert('Basic info saved!');
@@ -1139,6 +1302,7 @@
     // --- Save Social ---
     document.getElementById('profileSocialSaveBtn').addEventListener('click', async () => {
       try {
+        // Save social profile fields
         await api('/admin/users/' + profileUserId + '/profile', {
           method: 'PUT',
           body: JSON.stringify({
@@ -1147,12 +1311,40 @@
             twitter_url: document.getElementById('profileTwitter').value.trim(),
             linkedin_url: document.getElementById('profileLinkedin').value.trim(),
             tiktok_url: document.getElementById('profileTiktok').value.trim(),
+            youtube_url: document.getElementById('profileYoutube').value.trim(),
           }),
         });
+
+        // Save custom links
+        const rows = document.querySelectorAll('#customLinksContainer > div');
+        for (const row of rows) {
+          const label = row.querySelector('.cl-label').value.trim();
+          const url = row.querySelector('.cl-url').value.trim();
+          if (!label || !url) continue;
+          const linkId = row.dataset.linkId;
+          if (linkId) {
+            await api('/admin/users/' + profileUserId + '/custom-links/' + linkId, {
+              method: 'PUT',
+              body: JSON.stringify({ label, url }),
+            });
+          } else {
+            const created = await api('/admin/users/' + profileUserId + '/custom-links', {
+              method: 'POST',
+              body: JSON.stringify({ label, url }),
+            });
+            if (created) row.dataset.linkId = created.id;
+          }
+        }
+
         alert('Social links saved!');
       } catch (err) {
         alert('Error saving: ' + err.message);
       }
+    });
+
+    // --- Add Custom Link Row ---
+    document.getElementById('addCustomLinkBtn').addEventListener('click', () => {
+      addCustomLinkRow(null);
     });
 
     // --- Avatar Upload ---
@@ -1295,6 +1487,88 @@
         document.body.removeChild(a);
       }
     });
+
+    // --- QR Code Upload/Remove/Download (generic for slots 1 & 2) ---
+    function setupQrCodeHandlers(num) {
+      const slug = 'qr-code-' + num;
+
+      document.getElementById('qrCode' + num + 'UploadBtn').addEventListener('click', () => {
+        document.getElementById('qrCode' + num + 'FileInput').click();
+      });
+      document.getElementById('qrCode' + num + 'Container').addEventListener('click', () => {
+        document.getElementById('qrCode' + num + 'FileInput').click();
+      });
+
+      document.getElementById('qrCode' + num + 'FileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) return alert('Please select an image file');
+        if (file.size > 5 * 1024 * 1024) return alert('Image must be under 5 MB');
+
+        try {
+          const urlData = await api('/admin/users/' + profileUserId + '/' + slug + '/upload-url', {
+            method: 'POST',
+            body: JSON.stringify({ fileName: file.name, fileType: file.type }),
+          });
+          if (!urlData) return;
+
+          const uploadRes = await fetch(urlData.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          });
+          if (!uploadRes.ok) throw new Error('Upload to S3 failed');
+
+          await api('/admin/users/' + profileUserId + '/' + slug + '/confirm', {
+            method: 'PUT',
+            body: JSON.stringify({ fileKey: urlData.fileKey }),
+          });
+
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            document.getElementById('qrCode' + num + 'Img').src = ev.target.result;
+            document.getElementById('qrCode' + num + 'Img').style.display = 'block';
+            document.getElementById('qrCode' + num + 'Placeholder').style.display = 'none';
+            document.getElementById('qrCode' + num + 'RemoveBtn').style.display = '';
+            document.getElementById('qrCode' + num + 'DownloadBtn').style.display = '';
+            document.getElementById('qrCode' + num + 'Container').style.borderStyle = 'solid';
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          alert('QR code upload failed: ' + err.message);
+        }
+        e.target.value = '';
+      });
+
+      document.getElementById('qrCode' + num + 'RemoveBtn').addEventListener('click', async () => {
+        if (!confirm('Remove QR code ' + num + '?')) return;
+        try {
+          await api('/admin/users/' + profileUserId + '/' + slug, { method: 'DELETE' });
+          document.getElementById('qrCode' + num + 'Img').style.display = 'none';
+          document.getElementById('qrCode' + num + 'Placeholder').style.display = '';
+          document.getElementById('qrCode' + num + 'RemoveBtn').style.display = 'none';
+          document.getElementById('qrCode' + num + 'DownloadBtn').style.display = 'none';
+          document.getElementById('qrCode' + num + 'Container').style.borderStyle = 'dashed';
+        } catch (err) {
+          alert('Error: ' + err.message);
+        }
+      });
+
+      document.getElementById('qrCode' + num + 'DownloadBtn').addEventListener('click', () => {
+        const img = document.getElementById('qrCode' + num + 'Img');
+        if (img.src && img.style.display !== 'none') {
+          const a = document.createElement('a');
+          a.href = img.src;
+          a.download = 'qr-code-' + num + '.png';
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        }
+      });
+    }
+    setupQrCodeHandlers(1);
+    setupQrCodeHandlers(2);
 
     // --- Email Signature ---
     document.getElementById('signaturePreviewBtn').addEventListener('click', () => {

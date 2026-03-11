@@ -50,6 +50,17 @@ function requireProcessorOrAdmin(req, res, next) {
   return next();
 }
 
+/**
+ * Express middleware: reject with 403 if user is not a manager or admin.
+ * Use on routes that managers need access to (profiles, documents, notes).
+ */
+function requireManagerOrAdmin(req, res, next) {
+  if (!hasRole(req, 'admin', 'manager')) {
+    return res.status(403).json({ error: 'Manager or admin access required' });
+  }
+  return next();
+}
+
 module.exports = {
   getDbUser,
   getUserId,
@@ -58,5 +69,6 @@ module.exports = {
   isAdmin,
   requireAdmin,
   requireProcessorOrAdmin,
+  requireManagerOrAdmin,
   requireDbUser,
 };

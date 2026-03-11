@@ -33,7 +33,12 @@ router.get('/:id/contact-card', async (req, res, next) => {
       `SELECT u.id, u.name, u.email, u.initials, u.role,
               p.team, p.phone, p.display_email, p.website, p.online_app_url,
               p.facebook_url, p.instagram_url, p.twitter_url, p.linkedin_url, p.tiktok_url,
-              p.avatar_s3_key, p.business_card_s3_key, p.email_signature
+              p.youtube_url,
+              p.avatar_s3_key, p.business_card_s3_key,
+              p.qr_code_1_s3_key, p.qr_code_1_label,
+              p.qr_code_2_s3_key, p.qr_code_2_label,
+              p.nmls_number,
+              p.email_signature
        FROM users u
        LEFT JOIN user_profiles p ON u.id = p.user_id
        WHERE u.id = ? AND u.is_active = 1`,
@@ -46,25 +51,39 @@ router.get('/:id/contact-card', async (req, res, next) => {
 
     const user = users[0];
 
-    // Generate presigned avatar URL if exists
+    // Generate presigned URLs for images
     let avatar_url = null;
     if (user.avatar_s3_key) {
-      try {
-        avatar_url = await getDownloadUrl(BUCKETS.media, user.avatar_s3_key);
-      } catch { /* ignore */ }
+      try { avatar_url = await getDownloadUrl(BUCKETS.media, user.avatar_s3_key); } catch { /* ignore */ }
     }
-    // Generate presigned business card URL if exists
     let business_card_url = null;
     if (user.business_card_s3_key) {
-      try {
-        business_card_url = await getDownloadUrl(BUCKETS.media, user.business_card_s3_key);
-      } catch { /* ignore */ }
+      try { business_card_url = await getDownloadUrl(BUCKETS.media, user.business_card_s3_key); } catch { /* ignore */ }
     }
+    let qr_code_1_url = null;
+    if (user.qr_code_1_s3_key) {
+      try { qr_code_1_url = await getDownloadUrl(BUCKETS.media, user.qr_code_1_s3_key); } catch { /* ignore */ }
+    }
+    let qr_code_2_url = null;
+    if (user.qr_code_2_s3_key) {
+      try { qr_code_2_url = await getDownloadUrl(BUCKETS.media, user.qr_code_2_s3_key); } catch { /* ignore */ }
+    }
+
+    // Get custom links
+    const [customLinks] = await db.query(
+      'SELECT id, label, url, icon, sort_order FROM employee_custom_links WHERE user_id = ? ORDER BY sort_order, id',
+      [userId]
+    );
 
     delete user.avatar_s3_key;
     delete user.business_card_s3_key;
+    delete user.qr_code_1_s3_key;
+    delete user.qr_code_2_s3_key;
     user.avatar_url = avatar_url;
     user.business_card_url = business_card_url;
+    user.qr_code_1_url = qr_code_1_url;
+    user.qr_code_2_url = qr_code_2_url;
+    user.custom_links = customLinks;
 
     res.json(user);
   } catch (error) {

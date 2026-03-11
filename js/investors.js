@@ -442,6 +442,7 @@ const Investors = {
         { url: user.twitter_url, icon: 'fab fa-x-twitter', color: '#000', label: 'X' },
         { url: user.linkedin_url, icon: 'fab fa-linkedin-in', color: '#0A66C2', label: 'LinkedIn' },
         { url: user.tiktok_url, icon: 'fab fa-tiktok', color: '#000', label: 'TikTok' },
+        { url: user.youtube_url, icon: 'fab fa-youtube', color: '#FF0000', label: 'YouTube' },
       ].filter(s => s.url);
 
       let socialHtml = '';
@@ -460,6 +461,7 @@ const Investors = {
       if (email) infoHtml += '<div class="contact-card-item"><i class="fas fa-envelope"></i><a href="mailto:' + email + '">' + esc(email) + '</a></div>';
       if (user.website) infoHtml += '<div class="contact-card-item"><i class="fas fa-globe"></i><a href="' + user.website + '" target="_blank" rel="noopener noreferrer">' + esc(user.website.replace(/^https?:\/\//, '')) + '</a></div>';
       if (user.online_app_url) infoHtml += '<div class="contact-card-item"><i class="fas fa-file-alt"></i><a href="' + user.online_app_url + '" target="_blank" rel="noopener noreferrer">Online Application</a></div>';
+      if (user.nmls_number) infoHtml += '<div class="contact-card-item"><i class="fas fa-id-badge"></i><span>NMLS# ' + esc(user.nmls_number) + '</span></div>';
       infoHtml += '</div>';
 
       // Business card download
@@ -475,6 +477,36 @@ const Investors = {
               '</a>' +
             '</div>' +
           '</div>';
+      }
+
+      // Custom links
+      let customLinksHtml = '';
+      if (user.custom_links && user.custom_links.length > 0) {
+        customLinksHtml = '<div class="contact-card-section"><h4 style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px;">Links</h4><div style="display:flex; flex-wrap:wrap; gap:8px;">';
+        user.custom_links.forEach(link => {
+          customLinksHtml += '<a href="' + link.url + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">' +
+            '<i class="fas fa-link"></i> ' + esc(link.label) +
+          '</a>';
+        });
+        customLinksHtml += '</div></div>';
+      }
+
+      // QR Codes
+      let qrHtml = '';
+      const qrItems = [];
+      if (user.qr_code_1_url) qrItems.push({ url: user.qr_code_1_url, label: user.qr_code_1_label || 'QR Code 1' });
+      if (user.qr_code_2_url) qrItems.push({ url: user.qr_code_2_url, label: user.qr_code_2_label || 'QR Code 2' });
+      if (qrItems.length > 0) {
+        qrHtml = '<div class="contact-card-section"><h4 style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px;">QR Codes</h4><div style="display:flex; gap:16px; justify-content:center; flex-wrap:wrap;">';
+        qrItems.forEach(qr => {
+          qrHtml +=
+            '<div style="text-align:center;">' +
+              '<img src="' + qr.url + '" alt="' + esc(qr.label) + '" style="width:120px; height:120px; object-fit:contain; border:1px solid #eee; border-radius:8px;" />' +
+              '<p style="font-size:12px; color:#666; margin:6px 0 4px;">' + esc(qr.label) + '</p>' +
+              '<a href="' + qr.url + '" download="' + esc(qr.label) + '.png" target="_blank" class="btn btn-sm btn-secondary" style="font-size:11px;"><i class="fas fa-download"></i> Download</a>' +
+            '</div>';
+        });
+        qrHtml += '</div></div>';
       }
 
       // Email signature
@@ -498,7 +530,9 @@ const Investors = {
         '</div>' +
         infoHtml +
         socialHtml +
+        customLinksHtml +
         businessCardHtml +
+        qrHtml +
         sigHtml;
 
       // Re-bind close
