@@ -274,6 +274,50 @@
           </div>
         </div>
 
+        <!-- Business / Compliance Social -->
+        <h4 style="margin:20px 0 10px; font-size:13px; color:#104547; border-top:1px solid #eee; padding-top:16px;">
+          <i class="fas fa-briefcase"></i> Business &amp; Compliance
+        </h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label><i class="fab fa-facebook" style="color:#1877F2;"></i> Facebook Business Page</label>
+            <input type="url" id="profileFacebookBusiness" placeholder="https://facebook.com/YourPage" />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-facebook" style="color:#1877F2;"></i> Facebook Business Page 2</label>
+            <input type="url" id="profileFacebookBusiness2" placeholder="https://facebook.com/profile.php?id=..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-linkedin" style="color:#0A66C2;"></i> LinkedIn (Alt)</label>
+            <input type="url" id="profileLinkedin2" placeholder="https://linkedin.com/in/..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fas fa-map-marker-alt" style="color:#00B246;"></i> Nextdoor</label>
+            <input type="url" id="profileNextdoor" placeholder="https://nextdoor.com/pages/..." />
+          </div>
+          <div class="form-group">
+            <label><i class="fab fa-google" style="color:#4285F4;"></i> Google My Business</label>
+            <input type="url" id="profileGoogleMyBusiness" placeholder="https://g.page/..." />
+          </div>
+        </div>
+
+        <!-- Compliance Audit -->
+        <h4 style="margin:20px 0 10px; font-size:13px; color:#104547; border-top:1px solid #eee; padding-top:16px;">
+          <i class="fas fa-clipboard-check" style="color:#d97706;"></i> Compliance Audit
+        </h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Last Audit Date</label>
+            <input type="date" id="profileSocialAuditDate" />
+          </div>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label>Audit Notes</label>
+          <textarea id="profileSocialAuditNotes" rows="3"
+            style="width:100%; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px; resize:vertical;"
+            placeholder="Compliance notes, flags, follow-ups..."></textarea>
+        </div>
+
         <!-- Custom Links -->
         <h4 style="margin:20px 0 10px; font-size:13px; color:#104547; border-top:1px solid #eee; padding-top:16px;">
           <i class="fas fa-link"></i> Custom Links
@@ -324,9 +368,15 @@
           <button class="btn btn-secondary" id="signaturePreviewBtn"><i class="fas fa-eye"></i> Preview</button>
           <button class="btn btn-primary" id="signatureSaveBtn"><i class="fas fa-save"></i> Save</button>
         </div>
-        <div id="signaturePreview" style="display:none; margin-top:16px; padding:16px; border:1px solid #eee; border-radius:8px; background:#fff;">
-          <h4 style="margin:0 0 8px; font-size:11px; color:#999; text-transform:uppercase; letter-spacing:.5px;">Preview</h4>
-          <div id="signaturePreviewContent"></div>
+        <div id="signaturePreview" style="display:none; margin-top:16px; border:1px solid #eee; border-radius:8px; background:#fff;">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid #eee;">
+            <h4 style="margin:0; font-size:11px; color:#999; text-transform:uppercase; letter-spacing:.5px;">Preview</h4>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm btn-secondary" id="signatureCopyBtn" title="Copy HTML to clipboard"><i class="fas fa-copy"></i> Copy HTML</button>
+              <button class="btn btn-sm btn-secondary" id="signatureDownloadBtn" title="Download as HTML file"><i class="fas fa-download"></i> Download</button>
+            </div>
+          </div>
+          <div id="signaturePreviewContent" style="padding:16px; max-height:400px; overflow:auto; transform:scale(0.85); transform-origin:top left; width:117.6%;"></div>
         </div>
       </div>
 
@@ -939,9 +989,6 @@
         }
 
         tbody.innerHTML = users.map(u => {
-          const statusBadge = u.is_active
-            ? '<span class="badge badge-active">Active</span>'
-            : '<span class="badge badge-inactive">Inactive</span>';
           const roleBadge = u.role === 'admin'
             ? '<span class="badge badge-admin">' + escHtml(u.role) + '</span>'
             : escHtml(u.role || 'user');
@@ -951,14 +998,18 @@
             '<td><strong>' + escHtml(u.name) + '</strong></td>' +
             '<td>' + escHtml(u.email) + '</td>' +
             '<td>' + roleBadge + '</td>' +
-            '<td>' + statusBadge + '</td>' +
+            '<td>' +
+              '<label class="toggle-switch" title="' + (u.is_active ? 'Active' : 'Inactive') + '">' +
+                '<input type="checkbox" class="user-active-toggle" data-id="' + u.id + '"' + (u.is_active ? ' checked' : '') + '>' +
+                '<span class="toggle-slider"></span>' +
+              '</label>' +
+              '<span style="margin-left:8px; font-size:0.82em; color:' + (u.is_active ? 'var(--msfg-green)' : '#999') + ';">' +
+                (u.is_active ? 'Active' : 'Inactive') +
+              '</span>' +
+            '</td>' +
             '<td>' +
               '<button class="btn btn-sm btn-primary view-profile-btn" data-id="' + u.id + '" title="View Profile"><i class="fas fa-id-card"></i></button> ' +
-              '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
-              (u.is_active
-                ? '<button class="btn btn-sm btn-danger deactivate-user-btn" data-id="' + u.id + '" title="Deactivate"><i class="fas fa-user-slash"></i></button>'
-                : '<button class="btn btn-sm btn-primary activate-user-btn" data-id="' + u.id + '" title="Activate"><i class="fas fa-user-check"></i></button>'
-              ) +
+              '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button>' +
             '</td>' +
             '</tr>'
           );
@@ -974,14 +1025,9 @@
           btn.addEventListener('click', () => editUser(users.find(u => String(u.id) === btn.dataset.id)));
         });
 
-        // Bind deactivate buttons
-        tbody.querySelectorAll('.deactivate-user-btn').forEach(btn => {
-          btn.addEventListener('click', () => toggleUserActive(btn.dataset.id, false));
-        });
-
-        // Bind activate buttons
-        tbody.querySelectorAll('.activate-user-btn').forEach(btn => {
-          btn.addEventListener('click', () => toggleUserActive(btn.dataset.id, true));
+        // Bind active/inactive toggles
+        tbody.querySelectorAll('.user-active-toggle').forEach(toggle => {
+          toggle.addEventListener('change', () => toggleUserActive(toggle.dataset.id, toggle.checked));
         });
       } catch (err) {
         console.error('Load users error:', err);
@@ -1053,21 +1099,15 @@
     }
 
     async function toggleUserActive(userId, activate) {
-      const action = activate ? 'activate' : 'deactivate';
-      if (!confirm('Are you sure you want to ' + action + ' this user?')) return;
-
       try {
-        if (activate) {
-          await api('/admin/users/' + userId, {
-            method: 'PUT',
-            body: JSON.stringify({ is_active: true }),
-          });
-        } else {
-          await api('/admin/users/' + userId, { method: 'DELETE' });
-        }
+        await api('/admin/users/' + userId, {
+          method: 'PUT',
+          body: JSON.stringify({ is_active: activate }),
+        });
         loadUsers();
       } catch (err) {
         alert('Error: ' + err.message);
+        loadUsers(); // re-render to reset toggle state on failure
       }
     }
 
@@ -1153,13 +1193,23 @@
         document.getElementById('profileWebsite').value = data.website || '';
         document.getElementById('profileOnlineApp').value = data.online_app_url || '';
 
-        // Social fields
+        // Social fields — personal
         document.getElementById('profileFacebook').value = data.facebook_url || '';
         document.getElementById('profileInstagram').value = data.instagram_url || '';
         document.getElementById('profileTwitter').value = data.twitter_url || '';
         document.getElementById('profileLinkedin').value = data.linkedin_url || '';
         document.getElementById('profileTiktok').value = data.tiktok_url || '';
         document.getElementById('profileYoutube').value = data.youtube_url || '';
+
+        // Social fields — business & compliance
+        document.getElementById('profileFacebookBusiness').value = data.facebook_business_url || '';
+        document.getElementById('profileFacebookBusiness2').value = data.facebook_business_url_2 || '';
+        document.getElementById('profileLinkedin2').value = data.linkedin_url_2 || '';
+        document.getElementById('profileNextdoor').value = data.nextdoor_url || '';
+        document.getElementById('profileGoogleMyBusiness').value = data.google_my_business_url || '';
+        document.getElementById('profileSocialAuditDate').value = data.social_audit_date
+          ? data.social_audit_date.substring(0, 10) : '';
+        document.getElementById('profileSocialAuditNotes').value = data.social_audit_notes || '';
 
         // Licensing fields
         document.getElementById('profileNmls').value = data.nmls_number || '';
@@ -1314,12 +1364,21 @@
         await api('/admin/users/' + profileUserId + '/profile', {
           method: 'PUT',
           body: JSON.stringify({
-            facebook_url: document.getElementById('profileFacebook').value.trim(),
-            instagram_url: document.getElementById('profileInstagram').value.trim(),
-            twitter_url: document.getElementById('profileTwitter').value.trim(),
-            linkedin_url: document.getElementById('profileLinkedin').value.trim(),
-            tiktok_url: document.getElementById('profileTiktok').value.trim(),
-            youtube_url: document.getElementById('profileYoutube').value.trim(),
+            // Personal
+            facebook_url:             document.getElementById('profileFacebook').value.trim() || null,
+            instagram_url:            document.getElementById('profileInstagram').value.trim() || null,
+            twitter_url:              document.getElementById('profileTwitter').value.trim() || null,
+            linkedin_url:             document.getElementById('profileLinkedin').value.trim() || null,
+            tiktok_url:               document.getElementById('profileTiktok').value.trim() || null,
+            youtube_url:              document.getElementById('profileYoutube').value.trim() || null,
+            // Business & compliance
+            facebook_business_url:    document.getElementById('profileFacebookBusiness').value.trim() || null,
+            facebook_business_url_2:  document.getElementById('profileFacebookBusiness2').value.trim() || null,
+            linkedin_url_2:           document.getElementById('profileLinkedin2').value.trim() || null,
+            nextdoor_url:             document.getElementById('profileNextdoor').value.trim() || null,
+            google_my_business_url:   document.getElementById('profileGoogleMyBusiness').value.trim() || null,
+            social_audit_date:        document.getElementById('profileSocialAuditDate').value || null,
+            social_audit_notes:       document.getElementById('profileSocialAuditNotes').value.trim() || null,
           }),
         });
 
@@ -1584,6 +1643,26 @@
       const preview = document.getElementById('signaturePreview');
       document.getElementById('signaturePreviewContent').innerHTML = html;
       preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
+    });
+
+    document.getElementById('signatureCopyBtn').addEventListener('click', () => {
+      const html = document.getElementById('profileSignatureInput').value;
+      navigator.clipboard.writeText(html).then(() => {
+        const btn = document.getElementById('signatureCopyBtn');
+        btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-copy"></i> Copy HTML'; }, 2000);
+      }).catch(() => alert('Failed to copy'));
+    });
+
+    document.getElementById('signatureDownloadBtn').addEventListener('click', () => {
+      const html = document.getElementById('profileSignatureInput').value;
+      const name = (profileUserObj?.name || 'signature').replace(/\s+/g, '-').toLowerCase();
+      const blob = new Blob([html], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = name + '-email-signature.html';
+      a.click();
+      URL.revokeObjectURL(a.href);
     });
 
     document.getElementById('signatureSaveBtn').addEventListener('click', async () => {
