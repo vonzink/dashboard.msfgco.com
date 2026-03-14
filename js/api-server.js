@@ -26,9 +26,16 @@ const ServerAPI = {
         return entry.data;
     },
 
+    _MAX_CACHE_SIZE: 50,
+
     _setCache(endpoint, data) {
         const ttl = this._cacheTTLs[endpoint];
         if (!ttl) return;
+        // Evict oldest entries if cache is full
+        if (this._cache.size >= this._MAX_CACHE_SIZE) {
+            const oldest = this._cache.keys().next().value;
+            this._cache.delete(oldest);
+        }
         this._cache.set(endpoint, { data, expires: Date.now() + ttl });
     },
 
@@ -58,7 +65,7 @@ const ServerAPI = {
         localStorage.setItem("auth_token", token);
         // Set shared domain cookie — max-age defaults to 1 hour (matches Cognito access token TTL)
         var age = maxAge || 3600;
-        document.cookie = "auth_token=" + encodeURIComponent(token) + "; path=/; domain=.msfgco.com; max-age=" + age + "; SameSite=Lax; Secure";
+        document.cookie = "auth_token=" + encodeURIComponent(token) + "; path=/; domain=.msfgco.com; max-age=" + age + "; SameSite=Strict; Secure";
     },
 
     clearAuth() {

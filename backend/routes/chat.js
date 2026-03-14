@@ -5,6 +5,7 @@ const db = require('../db/connection');
 const { requireDbUser, getUserId } = require('../middleware/userContext');
 const { chatMessage, chatMessageTags, validate } = require('../validation/schemas');
 const websocket = require('../lib/websocket');
+const { parseId } = require('../middleware/parseId');
 
 router.use(requireDbUser);
 
@@ -46,7 +47,7 @@ router.post('/tags', async (req, res, next) => {
 });
 
 // DELETE /api/chat/tags/:id — delete a tag
-router.delete('/tags/:id', async (req, res, next) => {
+router.delete('/tags/:id', parseId(), async (req, res, next) => {
   try {
     await db.query('DELETE FROM chat_tags WHERE id = ?', [req.params.id]);
     res.json({ success: true });
@@ -174,7 +175,7 @@ router.post('/messages', validate(chatMessage), async (req, res, next) => {
 });
 
 // PUT /api/chat/messages/:id/tags — update tags on a message
-router.put('/messages/:id/tags', validate(chatMessageTags), async (req, res, next) => {
+router.put('/messages/:id/tags', parseId(), validate(chatMessageTags), async (req, res, next) => {
   try {
     const msgId = parseInt(req.params.id);
     const { tag_ids } = req.body;
@@ -198,7 +199,7 @@ router.put('/messages/:id/tags', validate(chatMessageTags), async (req, res, nex
 });
 
 // DELETE /api/chat/messages/:id — delete a message (owner or admin)
-router.delete('/messages/:id', async (req, res, next) => {
+router.delete('/messages/:id', parseId(), async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const isAdminUser = String(req.user?.db?.role || '').toLowerCase() === 'admin';

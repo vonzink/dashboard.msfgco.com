@@ -55,7 +55,8 @@ router.put('/', validate(goalsUpdate), async (req, res, next) => {
       
       // Use INSERT ... ON DUPLICATE KEY UPDATE
       const currentUserId = getUserId(req);
-      const finalUserId = isAdmin(req) ? (user_id || currentUserId) : currentUserId;
+      // Always require a valid user_id — prevent null/company-wide goal injection
+      const finalUserId = (isAdmin(req) && user_id) ? user_id : currentUserId;
 
       const [result] = await db.query(
         `INSERT INTO goals (user_id, period_type, period_value, goal_type, current_value, target_value)

@@ -5,6 +5,7 @@ const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { deleted } = require('../utils/response');
 const { notification: notificationSchema, validate } = require('../validation/schemas');
+const { parseId } = require('../middleware/parseId');
 
 router.use(requireDbUser);
 
@@ -54,7 +55,7 @@ router.post('/', validate(notificationSchema), async (req, res, next) => {
 });
 
 // DELETE /api/notifications/:id - Delete notification
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', parseId(), async (req, res, next) => {
   try {
     const [existing] = await db.query('SELECT user_id FROM notifications WHERE id = ?', [req.params.id]);
 

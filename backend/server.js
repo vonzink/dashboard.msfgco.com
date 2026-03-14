@@ -79,8 +79,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, etc) in dev
-    if (!origin && process.env.NODE_ENV !== 'production') {
+    // Allow requests with no origin only in explicit development mode
+    if (!origin && process.env.NODE_ENV === 'development') {
       return callback(null, true);
     }
     // Allow listed origins
@@ -103,6 +103,18 @@ const limiter = rateLimit({
   message: { error: 'Too many requests, please try again later' }
 });
 app.use('/api/', limiter);
+
+// Stricter rate limit for write operations (POST/PUT/DELETE)
+const writeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many write requests, please slow down' },
+  // Only apply to mutating methods
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+});
+app.use('/api/', writeLimiter);
 
 // Request logging
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));

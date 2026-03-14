@@ -5,6 +5,8 @@ const db = require('../db/connection');
 const { getUserId, hasRole, requireDbUser } = require('../middleware/userContext');
 const { announcement, validate } = require('../validation/schemas');
 const { deleted } = require('../utils/response');
+const { sanitizeHtml } = require('../utils/sanitizeHtml');
+const { parseId } = require('../middleware/parseId');
 
 const MAX_ACTIVE = 8;
 
@@ -33,13 +35,14 @@ router.post('/', validate(announcement), async (req, res, next) => {
   try {
 
     const { title, content, link, icon, file_s3_key, file_name, file_size, file_type } = req.body;
+    const sanitizedContent = sanitizeHtml(content);
     const authorId = getUserId(req);
 
     const [result] = await db.query(
       `INSERT INTO announcements
        (title, content, link, icon, file_s3_key, file_name, file_size, file_type, author_id, status)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
-      [title, content, link || null, icon || null, file_s3_key || null, file_name || null, file_size || null, file_type || null, authorId || null]
+      [title, sanitizedContent, link || null, icon || null, file_s3_key || null, file_name || null, file_size || null, file_type || null, authorId || null]
     );
 
     // Auto-archive oldest active announcements if we exceed the limit
@@ -77,7 +80,7 @@ router.post('/', validate(announcement), async (req, res, next) => {
 });
 
 // DELETE /api/announcements/:id - Delete announcement (admin only)
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', parseId(), async (req, res, next) => {
   try {
     if (!hasRole(req, 'admin')) {
       return res.status(403).json({ error: 'Only admins can delete announcements' });
