@@ -469,6 +469,10 @@ const ServerAPI = {
         return this.get('/monday/view-config');
     },
 
+    getMondayMyBoards() {
+        return this.get('/monday/boards/my-boards');
+    },
+
     // ========================================
     // EMPLOYEE PROFILES
     // ========================================

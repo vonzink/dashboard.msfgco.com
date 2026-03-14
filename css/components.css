@@ -1693,16 +1693,37 @@ textarea.form-input {
 /* Goals Tab */
 .settings-goals-header {
     margin-bottom: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
 }
 
 .settings-goals-header h4 {
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-primary);
-    margin: 0 0 var(--spacing-xs);
+    margin: 0;
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+}
+
+.settings-goals-period-select {
+    padding: 6px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+}
+
+.settings-goals-period-select:focus {
+    border-color: var(--green-bright);
 }
 
 .settings-goals-header h4 i {
@@ -1711,7 +1732,7 @@ textarea.form-input {
 
 .settings-goals-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: var(--spacing-lg);
 }
 
@@ -1743,17 +1764,23 @@ textarea.form-input {
     display: flex;
     align-items: baseline;
     gap: var(--spacing-xs);
+    flex-wrap: wrap;
+    overflow: hidden;
 }
 
 .settings-goal-value {
-    font-size: 1.4rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .settings-goal-of {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
+    white-space: nowrap;
 }
 
 .settings-goal-card .progress-bar {

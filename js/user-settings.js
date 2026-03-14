@@ -259,17 +259,47 @@ const UserSettings = {
   // ========================================
   // DISPLAY PREFERENCES TAB
   // ========================================
+  _myBoards: [],
+  _boardMappings: {},
+
   async _loadDisplayPreferences() {
     const container = document.getElementById('settingsDisplayContent');
     if (!container) return;
 
-    container.innerHTML = '<div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading preferences...</div>';
+    container.innerHTML = '<div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading your boards...</div>';
 
     try {
-      this._displayPrefs = await ServerAPI.get('/me/profile/display-preferences');
+      // Fetch boards assigned to this user + saved preferences in parallel
+      const [boardsResult, prefsResult] = await Promise.allSettled([
+        ServerAPI.getMondayMyBoards(),
+        ServerAPI.get('/me/profile/display-preferences'),
+      ]);
+
+      const boardsData = boardsResult.status === 'fulfilled' ? boardsResult.value : {};
+      this._myBoards = boardsData.boards || [];
+      this._displayPrefs = prefsResult.status === 'fulfilled' ? prefsResult.value : {};
+
+      if (this._myBoards.length === 0) {
+        container.innerHTML = `
+          <div class="settings-empty">
+            <i class="fas fa-columns"></i>
+            <p>No Monday.com boards are assigned to you yet.</p>
+            <p class="settings-hint">Contact your admin to assign boards to your account.</p>
+          </div>`;
+        return;
+      }
+
+      // Fetch mappings for each board in parallel
+      const mappingPromises = this._myBoards.map(b =>
+        ServerAPI.getMondayMappings(b.board_id).then(mappings => ({ boardId: b.board_id, mappings })).catch(() => ({ boardId: b.board_id, mappings: [] }))
+      );
+      const mappingResults = await Promise.all(mappingPromises);
+      this._boardMappings = {};
+      mappingResults.forEach(r => { this._boardMappings[r.boardId] = r.mappings; });
+
       this._renderDisplayPreferences();
     } catch (err) {
-      container.innerHTML = '<div class="settings-error"><i class="fas fa-exclamation-triangle"></i> Failed to load preferences.</div>';
+      container.innerHTML = '<div class="settings-error"><i class="fas fa-exclamation-triangle"></i> Failed to load board data.</div>';
     }
   },
 
@@ -277,93 +307,72 @@ const UserSettings = {
     const container = document.getElementById('settingsDisplayContent');
     if (!container) return;
 
-    const sections = [
-      {
-        key: 'pipeline', label: 'Active Pipeline', icon: 'fa-tasks',
-        fields: [
-          { field: 'client_name', label: 'Client Name', locked: true },
-          { field: 'loan_number', label: 'Loan #' },
-          { field: 'assigned_lo_name', label: 'Loan Officer' },
-          { field: 'lender', label: 'Lender' },
-          { field: 'subject_property', label: 'Subject Property' },
-          { field: 'loan_amount', label: 'Loan Amount' },
-          { field: 'rate', label: 'Rate' },
-          { field: 'loan_type', label: 'Loan Type' },
-          { field: 'loan_purpose', label: 'Loan Purpose' },
-          { field: 'occupancy', label: 'Occupancy' },
-          { field: 'appraisal_status', label: 'Appraisal' },
-          { field: 'title_status', label: 'Title' },
-          { field: 'hoi_status', label: 'HOI' },
-          { field: 'prelims_status', label: 'Prelims' },
-          { field: 'mini_set_status', label: 'Mini Set' },
-          { field: 'cd_status', label: 'CD' },
-          { field: 'loan_estimate', label: 'Loan Estimate' },
-          { field: 'application_date', label: 'App Date' },
-          { field: 'lock_expiration_date', label: 'Lock Exp' },
-          { field: 'closing_date', label: 'Closing Date' },
-          { field: 'funding_date', label: 'Funding Date' },
-          { field: 'stage', label: 'Stage' },
-          { field: 'notes', label: 'Notes' },
-        ]
-      },
-      {
-        key: 'pre_approvals', label: 'Pre-Approvals', icon: 'fa-clipboard-check',
-        fields: [
-          { field: 'client_name', label: 'Client Name', locked: true },
-          { field: 'loan_amount', label: 'Loan Amount' },
-          { field: 'pre_approval_date', label: 'Pre-Approval Date' },
-          { field: 'expiration_date', label: 'Expiration Date' },
-          { field: 'status', label: 'Status' },
-          { field: 'assigned_lo_name', label: 'Loan Officer' },
-          { field: 'property_address', label: 'Property Address' },
-          { field: 'loan_type', label: 'Loan Type' },
-          { field: 'notes', label: 'Notes' },
-        ]
-      },
-      {
-        key: 'funded_loans', label: 'Funded Loans', icon: 'fa-check-circle',
-        fields: [
-          { field: 'client_name', label: 'Borrower', locked: true },
-          { field: 'loan_amount', label: 'Loan Amount' },
-          { field: 'assigned_lo_name', label: 'Loan Officer' },
-          { field: 'group_name', label: 'Group' },
-          { field: 'loan_type', label: 'Loan Type' },
-          { field: 'funded_date', label: 'Funded Date' },
-          { field: 'investor', label: 'Investor' },
-          { field: 'property_address', label: 'Property' },
-          { field: 'loan_number', label: 'Loan #' },
-          { field: 'notes', label: 'Notes' },
-        ]
-      },
-    ];
-
     const esc = Utils.escapeHtml;
+    const SECTION_ICONS = { pipeline: 'fa-tasks', pre_approvals: 'fa-clipboard-check', funded_loans: 'fa-check-circle' };
+    const SECTION_LABELS = { pipeline: 'Active Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Funded Loans' };
 
-    container.innerHTML = sections.map(section => {
-      const savedPref = this._displayPrefs[`display_columns_${section.key}`] || [];
+    // Group boards by target_section
+    const bySection = {};
+    this._myBoards.forEach(b => {
+      const sec = b.target_section;
+      if (!bySection[sec]) bySection[sec] = [];
+      bySection[sec].push(b);
+    });
+
+    const sectionKeys = ['pipeline', 'pre_approvals', 'funded_loans'].filter(k => bySection[k]);
+
+    container.innerHTML = sectionKeys.map(sectionKey => {
+      const boards = bySection[sectionKey];
+      const icon = SECTION_ICONS[sectionKey] || 'fa-table';
+      const sectionLabel = SECTION_LABELS[sectionKey] || sectionKey;
+
+      // Collect all unique mapped columns across this user's boards for this section
+      const columnMap = new Map(); // field → { label, visible }
+      columnMap.set('client_name', { label: sectionKey === 'funded_loans' ? 'Borrower' : 'Client Name', locked: true });
+
+      boards.forEach(b => {
+        const mappings = this._boardMappings[b.board_id] || [];
+        mappings.forEach(m => {
+          if (m.pipeline_field && m.pipeline_field !== 'client_name') {
+            if (!columnMap.has(m.pipeline_field)) {
+              columnMap.set(m.pipeline_field, {
+                label: m.display_label || m.monday_column_title || m.pipeline_field,
+                locked: false,
+              });
+            }
+          }
+        });
+      });
+
+      const savedPref = this._displayPrefs[`display_columns_${sectionKey}`] || [];
       const savedMap = {};
       savedPref.forEach(col => { savedMap[col.field] = col; });
 
+      const boardNames = boards.map(b => esc(b.board_name)).join(', ');
+
       return `
-        <div class="settings-display-section" data-section="${section.key}">
-          <h4><i class="fas ${section.icon}"></i> ${esc(section.label)}</h4>
-          <p class="settings-hint">Check the columns you want to display in the ${esc(section.label)} table.</p>
-          <div class="settings-columns-list">
-            ${section.fields.map(f => {
-              const saved = savedMap[f.field];
-              const isVisible = saved ? saved.visible !== false : true;
-              const isLocked = f.locked;
-              return `
-                <label class="settings-column-item ${isLocked ? 'locked' : ''}">
-                  <input type="checkbox" data-field="${f.field}" ${isVisible ? 'checked' : ''} ${isLocked ? 'disabled' : ''} />
-                  <span>${esc(f.label)}</span>
-                </label>
-              `;
-            }).join('')}
-          </div>
-          <button type="button" class="btn btn-sm btn-primary settings-save-columns-btn" data-section="${section.key}">
-            <i class="fas fa-save"></i> Save ${esc(section.label)} Columns
-          </button>
+        <div class="settings-display-section" data-section="${sectionKey}">
+          <h4><i class="fas ${icon}"></i> ${esc(sectionLabel)}</h4>
+          <p class="settings-hint">Boards: ${boardNames}</p>
+          <p class="settings-hint">Check the columns you want to display.</p>
+          ${columnMap.size <= 1
+            ? '<p class="settings-hint" style="color:var(--status-warning);">No column mappings configured for your boards yet. Contact your admin.</p>'
+            : `<div class="settings-columns-list">
+              ${Array.from(columnMap.entries()).map(([field, col]) => {
+                const saved = savedMap[field];
+                const isVisible = saved ? saved.visible !== false : true;
+                return `
+                  <label class="settings-column-item ${col.locked ? 'locked' : ''}">
+                    <input type="checkbox" data-field="${field}" ${isVisible ? 'checked' : ''} ${col.locked ? 'disabled' : ''} />
+                    <span>${esc(col.label)}</span>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+            <button type="button" class="btn btn-sm btn-primary settings-save-columns-btn" data-section="${sectionKey}">
+              <i class="fas fa-save"></i> Save ${esc(sectionLabel)} Columns
+            </button>`
+          }
         </div>
       `;
     }).join('<hr class="settings-divider" />');
@@ -396,7 +405,7 @@ const UserSettings = {
       await ServerAPI.put('/me/profile/display-preferences', { section, columns });
       btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
       setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 2000);
-      Utils.showToast(`${section.replace('_', ' ')} columns updated`, 'success');
+      Utils.showToast(`${section.replace(/_/g, ' ')} columns updated`, 'success');
     } catch (err) {
       Utils.showToast('Failed to save: ' + err.message, 'error');
       btn.innerHTML = origHtml;
@@ -511,16 +520,44 @@ const UserSettings = {
   // ========================================
   // GOALS TAB
   // ========================================
+  _goalsPeriod: null,
+
+  _getGoalsPeriodValue(period) {
+    const now = new Date();
+    switch (period) {
+      case 'weekly': {
+        const start = new Date(now);
+        start.setDate(now.getDate() - now.getDay());
+        return start.toISOString().slice(0, 10);
+      }
+      case 'monthly':
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      case 'quarterly': {
+        const q = Math.ceil((now.getMonth() + 1) / 3);
+        return `${now.getFullYear()}-Q${q}`;
+      }
+      case 'yearly':
+        return `${now.getFullYear()}`;
+      default:
+        return '';
+    }
+  },
+
   async _loadGoalsTab() {
     const container = document.getElementById('settingsGoalsContent');
     if (!container) return;
+
+    // Default to GoalsManager period or monthly
+    if (!this._goalsPeriod) {
+      this._goalsPeriod = GoalsManager?.currentPeriod || 'monthly';
+    }
 
     container.innerHTML = '<div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading goals...</div>';
 
     try {
       const userId = CONFIG.currentUser?.id;
-      const period = GoalsManager?.currentPeriod || 'monthly';
-      const periodValue = GoalsManager?.getPeriodValue() || '';
+      const period = this._goalsPeriod;
+      const periodValue = this._getGoalsPeriodValue(period);
 
       const [fundedResult, pipelineResult, preApprovalsResult, goalsResult] = await Promise.allSettled([
         ServerAPI.getFundedLoansSummary({ period, lo_id: userId }),
@@ -576,13 +613,18 @@ const UserSettings = {
     if (!container) return;
 
     const esc = Utils.escapeHtml;
-    const periodLabel = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly', all: 'All Time' }[period] || period;
 
     container.innerHTML = `
       <div class="settings-goals-header">
-        <h4><i class="fas fa-trophy"></i> ${esc(periodLabel)} Goals</h4>
-        <p class="settings-hint">Set your targets. Changes save automatically when you adjust the slider.</p>
+        <h4><i class="fas fa-trophy"></i> Goals</h4>
+        <select class="settings-goals-period-select" id="settingsGoalsPeriodSelect">
+          <option value="weekly" ${period === 'weekly' ? 'selected' : ''}>Weekly</option>
+          <option value="monthly" ${period === 'monthly' ? 'selected' : ''}>Monthly</option>
+          <option value="quarterly" ${period === 'quarterly' ? 'selected' : ''}>Quarterly</option>
+          <option value="yearly" ${period === 'yearly' ? 'selected' : ''}>Yearly</option>
+        </select>
       </div>
+      <p class="settings-hint" style="margin-top:-8px;margin-bottom:12px;">Set your targets. Changes save automatically when you adjust the slider.</p>
       <div class="settings-goals-grid">
         ${goalDefs.map(g => {
           const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
@@ -628,13 +670,19 @@ const UserSettings = {
         this._saveGoalTarget(goalId, val);
       });
     });
+
+    // Period selector
+    document.getElementById('settingsGoalsPeriodSelect')?.addEventListener('change', (e) => {
+      this._goalsPeriod = e.target.value;
+      this._loadGoalsTab();
+    });
   },
 
   async _saveGoalTarget(goalId, targetValue) {
     try {
       const userId = CONFIG.currentUser?.id;
-      const period = GoalsManager?.currentPeriod || 'monthly';
-      const periodValue = GoalsManager?.getPeriodValue() || '';
+      const period = this._goalsPeriod || 'monthly';
+      const periodValue = this._getGoalsPeriodValue(period);
 
       await ServerAPI.updateGoals({
         user_id: userId,
