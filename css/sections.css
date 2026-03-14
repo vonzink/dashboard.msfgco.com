@@ -931,3 +931,15 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ========================================
+   ANNOUNCEMENT EDITOR (toolbar + dropzone)
+======================================== */
+.ann-tb-btn{background:none;border:1px solid transparent;border-radius:4px;padding:4px 7px;cursor:pointer;color:var(--text-secondary);font-size:0.8rem;transition:all 0.15s;}
+.ann-tb-btn:hover{background:var(--bg-tertiary);color:var(--text-primary);}
+.ann-tb-btn.active{background:var(--green-teal);color:#fff;border-color:var(--green-teal);}
+#announcementContent[contenteditable]:empty:before{content:attr(data-placeholder);color:var(--text-muted);pointer-events:none;}
+#announcementDropzone.drag-over{border-color:var(--green-bright);background:rgba(140,198,62,0.06);}
+/* Rich content styling inside editor */
+#announcementContent ul,#announcementContent ol{margin:0.25rem 0;padding-left:1.5rem;}
+#announcementContent li{margin:0.15rem 0;}

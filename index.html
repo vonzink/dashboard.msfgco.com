@@ -857,121 +857,7 @@
       </div>
     </div>
 
-    <!-- Announcement Editor Styles + Logic -->
-    <style>
-      .ann-tb-btn{background:none;border:1px solid transparent;border-radius:4px;padding:4px 7px;cursor:pointer;color:var(--text-secondary);font-size:0.8rem;transition:all 0.15s;}
-      .ann-tb-btn:hover{background:var(--bg-tertiary);color:var(--text-primary);}
-      .ann-tb-btn.active{background:var(--green-teal);color:#fff;border-color:var(--green-teal);}
-      #announcementContent[contenteditable]:empty:before{content:attr(data-placeholder);color:var(--text-muted);pointer-events:none;}
-      #announcementDropzone.drag-over{border-color:var(--green-bright);background:rgba(140,198,62,0.06);}
-      /* Rich content styling inside editor */
-      #announcementContent ul,#announcementContent ol{margin:0.25rem 0;padding-left:1.5rem;}
-      #announcementContent li{margin:0.15rem 0;}
-    </style>
-    <script>
-    (function(){
-      // ---- Rich Text Toolbar ----
-      const toolbar = document.getElementById('announcementToolbar');
-      const editor = document.getElementById('announcementContent');
-      const fontSize = document.getElementById('annFontSize');
-      const charCount = document.getElementById('annCharCount');
-
-      if(toolbar && editor){
-        toolbar.addEventListener('click',function(e){
-          const btn = e.target.closest('.ann-tb-btn');
-          if(!btn) return;
-          e.preventDefault();
-          const cmd = btn.dataset.cmd;
-          if(cmd){
-            document.execCommand(cmd, false, null);
-            editor.focus();
-            updateToolbarState();
-          }
-        });
-
-        if(fontSize){
-          fontSize.addEventListener('change',function(){
-            if(this.value){
-              document.execCommand('fontSize', false, this.value);
-              editor.focus();
-            }
-            this.value = '';
-          });
-        }
-
-        editor.addEventListener('input', updateCharCount);
-        editor.addEventListener('keyup', updateToolbarState);
-        editor.addEventListener('mouseup', updateToolbarState);
-
-        function updateToolbarState(){
-          toolbar.querySelectorAll('.ann-tb-btn[data-cmd]').forEach(function(btn){
-            const cmd = btn.dataset.cmd;
-            if(cmd === 'removeFormat') return;
-            try{ btn.classList.toggle('active', document.queryCommandState(cmd)); }catch(e){}
-          });
-        }
-
-        function updateCharCount(){
-          const text = editor.innerText || '';
-          const len = text.length;
-          if(charCount) charCount.textContent = len.toLocaleString() + ' / 5,000';
-          if(len > 5000 && charCount) charCount.style.color = '#e74c3c';
-          else if(charCount) charCount.style.color = '';
-        }
-      }
-
-      // ---- Dropzone ----
-      const dropzone = document.getElementById('announcementDropzone');
-      const fileInput = document.getElementById('announcementFile');
-      const dropContent = document.getElementById('annDropzoneContent');
-      const filePreview = document.getElementById('annFilePreview');
-      const fileNameEl = document.getElementById('annFileName');
-      const fileSizeEl = document.getElementById('annFileSize');
-      const fileThumbnail = document.getElementById('annFileThumbnail');
-      const fileRemove = document.getElementById('annFileRemove');
-
-      if(dropzone && fileInput){
-        dropzone.addEventListener('click',function(e){
-          if(e.target.closest('#annFileRemove')) return;
-          fileInput.click();
-        });
-
-        dropzone.addEventListener('dragover',function(e){ e.preventDefault(); dropzone.classList.add('drag-over'); });
-        dropzone.addEventListener('dragleave',function(){ dropzone.classList.remove('drag-over'); });
-        dropzone.addEventListener('drop',function(e){
-          e.preventDefault();
-          dropzone.classList.remove('drag-over');
-          if(e.dataTransfer.files.length){ fileInput.files = e.dataTransfer.files; showFilePreview(e.dataTransfer.files[0]); }
-        });
-
-        fileInput.addEventListener('change',function(){ if(this.files[0]) showFilePreview(this.files[0]); });
-
-        if(fileRemove) fileRemove.addEventListener('click',function(e){
-          e.stopPropagation();
-          fileInput.value = '';
-          dropContent.style.display = '';
-          filePreview.style.display = 'none';
-        });
-
-        function showFilePreview(file){
-          dropContent.style.display = 'none';
-          filePreview.style.display = 'flex';
-          fileNameEl.textContent = file.name;
-          fileSizeEl.textContent = (file.size/1024).toFixed(1) + ' KB';
-
-          if(file.type && file.type.startsWith('image/')){
-            const reader = new FileReader();
-            reader.onload = function(e){ fileThumbnail.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:100%;object-fit:cover;">'; };
-            reader.readAsDataURL(file);
-          } else {
-            const iconMap = {'application/pdf':'fa-file-pdf','application/msword':'fa-file-word','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'fa-file-word','application/vnd.ms-excel':'fa-file-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'fa-file-excel'};
-            const ic = iconMap[file.type] || 'fa-file';
-            fileThumbnail.innerHTML = '<i class="fas '+ic+'" style="font-size:1.2rem;color:var(--text-muted);"></i>';
-          }
-        }
-      }
-    })();
-    </script>
+    <!-- Announcement Editor Logic (styles in css/sections.css, script in js/announcement-editor.js) -->
 
     <!-- Manage Investors Modal (admin only) -->
     <!-- Manage Tags Modal -->
@@ -1087,6 +973,7 @@
   <script src="js/tables.js?v=20260314"></script>
   <script src="js/chat.js?v=20260314"></script>
   <script src="js/api.js?v=20260314"></script>
+  <script src="js/sync-manager.js?v=20260314"></script>
   <script src="js/investors.js?v=20260314"></script>
   <script src="js/funded-loans.js?v=20260314"></script>
   <script src="js/goals.js?v=20260314"></script>
@@ -1099,6 +986,7 @@
 
   <!-- CSP-friendly progress widths -->
   <script src="js/progress-init.js?v=20260314"></script>
+  <script src="js/announcement-editor.js?v=20260314"></script>
 
   <script src="js/app.js?v=20260314"></script>
 </body>
