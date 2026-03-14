@@ -5,55 +5,13 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, getUserRole, hasRole, requireDbUser } = require('../middleware/userContext');
+const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
 
 router.use(requireDbUser);
 
 // ========================================
 // HELPER FUNCTIONS
 // ========================================
-
-/**
- * Get the user's role from DB (consistent with all other routes)
- */
-function getUserGroup(req) {
-  return getUserRole(req);
-}
-
-/**
- * Check if user is Admin or Manager
- */
-function isAdminOrManager(req) {
-  return hasRole(req, 'admin', 'manager');
-}
-
-/**
- * Check if user is Admin only
- */
-function isAdmin(req) {
-  return hasRole(req, 'admin');
-}
-
-/**
- * Get board IDs accessible to a user (from monday_board_access)
- */
-async function getAccessibleBoardIds(userId) {
-  const [rows] = await db.query(
-    'SELECT board_id FROM monday_board_access WHERE user_id = ?',
-    [userId]
-  );
-  return rows.map(r => r.board_id);
-}
-
-/**
- * Get LO IDs that a processor is assigned to
- */
-async function getProcessorLOIds(processorUserId) {
-  const [assignments] = await db.query(
-    'SELECT lo_user_id FROM processor_lo_assignments WHERE processor_user_id = ?',
-    [processorUserId]
-  );
-  return assignments.map(a => a.lo_user_id);
-}
 
 /**
  * Build date filter for various periods
@@ -124,7 +82,7 @@ function getDateFilter(period) {
 router.get('/', async (req, res, next) => {
   try {
     const { period, board_id, group, start_date, end_date } = req.query;
-    const userGroup = getUserGroup(req);
+    const userGroup = getUserRole(req);
     const userId = getUserId(req);
 
     let whereClause = 'WHERE 1=1';
@@ -184,6 +142,13 @@ router.get('/', async (req, res, next) => {
     }
 
     // ========================================
+    // SNAPSHOT FOR GROUPS (role + board filters only, NO date restriction)
+    // so the dropdown shows ALL groups for the selected board
+    // ========================================
+    const groupWhereClause = whereClause;
+    const groupParams = [...params];
+
+    // ========================================
     // DATE FILTERING
     // ========================================
 
@@ -198,12 +163,6 @@ router.get('/', async (req, res, next) => {
       }
       // If dateFilter is null (all time), no date restriction
     }
-
-    // ========================================
-    // SNAPSHOT BASE FILTERS (for groups dropdown — before group filter)
-    // ========================================
-    const baseWhereClause = whereClause;
-    const baseParams = [...params];
 
     // ========================================
     // GROUP FILTERING
@@ -247,16 +206,16 @@ router.get('/', async (req, res, next) => {
 
     // ========================================
     // AVAILABLE GROUPS (for filter dropdown)
-    // Uses base filters (role + board + date) but NOT the group filter itself
-    // so the dropdown shows all groups available in the current board/period
+    // Uses role + board filters only (no date/group restriction)
+    // so the dropdown shows ALL groups available on the board
     // ========================================
 
     const [groupRows] = await db.query(
       `SELECT DISTINCT fl.group_name FROM funded_loans fl
-       ${baseWhereClause}
+       ${groupWhereClause}
        AND fl.group_name IS NOT NULL AND fl.group_name != ''
        ORDER BY fl.group_name`,
-      baseParams
+      groupParams
     );
     const groups = groupRows.map(r => r.group_name);
 
@@ -264,7 +223,7 @@ router.get('/', async (req, res, next) => {
     // AVAILABLE BOARDS (for filter dropdown)
     // ========================================
     let boardsForFilter;
-    if (isAdminOrManager(req)) {
+    if (hasRole(req, 'admin', 'manager')) {
       [boardsForFilter] = await db.query(
         `SELECT DISTINCT mb.board_id, mb.board_name
          FROM monday_boards mb
@@ -311,7 +270,7 @@ router.get('/', async (req, res, next) => {
 router.get('/summary', async (req, res, next) => {
   try {
     const { period, board_id, lo_id } = req.query;
-    const userGroup = getUserGroup(req);
+    const userGroup = getUserRole(req);
     const userId = getUserId(req);
 
     let whereClause = 'WHERE 1=1';
@@ -389,7 +348,7 @@ router.get('/summary', async (req, res, next) => {
 // ========================================
 router.get('/by-lo/summary', async (req, res, next) => {
   try {
-    if (!isAdminOrManager(req)) {
+    if (!hasRole(req, 'admin', 'manager')) {
       return res.status(403).json({ error: 'Admin or Manager access required' });
     }
 
@@ -435,7 +394,7 @@ router.get('/by-lo/summary', async (req, res, next) => {
 // ========================================
 router.get('/:id', async (req, res, next) => {
   try {
-    const userGroup = getUserGroup(req);
+    const userGroup = getUserRole(req);
     const userId = getUserId(req);
 
     const [loans] = await db.query(
@@ -483,7 +442,7 @@ router.get('/:id', async (req, res, next) => {
 // ========================================
 router.delete('/:id', async (req, res, next) => {
   try {
-    if (!isAdmin(req)) {
+    if (!hasRole(req, 'admin')) {
       return res.status(403).json({ error: 'Only admins can delete funded loans' });
     }
 

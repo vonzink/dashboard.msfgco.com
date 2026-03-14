@@ -27,7 +27,7 @@ const App = {
     // ========================================
     // INITIALIZATION
     // ========================================
-    init() {
+    async init() {
 
         // Initialize modules — each wrapped in try/catch so one
         // failing module doesn't prevent the rest from loading
@@ -37,7 +37,6 @@ const App = {
             ['Chat',           () => this.initChat()],
             ['Investors',      () => this.initInvestors()],
             ['Funded Loans',   () => this.initFundedLoans()],
-            ['Goals',          () => this.initGoals()],
             ['Gauges',         () => this.initGauges()],
             ['Modals',         () => this.initModals()],
             ['User Settings',  () => this.initUserSettings()],
@@ -54,8 +53,18 @@ const App = {
             }
         }
 
-        // Load user info + data from API
-        this.loadCurrentUser();
+        // Load user info first — CONFIG.currentUser must be populated
+        // before modules that depend on it (e.g. GoalsManager) initialize
+        await this.loadCurrentUser();
+
+        // Now init Goals — it reads CONFIG.currentUser for LO/admin detection
+        try {
+            this.initGoals();
+        } catch (err) {
+            console.error('Failed to init Goals:', err);
+        }
+
+        // Load data + employee directory (can run in parallel)
         this.loadData();
         this.loadEmployeeDirectory();
 

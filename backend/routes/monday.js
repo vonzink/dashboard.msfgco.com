@@ -451,10 +451,44 @@ router.post('/mappings', requireAdmin, async (req, res, next) => {
 });
 
 // ── POST /sync — trigger a sync from ALL active Monday.com boards ──
+// Runs asynchronously to avoid HTTP timeout — returns immediately,
+// then the client polls GET /sync/status for completion.
 router.post('/sync', requireAdmin, async (req, res, next) => {
   try {
-    const result = await syncAllBoards(getUserId(req));
-    res.json({ success: true, ...result });
+    const userId = getUserId(req);
+
+    // Create a sync log entry so the client knows a sync is in progress
+    await db.query(
+      "INSERT INTO monday_sync_log (board_id, triggered_by, target_section, status) VALUES ('0', ?, 'all', 'running')",
+      [userId]
+    );
+
+    // Respond immediately — sync runs in background
+    res.json({ success: true, message: 'Sync started. Check status for progress.', async: true });
+
+    // Fire-and-forget — run sync in the background
+    syncAllBoards(userId)
+      .then(async (result) => {
+        // Update the "running" log entry to "success"
+        await db.query(
+          `UPDATE monday_sync_log
+           SET status = 'success', items_synced = ?, items_created = ?, items_updated = ?, finished_at = NOW()
+           WHERE board_id = '0' AND triggered_by = ? AND status = 'running'
+           ORDER BY started_at DESC LIMIT 1`,
+          [result.itemsFetched, result.created, result.updated, userId]
+        );
+      })
+      .catch(async (err) => {
+        const logger = require('../lib/logger');
+        logger.error({ err }, 'Background sync failed');
+        await db.query(
+          `UPDATE monday_sync_log
+           SET status = 'error', error_message = ?, finished_at = NOW()
+           WHERE board_id = '0' AND triggered_by = ? AND status = 'running'
+           ORDER BY started_at DESC LIMIT 1`,
+          [err.message, userId]
+        ).catch(() => {});
+      });
   } catch (error) {
     next(error);
   }

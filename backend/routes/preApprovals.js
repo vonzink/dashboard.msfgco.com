@@ -8,18 +8,9 @@ const logger = require('../lib/logger');
 const { getMondayToken } = require('../services/monday/sync');
 const { createPreApproval, updatePreApproval, archivePreApproval } = require('../services/monday/writer');
 
-router.use(requireDbUser);
+const { getAccessibleBoardIds } = require('../utils/boardAccess');
 
-/**
- * Get board IDs accessible to a user (from monday_board_access)
- */
-async function getAccessibleBoardIds(userId) {
-  const [rows] = await db.query(
-    'SELECT board_id FROM monday_board_access WHERE user_id = ?',
-    [userId]
-  );
-  return rows.map(r => r.board_id);
-}
+router.use(requireDbUser);
 
 // GET /api/pre-approvals - Get all pre-approvals (filtered by board access)
 router.get('/', async (req, res, next) => {

@@ -476,13 +476,7 @@
           <select class="filter-select" id="goalLOSelect" style="display:none;" title="View LO performance">
             <option value="">All Loan Officers</option>
           </select>
-          <select class="filter-select goal-period-select" id="goalPeriodSelect">
-            <option value="weekly">Weekly</option>
-            <option value="monthly" selected>Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="yearly">Yearly</option>
-            <option value="all">All Time</option>
-          </select>
+          <span class="goals-period-label" id="goalsPeriodLabel" style="font-size:0.8rem;opacity:0.7;"></span>
           <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-goals" title="Toggle section">
             <i class="fas fa-chevron-up"></i>
           </button>
@@ -496,13 +490,8 @@
             <div class="goal-label">Loans Closed</div>
             <div class="goal-value-container">
               <div class="goal-value" id="loansClosedValue">0</div>
-              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="loans-closed"><i class="fas fa-edit"></i></button>
             </div>
             <div class="goal-target">of <span class="goal-target-value" id="loansClosedTarget">0</span> target</div>
-            <div class="goal-slider-container u-hidden">
-              <input type="range" class="goal-slider" id="loansClosedSlider" min="0" max="100" value="0" step="1" />
-              <div class="slider-value-display"><span class="slider-value">0</span></div>
-            </div>
             <div class="progress-bar"><div class="progress-fill on-track" id="loansClosedProgress" data-progress="0"></div></div>
             <div class="goal-progress-text" id="loansClosedProgressText">0% complete</div>
           </div>
@@ -512,13 +501,8 @@
             <div class="goal-label">Volume Closed</div>
             <div class="goal-value-container">
               <div class="goal-value" id="volumeClosedValue">$0M</div>
-              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="volume-closed"><i class="fas fa-edit"></i></button>
             </div>
             <div class="goal-target">of $<span class="goal-target-value" id="volumeClosedTarget">0</span>M target</div>
-            <div class="goal-slider-container u-hidden">
-              <input type="range" class="goal-slider" id="volumeClosedSlider" min="0" max="50" value="0" step="0.5" />
-              <div class="slider-value-display">$<span class="slider-value">0</span>M</div>
-            </div>
             <div class="progress-bar"><div class="progress-fill on-track" id="volumeClosedProgress" data-progress="0"></div></div>
             <div class="goal-progress-text" id="volumeClosedProgressText">0% complete</div>
           </div>
@@ -528,14 +512,9 @@
             <div class="goal-label">Pipeline</div>
             <div class="goal-value-container">
               <div class="goal-value" id="pipelineValue">$0M</div>
-              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="pipeline"><i class="fas fa-edit"></i></button>
             </div>
             <div class="goal-unit-count" id="pipelineUnitCount">0 loans</div>
             <div class="goal-target">of $<span class="goal-target-value" id="pipelineTarget">0</span>M target</div>
-            <div class="goal-slider-container u-hidden">
-              <input type="range" class="goal-slider" id="pipelineSlider" min="0" max="50" value="0" step="0.5" />
-              <div class="slider-value-display">$<span class="slider-value">0</span>M</div>
-            </div>
             <div class="progress-bar"><div class="progress-fill on-track" id="pipelineProgress" data-progress="0"></div></div>
             <div class="goal-progress-text" id="pipelineProgressText">0% complete</div>
           </div>
@@ -545,13 +524,8 @@
             <div class="goal-label">Pre-Approvals</div>
             <div class="goal-value-container">
               <div class="goal-value" id="preApprovalsValue">0</div>
-              <button type="button" class="goal-edit-btn" title="Edit goal" data-goal="pre-approvals"><i class="fas fa-edit"></i></button>
             </div>
             <div class="goal-target">of <span class="goal-target-value" id="preApprovalsTarget">0</span> target</div>
-            <div class="goal-slider-container u-hidden">
-              <input type="range" class="goal-slider" id="preApprovalsSlider" min="0" max="200" value="0" step="5" />
-              <div class="slider-value-display"><span class="slider-value">0</span></div>
-            </div>
             <div class="progress-bar"><div class="progress-fill on-track" id="preApprovalsProgress" data-progress="0"></div></div>
             <div class="goal-progress-text" id="preApprovalsProgressText">0% complete</div>
           </div>
@@ -1116,7 +1090,6 @@
   <script src="js/investors.js?v=20260314"></script>
   <script src="js/funded-loans.js?v=20260314"></script>
   <script src="js/goals.js?v=20260314"></script>
-  <!-- gauges.js removed -->
   <script src="js/modals.js?v=20260314"></script>
   <script src="js/user-settings.js?v=20260314"></script>
   <script src="js/collapsible.js?v=20260314"></script>

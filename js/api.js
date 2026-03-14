@@ -687,8 +687,13 @@ const API = {
 // ========================================
 const MondaySettings = {
     init() {
-        // Pipeline filter handler
+        // Pipeline filter handlers — both LO dropdown and search update summary
         document.getElementById('pipelineLO')?.addEventListener('change', () => this.filterPipeline());
+        const searchInput = document.getElementById('pipelineSearch');
+        if (searchInput) {
+            const debounced = Utils.debounce(() => this.filterPipeline(), 200);
+            searchInput.addEventListener('input', debounced);
+        }
     },
 
     async triggerSyncFromToolbar(clickedBtn) {
@@ -698,21 +703,50 @@ const MondaySettings = {
         allBtns.forEach(btn => {
             originals.set(btn, btn.innerHTML);
             btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
         });
 
         try {
+            // POST /sync now returns immediately — sync runs in background
             await ServerAPI.syncMonday();
+
+            // Poll for sync completion (check every 3s, up to 2 minutes)
+            const maxWait = 120000;
+            const interval = 3000;
+            const start = Date.now();
+            let completed = false;
+
+            while (Date.now() - start < maxWait) {
+                await new Promise(r => setTimeout(r, interval));
+                try {
+                    const status = await ServerAPI.getMondaySyncStatus();
+                    if (status.lastSync) {
+                        const syncStatus = status.lastSync.status;
+                        if (syncStatus === 'success' || syncStatus === 'error') {
+                            completed = true;
+                            if (syncStatus === 'error') {
+                                Utils.showToast('Sync completed with errors: ' + (status.lastSync.error_message || 'Unknown'), 'error');
+                            }
+                            break;
+                        }
+                    }
+                } catch { /* ignore polling errors */ }
+            }
+
             // Reload all three synced sections
             await Promise.allSettled([
                 API.loadPreApprovals(),
                 API.loadPipeline(),
                 typeof FundedLoans !== 'undefined' ? FundedLoans.load() : Promise.resolve(),
             ]);
+
             // Brief success flash
             allBtns.forEach(btn => {
-                btn.innerHTML = '<i class="fas fa-check"></i>';
+                btn.innerHTML = '<i class="fas fa-check"></i> Done';
             });
+            if (completed) {
+                Utils.showToast('Monday.com sync completed successfully!', 'success');
+            }
             setTimeout(() => {
                 allBtns.forEach(btn => {
                     btn.innerHTML = originals.get(btn);
@@ -730,16 +764,52 @@ const MondaySettings = {
 
     filterPipeline() {
         const loVal = (document.getElementById('pipelineLO')?.value || '').toLowerCase();
+        const searchVal = (document.getElementById('pipelineSearch')?.value || '').toLowerCase();
         const rows = document.querySelectorAll('#pipelineTable tbody tr');
 
         rows.forEach(row => {
             if (row.querySelector('.empty-state')) return;
             const rowLO = (row.getAttribute('data-lo') || '').toLowerCase();
+            const rowText = row.textContent.toLowerCase();
 
             let show = true;
             if (loVal && rowLO !== loVal) show = false;
+            if (searchVal && !rowText.includes(searchVal)) show = false;
             row.style.display = show ? '' : 'none';
         });
+
+        // Recalculate summary from visible rows
+        this._updatePipelineSummaryFromVisible();
+    },
+
+    /** Recalculate pipeline summary from currently visible table rows */
+    _updatePipelineSummaryFromVisible() {
+        if (!API.pipelineData) return;
+
+        const loVal = (document.getElementById('pipelineLO')?.value || '').toLowerCase();
+        const searchVal = (document.getElementById('pipelineSearch')?.value || '').toLowerCase();
+        const hasFilters = loVal || searchVal;
+
+        if (!hasFilters) {
+            // No filters active — show full summary
+            API.updatePipelineSummary(API.pipelineData);
+            return;
+        }
+
+        // Build filtered dataset from the original data
+        const filtered = API.pipelineData.filter(item => {
+            if (loVal) {
+                const itemLO = (item.assigned_lo_name || '').toLowerCase();
+                if (itemLO !== loVal) return false;
+            }
+            if (searchVal) {
+                const text = Object.values(item).join(' ').toLowerCase();
+                if (!text.includes(searchVal)) return false;
+            }
+            return true;
+        });
+
+        API.updatePipelineSummary(filtered);
     },
 };
 

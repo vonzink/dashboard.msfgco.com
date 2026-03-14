@@ -259,33 +259,6 @@ const FundedLoans = {
     });
   },
 
-  // ========================================
-  // GOALS INTEGRATION
-  // ========================================
-  _updateGoalsFromFunded() {
-    if (typeof GoalsManager === 'undefined') return;
-
-    // Only update goals if the Goals period matches the funded loans period
-    const goalPeriod = GoalsManager.currentPeriod;
-    if (goalPeriod !== this._period) return;
-
-    // Loans Closed = unit count from funded loans
-    const units = this._summary.count || 0;
-    const loansGoal = GoalsManager.goals['loans-closed'];
-    if (loansGoal) {
-      loansGoal.current = units;
-      GoalsManager.updateGoalCard('loans-closed');
-    }
-
-    // Volume Closed = total amount from funded loans (in millions)
-    const volumeM = (this._summary.total_amount || 0) / 1000000;
-    const volumeGoal = GoalsManager.goals['volume-closed'];
-    if (volumeGoal) {
-      volumeGoal.current = parseFloat(volumeM.toFixed(2));
-      GoalsManager.updateGoalCard('volume-closed');
-    }
-  },
-
   /**
    * Get the current summary data (used by GoalsManager to pull data on period change)
    */

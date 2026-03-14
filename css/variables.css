@@ -25,7 +25,11 @@
     --text-secondary: #4a4a68;
     --text-muted: #8888a4;
     --border-color: #e0e4ea;
-    
+    --bg-hover: #edf0f5;
+
+    /* Accent aliases */
+    --red: var(--status-danger);
+
     /* Shadows */
     --shadow-sm: 0 2px 4px rgba(0,0,0,0.04);
     --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
@@ -87,4 +91,6 @@
     --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
     --shadow-xl: 0 12px 48px rgba(0,0,0,0.5);
+    --bg-hover: #1e2d40;
+    --red: var(--status-danger);
 }
