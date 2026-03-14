@@ -499,9 +499,11 @@ const UserSettings = {
 
     try {
       await ServerAPI.put('/me/profile/display-preferences', { section, columns });
+      // Invalidate cached prefs so tables re-render with new visibility
+      if (API._displayPrefs) API._displayPrefs = null;
       btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
       setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 2000);
-      Utils.showToast(`${section.replace(/_/g, ' ')} columns updated`, 'success');
+      Utils.showToast(`${section.replace(/_/g, ' ')} columns updated — refresh to see changes`, 'success');
     } catch (err) {
       Utils.showToast('Failed to save: ' + err.message, 'error');
       btn.innerHTML = origHtml;

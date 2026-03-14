@@ -5,7 +5,7 @@ const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
-const { task: taskSchema, validate } = require('../validation/schemas');
+const { task: taskSchema, taskUpdate: taskUpdateSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -82,7 +82,7 @@ router.post('/', validate(taskSchema), async (req, res, next) => {
 });
 
 // PUT /api/tasks/:id - Update task
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(taskUpdateSchema), async (req, res, next) => {
   try {
     const TASK_FIELDS = ['title', 'description', 'priority', 'status', 'due_date', 'due_time', 'assigned_to'];
 

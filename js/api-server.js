@@ -4,6 +4,44 @@
 
 const ServerAPI = {
     // ========================================
+    // GET RESPONSE CACHE (TTL-based)
+    // ========================================
+    _cache: new Map(),
+    _cacheTTLs: {
+        '/investors':                    60000,
+        '/chat/tags':                    60000,
+        '/monday/view-config':           120000,
+        '/monday/boards/my-boards':      120000,
+        '/me/profile/display-preferences': 60000,
+        '/users/directory':              300000,
+    },
+
+    _getCached(endpoint) {
+        const entry = this._cache.get(endpoint);
+        if (!entry) return null;
+        if (Date.now() > entry.expires) {
+            this._cache.delete(endpoint);
+            return null;
+        }
+        return entry.data;
+    },
+
+    _setCache(endpoint, data) {
+        const ttl = this._cacheTTLs[endpoint];
+        if (!ttl) return;
+        this._cache.set(endpoint, { data, expires: Date.now() + ttl });
+    },
+
+    /** Invalidate a cached endpoint (call after mutations) */
+    invalidateCache(endpoint) {
+        if (endpoint) {
+            this._cache.delete(endpoint);
+        } else {
+            this._cache.clear();
+        }
+    },
+
+    // ========================================
     // AUTHENTICATION
     // ========================================
     getAuthToken() {
@@ -31,6 +69,33 @@ const ServerAPI = {
         document.cookie = "auth_token=; path=/; domain=.msfgco.com; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure";
         // Clear path-only cookie too (legacy)
         document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    },
+
+    /**
+     * Parse JWT expiry without a library (JWTs are base64url).
+     * Returns epoch seconds or null.
+     */
+    _getTokenExpiry(token) {
+        try {
+            const payload = token.split('.')[1];
+            const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+            return JSON.parse(json).exp || null;
+        } catch { return null; }
+    },
+
+    /**
+     * Proactively check if the token is expired or about to expire (within 2 min).
+     * If so, refresh BEFORE the request to avoid a 401 round-trip.
+     */
+    async _ensureFreshToken() {
+        const token = this.getAuthToken();
+        if (!token) return;
+        const exp = this._getTokenExpiry(token);
+        if (!exp) return;
+        const secondsLeft = exp - Math.floor(Date.now() / 1000);
+        if (secondsLeft < 120) {
+            await this.refreshAccessToken();
+        }
     },
 
     /**
@@ -95,6 +160,9 @@ const ServerAPI = {
     // REQUEST CORE
     // ========================================
     async request(endpoint, options = {}) {
+        // Proactive refresh: check expiry before sending to avoid 401 round-trip
+        await this._ensureFreshToken();
+
         const url = `${CONFIG.api.baseUrl}${endpoint}`;
         const token = this.getAuthToken();
 
@@ -122,14 +190,21 @@ const ServerAPI = {
                 // Try silent token refresh (coalesced — only one refresh runs at a time)
                 var newToken = await this.refreshAccessToken();
                 if (newToken) {
-                    // Retry the original request with the new token
+                    // Retry the original request with the new token (with timeout)
+                    var retryController = new AbortController();
+                    var retryTimeoutId = setTimeout(
+                        () => retryController.abort(),
+                        CONFIG.api.timeout
+                    );
                     var retryResponse = await fetch(url, {
                         ...options,
                         headers: {
                             ...(options.headers || {}),
                             Authorization: "Bearer " + newToken,
                         },
+                        signal: retryController.signal,
                     });
+                    clearTimeout(retryTimeoutId);
                     if (retryResponse.ok) {
                         return retryResponse.json();
                     }
@@ -162,8 +237,12 @@ const ServerAPI = {
         }
     },
 
-    get(endpoint) {
-        return this.request(endpoint, { method: "GET" });
+    async get(endpoint) {
+        const cached = this._getCached(endpoint);
+        if (cached) return cached;
+        const data = await this.request(endpoint, { method: "GET" });
+        this._setCache(endpoint, data);
+        return data;
     },
 
     post(endpoint, data) {
@@ -571,3 +650,9 @@ const ServerAPI = {
 
 window.ServerAPI = ServerAPI;
 
+// ── Proactive token refresh when tab regains focus ──
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        ServerAPI._ensureFreshToken().catch(() => {});
+    }
+});

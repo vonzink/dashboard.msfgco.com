@@ -1,3 +1,9 @@
+// AUTH MIDDLEWARE CHAIN:
+// 1. auth/middleware.js    — extractToken → verifyCognitoJwt → buildReqUser (sets req.user.cognito)
+// 2. middleware/auth.js    — authenticate (wraps #1 + DB lookup, sets req.user.db)
+// 3. middleware/userContext.js — getUserId, isAdmin, hasRole, checkOwnership (reads req.user.db)
+// 4. middleware/apiKeyAuth.js — API key validation for webhook routes (alternative to JWT)
+
 /**
  * middleware/auth.js
  *

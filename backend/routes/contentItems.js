@@ -16,6 +16,7 @@ const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
+const { contentItemUpdate: contentItemUpdateSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -149,7 +150,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ── PUT /:id — update item ──────────────────────────────────────
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(contentItemUpdateSchema), async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const itemId = req.params.id;

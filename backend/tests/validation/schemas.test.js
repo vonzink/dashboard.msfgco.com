@@ -96,7 +96,7 @@ describe('goalsUpdate schema', () => {
   const validGoal = {
     period_type: 'monthly',
     period_value: '2026-01',
-    goal_type: 'units',
+    goal_type: 'loans-closed',
     target_value: 10,
   };
 
@@ -105,11 +105,11 @@ describe('goalsUpdate schema', () => {
   });
 
   it('accepts array of goals', () => {
-    expect(goalsUpdate.safeParse([validGoal, { ...validGoal, goal_type: 'volume', target_value: 5000000 }]).success).toBe(true);
+    expect(goalsUpdate.safeParse([validGoal, { ...validGoal, goal_type: 'volume-closed', target_value: 5000000 }]).success).toBe(true);
   });
 
   it('rejects invalid period_type', () => {
-    const result = goalsUpdate.safeParse({ ...validGoal, period_type: 'weekly' });
+    const result = goalsUpdate.safeParse({ ...validGoal, period_type: 'biweekly' });
     expect(result.success).toBe(false);
   });
 

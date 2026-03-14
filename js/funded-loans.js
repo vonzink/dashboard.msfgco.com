@@ -65,7 +65,7 @@ const FundedLoans = {
     // Show loading
     if (tbody) {
       tbody.innerHTML =
-        '<tr><td colspan="6" class="empty-state">' +
+        '<tr><td colspan="' + this._getVisibleColumns().length + '" class="empty-state">' +
         '<i class="fas fa-spinner fa-spin"></i>' +
         '<p>Loading funded loans...</p>' +
         '</td></tr>';
@@ -95,11 +95,53 @@ const FundedLoans = {
       console.error('Funded loans load error:', err);
       if (tbody) {
         tbody.innerHTML =
-          '<tr><td colspan="6" class="empty-state">' +
+          '<tr><td colspan="' + this._getVisibleColumns().length + '" class="empty-state">' +
           '<i class="fas fa-exclamation-triangle"></i>' +
           '<p>Failed to load funded loans.</p>' +
           '</td></tr>';
       }
+    }
+  },
+
+  // ========================================
+  // COLUMN DEFINITIONS
+  // ========================================
+  COLUMNS: [
+    { field: 'client_name', label: 'Borrower' },
+    { field: 'loan_amount', label: 'Loan Amount' },
+    { field: 'assigned_lo_name', label: 'Loan Officer' },
+    { field: 'group_name', label: 'Group' },
+    { field: 'loan_type', label: 'Product' },
+    { field: 'funded_date', label: 'Funded Date' },
+  ],
+
+  _getVisibleColumns() {
+    const prefs = API._displayPrefs;
+    const userPref = prefs?.display_columns_funded_loans;
+    if (!Array.isArray(userPref) || userPref.length === 0) return this.COLUMNS;
+    const prefMap = {};
+    userPref.forEach(p => { prefMap[p.field] = p; });
+    return this.COLUMNS.filter(c =>
+      prefMap[c.field] === undefined || prefMap[c.field].visible !== false
+    );
+  },
+
+  _renderCell(loan, field) {
+    switch (field) {
+      case 'client_name':
+        return '<td>' + Utils.escapeHtml(loan.client_name || loan.borrower_name || loan.borrower || '--') + '</td>';
+      case 'loan_amount':
+        return '<td class="text-right">' + Utils.formatCurrency(loan.loan_amount) + '</td>';
+      case 'assigned_lo_name':
+        return '<td>' + Utils.escapeHtml(loan.lo_name || loan.assigned_lo_name || '--') + '</td>';
+      case 'group_name':
+        return '<td>' + Utils.escapeHtml(loan.group_name || '--') + '</td>';
+      case 'loan_type':
+        return '<td>' + Utils.escapeHtml(loan.loan_type || loan.product_type || '--') + '</td>';
+      case 'funded_date':
+        return '<td>' + (loan.funded_date ? Utils.formatDate(loan.funded_date, 'short') : '--') + '</td>';
+      default:
+        return '<td>' + Utils.escapeHtml(loan[field] != null ? String(loan[field]) : '--') + '</td>';
     }
   },
 
@@ -110,34 +152,28 @@ const FundedLoans = {
     const tbody = document.getElementById('fundedLoansBody');
     if (!tbody) return;
 
+    const cols = this._getVisibleColumns();
+
+    // Update thead
+    const thead = document.getElementById('fundedLoansHead');
+    if (thead) {
+      thead.innerHTML = '<tr>' +
+        cols.map(c => '<th>' + Utils.escapeHtml(c.label) + '</th>').join('') +
+        '</tr>';
+    }
+
     if (this._data.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="6" class="empty-state">' +
+        '<tr><td colspan="' + cols.length + '" class="empty-state">' +
         '<i class="fas fa-check-circle"></i>' +
         '<p>No funded loans for this period.</p>' +
         '</td></tr>';
       return;
     }
 
-    tbody.innerHTML = this._data.map(loan => {
-      const borrower = Utils.escapeHtml(loan.client_name || loan.borrower_name || loan.borrower || '--');
-      const amount = Utils.formatCurrency(loan.loan_amount);
-      const lo = Utils.escapeHtml(loan.lo_name || loan.assigned_lo_name || '--');
-      const group = Utils.escapeHtml(loan.group_name || '--');
-      const date = loan.funded_date ? Utils.formatDate(loan.funded_date, 'short') : '--';
-      const loanType = Utils.escapeHtml(loan.loan_type || loan.product_type || '--');
-
-      return (
-        '<tr>' +
-        '<td>' + borrower + '</td>' +
-        '<td class="text-right">' + amount + '</td>' +
-        '<td>' + lo + '</td>' +
-        '<td>' + group + '</td>' +
-        '<td>' + loanType + '</td>' +
-        '<td>' + date + '</td>' +
-        '</tr>'
-      );
-    }).join('');
+    tbody.innerHTML = this._data.map(loan =>
+      '<tr>' + cols.map(c => this._renderCell(loan, c.field)).join('') + '</tr>'
+    ).join('');
   },
 
   _renderSummary() {

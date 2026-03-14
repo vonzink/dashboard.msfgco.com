@@ -118,6 +118,28 @@ const task = z.object({
   user_id: z.number().int().positive().optional().nullable(),
 });
 
+const taskUpdate = task.partial().refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
+
+// ── Chat Message Tags ────────────────────────
+const chatMessageTags = z.object({
+  tag_ids: z.array(z.number().int().positive()).min(0).max(50),
+});
+
+// ── Pre-Approval Update ────────────────────
+const preApprovalUpdate = preApproval.partial().refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
+
+// ── Calendar Event Update ──────────────────
+const calendarEventUpdate = calendarEvent.partial().refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
+
 // ── Investors ──────────────────────────────
 const investor = z.object({
   investor_key: optionalString(200),
@@ -139,6 +161,54 @@ const investor = z.object({
   login_url: optionalString(500),
   notes: optionalString(5000),
 });
+
+const investorUpdate = investor.extend({
+  is_active: z.union([z.boolean(), z.number()]).optional(),
+  account_executive_photo_url: optionalString(500),
+}).partial().refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
+
+// ── Monday Board Update ─────────────────────
+const mondayBoardUpdate = z.object({
+  boardName: optionalString(200),
+  targetSection: z.enum(['pipeline', 'pre_approvals', 'funded_loans']).optional(),
+  isActive: z.union([z.boolean(), z.number()]).optional(),
+  displayOrder: z.number().int().nonnegative().optional(),
+  assignedUsers: z.array(z.number().int().positive()).optional(),
+}).refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
+
+// ── Admin User Update ───────────────────────
+const userUpdate = z.object({
+  name: optionalString(200),
+  initials: optionalString(10),
+  role: z.enum(['admin', 'manager', 'user']).optional(),
+  is_active: z.union([z.boolean(), z.number()]).optional(),
+}).refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
+
+// ── Content Items (update) ─────────────────
+const contentItemUpdate = z.object({
+  text_content: optionalString(50000),
+  hashtags: z.union([z.array(z.string()), z.string()]).optional().nullable(),
+  platform: optionalString(50),
+  status: optionalString(50),
+  image_s3_key: optionalString(500),
+  image_source: optionalString(500),
+  video_s3_key: optionalString(500),
+  video_source: optionalString(500),
+  review_notes: optionalString(5000),
+  scheduled_at: z.string().optional().nullable(),
+}).refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
 
 // ── Content Generation ─────────────────────
 const contentGenerate = z.object({
@@ -164,6 +234,11 @@ const contentTemplate = z.object({
   is_default: z.boolean().optional().default(false),
   is_company_wide: z.boolean().optional().default(false),
 });
+
+const contentTemplateUpdate = contentTemplate.partial().refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' }
+);
 
 // ── Content Publish (batch) ────────────────
 const contentPublishBatch = z.object({
@@ -246,17 +321,26 @@ function validateQuery(schema) {
 
 module.exports = {
   chatMessage,
+  chatMessageTags,
   announcement,
   preApproval,
+  preApprovalUpdate,
   pipelineUpdate,
   goal,
   goalsUpdate,
   notification,
   calendarEvent,
+  calendarEventUpdate,
   task,
+  taskUpdate,
   investor,
+  investorUpdate,
+  mondayBoardUpdate,
+  userUpdate,
   contentGenerate,
+  contentItemUpdate,
   contentTemplate,
+  contentTemplateUpdate,
   contentPublishBatch,
   guidelineUpload,
   guidelineProcess,

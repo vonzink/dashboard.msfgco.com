@@ -346,7 +346,6 @@
 }
 
 /* Step 3 helpers */
-button.dropdown-item,
 button.quick-link,
 button.link-item {
   width: 100%;
@@ -356,6 +355,16 @@ button.link-item {
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+
+button.dropdown-item {
+  width: 100%;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  /* padding inherited from .dropdown-item in layout.css */
 }
 
 .is-disabled {

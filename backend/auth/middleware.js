@@ -190,6 +190,7 @@ module.exports = {
   requireAuth,
   optionalAuth,
   extractToken,
+  verifyCognitoJwt,
   requireGroup,
   requireAnyGroup,
   requireAllGroups,

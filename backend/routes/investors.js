@@ -6,7 +6,7 @@ const db = require('../db/connection');
 const { requireDbUser, isAdmin, hasRole, requireAdmin, requireManagerOrAdmin } = require('../middleware/userContext');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../services/s3');
-const { investor: investorSchema, validate } = require('../validation/schemas');
+const { investor: investorSchema, investorUpdate, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -173,7 +173,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
 // PUT /api/investors/:idOrKey — Update investor
 // Admin can update all fields; non-admin can only update notes
 // ──────────────────────────────────────────────
-router.put('/:idOrKey', async (req, res, next) => {
+router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
   try {
     const admin = isAdmin(req);
     const ADMIN_FIELDS = [

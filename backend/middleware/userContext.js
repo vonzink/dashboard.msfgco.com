@@ -61,12 +61,31 @@ function requireManagerOrAdmin(req, res, next) {
   return next();
 }
 
+/**
+ * Check whether the current user owns a record or is an admin.
+ *
+ * @param {object} req        - Express request (must have req.user.db set)
+ * @param {object} record     - The DB record to check ownership of
+ * @param {string} ownerField - The field on `record` that holds the owner's user ID (default: 'user_id')
+ * @returns {boolean} true if the user owns the record OR is an admin
+ *
+ * Example:
+ *   if (!checkOwnership(req, item)) return res.status(403).json({ error: 'Access denied' });
+ */
+function checkOwnership(req, record, ownerField = 'user_id') {
+  if (isAdmin(req)) return true;
+  const userId = getUserId(req);
+  if (!userId || !record) return false;
+  return record[ownerField] === userId;
+}
+
 module.exports = {
   getDbUser,
   getUserId,
   getUserRole,
   hasRole,
   isAdmin,
+  checkOwnership,
   requireAdmin,
   requireProcessorOrAdmin,
   requireManagerOrAdmin,

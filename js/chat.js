@@ -14,6 +14,9 @@ const Chat = {
   maxMessages: CONFIG.chat.maxMessages,
   isConnected: false,
   websocket: null,
+  _wsRetryCount: 0,
+  _wsRetryTimer: null,
+  _wsMaxRetries: 10,
 
   tags: [],                // All available tags [{id, name, color}]
   activeFilterTagId: null, // Currently filtering by this tag (null = show all)
@@ -27,19 +30,136 @@ const Chat = {
   init() {
     if (!CONFIG.features.chat) return;
 
-    // Clear existing timer (prevents leak on re-init)
+    // Clear existing timers (prevents leak on re-init)
     if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+    if (this._wsRetryTimer) { clearTimeout(this._wsRetryTimer); this._wsRetryTimer = null; }
 
     this.bindEvents();
     this.bindFloatPanel();
     this.loadTags().then(() => this.loadMessages());
 
-    // Auto-refresh messages every 15 seconds
-    this._refreshTimer = setInterval(() => this.loadMessages(), CONFIG.refresh?.chat || 15000);
+    // Try WebSocket for real-time updates; fall back to polling
+    this._connectWebSocket();
   },
 
   destroy() {
     if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+    if (this._wsRetryTimer) { clearTimeout(this._wsRetryTimer); this._wsRetryTimer = null; }
+    if (this.websocket) {
+      this.websocket.close(1000, 'destroy');
+      this.websocket = null;
+    }
+  },
+
+  // ========================================
+  // WEBSOCKET (real-time updates)
+  // ========================================
+  _connectWebSocket() {
+    // Build WebSocket URL from API base URL
+    const apiBase = CONFIG.api.baseUrl.replace(/\/api$/, '');
+    const wsProtocol = apiBase.startsWith('https') ? 'wss' : 'ws';
+    const wsHost = apiBase.replace(/^https?:\/\//, '');
+    const token = ServerAPI.getAuthToken();
+
+    if (!token) {
+      // No token yet — fall back to polling
+      this._startPolling();
+      return;
+    }
+
+    try {
+      const wsUrl = wsProtocol + '://' + wsHost + '/ws?token=' + encodeURIComponent(token);
+      this.websocket = new WebSocket(wsUrl);
+
+      this.websocket.onopen = () => {
+        this.isConnected = true;
+        this._wsRetryCount = 0;
+        // Stop polling since WebSocket is active
+        if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+        console.log('Chat WebSocket connected');
+      };
+
+      this.websocket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          this._handleWsMessage(msg);
+        } catch (err) {
+          // Ignore malformed messages
+        }
+      };
+
+      this.websocket.onclose = (event) => {
+        this.isConnected = false;
+        this.websocket = null;
+
+        // Don't reconnect if intentionally closed
+        if (event.code === 1000) return;
+
+        // Reconnect with exponential backoff
+        if (this._wsRetryCount < this._wsMaxRetries) {
+          const delay = Math.min(1000 * Math.pow(2, this._wsRetryCount), 30000);
+          this._wsRetryCount++;
+          this._wsRetryTimer = setTimeout(() => this._connectWebSocket(), delay);
+        } else {
+          // Give up on WebSocket, fall back to polling
+          console.warn('WebSocket max retries reached, falling back to polling');
+          this._startPolling();
+        }
+      };
+
+      this.websocket.onerror = () => {
+        // onclose will fire after onerror, so reconnection logic is handled there
+      };
+    } catch (err) {
+      console.warn('WebSocket connection failed, using polling:', err.message);
+      this._startPolling();
+    }
+  },
+
+  _startPolling() {
+    if (this._refreshTimer) return; // Already polling
+    this._refreshTimer = setInterval(() => this.loadMessages(), CONFIG.refresh?.chat || 30000);
+  },
+
+  _handleWsMessage(msg) {
+    switch (msg.type) {
+      case 'chat:message': {
+        // Add new message if not already in local cache
+        const data = msg.data;
+        if (!this.messages.find(m => m.id === data.id)) {
+          this.messages.push(data);
+
+          // Trim to max if needed
+          if (this.messages.length > (this.maxMessages || 200)) {
+            this.messages = this.messages.slice(-100);
+          }
+
+          // Only re-render if not filtering by tag, or message matches filter
+          if (!this.activeFilterTagId ||
+              (data.tags && data.tags.some(t => t.id === this.activeFilterTagId))) {
+            this.renderMessages(this.messages);
+          }
+        }
+        break;
+      }
+
+      case 'chat:delete': {
+        const deleteId = msg.data.id;
+        this.messages = this.messages.filter(m => m.id !== deleteId);
+        this.renderMessages(this.messages);
+        break;
+      }
+
+      case 'chat:tags': {
+        const { id, tag_ids } = msg.data;
+        const existing = this.messages.find(m => m.id === id);
+        if (existing) {
+          existing.tags = (tag_ids || []).map(tid => this.tags.find(t => t.id === tid)).filter(Boolean);
+          this.renderMessages(this.messages);
+        }
+        break;
+      }
+    }
   },
 
   bindEvents() {
@@ -507,8 +627,9 @@ const Chat = {
       this.selectedTagIds = [];
       this.renderTagPicker();
 
-      // Add to local cache and re-render
-      if (newMsg && newMsg.id) {
+      // If WebSocket is connected, the broadcast will add it automatically.
+      // Otherwise, add to local cache manually (polling mode).
+      if (!this.isConnected && newMsg && newMsg.id) {
         this.messages.push(newMsg);
         this.renderMessages(this.messages);
       }

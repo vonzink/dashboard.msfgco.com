@@ -260,14 +260,21 @@ const ModalsManager = {
         `;
       }).join('');
 
-      // Bind delete buttons
+      // Bind delete buttons (optimistic UI — remove from DOM immediately)
       container.querySelectorAll('.notif-delete').forEach(btn => {
         btn.addEventListener('click', async () => {
           if (!confirm('Delete this reminder?')) return;
+          const item = btn.closest('.notif-item');
+          if (item) { item.style.opacity = '0'; item.style.transition = 'opacity 0.2s'; }
           try {
             await ServerAPI.delete(`/notifications/${btn.dataset.id}`);
-            this.loadNotificationsList();
+            if (item) item.remove();
+            // Show empty state if no items left
+            if (container.querySelectorAll('.notif-item').length === 0) {
+              container.innerHTML = '<div class="notif-empty"><i class="fas fa-bell-slash"></i><p>No reminders set up yet.</p></div>';
+            }
           } catch (err) {
+            if (item) { item.style.opacity = '1'; }
             Utils.showToast('Failed to delete: ' + err.message, 'error');
           }
         });

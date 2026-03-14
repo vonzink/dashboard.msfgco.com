@@ -4,7 +4,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
-const { calendarEvent: calendarEventSchema, validate } = require('../validation/schemas');
+const { calendarEvent: calendarEventSchema, calendarEventUpdate, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -103,7 +103,7 @@ router.post('/', validate(calendarEventSchema), async (req, res, next) => {
 // PUT /api/calendar-events/:id - Update a calendar event
 // Query param: ?scope=single|all (default: single)
 // Any authenticated user can edit any event
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(calendarEventUpdate), async (req, res, next) => {
   try {
     const { title, who, start, end, allDay, notes, color } = req.body;
     const scope = req.query.scope || 'single';

@@ -103,6 +103,9 @@ const API = {
 
     async loadPreApprovals() {
         try {
+            // Ensure display prefs are loaded
+            await this._loadDisplayPrefs();
+
             // Build query params from filters
             const boardSelect = document.getElementById('preApprovalBoardSelect');
             const groupSelect = document.getElementById('preApprovalGroupSelect');
@@ -160,42 +163,80 @@ const API = {
         this._paFiltersInitialized = true;
     },
 
+    PRE_APPROVAL_COLUMNS: [
+        { field: 'client_name', label: 'Client Name' },
+        { field: 'loan_amount', label: 'Loan Amount' },
+        { field: 'pre_approval_date', label: 'Pre-Approval Date' },
+        { field: 'expiration_date', label: 'Expiration Date' },
+        { field: 'status', label: 'Status' },
+        { field: 'assigned_lo_name', label: 'Loan Officer' },
+        { field: 'property_address', label: 'Property' },
+        { field: 'loan_type', label: 'Loan Type' },
+        { field: 'notes', label: 'Notes' },
+    ],
+
+    _getVisiblePreApprovalColumns() {
+        const prefs = this._displayPrefs;
+        const userPref = prefs?.display_columns_pre_approvals;
+        if (!Array.isArray(userPref) || userPref.length === 0) return this.PRE_APPROVAL_COLUMNS;
+        const prefMap = {};
+        userPref.forEach(p => { prefMap[p.field] = p; });
+        return this.PRE_APPROVAL_COLUMNS.filter(c =>
+            prefMap[c.field] === undefined || prefMap[c.field].visible !== false
+        );
+    },
+
+    _renderPreApprovalCell(item, field) {
+        const val = item[field];
+        switch (field) {
+            case 'client_name':
+                return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
+            case 'loan_amount':
+                return `<td class="currency">${Utils.formatCurrency(val)}</td>`;
+            case 'pre_approval_date':
+            case 'expiration_date':
+                return `<td>${Utils.formatDate(val)}</td>`;
+            case 'status':
+                return `<td><span class="status-badge ${(val || '').toLowerCase().replace(/[^a-z]/g, '-')}">${Utils.escapeHtml(val || 'Unknown')}</span></td>`;
+            case 'assigned_lo_name':
+                return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
+            case 'property_address':
+                return `<td>${Utils.escapeHtml(val || 'TBD')}</td>`;
+            case 'notes':
+                return `<td class="notes-cell" title="${Utils.escapeHtml(val || '')}">${Utils.escapeHtml(val || '')}</td>`;
+            default:
+                return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
+        }
+    },
+
     renderPreApprovals(data) {
         const tbody = document.getElementById('preApprovalsBody');
         if (!tbody) return;
 
+        const cols = this._getVisiblePreApprovalColumns();
+
+        // Update thead
+        const thead = document.getElementById('preApprovalsHead');
+        if (thead) {
+            thead.innerHTML = '<tr>' +
+                cols.map(c => `<th class="sortable">${Utils.escapeHtml(c.label)}</th>`).join('') +
+                '</tr>';
+            thead.querySelectorAll('.sortable').forEach(header => {
+                header.addEventListener('click', (e) => TableManager.handleSort(e));
+            });
+        }
+
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="9" class="empty-state">
+            tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty-state">
                 <i class="fas fa-database"></i>
                 <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
             </td></tr>`;
             return;
         }
 
-        tbody.innerHTML = data.map(item => `
-            <tr data-id="${item.id}">
-                <td><strong>${Utils.escapeHtml(item.client_name || '')}</strong></td>
-                <td class="currency">${Utils.formatCurrency(item.loan_amount)}</td>
-                <td>${Utils.formatDate(item.pre_approval_date)}</td>
-                <td>${Utils.formatDate(item.expiration_date)}</td>
-                <td>
-                    <span class="status-badge ${(item.status || '').toLowerCase().replace(/[^a-z]/g, '-')}">
-                        ${Utils.escapeHtml(item.status || 'Unknown')}
-                    </span>
-                </td>
-                <td>
-                    <div class="lo-cell">
-                        <span class="lo-avatar">${Utils.getInitials(item.assigned_lo_name)}</span>
-                        ${Utils.escapeHtml(item.assigned_lo_name || 'Unassigned')}
-                    </div>
-                </td>
-                <td>${Utils.escapeHtml(item.property_address || 'TBD')}</td>
-                <td>${Utils.escapeHtml(item.loan_type || '')}</td>
-                <td class="notes-cell" title="${Utils.escapeHtml(item.notes || '')}">
-                    ${Utils.escapeHtml(item.notes || '')}
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = data.map(item =>
+            `<tr data-id="${item.id}">${cols.map(c => this._renderPreApprovalCell(item, c.field)).join('')}</tr>`
+        ).join('');
     },
 
     // ========================================
@@ -221,15 +262,39 @@ const API = {
         { field: 'funding_date', label: 'Funding Date' },
     ],
 
+    _displayPrefs: null,
+
+    async _loadDisplayPrefs() {
+        if (this._displayPrefs) return this._displayPrefs;
+        try {
+            this._displayPrefs = await ServerAPI.get('/me/profile/display-preferences');
+        } catch {
+            this._displayPrefs = {};
+        }
+        return this._displayPrefs;
+    },
+
     async loadPipelineConfig() {
         try {
-            const config = await ServerAPI.getMondayViewConfig();
-            const cols = (config.columns || []).filter(c => c.visible !== false);
+            const [config, prefs] = await Promise.all([
+                ServerAPI.getMondayViewConfig(),
+                this._loadDisplayPrefs(),
+            ]);
+            let cols = (config.columns || []).filter(c => c.visible !== false);
             // Only use server config if it has more than just client_name
             if (cols.length > 1) {
                 this.pipelineColumns = cols;
             } else {
                 this.pipelineColumns = this.FALLBACK_PIPELINE_COLUMNS;
+            }
+            // Apply user display preferences (hide unchecked columns)
+            const userPref = prefs.display_columns_pipeline;
+            if (Array.isArray(userPref) && userPref.length > 0) {
+                const prefMap = {};
+                userPref.forEach(p => { prefMap[p.field] = p; });
+                this.pipelineColumns = this.pipelineColumns.filter(c =>
+                    prefMap[c.field] === undefined || prefMap[c.field].visible !== false
+                );
             }
         } catch (e) {
             console.warn('Failed to load pipeline view config, using defaults:', e.message || e);

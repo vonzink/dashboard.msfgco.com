@@ -1,6 +1,26 @@
 /* ============================================
    MSFG Dashboard - Main Application
    Application initialization and orchestration
+
+   SCRIPT LOAD ORDER (index.html):
+     1. auth-gate.js     — Blocks render until JWT exists (redirects to login)
+     2. config.js        — CONFIG global (api urls, cognito, feature flags)
+     3. api-server.js    — ServerAPI (HTTP client, token refresh, response cache)
+     4. utils.js         — Utils (formatting, DOM, toast, openPopup)
+     5. theme.js         — ThemeManager (dark/light)
+     6. tables.js        — TableManager (sorting, search, pagination)
+     7. chat.js          — Chat (messages, tags, polling)
+     8. investors.js     — Investors (modals, CRUD, contact cards)
+     9. api.js           — API (data loading, pipeline/PA rendering) — depends on ServerAPI, Utils
+    10. funded-loans.js  — FundedLoans — depends on API._displayPrefs, ServerAPI
+    11. goals.js         — GoalsManager — depends on API (pipeline/funded data)
+    12. gauges.js         — DashboardGauges
+    13. modals.js         — ModalsManager (support ticket, notifications, announcements)
+    14. user-settings.js  — UserSettings
+    15. monday.js         — MondaySettings
+    16. data-refresher.js — DataRefresher (auto-refresh intervals)
+    17. action-dispatcher.js — Global [data-action] click handler
+    18. app.js            — THIS FILE — orchestrates init of all modules above
    ============================================ */
 
 const App = {
@@ -216,12 +236,25 @@ const App = {
 // ========================================
 window.onerror = function(message, source, lineno, colno, error) {
     console.error('Global error:', { message, source, lineno, colno, error });
+
+    // User-facing toast for meaningful errors (skip noise like ResizeObserver)
+    if (typeof message === 'string' && !message.includes('ResizeObserver') && !message.includes('Script error')) {
+        Utils?.showToast?.('Something went wrong. Please refresh if issues persist.', 'error');
+    }
     return false;
 };
 
-window.onunhandledrejection = function(event) {
+window.addEventListener('unhandledrejection', function(event) {
     console.error('Unhandled promise rejection:', event.reason);
-};
+
+    // Don't toast on AbortError (user navigated away / timeout) or auth redirects
+    const msg = String(event.reason?.message || event.reason || '');
+    if (msg.includes('AbortError') || msg.includes('Session expired') || msg.includes('signal')) return;
+
+    if (msg.includes('fetch') || msg.includes('network') || msg.includes('NetworkError')) {
+        Utils?.showToast?.('Network error. Please check your connection.', 'error');
+    }
+});
 
 // ========================================
 // DOM READY

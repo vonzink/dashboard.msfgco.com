@@ -12,7 +12,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
-const { contentTemplate: contentTemplateSchema, validate } = require('../validation/schemas');
+const { contentTemplate: contentTemplateSchema, contentTemplateUpdate: contentTemplateUpdateSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -151,7 +151,7 @@ router.post('/', validate(contentTemplateSchema), async (req, res, next) => {
 });
 
 // ── PUT /:id — update template ──────────────────────────────────
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(contentTemplateUpdateSchema), async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const templateId = req.params.id;

@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../db/connection');
 const { encrypt, decrypt, mask } = require('../../utils/encryption');
+const { userUpdate, validate } = require('../../validation/schemas');
 
 // GET /users
 router.get('/', async (req, res, next) => {
@@ -62,7 +63,7 @@ router.post('/', async (req, res, next) => {
 });
 
 // PUT /users/:id
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', validate(userUpdate), async (req, res, next) => {
   try {
     const { name, initials, role, is_active } = req.body;
     const userId = req.params.id;

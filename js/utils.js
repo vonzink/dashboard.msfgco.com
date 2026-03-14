@@ -309,6 +309,32 @@ const Utils = {
         return re.test(email);
     },
 
+    // ========================================
+    // WINDOW UTILITIES
+    // ========================================
+
+    /**
+     * Open a centered popup window (DRY helper for window.open sizing)
+     * @param {string} url    - URL to open
+     * @param {string} name   - Window name (reuse if already open)
+     * @param {number} maxW   - Maximum width  (default 1200)
+     * @param {number} maxH   - Maximum height (default 860)
+     */
+    openPopup(url, name = '_blank', maxW = 1200, maxH = 860) {
+        const w = Math.min(maxW, screen.availWidth - 80);
+        const h = Math.min(maxH, screen.availHeight - 80);
+        const left = Math.round((screen.availWidth - w) / 2);
+        const top  = Math.round((screen.availHeight - h) / 2);
+        return window.open(
+            url, name,
+            'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
+        );
+    },
+
+    // ========================================
+    // NOTIFICATION UTILITIES
+    // ========================================
+
     /**
      * Show a brief toast notification
      */

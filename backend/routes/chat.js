@@ -3,7 +3,8 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { requireDbUser, getUserId } = require('../middleware/userContext');
-const { chatMessage, validate } = require('../validation/schemas');
+const { chatMessage, chatMessageTags, validate } = require('../validation/schemas');
+const websocket = require('../lib/websocket');
 
 router.use(requireDbUser);
 
@@ -155,7 +156,7 @@ router.post('/messages', validate(chatMessage), async (req, res, next) => {
 
     const row = rows[0];
     const tags = row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [];
-    res.status(201).json({
+    const msgPayload = {
       id: row.id,
       user_id: row.user_id,
       sender_name: row.sender_name,
@@ -163,19 +164,20 @@ router.post('/messages', validate(chatMessage), async (req, res, next) => {
       message: row.message,
       created_at: row.created_at,
       tags,
-    });
+    };
+
+    // Broadcast to all connected WebSocket clients
+    websocket.broadcast('chat:message', msgPayload);
+
+    res.status(201).json(msgPayload);
   } catch (err) { next(err); }
 });
 
 // PUT /api/chat/messages/:id/tags — update tags on a message
-router.put('/messages/:id/tags', async (req, res, next) => {
+router.put('/messages/:id/tags', validate(chatMessageTags), async (req, res, next) => {
   try {
     const msgId = parseInt(req.params.id);
     const { tag_ids } = req.body;
-
-    if (!Array.isArray(tag_ids)) {
-      return res.status(400).json({ error: 'tag_ids array is required' });
-    }
 
     // Replace all tags
     await db.query('DELETE FROM chat_message_tags WHERE message_id = ?', [msgId]);
@@ -187,6 +189,9 @@ router.put('/messages/:id/tags', async (req, res, next) => {
         [tagValues]
       );
     }
+
+    // Broadcast tag update
+    websocket.broadcast('chat:tags', { id: msgId, tag_ids });
 
     res.json({ success: true, message_id: msgId, tag_ids });
   } catch (err) { next(err); }
@@ -206,6 +211,10 @@ router.delete('/messages/:id', async (req, res, next) => {
     }
 
     await db.query('DELETE FROM chat_messages WHERE id = ?', [req.params.id]);
+
+    // Broadcast deletion to all connected clients
+    websocket.broadcast('chat:delete', { id: parseInt(req.params.id) });
+
     res.json({ success: true });
   } catch (err) { next(err); }
 });

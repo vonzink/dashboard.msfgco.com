@@ -30,6 +30,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser, requireAdmin } = require('../middleware/userContext');
+const { mondayBoardUpdate, validate } = require('../validation/schemas');
 
 const {
   VALID_FIELDS_BY_SECTION,
@@ -178,7 +179,7 @@ router.post('/boards', requireAdmin, async (req, res, next) => {
 });
 
 // ── PUT /boards/:boardId — update board config (admin) ──────────
-router.put('/boards/:boardId', requireAdmin, async (req, res, next) => {
+router.put('/boards/:boardId', requireAdmin, validate(mondayBoardUpdate), async (req, res, next) => {
   try {
     const { boardName, targetSection, isActive, displayOrder, assignedUsers } = req.body;
     const updates = [];

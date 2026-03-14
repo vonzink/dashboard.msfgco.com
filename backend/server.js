@@ -11,6 +11,7 @@ const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
 const logger = require('./lib/logger');
 const pinoHttp = require('pino-http');
+const websocket = require('./lib/websocket');
 
 // Route imports
 const investorsRoutes = require('./routes/investors');
@@ -52,8 +53,24 @@ const PORT = process.env.PORT || 8080;
 // Trust first proxy (ALB / nginx / CloudFront in front of EC2)
 app.set('trust proxy', 1);
 
-// Security headers
-app.use(helmet());
+// Security headers — API-only server, so strict CSP + no sniffing
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'none'"],        // API returns JSON only, no need for any content loading
+      frameAncestors: ["'none'"],    // Prevent click-jacking via iframes
+    },
+  },
+  crossOriginEmbedderPolicy: true,
+  crossOriginOpenerPolicy: { policy: 'same-origin' },
+  crossOriginResourcePolicy: { policy: 'same-origin' },
+  referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  hsts: { maxAge: 63072000, includeSubDomains: true, preload: true },  // 2 years
+  noSniff: true,
+  dnsPrefetchControl: { allow: false },
+  frameguard: { action: 'deny' },
+  permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+}));
 
 // CORS - restrict to your frontend domain
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
@@ -97,8 +114,13 @@ app.use(express.urlencoded({ extended: true }));
 // ======================
 // HEALTH CHECK (no auth)
 // ======================
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  try {
+    await db.ping();
+    res.json({ status: 'ok', uptime: process.uptime(), wsClients: websocket.clientCount(), timestamp: new Date().toISOString() });
+  } catch (err) {
+    res.status(503).json({ status: 'error', error: 'Database connection failed', timestamp: new Date().toISOString() });
+  }
 });
 
 // ======================
@@ -195,8 +217,28 @@ async function startServer() {
     await migrations.runMigrations();
     logger.info('Database migrations completed');
 
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info({ port: PORT, env: process.env.NODE_ENV || 'development', origins: allowedOrigins }, 'Server started');
+    });
+
+    // Attach WebSocket server for real-time chat
+    const { verifyCognitoJwt } = require('./auth/middleware');
+    websocket.attach(server, async (token) => {
+      const claims = await verifyCognitoJwt(token);
+      const email = claims.email;
+      const sub = claims.sub;
+
+      // Look up DB user (same logic as authenticate middleware)
+      let users = [];
+      if (email) {
+        [users] = await db.query('SELECT id, email FROM users WHERE email = ?', [email]);
+      }
+      if (users.length === 0 && sub) {
+        [users] = await db.query('SELECT id, email FROM users WHERE cognito_sub = ?', [sub]);
+      }
+      if (users.length === 0) throw new Error('No DB user found');
+
+      return { userId: users[0].id, email: users[0].email };
     });
   } catch (error) {
     logger.fatal({ err: error }, 'Failed to start server');
@@ -206,6 +248,14 @@ async function startServer() {
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  websocket.close();
+  await db.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  websocket.close();
   await db.close();
   process.exit(0);
 });

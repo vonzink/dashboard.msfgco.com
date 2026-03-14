@@ -5,39 +5,20 @@
 (() => {
   'use strict';
 
-  const safeCall = (fn, name) => {
-    if (typeof fn !== 'function') {
-      console.warn(`Action handler not available: ${name}`);
-      return;
-    }
-    fn();
-  };
-
-  // Simple toast notification for "Coming Soon" features
-  const comingSoon = (feature) => {
-    const toast = document.createElement('div');
-    toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#104547;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-family:Inter,sans-serif;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;';
-    toast.textContent = feature + ' — Coming Soon';
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => { toast.style.opacity = '1'; });
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 2500);
-  };
+  const comingSoon = (feature) => Utils.showToast(feature + ' — Coming Soon');
 
   const ACTIONS = {
     // =====================
     // Modals
     // =====================
     'open-support-ticket': () =>
-      safeCall(window.ModalsManager?.showSupportTicketModal, 'open-support-ticket'),
+      window.ModalsManager?.showSupportTicketModal(),
 
     'open-notifications': () =>
-      safeCall(window.ModalsManager?.showNotificationsModal, 'open-notifications'),
+      window.ModalsManager?.showNotificationsModal(),
 
     'open-add-announcement': () =>
-      safeCall(window.ModalsManager?.showAnnouncementModal, 'open-add-announcement'),
+      window.ModalsManager?.showAnnouncementModal(),
 
     'open-company-contacts': () =>
       window.Investors?.showCompanyContactsModal?.(),
@@ -47,18 +28,8 @@
       if (id) window.Investors?.showModal?.(id);
     },
 
-    'manage-investors': () => {
-      // Open admin settings page to investors tab
-      const w = Math.min(1200, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/Admin Settings/admin-settings.html#investors',
-        'MSFGAdminSettings',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'manage-investors': () =>
+      Utils.openPopup('Calculators/Admin Settings/admin-settings.html#investors', 'MSFGAdminSettings'),
 
     // =====================
     // HR / Docs
@@ -70,38 +41,20 @@
     'open-employee-card': (el) => {
       const empId = el?.dataset?.employeeId;
       if (!empId) return;
-      // Show in-page contact card modal
       window.Investors?.showContactCard?.(empId);
     },
     // =====================
     // LendingPad
     // =====================
-    'open-lendingpad': () => {
-      const w = Math.min(1280, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/LendingPad/lendingpad.html',
-        'MSFGLendingPad',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'open-lendingpad': () =>
+      Utils.openPopup('Calculators/LendingPad/lendingpad.html', 'MSFGLendingPad', 1280, 860),
 
     // =====================
     // Schedule
     // =====================
-    'open-company-calendar': () => {
-      const w = Math.min(1280, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/Company Calendar/calendar.html',
-        'MSFGCalendar',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'open-company-calendar': () =>
+      Utils.openPopup('Calculators/Company Calendar/calendar.html', 'MSFGCalendar', 1280, 860),
+
     'open-timeoff-requests': () => comingSoon('Time-Off Requests'),
 
     // =====================
@@ -115,7 +68,7 @@
     'open-privacy': () => comingSoon('Privacy Policy'),
     'open-terms': () => comingSoon('Terms of Service'),
     'open-support': () =>
-      safeCall(window.ModalsManager?.showSupportTicketModal, 'open-support'),
+      window.ModalsManager?.showSupportTicketModal(),
 
     // =====================
     // Tools
@@ -128,56 +81,21 @@
       }
     },
 
-    'open-admin-settings': () => {
-      const w = Math.min(1200, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/Admin Settings/admin-settings.html',
-        'MSFGAdminSettings',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'open-admin-settings': () =>
+      Utils.openPopup('Calculators/Admin Settings/admin-settings.html', 'MSFGAdminSettings'),
 
-    'open-forms-library': () => {
-      const w = Math.min(1100, screen.availWidth - 80);
-      const h = Math.min(800, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/File Browser/file-browser.html?library=forms',
-        'MSFGFormsLibrary',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'open-forms-library': () =>
+      Utils.openPopup('Calculators/File Browser/file-browser.html?library=forms', 'MSFGFormsLibrary', 1100, 800),
 
-    'open-logos-browser': () => {
-      const w = Math.min(1100, screen.availWidth - 80);
-      const h = Math.min(800, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/File Browser/file-browser.html?library=logos',
-        'MSFGLogosBrowser',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'open-logos-browser': () =>
+      Utils.openPopup('Calculators/File Browser/file-browser.html?library=logos', 'MSFGLogosBrowser', 1100, 800),
 
     // =====================
     // Monday.com Integration
     // =====================
-    'monday-settings': () => {
-      const w = Math.min(1200, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'Calculators/Admin Settings/admin-settings.html#monday',
-        'MSFGAdminSettings',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
-    },
+    'monday-settings': () =>
+      Utils.openPopup('Calculators/Admin Settings/admin-settings.html#monday', 'MSFGAdminSettings'),
+
     'monday-sync': (el) => {
       if (typeof MondaySettings !== 'undefined') {
         MondaySettings.triggerSyncFromToolbar(el);
@@ -189,15 +107,7 @@
     // =====================
     'open-processing': (el) => {
       const type = el?.dataset?.type || 'title';
-      const w = Math.min(1280, screen.availWidth - 80);
-      const h = Math.min(860, screen.availHeight - 80);
-      const left = Math.round((screen.availWidth - w) / 2);
-      const top  = Math.round((screen.availHeight - h) / 2);
-      window.open(
-        'processing.html?type=' + encodeURIComponent(type),
-        'MSFGProcessing',
-        'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-      );
+      Utils.openPopup('processing.html?type=' + encodeURIComponent(type), 'MSFGProcessing', 1280, 860);
     },
 
     // =====================

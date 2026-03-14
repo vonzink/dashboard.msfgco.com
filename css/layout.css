@@ -335,9 +335,13 @@
 }
 
 .dropdown-item i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
     width: 20px;
-    text-align: center;
     font-size: 0.9rem;
+    flex-shrink: 0;
 }
 
 .dropdown-divider {

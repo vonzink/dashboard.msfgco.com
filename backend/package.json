@@ -9,6 +9,7 @@
     "migrate": "node -e \"require('./db/migrations').runMigrations().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })\"",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
@@ -28,6 +29,7 @@
     "pdfjs-dist": "^4.10.38",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "ws": "^8.19.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
