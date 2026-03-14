@@ -160,14 +160,21 @@ const Investors = {
       const aeName = ae.name || investor.account_executive_name;
       const aeEmail = ae.email || investor.account_executive_email;
       const aePhone = ae.mobile || investor.account_executive_phone;
+      const aePhoto = investor.account_executive_photo_url;
 
       if (aeName && aeName !== 'TBD') {
+        const photoHtml = aePhoto
+          ? '<img src="' + aePhoto + '" alt="' + esc(aeName) + '" class="ae-photo" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--green-bright);margin-right:12px;flex-shrink:0;" />'
+          : '';
         aeSection.innerHTML =
           '<h4><i class="fas fa-user-tie"></i> Account Executive</h4>' +
-          '<div class="contact-info">' +
-            (aeName ? '<div><strong>' + esc(aeName) + '</strong></div>' : '') +
-            (aePhone ? '<div><i class="fas fa-phone"></i> <a href="tel:' + aePhone.replace(/\D/g, '') + '">' + esc(aePhone) + '</a></div>' : '') +
-            (aeEmail ? '<div><i class="fas fa-envelope"></i> <a href="mailto:' + aeEmail + '">' + esc(aeEmail) + '</a></div>' : '') +
+          '<div class="contact-info" style="flex-direction:row;align-items:center;flex-wrap:wrap;">' +
+            photoHtml +
+            '<div style="display:flex;flex-direction:column;gap:var(--spacing-xs);">' +
+              (aeName ? '<div><strong>' + esc(aeName) + '</strong></div>' : '') +
+              (aePhone ? '<div><i class="fas fa-phone"></i> <a href="tel:' + aePhone.replace(/\D/g, '') + '">' + esc(aePhone) + '</a></div>' : '') +
+              (aeEmail ? '<div><i class="fas fa-envelope"></i> <a href="mailto:' + aeEmail + '">' + esc(aeEmail) + '</a></div>' : '') +
+            '</div>' +
           '</div>';
       } else {
         aeSection.innerHTML =
@@ -207,12 +214,17 @@ const Investors = {
       if (team.length > 0) {
         let teamHtml = '<h4><i class="fas fa-users"></i> Team</h4><div class="team-list">';
         team.forEach(member => {
-          teamHtml += '<div class="team-member">';
+          const photoHtml = member.photo_url
+            ? '<img src="' + member.photo_url + '" alt="' + esc(member.name || '') + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color);flex-shrink:0;" />'
+            : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid var(--border-color);"><i class="fas fa-user" style="font-size:12px;color:var(--text-muted);"></i></div>';
+          teamHtml += '<div class="team-member" style="display:flex;align-items:center;gap:10px;">';
+          teamHtml += photoHtml;
+          teamHtml += '<div>';
           if (member.role) teamHtml += '<strong>' + esc(member.role) + '</strong> / ';
           if (member.name) teamHtml += esc(member.name);
           if (member.phone) teamHtml += ' / <a href="tel:' + member.phone.replace(/\D/g, '') + '">' + esc(member.phone) + '</a>';
           if (member.email) teamHtml += ' / <a href="mailto:' + member.email + '">' + esc(member.email) + '</a>';
-          teamHtml += '</div>';
+          teamHtml += '</div></div>';
         });
         teamHtml += '</div>';
         teamSection.innerHTML = teamHtml;
@@ -250,10 +262,11 @@ const Investors = {
       if (clauses.length > 0) {
         let html = '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4><div class="clause-info">';
         clauses.forEach(c => {
-          html += '<div class="clause-item" style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid #f0f0f0;">';
+          html += '<div class="clause-item" style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border-color);">';
+          if (c.label) html += '<span style="display:inline-block;background:var(--green-dark,#0d3b3d);color:var(--green-bright,#8cc63e);font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:4px;margin-bottom:4px;text-transform:uppercase;">' + esc(c.label) + '</span>';
           html += '<div><strong>' + esc(c.name) + '</strong></div>';
           if (c.isaoa) html += '<div>' + esc(c.isaoa) + '</div>';
-          if (c.address) html += '<div style="color:#666;">' + esc(c.address) + '</div>';
+          if (c.address) html += '<div style="color:var(--text-muted,#666);">' + esc(c.address) + '</div>';
           html += '</div>';
         });
         html += '</div>';

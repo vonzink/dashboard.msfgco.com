@@ -555,6 +555,20 @@
                 <label>Investor Name</label>
                 <input type="text" id="invEditName" />
               </div>
+              <div class="form-group" style="grid-column: 1 / -1;">
+                <label>Account Executive</label>
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                  <div id="invAePhotoPreview" style="width:48px; height:48px; border-radius:50%; overflow:hidden; background:#f0f0f0; border:2px solid #ddd; display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer;" title="Click to upload photo">
+                    <img id="invAePhotoImg" src="" style="width:100%; height:100%; object-fit:cover; display:none;" />
+                    <i id="invAePhotoPlaceholder" class="fas fa-user-tie" style="color:#bbb; font-size:18px;"></i>
+                  </div>
+                  <div style="display:flex; gap:4px;">
+                    <button type="button" class="btn btn-sm btn-secondary" id="invAePhotoUploadBtn" title="Upload AE photo"><i class="fas fa-camera"></i></button>
+                    <button type="button" class="btn btn-sm btn-danger" id="invAePhotoRemoveBtn" style="display:none;" title="Remove photo"><i class="fas fa-times"></i></button>
+                  </div>
+                  <input type="file" id="invAePhotoFileInput" accept="image/png,image/jpeg,image/svg+xml" style="display:none;" />
+                </div>
+              </div>
               <div class="form-group">
                 <label>AE Name</label>
                 <input type="text" id="invEditAeName" />
@@ -610,7 +624,7 @@
       <!-- ── SUB-TAB: Team ── -->
       <div class="inv-profile-section" id="inv-team">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <p style="margin:0; font-size:13px; color:#888;">Manage team members for this investor.</p>
+          <p style="margin:0; font-size:13px; color:#888;">Manage team members for this investor. Click the avatar to upload a photo.</p>
           <button class="btn btn-sm btn-primary" id="invAddTeamMemberBtn"><i class="fas fa-plus"></i> Add Member</button>
         </div>
         <div id="invTeamRows"></div>
@@ -639,7 +653,7 @@
       <!-- ── SUB-TAB: Mortgagee Clauses ── -->
       <div class="inv-profile-section" id="inv-clauses">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <p style="margin:0; font-size:13px; color:#888;">Manage mortgagee clauses for this investor.</p>
+          <p style="margin:0; font-size:13px; color:#888;">Manage mortgagee clauses for this investor. Use the label field to categorize (e.g. "FHA", "Conventional").</p>
           <button class="btn btn-sm btn-primary" id="invAddClauseBtn"><i class="fas fa-plus"></i> Add Clause</button>
         </div>
         <div id="invClauseRows"></div>
@@ -650,32 +664,11 @@
 
       <!-- ── SUB-TAB: Links ── -->
       <div class="inv-profile-section" id="inv-links">
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Website</label>
-            <input type="url" id="invLinkWebsite" placeholder="https://..." />
-          </div>
-          <div class="form-group">
-            <label>Login Portal</label>
-            <input type="url" id="invLinkLogin" placeholder="https://..." />
-          </div>
-          <div class="form-group">
-            <label>Flex Site</label>
-            <input type="url" id="invLinkFlexSite" placeholder="https://..." />
-          </div>
-          <div class="form-group">
-            <label>FAQ Page</label>
-            <input type="url" id="invLinkFaq" placeholder="https://..." />
-          </div>
-          <div class="form-group">
-            <label>Appraisal Video</label>
-            <input type="url" id="invLinkAppraisal" placeholder="https://..." />
-          </div>
-          <div class="form-group">
-            <label>New Scenarios (email)</label>
-            <input type="text" id="invLinkScenarios" placeholder="mailto:..." />
-          </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <p style="margin:0; font-size:13px; color:#888;">Manage links for this investor. Use the label to customize the display name.</p>
+          <button class="btn btn-sm btn-primary" id="invAddLinkBtn"><i class="fas fa-plus"></i> Add Link</button>
         </div>
+        <div id="invLinkRows"></div>
         <div class="form-actions">
           <button class="btn btn-primary" id="invLinksSaveBtn"><i class="fas fa-save"></i> Save Links</button>
         </div>
@@ -2158,7 +2151,68 @@
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
       document.getElementById('invEditDocReview').value = data.doc_review_wire || '';
       document.getElementById('invEditRemoteClosing').value = data.remote_closing_review || '';
+      // AE Photo
+      loadAePhoto(data);
     }
+
+    function loadAePhoto(data) {
+      const img = document.getElementById('invAePhotoImg');
+      const placeholder = document.getElementById('invAePhotoPlaceholder');
+      const removeBtn = document.getElementById('invAePhotoRemoveBtn');
+      if (data.account_executive_photo_url) {
+        img.src = data.account_executive_photo_url;
+        img.style.display = '';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = '';
+      } else {
+        img.src = '';
+        img.style.display = 'none';
+        placeholder.style.display = '';
+        removeBtn.style.display = 'none';
+      }
+    }
+
+    // AE Photo upload
+    document.getElementById('invAePhotoPreview').addEventListener('click', () => {
+      document.getElementById('invAePhotoFileInput').click();
+    });
+    document.getElementById('invAePhotoUploadBtn').addEventListener('click', () => {
+      document.getElementById('invAePhotoFileInput').click();
+    });
+
+    document.getElementById('invAePhotoFileInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file || !currentInvestorId) return;
+      const ALLOWED = ['image/png', 'image/jpeg', 'image/svg+xml'];
+      if (!ALLOWED.includes(file.type)) { alert('Only PNG, JPG, and SVG images are allowed.'); e.target.value = ''; return; }
+      if (file.size > 5 * 1024 * 1024) { alert('Photo must be under 5 MB.'); e.target.value = ''; return; }
+      try {
+        const { uploadUrl, fileKey } = await api('/investors/' + currentInvestorId + '/photo/upload-url', {
+          method: 'POST',
+          body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size, purpose: 'ae' }),
+        });
+        await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+        const result = await api('/investors/' + currentInvestorId + '/photo/confirm', {
+          method: 'PUT',
+          body: JSON.stringify({ fileKey, purpose: 'ae' }),
+        });
+        loadAePhoto({ account_executive_photo_url: result.photo_url });
+      } catch (err) {
+        alert('AE photo upload failed: ' + err.message);
+      }
+      e.target.value = '';
+    });
+
+    document.getElementById('invAePhotoRemoveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      if (!confirm('Remove AE photo?')) return;
+      try {
+        await api('/investors/' + currentInvestorId + '/ae-photo', { method: 'DELETE' });
+        loadAePhoto({});
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
 
     // Save Basic Info
     document.getElementById('invBasicSaveBtn').addEventListener('click', async () => {
@@ -2273,13 +2327,50 @@
       container = container || document.getElementById('invTeamRows');
       const row = document.createElement('div');
       row.className = 'inv-repeatable-row';
+      const photoUrl = (data && data.photo_url) || '';
+      const photoKey = (data && data.photo_key) || ''; // S3 key stored in hidden input
       row.innerHTML =
+        '<div class="inv-team-photo" title="Click to upload photo" style="width:36px;height:36px;border-radius:50%;overflow:hidden;background:#f0f0f0;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">' +
+          '<img src="' + escHtml(photoUrl) + '" style="width:100%;height:100%;object-fit:cover;' + (photoUrl ? '' : 'display:none;') + '" />' +
+          '<i class="fas fa-user" style="color:#bbb;font-size:14px;' + (photoUrl ? 'display:none;' : '') + '"></i>' +
+        '</div>' +
+        '<input type="hidden" data-field="photo_url" value="' + escHtml(photoKey) + '" />' +
         '<input type="text" placeholder="Role" value="' + escHtml((data && data.role) || '') + '" data-field="role" />' +
         '<input type="text" placeholder="Name" value="' + escHtml((data && data.name) || '') + '" data-field="name" />' +
         '<input type="tel" placeholder="Phone" value="' + escHtml((data && data.phone) || '') + '" data-field="phone" />' +
         '<input type="email" placeholder="Email" value="' + escHtml((data && data.email) || '') + '" data-field="email" />' +
         '<button class="btn btn-sm btn-danger" title="Remove"><i class="fas fa-times"></i></button>';
       row.querySelector('button').addEventListener('click', () => row.remove());
+      // Photo click → upload
+      row.querySelector('.inv-team-photo').addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/png,image/jpeg,image/svg+xml';
+        input.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file || !currentInvestorId) return;
+          try {
+            const { uploadUrl, fileKey } = await api('/investors/' + currentInvestorId + '/photo/upload-url', {
+              method: 'POST',
+              body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size, purpose: 'team' }),
+            });
+            await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+            const result = await api('/investors/' + currentInvestorId + '/photo/confirm', {
+              method: 'PUT',
+              body: JSON.stringify({ fileKey, purpose: 'team' }),
+            });
+            const img = row.querySelector('.inv-team-photo img');
+            const icon = row.querySelector('.inv-team-photo i');
+            img.src = result.photo_url;
+            img.style.display = '';
+            icon.style.display = 'none';
+            row.querySelector('[data-field="photo_url"]').value = fileKey;
+          } catch (err) {
+            alert('Photo upload failed: ' + err.message);
+          }
+        });
+        input.click();
+      });
       container.appendChild(row);
     }
 
@@ -2294,7 +2385,8 @@
         const name = row.querySelector('[data-field="name"]').value.trim();
         const phone = row.querySelector('[data-field="phone"]').value.trim();
         const email = row.querySelector('[data-field="email"]').value.trim();
-        if (name || role) team.push({ role, name, phone, email, sort_order: i });
+        const photo_url = row.querySelector('[data-field="photo_url"]').value.trim();
+        if (name || role) team.push({ role, name, phone, email, photo_url: photo_url || null, sort_order: i });
       });
       try {
         await api('/investors/' + currentInvestorId + '/team', {
@@ -2345,6 +2437,7 @@
       const row = document.createElement('div');
       row.className = 'inv-repeatable-row inv-clause-row';
       row.innerHTML =
+        '<input type="text" placeholder="Label (e.g. FHA, Conv)" value="' + escHtml((data && data.label) || '') + '" data-field="label" style="max-width:140px;" />' +
         '<input type="text" placeholder="Name" value="' + escHtml((data && data.name) || '') + '" data-field="name" />' +
         '<input type="text" placeholder="ISAOA" value="' + escHtml((data && data.isaoa) || '') + '" data-field="isaoa" />' +
         '<input type="text" placeholder="Address" value="' + escHtml((data && data.address) || '') + '" data-field="address" />' +
@@ -2360,10 +2453,11 @@
       const rows = document.querySelectorAll('#invClauseRows .inv-repeatable-row');
       const clauses = [];
       rows.forEach(row => {
+        const label = row.querySelector('[data-field="label"]').value.trim();
         const name = row.querySelector('[data-field="name"]').value.trim();
         const isaoa = row.querySelector('[data-field="isaoa"]').value.trim();
         const address = row.querySelector('[data-field="address"]').value.trim();
-        if (name) clauses.push({ name, isaoa, address });
+        if (name) clauses.push({ label, name, isaoa, address });
       });
       try {
         await api('/investors/' + currentInvestorId + '/mortgagee-clauses', {
@@ -2377,31 +2471,53 @@
     });
 
     // --- Links ---
-    const LINK_FIELDS = [
-      { type: 'website', id: 'invLinkWebsite' },
-      { type: 'login', id: 'invLinkLogin' },
-      { type: 'flex_site', id: 'invLinkFlexSite' },
-      { type: 'faq', id: 'invLinkFaq' },
-      { type: 'appraisal_video', id: 'invLinkAppraisal' },
-      { type: 'new_scenarios', id: 'invLinkScenarios' },
+    const LINK_TYPE_OPTIONS = [
+      { value: 'website', label: 'Website' },
+      { value: 'login', label: 'Login Portal' },
+      { value: 'flex_site', label: 'Flex Site' },
+      { value: 'faq', label: 'FAQ' },
+      { value: 'appraisal_video', label: 'Appraisal Video' },
+      { value: 'new_scenarios', label: 'New Scenarios' },
+      { value: 'other', label: 'Other' },
     ];
 
     function populateInvestorLinks(links) {
-      // Clear all
-      LINK_FIELDS.forEach(f => { document.getElementById(f.id).value = ''; });
-      // Fill from data
-      links.forEach(link => {
-        const field = LINK_FIELDS.find(f => f.type === link.link_type);
-        if (field) document.getElementById(field.id).value = link.url || '';
-      });
+      const container = document.getElementById('invLinkRows');
+      container.innerHTML = '';
+      if (links.length === 0) {
+        addLinkRow(container);
+        return;
+      }
+      links.forEach(l => addLinkRow(container, l));
     }
+
+    function addLinkRow(container, data) {
+      container = container || document.getElementById('invLinkRows');
+      const row = document.createElement('div');
+      row.className = 'inv-repeatable-row inv-link-row';
+      const typeOptions = LINK_TYPE_OPTIONS.map(opt =>
+        '<option value="' + opt.value + '"' + ((data && data.link_type === opt.value) ? ' selected' : '') + '>' + opt.label + '</option>'
+      ).join('');
+      row.innerHTML =
+        '<select data-field="link_type" style="max-width:140px;">' + typeOptions + '</select>' +
+        '<input type="text" placeholder="Label (optional)" value="' + escHtml((data && data.label) || '') + '" data-field="label" style="max-width:150px;" />' +
+        '<input type="text" placeholder="URL or mailto:..." value="' + escHtml((data && data.url) || '') + '" data-field="url" style="flex:1;" />' +
+        '<button class="btn btn-sm btn-danger" title="Remove"><i class="fas fa-times"></i></button>';
+      row.querySelector('button').addEventListener('click', () => row.remove());
+      container.appendChild(row);
+    }
+
+    document.getElementById('invAddLinkBtn').addEventListener('click', () => addLinkRow());
 
     document.getElementById('invLinksSaveBtn').addEventListener('click', async () => {
       if (!currentInvestorId) return;
+      const rows = document.querySelectorAll('#invLinkRows .inv-repeatable-row');
       const links = [];
-      LINK_FIELDS.forEach(f => {
-        const url = document.getElementById(f.id).value.trim();
-        if (url) links.push({ link_type: f.type, url: url });
+      rows.forEach(row => {
+        const link_type = row.querySelector('[data-field="link_type"]').value;
+        const label = row.querySelector('[data-field="label"]').value.trim();
+        const url = row.querySelector('[data-field="url"]').value.trim();
+        if (url) links.push({ link_type, label: label || null, url });
       });
       try {
         await api('/investors/' + currentInvestorId + '/links', {

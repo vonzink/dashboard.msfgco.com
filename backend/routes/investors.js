@@ -89,8 +89,17 @@ router.get('/:key', async (req, res, next) => {
     investor.mortgageeClauses = clausesResult[0];
     investor.links = linksResult[0];
 
-    // Resolve S3 key → presigned download URL
+    // Resolve S3 keys → presigned download URLs
     investor.logo_url = await resolveLogoUrl(investor.logo_url);
+    investor.account_executive_photo_url = await resolveLogoUrl(investor.account_executive_photo_url);
+
+    // Resolve team member photo URLs (keep raw key for re-saving)
+    await Promise.all(investor.team.map(async (m) => {
+      if (m.photo_url) {
+        m.photo_key = m.photo_url; // raw S3 key
+        m.photo_url = await resolveLogoUrl(m.photo_url); // presigned URL for display
+      }
+    }));
 
     res.json(investor);
   } catch (error) {
@@ -173,6 +182,7 @@ router.put('/:idOrKey', async (req, res, next) => {
     const ADMIN_FIELDS = [
       'name', 'account_executive_name', 'account_executive_mobile',
       'account_executive_email', 'account_executive_address',
+      'account_executive_photo_url',
       'states', 'best_programs', 'minimum_fico', 'in_house_dpa',
       'epo', 'max_comp', 'doc_review_wire', 'remote_closing_review',
       'website_url', 'logo_url', 'login_url', 'is_active',
@@ -344,6 +354,87 @@ router.delete('/:id/logo', requireAdmin, async (req, res, next) => {
 });
 
 // ──────────────────────────────────────────────
+// POST /api/investors/:id/photo/upload-url — Generic photo upload for AE/team (admin only)
+// ──────────────────────────────────────────────
+router.post('/:id/photo/upload-url', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fileName, fileType, fileSize, purpose } = req.body;
+
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+    if (!fileType || !ALLOWED_LOGO_TYPES[fileType]) {
+      return res.status(400).json({ error: 'Only PNG, JPG, and SVG images are allowed' });
+    }
+    if (fileSize && fileSize > MAX_LOGO_BYTES) {
+      return res.status(400).json({ error: 'Photo must be under 5 MB' });
+    }
+
+    const [rows] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    const ext = ALLOWED_LOGO_TYPES[fileType];
+    const prefix = purpose === 'ae' ? 'ae' : 'team';
+    const fileKey = `vendor/${investorId}/${prefix}-${crypto.randomUUID()}${ext}`;
+
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType);
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/photo/confirm — Save photo S3 key (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/photo/confirm', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fileKey, purpose } = req.body;
+    if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
+
+    if (purpose === 'ae') {
+      // Save as AE photo — clean up old one
+      const [old] = await db.query('SELECT account_executive_photo_url FROM investors WHERE id = ?', [investorId]);
+      if (old.length === 0) return res.status(404).json({ error: 'Investor not found' });
+
+      const oldKey = old[0].account_executive_photo_url;
+      await db.query('UPDATE investors SET account_executive_photo_url = ?, updated_at = NOW() WHERE id = ?', [fileKey, investorId]);
+
+      if (oldKey && isS3Key(oldKey) && oldKey !== fileKey) {
+        await deleteObject(BUCKETS.media, oldKey).catch(() => {});
+      }
+    }
+
+    const photo_url = await resolveLogoUrl(fileKey);
+    res.json({ success: true, fileKey, photo_url });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// DELETE /api/investors/:id/ae-photo — Remove AE photo (admin only)
+// ──────────────────────────────────────────────
+router.delete('/:id/ae-photo', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const [rows] = await db.query('SELECT account_executive_photo_url FROM investors WHERE id = ?', [investorId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+
+    const key = rows[0].account_executive_photo_url;
+    if (key && isS3Key(key)) {
+      await deleteObject(BUCKETS.media, key).catch(() => {});
+    }
+    await db.query('UPDATE investors SET account_executive_photo_url = NULL, updated_at = NOW() WHERE id = ?', [investorId]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
 // PUT /api/investors/:id/team — Replace team members (admin only)
 // ──────────────────────────────────────────────
 router.put('/:id/team', requireAdmin, async (req, res, next) => {
@@ -368,8 +459,8 @@ router.put('/:id/team', requireAdmin, async (req, res, next) => {
       const m = team[i];
       if (!m.name && !m.role) continue;
       await db.query(
-        'INSERT INTO investor_team (investor_id, role, name, phone, email, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
-        [investorId, m.role || null, m.name || null, m.phone || null, m.email || null, m.sort_order ?? i]
+        'INSERT INTO investor_team (investor_id, role, name, phone, email, photo_url, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [investorId, m.role || null, m.name || null, m.phone || null, m.email || null, m.photo_url || null, m.sort_order ?? i]
       );
     }
 
@@ -429,8 +520,8 @@ router.put('/:id/mortgagee-clauses', requireAdmin, async (req, res, next) => {
     for (const c of clauses) {
       if (!c.name) continue;
       await db.query(
-        'INSERT INTO investor_mortgagee_clauses (investor_id, name, isaoa, address) VALUES (?, ?, ?, ?)',
-        [investorId, c.name, c.isaoa || null, c.address || null]
+        'INSERT INTO investor_mortgagee_clauses (investor_id, label, name, isaoa, address) VALUES (?, ?, ?, ?, ?)',
+        [investorId, c.label || null, c.name, c.isaoa || null, c.address || null]
       );
     }
 
@@ -464,7 +555,7 @@ router.put('/:id/links', requireAdmin, async (req, res, next) => {
       if (!l.url) continue;
       await db.query(
         'INSERT INTO investor_links (investor_id, link_type, url, label) VALUES (?, ?, ?, ?)',
-        [investorId, l.link_type || 'website', l.url, l.label || null]
+        [investorId, l.link_type || 'other', l.url, l.label || null]
       );
     }
 

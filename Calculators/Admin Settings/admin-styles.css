@@ -433,17 +433,18 @@ body {
   display: block;
 }
 
-/* Repeatable row (team members, clauses) */
+/* Repeatable row (team members, clauses, links) */
 .inv-repeatable-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  display: flex;
   gap: 10px;
-  align-items: end;
+  align-items: center;
   padding: 10px 0;
   border-bottom: 1px solid #f2f2f2;
+  flex-wrap: wrap;
 }
 
-.inv-repeatable-row input {
+.inv-repeatable-row input,
+.inv-repeatable-row select {
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 8px;
@@ -451,14 +452,34 @@ body {
   font-size: 13px;
   outline: none;
   transition: border-color .15s;
+  flex: 1;
+  min-width: 0;
 }
 
-.inv-repeatable-row input:focus {
+.inv-repeatable-row input[type="hidden"] {
+  display: none;
+  flex: 0;
+}
+
+.inv-repeatable-row input:focus,
+.inv-repeatable-row select:focus {
   border-color: var(--msfg-teal);
 }
 
-.inv-clause-row {
-  grid-template-columns: 1fr 1fr 2fr auto;
+.inv-repeatable-row .inv-team-photo {
+  flex: 0 0 36px;
+}
+
+.inv-clause-row input[data-field="label"] {
+  flex: 0 0 140px;
+}
+
+.inv-link-row select[data-field="link_type"] {
+  flex: 0 0 140px;
+}
+
+.inv-link-row input[data-field="label"] {
+  flex: 0 0 150px;
 }
 
 /* ── Avatar ── */
