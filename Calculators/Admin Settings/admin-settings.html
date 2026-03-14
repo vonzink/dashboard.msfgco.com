@@ -861,11 +861,11 @@
       </button>
     </div>
 
-    <!-- Display Config -->
+    <!-- Display Config — Pipeline -->
     <div class="monday-section">
       <div class="toolbar">
         <h3 style="margin:0; font-size:16px; color:#104547;">
-          <i class="fas fa-table"></i> Pipeline Table Columns
+          <i class="fas fa-tasks"></i> Pipeline Table Columns
         </h3>
       </div>
       <p style="font-size:13px; color:#888; margin:0 0 8px;">
@@ -875,7 +875,43 @@
         <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
       </div>
       <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtn" style="display:none; margin-top:8px;">
-        <i class="fas fa-save"></i> Save Display Settings
+        <i class="fas fa-save"></i> Save Pipeline Display Settings
+      </button>
+    </div>
+
+    <!-- Display Config — Pre-Approvals -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-clipboard-check"></i> Pre-Approvals Table Columns
+        </h3>
+      </div>
+      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+        Choose which columns appear in the pre-approvals table, set custom labels, and reorder them.
+      </p>
+      <div id="mondayDisplayConfigPA">
+        <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtnPA" style="display:none; margin-top:8px;">
+        <i class="fas fa-save"></i> Save Pre-Approvals Display Settings
+      </button>
+    </div>
+
+    <!-- Display Config — Funded Loans -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-check-circle"></i> Funded Loans Table Columns
+        </h3>
+      </div>
+      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+        Choose which columns appear in the funded loans table, set custom labels, and reorder them.
+      </p>
+      <div id="mondayDisplayConfigFL">
+        <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtnFL" style="display:none; margin-top:8px;">
+        <i class="fas fa-save"></i> Save Funded Loans Display Settings
       </button>
     </div>
 
@@ -2967,14 +3003,26 @@
     document.getElementById('mondayLoadColumnsBtn').addEventListener('click', loadMondayColumns);
     document.getElementById('mondaySaveMappingsBtn').addEventListener('click', saveMondayMappings);
 
-    // ── Display Config ──
+    // ── Display Config (all sections) ──
+    const DISPLAY_SECTIONS = [
+      { key: 'pipeline',       containerId: 'mondayDisplayConfig',   saveBtnId: 'mondaySaveDisplayBtn',   tableId: 'displayConfigTable' },
+      { key: 'pre_approvals',  containerId: 'mondayDisplayConfigPA', saveBtnId: 'mondaySaveDisplayBtnPA', tableId: 'displayConfigTablePA' },
+      { key: 'funded_loans',   containerId: 'mondayDisplayConfigFL', saveBtnId: 'mondaySaveDisplayBtnFL', tableId: 'displayConfigTableFL' },
+    ];
+
     async function loadMondayDisplayConfig() {
-      const container = document.getElementById('mondayDisplayConfig');
-      const saveBtn = document.getElementById('mondaySaveDisplayBtn');
+      for (const sec of DISPLAY_SECTIONS) {
+        await loadSectionDisplayConfig(sec);
+      }
+    }
+
+    async function loadSectionDisplayConfig(sec) {
+      const container = document.getElementById(sec.containerId);
+      const saveBtn = document.getElementById(sec.saveBtnId);
       if (!container) return;
 
       try {
-        const config = await api('/monday/view-config');
+        const config = await api('/monday/view-config?section=' + sec.key);
         if (!config) return;
         const columns = config.columns || [];
 
@@ -2986,7 +3034,7 @@
 
         container.innerHTML =
           '<div style="max-height:350px; overflow-y:auto; border:1px solid #eee; border-radius:8px;">' +
-            '<table class="admin-table" style="margin:0; font-size:12px;" id="displayConfigTable">' +
+            '<table class="admin-table" style="margin:0; font-size:12px;" id="' + sec.tableId + '">' +
               '<thead><tr><th style="width:40px;">Show</th><th>Field</th><th>Label</th><th style="width:80px;">Order</th></tr></thead>' +
               '<tbody>' +
                 columns.map((col, idx) => {
@@ -3013,7 +3061,7 @@
             const row = e.target.closest('tr');
             const prev = row.previousElementSibling;
             if (prev) row.parentNode.insertBefore(row, prev);
-            updateMoveButtons();
+            updateSectionMoveButtons(sec.tableId);
           });
         });
         container.querySelectorAll('.dc-move-down').forEach(btn => {
@@ -3021,7 +3069,7 @@
             const row = e.target.closest('tr');
             const next = row.nextElementSibling;
             if (next) row.parentNode.insertBefore(next, row);
-            updateMoveButtons();
+            updateSectionMoveButtons(sec.tableId);
           });
         });
       } catch (err) {
@@ -3029,8 +3077,8 @@
       }
     }
 
-    function updateMoveButtons() {
-      const rows = document.querySelectorAll('#displayConfigTable tbody tr');
+    function updateSectionMoveButtons(tableId) {
+      const rows = document.querySelectorAll('#' + tableId + ' tbody tr');
       rows.forEach((row, idx) => {
         const up = row.querySelector('.dc-move-up');
         const down = row.querySelector('.dc-move-down');
@@ -3039,8 +3087,8 @@
       });
     }
 
-    async function saveMondayDisplaySettings() {
-      const rows = document.querySelectorAll('#displayConfigTable tbody tr');
+    async function saveSectionDisplaySettings(sec) {
+      const rows = document.querySelectorAll('#' + sec.tableId + ' tbody tr');
       const displayConfig = {};
       let order = 0;
       rows.forEach(row => {
@@ -3054,10 +3102,9 @@
       });
 
       try {
-        // Get all board IDs
         const data = await api('/monday/boards');
         if (!data) return;
-        const boards = (data.boards || []).filter(b => b.is_active);
+        const boards = (data.boards || []).filter(b => b.is_active && b.target_section === sec.key);
 
         for (const board of boards) {
           let boardMappings = [];
@@ -3079,11 +3126,14 @@
           });
         }
 
-        alert('Display settings saved!');
+        alert('Display settings saved for ' + sec.key.replace(/_/g, ' ') + '!');
       } catch (err) { alert('Failed to save display settings: ' + err.message); }
     }
 
-    document.getElementById('mondaySaveDisplayBtn').addEventListener('click', saveMondayDisplaySettings);
+    // Wire save buttons for all sections
+    DISPLAY_SECTIONS.forEach(sec => {
+      document.getElementById(sec.saveBtnId).addEventListener('click', () => saveSectionDisplaySettings(sec));
+    });
 
     // ── Sync Controls ──
     async function runMondaySync() {
