@@ -544,8 +544,8 @@ const ServerAPI = {
         return this.get('/monday/sync/log');
     },
 
-    getMondayViewConfig() {
-        return this.get('/monday/view-config');
+    getMondayViewConfig(section = 'pipeline') {
+        return this.get(`/monday/view-config?section=${section}`);
     },
 
     getMondayMyBoards() {

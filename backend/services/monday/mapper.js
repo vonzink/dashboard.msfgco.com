@@ -21,6 +21,7 @@ const VALID_FUNDED_LOAN_FIELDS = [
   'assigned_lo_name', 'loan_amount', 'loan_type',
   'funded_date', 'investor', 'property_address',
   'client_name', 'notes', 'loan_number', 'status',
+  'group_name',
 ];
 
 const VALID_FIELDS_BY_SECTION = {

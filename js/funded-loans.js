@@ -14,13 +14,42 @@ const FundedLoans = {
   _summary: { count: 0, total_amount: 0 },
   _availableGroups: [],
   _availableBoards: [],
+  _columnsLoaded: false,
 
   // ========================================
   // INITIALIZATION
   // ========================================
-  init() {
+  async init() {
     this._bindEvents();
+    await this._loadColumnConfig();
     this.load();
+  },
+
+  /** Load column config from Monday view-config endpoint */
+  async _loadColumnConfig() {
+    try {
+      const [config, prefs] = await Promise.all([
+        ServerAPI.getMondayViewConfig('funded_loans'),
+        API._loadDisplayPrefs(),
+      ]);
+      let cols = (config.columns || []).filter(c => c.visible !== false);
+      // Only use server config if it has more than just client_name
+      if (cols.length > 1) {
+        this.COLUMNS = cols.map(c => ({ field: c.field, label: c.label }));
+      }
+      // Apply user display preferences (hide unchecked columns)
+      const userPref = prefs?.display_columns_funded_loans;
+      if (Array.isArray(userPref) && userPref.length > 0) {
+        const prefMap = {};
+        userPref.forEach(p => { prefMap[p.field] = p; });
+        this.COLUMNS = this.COLUMNS.filter(c =>
+          prefMap[c.field] === undefined || prefMap[c.field].visible !== false
+        );
+      }
+      this._columnsLoaded = true;
+    } catch (e) {
+      console.warn('Failed to load funded loans view config, using defaults:', e.message || e);
+    }
   },
 
   _bindEvents() {
@@ -116,14 +145,8 @@ const FundedLoans = {
   ],
 
   _getVisibleColumns() {
-    const prefs = API._displayPrefs;
-    const userPref = prefs?.display_columns_funded_loans;
-    if (!Array.isArray(userPref) || userPref.length === 0) return this.COLUMNS;
-    const prefMap = {};
-    userPref.forEach(p => { prefMap[p.field] = p; });
-    return this.COLUMNS.filter(c =>
-      prefMap[c.field] === undefined || prefMap[c.field].visible !== false
-    );
+    // Preferences are applied during _loadColumnConfig; just return COLUMNS
+    return this.COLUMNS;
   },
 
   _renderCell(loan, field) {
@@ -140,6 +163,16 @@ const FundedLoans = {
         return '<td>' + Utils.escapeHtml(loan.loan_type || loan.product_type || '--') + '</td>';
       case 'funded_date':
         return '<td>' + (loan.funded_date ? Utils.formatDate(loan.funded_date, 'short') : '--') + '</td>';
+      case 'investor':
+        return '<td>' + Utils.escapeHtml(loan.investor || '--') + '</td>';
+      case 'loan_number':
+        return '<td>' + Utils.escapeHtml(loan.loan_number || '--') + '</td>';
+      case 'property_address':
+        return '<td>' + Utils.escapeHtml(loan.property_address || '--') + '</td>';
+      case 'status':
+        return '<td>' + Utils.escapeHtml(loan.status || '--') + '</td>';
+      case 'notes':
+        return '<td class="notes-cell" title="' + Utils.escapeHtml(loan.notes || '') + '">' + Utils.escapeHtml(loan.notes || '--') + '</td>';
       default:
         return '<td>' + Utils.escapeHtml(loan[field] != null ? String(loan[field]) : '--') + '</td>';
     }

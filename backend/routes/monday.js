@@ -272,10 +272,13 @@ router.delete('/boards/:boardId', requireAdmin, async (req, res, next) => {
   }
 });
 
-// ── GET /view-config — column display config for the pipeline table ──
+// ── GET /view-config — column display config for any section ──
+// Query params: ?section=pipeline|funded_loans|pre_approvals (default: pipeline)
 router.get('/view-config', async (req, res, next) => {
   try {
-    const boards = await getActiveBoards('pipeline');
+    const validSections = ['pipeline', 'funded_loans', 'pre_approvals'];
+    const section = validSections.includes(req.query.section) ? req.query.section : 'pipeline';
+    const boards = await getActiveBoards(section);
     const boardIds = boards.map(b => b.board_id);
 
     if (boardIds.length === 0) {

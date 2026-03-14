@@ -103,8 +103,10 @@ const API = {
 
     async loadPreApprovals() {
         try {
-            // Ensure display prefs are loaded
-            await this._loadDisplayPrefs();
+            // Load column config from Monday view-config on first call
+            if (!this._preApprovalColumnsLoaded) {
+                await this.loadPreApprovalConfig();
+            }
 
             // Build query params from filters
             const boardSelect = document.getElementById('preApprovalBoardSelect');
@@ -175,15 +177,37 @@ const API = {
         { field: 'notes', label: 'Notes' },
     ],
 
+    _preApprovalColumnsLoaded: false,
+
+    async loadPreApprovalConfig() {
+        try {
+            const [config, prefs] = await Promise.all([
+                ServerAPI.getMondayViewConfig('pre_approvals'),
+                this._loadDisplayPrefs(),
+            ]);
+            let cols = (config.columns || []).filter(c => c.visible !== false);
+            // Only use server config if it has more than just client_name
+            if (cols.length > 1) {
+                this.PRE_APPROVAL_COLUMNS = cols.map(c => ({ field: c.field, label: c.label }));
+            }
+            // Apply user display preferences (hide unchecked columns)
+            const userPref = prefs?.display_columns_pre_approvals;
+            if (Array.isArray(userPref) && userPref.length > 0) {
+                const prefMap = {};
+                userPref.forEach(p => { prefMap[p.field] = p; });
+                this.PRE_APPROVAL_COLUMNS = this.PRE_APPROVAL_COLUMNS.filter(c =>
+                    prefMap[c.field] === undefined || prefMap[c.field].visible !== false
+                );
+            }
+            this._preApprovalColumnsLoaded = true;
+        } catch (e) {
+            console.warn('Failed to load pre-approval view config, using defaults:', e.message || e);
+        }
+    },
+
     _getVisiblePreApprovalColumns() {
-        const prefs = this._displayPrefs;
-        const userPref = prefs?.display_columns_pre_approvals;
-        if (!Array.isArray(userPref) || userPref.length === 0) return this.PRE_APPROVAL_COLUMNS;
-        const prefMap = {};
-        userPref.forEach(p => { prefMap[p.field] = p; });
-        return this.PRE_APPROVAL_COLUMNS.filter(c =>
-            prefMap[c.field] === undefined || prefMap[c.field].visible !== false
-        );
+        // Preferences are applied during loadPreApprovalConfig; just return columns
+        return this.PRE_APPROVAL_COLUMNS;
     },
 
     _renderPreApprovalCell(item, field) {
