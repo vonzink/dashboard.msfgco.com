@@ -423,7 +423,7 @@ const UserSettings = {
       const sectionLabel = SECTION_LABELS[sectionKey] || sectionKey;
 
       // Collect all unique mapped columns across this user's boards for this section
-      const columnMap = new Map(); // field → { label, visible }
+      const columnMap = new Map(); // field → { label, locked }
       columnMap.set('client_name', { label: sectionKey === 'funded_loans' ? 'Borrower' : 'Client Name', locked: true });
 
       boards.forEach(b => {
@@ -444,26 +444,70 @@ const UserSettings = {
       const savedMap = {};
       savedPref.forEach(col => { savedMap[col.field] = col; });
 
+      // Build ordered column list: saved order first, then any new unmapped columns
+      const orderedColumns = [];
+      // Add columns in saved order first
+      if (savedPref.length > 0) {
+        const sortedSaved = [...savedPref].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+        sortedSaved.forEach(saved => {
+          if (columnMap.has(saved.field)) {
+            const col = columnMap.get(saved.field);
+            orderedColumns.push({ field: saved.field, label: col.label, locked: col.locked, visible: saved.visible !== false });
+          }
+        });
+        // Add any columns not in saved prefs (new columns)
+        columnMap.forEach((col, field) => {
+          if (!savedMap[field]) {
+            orderedColumns.push({ field, label: col.label, locked: col.locked, visible: true });
+          }
+        });
+      } else {
+        // No saved prefs — show all in default order
+        columnMap.forEach((col, field) => {
+          orderedColumns.push({ field, label: col.label, locked: col.locked, visible: true });
+        });
+      }
+
       const boardNames = boards.map(b => esc(b.board_name)).join(', ');
+      const tableId = `displayConfigTable_${sectionKey}`;
 
       return `
         <div class="settings-display-section" data-section="${sectionKey}">
           <h4><i class="fas ${icon}"></i> ${esc(sectionLabel)}</h4>
           <p class="settings-hint">Boards: ${boardNames}</p>
-          <p class="settings-hint">Check the columns you want to display.</p>
-          ${columnMap.size <= 1
+          <p class="settings-hint">Toggle visibility and use arrows to reorder columns.</p>
+          ${orderedColumns.length <= 1
             ? '<p class="settings-hint" style="color:var(--status-warning);">No column mappings configured for your boards yet. Contact your admin.</p>'
-            : `<div class="settings-columns-list">
-              ${Array.from(columnMap.entries()).map(([field, col]) => {
-                const saved = savedMap[field];
-                const isVisible = saved ? saved.visible !== false : true;
-                return `
-                  <label class="settings-column-item ${col.locked ? 'locked' : ''}">
-                    <input type="checkbox" data-field="${field}" ${isVisible ? 'checked' : ''} ${col.locked ? 'disabled' : ''} />
-                    <span>${esc(col.label)}</span>
-                  </label>
-                `;
-              }).join('')}
+            : `<div class="settings-column-table-wrap">
+              <table class="settings-column-table" id="${tableId}">
+                <thead>
+                  <tr>
+                    <th class="sct-show">Show</th>
+                    <th class="sct-name">Column</th>
+                    <th class="sct-order">Order</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${orderedColumns.map((col, idx) => `
+                    <tr data-field="${col.field}" class="${col.locked ? 'sct-locked' : ''}">
+                      <td class="sct-show">
+                        <input type="checkbox" class="sct-visible" ${col.visible ? 'checked' : ''} ${col.locked ? 'disabled' : ''} />
+                      </td>
+                      <td class="sct-name">${esc(col.label)}</td>
+                      <td class="sct-order">
+                        ${col.locked ? '' : `
+                          <button type="button" class="sct-move-btn sct-move-up" ${idx === 0 ? 'disabled' : ''} title="Move up">
+                            <i class="fas fa-chevron-up"></i>
+                          </button>
+                          <button type="button" class="sct-move-btn sct-move-down" ${idx === orderedColumns.length - 1 ? 'disabled' : ''} title="Move down">
+                            <i class="fas fa-chevron-down"></i>
+                          </button>
+                        `}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
             </div>
             <button type="button" class="btn btn-sm btn-primary settings-save-columns-btn" data-section="${sectionKey}">
               <i class="fas fa-save"></i> Save ${esc(sectionLabel)} Columns
@@ -477,17 +521,60 @@ const UserSettings = {
     container.querySelectorAll('.settings-save-columns-btn').forEach(btn => {
       btn.addEventListener('click', () => this._saveDisplayPreference(btn.dataset.section));
     });
+
+    // Bind move-up / move-down buttons for each section
+    sectionKeys.forEach(sectionKey => {
+      const tableId = `displayConfigTable_${sectionKey}`;
+      this._bindColumnReorderButtons(tableId);
+    });
+  },
+
+  /** Wire up ▲/▼ buttons inside a column-config table */
+  _bindColumnReorderButtons(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+
+    table.querySelectorAll('.sct-move-up').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const row = e.target.closest('tr');
+        const prev = row.previousElementSibling;
+        if (prev) row.parentNode.insertBefore(row, prev);
+        this._updateMoveButtons(tableId);
+      });
+    });
+
+    table.querySelectorAll('.sct-move-down').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const row = e.target.closest('tr');
+        const next = row.nextElementSibling;
+        if (next) row.parentNode.insertBefore(next, row);
+        this._updateMoveButtons(tableId);
+      });
+    });
+  },
+
+  /** Refresh disabled state on ▲/▼ buttons after reorder */
+  _updateMoveButtons(tableId) {
+    const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+    rows.forEach((row, idx) => {
+      const up = row.querySelector('.sct-move-up');
+      const down = row.querySelector('.sct-move-down');
+      if (up) up.disabled = idx === 0;
+      if (down) down.disabled = idx === rows.length - 1;
+    });
   },
 
   async _saveDisplayPreference(section) {
     const sectionEl = document.querySelector(`.settings-display-section[data-section="${section}"]`);
     if (!sectionEl) return;
 
+    const tableId = `displayConfigTable_${section}`;
+    const rows = document.querySelectorAll(`#${tableId} tbody tr`);
     const columns = [];
-    sectionEl.querySelectorAll('input[type="checkbox"]').forEach((cb, index) => {
+    rows.forEach((row, index) => {
       columns.push({
-        field: cb.dataset.field,
-        visible: cb.checked,
+        field: row.dataset.field,
+        visible: row.querySelector('.sct-visible')?.checked ?? true,
         order: index,
       });
     });
