@@ -18,13 +18,14 @@ const { getUserId, requireDbUser } = require('../middleware/userContext');
 const { getCredential } = require('./integrations');
 const { buildPrompt, PLATFORM_CONSTRAINTS } = require('../utils/promptBuilder');
 const logger = require('../lib/logger');
+const { contentGenerate: contentGenerateSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
 const VALID_PLATFORMS = Object.keys(PLATFORM_CONSTRAINTS);
 
 // ── POST / — generate content ───────────────────────────────────
-router.post('/', async (req, res, next) => {
+router.post('/', validate(contentGenerateSchema), async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const {
@@ -35,13 +36,6 @@ router.post('/', async (req, res, next) => {
       additional_instructions,
       save_drafts,
     } = req.body;
-
-    if (!suggestion) {
-      return res.status(400).json({ error: 'suggestion is required' });
-    }
-    if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
-      return res.status(400).json({ error: 'platforms[] is required' });
-    }
 
     const validPlatforms = platforms.filter(p => VALID_PLATFORMS.includes(p));
     if (validPlatforms.length === 0) {

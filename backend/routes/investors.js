@@ -6,6 +6,7 @@ const db = require('../db/connection');
 const { requireDbUser, isAdmin, hasRole, requireAdmin, requireManagerOrAdmin } = require('../middleware/userContext');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../services/s3');
+const { investor: investorSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -110,7 +111,7 @@ router.get('/:key', async (req, res, next) => {
 // ──────────────────────────────────────────────
 // POST /api/investors — Create investor (admin only)
 // ──────────────────────────────────────────────
-router.post('/', requireAdmin, async (req, res, next) => {
+router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) => {
   try {
     const {
       investor_key: rawKey, name,
@@ -119,10 +120,6 @@ router.post('/', requireAdmin, async (req, res, next) => {
       epo, max_comp, doc_review_wire, remote_closing_review,
       website_url, logo_url, login_url, notes
     } = req.body;
-
-    if (!name) {
-      return res.status(400).json({ error: 'name is required' });
-    }
 
     // Auto-generate investor_key from name if not provided
     const investor_key = rawKey || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');

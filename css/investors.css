@@ -1,0 +1,735 @@
+/* ============================================
+   MSFG Dashboard - Investor Styles
+   Modal, details grid, manage panel, forms
+   ============================================ */
+
+/* ========================================
+   INVESTOR MODAL
+======================================== */
+.investor-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    opacity: 0;
+    visibility: hidden;
+    transition: all var(--transition-normal);
+    padding: var(--spacing-lg);
+}
+
+.investor-modal.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    max-width: 1000px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    transform: scale(0.95) translateY(20px);
+    opacity: 0;
+    transition: all var(--transition-normal);
+}
+
+.investor-modal.active .modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.modal-close {
+    position: absolute;
+    top: var(--spacing-md);
+    right: var(--spacing-md);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    z-index: 10;
+}
+
+.modal-close:hover {
+    background: var(--status-danger);
+    color: white;
+    border-color: var(--status-danger);
+    transform: rotate(90deg);
+}
+
+.modal-header {
+    padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.investor-header-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-lg);
+    flex: 1;
+}
+
+.investor-logo {
+    max-width: 200px;
+    max-height: 80px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    background: white;
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.investor-name {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    background: var(--gradient-brand);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.modal-body {
+    padding: var(--spacing-xl);
+}
+
+.investor-info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: var(--spacing-lg);
+}
+
+.info-section {
+    background: var(--bg-primary);
+    padding: var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+}
+
+.info-section h4 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 var(--spacing-md) 0;
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.info-section h4 i {
+    color: var(--green-bright);
+    width: 20px;
+}
+
+.contact-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.contact-info div {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.contact-info i {
+    width: 18px;
+    color: var(--green-medium);
+}
+
+.contact-info a {
+    color: var(--green-forest);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.contact-info a:hover {
+    color: var(--green-bright);
+    text-decoration: underline;
+}
+
+.team-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+.team-member {
+    padding: var(--spacing-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+.team-member strong {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.team-member a {
+    color: var(--green-forest);
+    text-decoration: none;
+}
+
+.team-member a:hover {
+    color: var(--green-bright);
+    text-decoration: underline;
+}
+
+.lender-ids-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+}
+
+.lender-ids-list div {
+    padding: var(--spacing-sm);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+}
+
+.lender-ids-list strong {
+    color: var(--text-primary);
+    margin-right: var(--spacing-sm);
+}
+
+.clause-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.clause-info strong {
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.links-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.link-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    color: var(--green-forest);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.link-item:hover {
+    background: var(--green-bright);
+    color: white;
+    border-color: var(--green-bright);
+    transform: translateX(4px);
+}
+
+.link-item i {
+    width: 18px;
+    text-align: center;
+}
+
+.tbd {
+    color: var(--text-muted);
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+/* ========================================
+   EDITABLE CONTENT & EDIT BUTTONS
+======================================== */
+.section-edit-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    margin-left: var(--spacing-sm);
+    opacity: 0;
+    transition: all var(--transition-fast);
+    font-size: 0.75rem;
+}
+
+.info-section:hover .section-edit-btn {
+    opacity: 1;
+}
+
+.section-edit-btn:hover {
+    color: var(--green-bright);
+    transform: scale(1.1);
+}
+
+.editable-content {
+    position: relative;
+}
+
+.editable-content[contenteditable="true"] {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+    padding: 2px;
+    transition: all var(--transition-fast);
+}
+
+.editable-content[contenteditable="true"]:focus {
+    outline-color: var(--green-bright);
+    background: var(--bg-tertiary);
+}
+
+.notes-content {
+    min-height: 100px;
+    padding: var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.notes-content.empty:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.notes-content:focus {
+    outline: 2px solid var(--green-bright);
+    outline-offset: 2px;
+    background: var(--bg-primary);
+}
+
+/* Step 3 helpers */
+button.dropdown-item,
+button.quick-link,
+button.link-item {
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.is-disabled {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* ========================================
+   FORMS IN MODALS
+======================================== */
+.notification-form,
+.announcement-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.form-group label i {
+    color: var(--green-bright);
+    width: 18px;
+}
+
+.form-input {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: all var(--transition-fast);
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--green-bright);
+    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.2);
+}
+
+.form-input::placeholder {
+    color: var(--text-muted);
+}
+
+textarea.form-input {
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+}
+
+.file-input {
+    padding: var(--spacing-md);
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.file-input:hover {
+    border-color: var(--green-bright);
+    background: var(--bg-tertiary);
+}
+
+.file-input-label {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: var(--spacing-xs);
+    font-style: italic;
+}
+
+.form-actions {
+    display: flex;
+    gap: var(--spacing-md);
+    justify-content: flex-end;
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+/* === Utilities for CSP-friendly markup === */
+.is-hidden { display: none !important; }
+.grid-span-all { grid-column: 1 / -1; }
+
+/* =========================
+   Security/CSP helpers
+   ========================= */
+.u-hidden { display: none !important; }
+.u-grid-span-all { grid-column: 1 / -1; }
+
+/* ========================================
+   INVESTOR DETAILS GRID
+======================================== */
+.details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm) var(--spacing-lg);
+}
+
+.detail-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.detail-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.detail-value {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.detail-value .tbd {
+    font-size: 0.85rem;
+}
+
+/* ========================================
+   MANAGE INVESTORS MODAL
+======================================== */
+.manage-investors-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+}
+
+.manage-investors-toolbar .form-input {
+    flex: 1;
+    min-width: 200px;
+    max-width: 350px;
+}
+
+.manage-investor-count {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+
+.manage-investors-table {
+    font-size: 0.85rem;
+}
+
+.manage-investors-table th {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.manage-investors-table td {
+    vertical-align: middle;
+}
+
+.manage-actions-cell {
+    white-space: nowrap;
+}
+
+.manage-actions-cell .btn {
+    padding: 0.25rem 0.5rem;
+}
+
+.manage-form-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--spacing-lg) 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.manage-investor-form .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.manage-investor-form .form-group-full {
+    grid-column: 1 / -1;
+}
+
+.manage-investor-form .form-group label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-xs);
+}
+
+.manage-investor-form .form-group label i {
+    color: var(--green-bright);
+    width: 16px;
+    font-size: 0.8rem;
+}
+
+.manage-investor-form .form-input {
+    width: 100%;
+}
+
+/* ── Investor Logo Upload ─────────────────────────── */
+.inv-logo-upload-group {
+    margin-bottom: 0.5rem;
+}
+
+.inv-logo-upload-area {
+    position: relative;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background-color 0.2s;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.inv-logo-upload-area:hover,
+.inv-logo-upload-area.drag-over {
+    border-color: var(--primary-color);
+    background: rgba(16, 69, 71, 0.04);
+}
+
+.inv-logo-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.inv-logo-placeholder i {
+    font-size: 1.5rem;
+    opacity: 0.5;
+}
+
+.inv-logo-preview {
+    max-width: 200px;
+    max-height: 80px;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+}
+
+.inv-logo-remove-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+}
+
+.inv-logo-upload-area.uploading {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.inv-logo-upload-area.uploading::after {
+    content: 'Uploading...';
+    position: absolute;
+    bottom: 0.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    color: var(--primary-color);
+}
+
+/* Scrollable dropdown for many investors */
+.dropdown-menu-investors {
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* Scrollable dropdown for contacts */
+.dropdown-menu-contacts {
+    max-height: 480px;
+    overflow-y: auto;
+    min-width: 260px;
+}
+
+/* Generic scrollable dropdown (Systems, HR, etc.) */
+.dropdown-menu-scrollable {
+    max-height: 480px;
+    overflow-y: auto;
+}
+
+/* Contacts list inside a parent dropdown (e.g. HR) */
+.dropdown-contacts-list {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.investor-dropdown-search {
+    padding: 0.375rem 0.75rem;
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    z-index: 1;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.investor-dropdown-search .form-input {
+    width: 100%;
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8rem;
+    border-radius: var(--radius-md);
+}
+
+.investor-dropdown-items {
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+/* Admin-only items */
+.admin-only-item {
+    border-top: 1px solid var(--border-color);
+    font-weight: 600;
+    color: var(--green-forest);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .investor-info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .modal-content {
+        max-height: 95vh;
+        margin: var(--spacing-md);
+    }
+
+    .modal-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .form-actions .btn {
+        width: 100%;
+    }
+
+    .details-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .manage-investor-form .form-grid {
+        grid-template-columns: 1fr;
+    }
+}

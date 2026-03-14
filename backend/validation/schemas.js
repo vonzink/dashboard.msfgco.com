@@ -83,6 +83,94 @@ const goal = z.object({
 
 const goalsUpdate = z.union([goal, z.array(goal).min(1).max(50)]);
 
+// ── Notifications ───────────────────────────
+const notification = z.object({
+  user_id: z.number().int().positive(),
+  reminder_date: dateString,
+  reminder_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Expected HH:MM or HH:MM:SS format'),
+  note: trimmedString(500),
+  delivery_method: z.enum(['email', 'text', 'both']).optional().default('email'),
+  recurrence: z.enum(['none', 'daily', 'weekly', 'monthly']).optional().default('none'),
+});
+
+// ── Calendar Events ────────────────────────
+const calendarEvent = z.object({
+  title: trimmedString(200),
+  who: optionalString(200),
+  start: z.string().min(1, 'start is required'),
+  end: z.string().optional().nullable(),
+  allDay: z.union([z.boolean(), z.number()]).optional().default(false),
+  notes: optionalString(2000),
+  color: optionalString(20),
+  recurrence_rule: z.enum(['none', 'daily', 'weekly', 'biweekly', 'monthly', 'yearly']).optional().default('none'),
+  recurrence_end: z.string().optional().nullable(),
+});
+
+// ── Tasks ──────────────────────────────────
+const task = z.object({
+  title: trimmedString(200),
+  description: optionalString(2000),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']).optional().default('medium'),
+  status: z.enum(['todo', 'in_progress', 'done', 'cancelled']).optional().default('todo'),
+  due_date: dateString.optional().nullable(),
+  due_time: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
+  assigned_to: optionalString(200),
+  user_id: z.number().int().positive().optional().nullable(),
+});
+
+// ── Investors ──────────────────────────────
+const investor = z.object({
+  investor_key: optionalString(200),
+  name: trimmedString(200),
+  account_executive_name: optionalString(200),
+  account_executive_email: optionalString(200),
+  account_executive_mobile: optionalString(50),
+  account_executive_address: optionalString(500),
+  states: optionalString(500),
+  best_programs: optionalString(2000),
+  minimum_fico: optionalString(20),
+  in_house_dpa: optionalString(500),
+  epo: optionalString(500),
+  max_comp: optionalString(200),
+  doc_review_wire: optionalString(500),
+  remote_closing_review: optionalString(500),
+  website_url: optionalString(500),
+  logo_url: optionalString(500),
+  login_url: optionalString(500),
+  notes: optionalString(5000),
+});
+
+// ── Content Generation ─────────────────────
+const contentGenerate = z.object({
+  suggestion: trimmedString(1000),
+  platforms: z.array(z.string().min(1)).min(1, 'platforms[] is required'),
+  keyword: optionalString(200),
+  template_id: z.number().int().positive().optional().nullable(),
+  additional_instructions: optionalString(2000),
+  save_drafts: z.boolean().optional().default(false),
+});
+
+// ── Content Templates ──────────────────────
+const contentTemplate = z.object({
+  platform: trimmedString(50),
+  name: trimmedString(200),
+  system_prompt: trimmedString(10000),
+  tone: optionalString(100),
+  audience: optionalString(200),
+  rules: optionalString(5000),
+  example_post: optionalString(5000),
+  model: optionalString(50),
+  temperature: z.number().min(0).max(2).optional().nullable(),
+  is_default: z.boolean().optional().default(false),
+  is_company_wide: z.boolean().optional().default(false),
+});
+
+// ── Content Publish (batch) ────────────────
+const contentPublishBatch = z.object({
+  item_ids: z.array(z.number().int().positive()).min(1, 'item_ids[] is required').max(20, 'Maximum 20 items per batch'),
+  method: z.enum(['direct', 'n8n', 'zapier']).optional(),
+});
+
 // ── Guidelines ──────────────────────────────────
 const PRODUCT_TYPES = ['conventional', 'fha', 'va', 'usda', 'jumbo', 'non-qm', 'other'];
 
@@ -163,6 +251,13 @@ module.exports = {
   pipelineUpdate,
   goal,
   goalsUpdate,
+  notification,
+  calendarEvent,
+  task,
+  investor,
+  contentGenerate,
+  contentTemplate,
+  contentPublishBatch,
   guidelineUpload,
   guidelineProcess,
   guidelineSearch,

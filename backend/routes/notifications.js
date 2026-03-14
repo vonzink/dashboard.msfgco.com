@@ -4,6 +4,7 @@ const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { deleted } = require('../utils/response');
+const { notification: notificationSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -11,10 +12,10 @@ router.use(requireDbUser);
 router.get('/', async (req, res, next) => {
   try {
     const userId = req.query.user_id;
-    
+
     let query = 'SELECT * FROM notifications WHERE 1=1';
     const params = [];
-    
+
     if (!isAdmin(req)) {
       query += ' AND user_id = ?';
       params.push(getUserId(req));
@@ -22,9 +23,9 @@ router.get('/', async (req, res, next) => {
       query += ' AND user_id = ?';
       params.push(userId);
     }
-    
+
     query += ' ORDER BY reminder_date, reminder_time';
-    
+
     const [notifications] = await db.query(query, params);
     res.json(notifications);
   } catch (error) {
@@ -33,27 +34,16 @@ router.get('/', async (req, res, next) => {
 });
 
 // POST /api/notifications - Create notification/reminder
-router.post('/', async (req, res, next) => {
+router.post('/', validate(notificationSchema), async (req, res, next) => {
   try {
     const { user_id, reminder_date, reminder_time, note, delivery_method, recurrence } = req.body;
-
-    if (!user_id || !reminder_date || !reminder_time || !note) {
-      return res.status(400).json({
-        error: 'user_id, reminder_date, reminder_time, and note are required'
-      });
-    }
 
     const currentUserId = getUserId(req);
     const finalUserId = isAdmin(req) ? (user_id || currentUserId) : currentUserId;
 
-    const validDelivery = ['email', 'text', 'both'];
-    const validRecurrence = ['none', 'daily', 'weekly', 'monthly'];
-    const finalDelivery = validDelivery.includes(delivery_method) ? delivery_method : 'email';
-    const finalRecurrence = validRecurrence.includes(recurrence) ? recurrence : 'none';
-
     const [result] = await db.query(
       'INSERT INTO notifications (user_id, reminder_date, reminder_time, note, delivery_method, recurrence) VALUES (?, ?, ?, ?, ?, ?)',
-      [finalUserId, reminder_date, reminder_time, note, finalDelivery, finalRecurrence]
+      [finalUserId, reminder_date, reminder_time, note, delivery_method, recurrence]
     );
 
     const [notifications] = await db.query('SELECT * FROM notifications WHERE id = ?', [result.insertId]);
@@ -67,21 +57,21 @@ router.post('/', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   try {
     const [existing] = await db.query('SELECT user_id FROM notifications WHERE id = ?', [req.params.id]);
-    
+
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Notification not found' });
     }
-    
+
     if (!isAdmin(req) && existing[0].user_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    
+
     const [result] = await db.query('DELETE FROM notifications WHERE id = ?', [req.params.id]);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Notification not found' });
     }
-    
+
     deleted(res, 'Notification deleted');
   } catch (error) {
     next(error);
@@ -89,4 +79,3 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 module.exports = router;
-

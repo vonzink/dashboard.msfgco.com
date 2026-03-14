@@ -22,23 +22,16 @@ const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { getCredential } = require('./integrations');
 const { publishDirect, supportsDirectPublish } = require('../utils/socialPublisher');
+const { contentPublishBatch: batchSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
 // ── POST /batch — publish multiple items at once ────────────────
 // IMPORTANT: must be registered BEFORE /:id to avoid Express matching "batch" as an id
-router.post('/batch', async (req, res, next) => {
+router.post('/batch', validate(batchSchema), async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const { item_ids, method } = req.body;
-
-    if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
-      return res.status(400).json({ error: 'item_ids[] is required' });
-    }
-
-    if (item_ids.length > 20) {
-      return res.status(400).json({ error: 'Maximum 20 items per batch' });
-    }
 
     // Publish each sequentially (to avoid flooding webhooks)
     const results = [];

@@ -5,6 +5,7 @@ const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
+const { task: taskSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -60,14 +61,10 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // POST /api/tasks - Create new task
-router.post('/', async (req, res, next) => {
+router.post('/', validate(taskSchema), async (req, res, next) => {
   try {
     const { title, description, priority, status, due_date, due_time, assigned_to, user_id } = req.body;
-    
-    if (!title) {
-      return res.status(400).json({ error: 'Title is required' });
-    }
-    
+
     const currentUserId = getUserId(req);
     const userId = isAdmin(req) ? (user_id || currentUserId) : currentUserId;
     

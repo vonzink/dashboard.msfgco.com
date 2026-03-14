@@ -4,6 +4,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { calendarEvent: calendarEventSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -50,13 +51,9 @@ router.get('/', async (req, res, next) => {
 });
 
 // POST /api/calendar-events - Create a calendar event (with optional recurrence)
-router.post('/', async (req, res, next) => {
+router.post('/', validate(calendarEventSchema), async (req, res, next) => {
   try {
     const { title, who, start, end, allDay, notes, color, recurrence_rule, recurrence_end } = req.body;
-
-    if (!title || !start) {
-      return res.status(400).json({ error: 'title and start are required' });
-    }
 
     const createdBy = getUserId(req);
     const rule = recurrence_rule || 'none';

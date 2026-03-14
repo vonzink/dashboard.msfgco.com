@@ -12,6 +12,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { contentTemplate: contentTemplateSchema, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
 
@@ -108,7 +109,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 // ── POST / — create template ────────────────────────────────────
-router.post('/', async (req, res, next) => {
+router.post('/', validate(contentTemplateSchema), async (req, res, next) => {
   try {
     const userId = getUserId(req);
     const {
@@ -116,10 +117,6 @@ router.post('/', async (req, res, next) => {
       rules, example_post, model, temperature, is_default,
       is_company_wide,
     } = req.body;
-
-    if (!platform || !name || !system_prompt) {
-      return res.status(400).json({ error: 'platform, name, and system_prompt are required' });
-    }
 
     // Only admins can create company-wide templates
     const ownerUserId = (is_company_wide && isAdmin(req)) ? null : userId;
