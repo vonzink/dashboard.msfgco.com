@@ -74,9 +74,9 @@ const pipelineUpdate = z.object({
 // ── Goals ───────────────────────────────────────
 const goal = z.object({
   user_id: z.number().int().positive().optional().nullable(),
-  period_type: z.enum(['monthly', 'quarterly', 'yearly']),
+  period_type: z.enum(['weekly', 'monthly', 'quarterly', 'yearly', 'all']),
   period_value: trimmedString(20),
-  goal_type: z.enum(['units', 'volume']),
+  goal_type: z.enum(['loans-closed', 'volume-closed', 'pipeline', 'pre-approvals']),
   current_value: z.number().optional().nullable(),
   target_value: z.number().nonnegative(),
 });

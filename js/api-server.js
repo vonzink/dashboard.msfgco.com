@@ -266,12 +266,14 @@ const ServerAPI = {
         return this.get(`/pipeline${query}`);
     },
 
-    getPipelineSummary() {
-        return this.get('/pipeline/summary');
+    getPipelineSummary(params = {}) {
+        const qs = this.buildQuery(params);
+        return this.get(`/pipeline/summary${qs}`);
     },
 
-    getPreApprovalsSummary() {
-        return this.get('/pre-approvals/summary');
+    getPreApprovalsSummary(params = {}) {
+        const qs = this.buildQuery(params);
+        return this.get(`/pre-approvals/summary${qs}`);
     },
 
     // ========================================

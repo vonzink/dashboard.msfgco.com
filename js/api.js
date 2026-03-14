@@ -299,14 +299,7 @@ const API = {
         if (unitsEl) unitsEl.textContent = Utils.formatNumber(units);
         if (volumeEl) volumeEl.textContent = Utils.formatCurrency(totalVolume);
 
-        // Update pipeline goal with current data
-        if (typeof GoalsManager !== 'undefined') {
-            const pipelineGoal = GoalsManager.goals['pipeline'];
-            if (pipelineGoal) {
-                pipelineGoal.current = parseFloat((totalVolume / 1000000).toFixed(2));
-                GoalsManager.updateGoalCard('pipeline');
-            }
-        }
+        // GoalsManager now fetches its own data via _fetchAllGoalData()
     },
 
     // Date fields that need formatting
@@ -349,13 +342,23 @@ const API = {
         }).join('');
     },
 
-    populatePipelineFilters(data) {
+    async populatePipelineFilters(data) {
         if (!data?.length) return;
 
-        // Populate Loan Officer filter
+        // Populate Loan Officer filter — only show active employees
         const loSelect = document.getElementById('pipelineLO');
         if (loSelect) {
-            const los = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
+            let activeNames = null;
+            try {
+                const activeUsers = await ServerAPI.get('/users/directory');
+                if (Array.isArray(activeUsers)) {
+                    activeNames = new Set(activeUsers.map(u => u.name));
+                }
+            } catch { /* fall back to unfiltered list */ }
+
+            const allLOs = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
+            const los = activeNames ? allLOs.filter(name => activeNames.has(name)) : allLOs;
+
             const currentVal = loSelect.value;
             loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
                 los.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');

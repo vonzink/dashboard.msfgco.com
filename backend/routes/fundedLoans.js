@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { requireDbUser } = require('../middleware/userContext');
+const { getUserId, getUserRole, hasRole, requireDbUser } = require('../middleware/userContext');
 
 router.use(requireDbUser);
 
@@ -13,26 +13,24 @@ router.use(requireDbUser);
 // ========================================
 
 /**
- * Get the user's Cognito group (role) - lowercase
+ * Get the user's role from DB (consistent with all other routes)
  */
 function getUserGroup(req) {
-  const groups = req.user?.groups || [];
-  return groups.length > 0 ? groups[0].toLowerCase() : null;
+  return getUserRole(req);
 }
 
 /**
  * Check if user is Admin or Manager
  */
 function isAdminOrManager(req) {
-  const group = getUserGroup(req);
-  return group === 'admin' || group === 'manager';
+  return hasRole(req, 'admin', 'manager');
 }
 
 /**
  * Check if user is Admin only
  */
 function isAdmin(req) {
-  return getUserGroup(req) === 'admin';
+  return hasRole(req, 'admin');
 }
 
 /**
@@ -127,7 +125,7 @@ router.get('/', async (req, res, next) => {
   try {
     const { period, board_id, group, start_date, end_date } = req.query;
     const userGroup = getUserGroup(req);
-    const userId = req.user?.db?.id;
+    const userId = getUserId(req);
 
     let whereClause = 'WHERE 1=1';
     const params = [];
@@ -312,15 +310,20 @@ router.get('/', async (req, res, next) => {
 // ========================================
 router.get('/summary', async (req, res, next) => {
   try {
-    const { period, board_id } = req.query;
+    const { period, board_id, lo_id } = req.query;
     const userGroup = getUserGroup(req);
-    const userId = req.user?.db?.id;
+    const userId = getUserId(req);
 
     let whereClause = 'WHERE 1=1';
     const params = [];
 
     // Role-based + board-access filtering
     if (userGroup === 'admin' || userGroup === 'manager') {
+      // Admin/Manager can filter by specific LO for goals view
+      if (lo_id) {
+        whereClause += ' AND assigned_lo_id = ?';
+        params.push(lo_id);
+      }
       if (board_id) {
         whereClause += ' AND source_board_id = ?';
         params.push(board_id);
@@ -380,13 +383,60 @@ router.get('/summary', async (req, res, next) => {
 });
 
 // ========================================
+// GET /api/funded-loans/by-lo/summary
+// Get summary grouped by LO (Admin/Manager only)
+// NOTE: Must be defined BEFORE /:id to avoid Express matching "by-lo" as :id
+// ========================================
+router.get('/by-lo/summary', async (req, res, next) => {
+  try {
+    if (!isAdminOrManager(req)) {
+      return res.status(403).json({ error: 'Admin or Manager access required' });
+    }
+
+    const { period } = req.query;
+    const dateFilter = getDateFilter(period);
+
+    // Handle 'all' period where dateFilter is null
+    let whereClause = '';
+    const params = [];
+    if (dateFilter) {
+      whereClause = 'WHERE fl.funded_date >= ? AND fl.funded_date <= ?';
+      params.push(dateFilter.start, dateFilter.end);
+    }
+
+    const [summary] = await db.query(
+      `SELECT
+        fl.assigned_lo_id,
+        fl.assigned_lo_name,
+        u.email as lo_email,
+        COUNT(*) as units,
+        SUM(fl.loan_amount) as total_amount
+       FROM funded_loans fl
+       LEFT JOIN users u ON fl.assigned_lo_id = u.id
+       ${whereClause}
+       GROUP BY fl.assigned_lo_id, fl.assigned_lo_name, u.email
+       ORDER BY total_amount DESC`,
+      params
+    );
+
+    res.json({
+      data: summary,
+      period: period || 'ytd'
+    });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ========================================
 // GET /api/funded-loans/:id
 // Get single funded loan by ID
 // ========================================
 router.get('/:id', async (req, res, next) => {
   try {
     const userGroup = getUserGroup(req);
-    const userId = req.user?.db?.id;
+    const userId = getUserId(req);
 
     const [loans] = await db.query(
       `SELECT fl.*, u.name as lo_name, u.email as lo_email
@@ -449,44 +499,6 @@ router.delete('/:id', async (req, res, next) => {
       success: true,
       message: 'Funded loan deleted',
       data: loans[0]
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-// ========================================
-// GET /api/funded-loans/by-lo/summary
-// Get summary grouped by LO (Admin/Manager only)
-// ========================================
-router.get('/by-lo/summary', async (req, res, next) => {
-  try {
-    if (!isAdminOrManager(req)) {
-      return res.status(403).json({ error: 'Admin or Manager access required' });
-    }
-
-    const { period } = req.query;
-    const dateFilter = getDateFilter(period);
-
-    const [summary] = await db.query(
-      `SELECT
-        fl.assigned_lo_id,
-        fl.assigned_lo_name,
-        u.email as lo_email,
-        COUNT(*) as units,
-        SUM(fl.loan_amount) as total_amount
-       FROM funded_loans fl
-       LEFT JOIN users u ON fl.assigned_lo_id = u.id
-       WHERE fl.funded_date >= ? AND fl.funded_date <= ?
-       GROUP BY fl.assigned_lo_id, fl.assigned_lo_name, u.email
-       ORDER BY total_amount DESC`,
-      [dateFilter.start, dateFilter.end]
-    );
-
-    res.json({
-      data: summary,
-      period: period || 'ytd'
     });
 
   } catch (error) {

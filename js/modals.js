@@ -294,8 +294,17 @@ const ModalsManager = {
       const form = document.getElementById('announcementForm');
       if (form) {
         form.reset();
-        const fileLabel = form.querySelector('.file-input-label');
-        if (fileLabel) fileLabel.textContent = 'Choose file or drag and drop';
+        // Reset rich text editor
+        const editor = document.getElementById('announcementContent');
+        if (editor && editor.getAttribute('contenteditable')) editor.innerHTML = '';
+        // Reset char counter
+        const charCount = document.getElementById('annCharCount');
+        if (charCount) charCount.textContent = '0 / 5,000';
+        // Reset file dropzone
+        const dropContent = document.getElementById('annDropzoneContent');
+        const filePreview = document.getElementById('annFilePreview');
+        if (dropContent) dropContent.style.display = '';
+        if (filePreview) filePreview.style.display = 'none';
       }
     }, 200);
   },
@@ -321,13 +330,21 @@ const ModalsManager = {
     const fileInput = document.getElementById('announcementFile');
 
     const title = titleEl ? titleEl.value : '';
-    const content = contentEl ? contentEl.value : '';
+    // Rich text editor uses contenteditable div — grab innerHTML
+    const content = contentEl ? (contentEl.getAttribute('contenteditable') ? contentEl.innerHTML.trim() : contentEl.value) : '';
     const link = linkEl ? linkEl.value : '';
     const icon = iconEl ? iconEl.value : '';
     const file = fileInput && fileInput.files ? fileInput.files[0] : null;
 
-    if (!title || !content) {
+    // Check if editor is truly empty (strip tags for validation)
+    const plainText = contentEl ? contentEl.innerText.trim() : '';
+    if (!title || !plainText) {
       alert('Please provide a title and content.');
+      return;
+    }
+
+    if (plainText.length > 5000) {
+      alert('Content exceeds 5,000 character limit. Please shorten your announcement.');
       return;
     }
 
@@ -491,6 +508,31 @@ const ModalsManager = {
     return role === 'admin';
   },
 
+  _sanitizeHtml(html) {
+    if (!html) return '';
+    // Strip dangerous tags and attributes, keep formatting
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    // Remove script, style, iframe, object, embed, form tags
+    tmp.querySelectorAll('script,style,iframe,object,embed,form,link,meta').forEach(el => el.remove());
+    // Remove event handler attributes
+    tmp.querySelectorAll('*').forEach(el => {
+      for (const attr of [...el.attributes]) {
+        if (attr.name.startsWith('on') || attr.name === 'srcdoc' || (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:'))) {
+          el.removeAttribute(attr.name);
+        }
+      }
+    });
+    return tmp.innerHTML;
+  },
+
+  _stripHtml(html) {
+    if (!html) return '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent || tmp.innerText || '';
+  },
+
   buildAnnouncementCard(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
     const relativeTime = Utils.getRelativeTime(announcement.createdAt);
@@ -509,7 +551,7 @@ const ModalsManager = {
             </button>` : ''}
           </div>
 
-          <p>${Utils.escapeHtml(announcement.content)}</p>
+          <div class="announcement-body">${this._sanitizeHtml(announcement.content)}</div>
 
           ${safeLink ? `
             <div class="news-embed-wrapper">
@@ -555,7 +597,7 @@ const ModalsManager = {
           <div class="news-card-icon"><i class="fas ${iconClass}"></i></div>
           <h4 class="news-card-title">${Utils.escapeHtml(announcement.title)}</h4>
         </div>
-        <p class="news-card-excerpt">${Utils.escapeHtml(announcement.content)}</p>
+        <p class="news-card-excerpt">${Utils.escapeHtml(this._stripHtml(announcement.content))}</p>
         <div class="news-card-meta">
           <span><i class="fas fa-user"></i> ${Utils.escapeHtml(announcement.author)}</span>
           <span><i class="fas fa-clock"></i> ${relativeTime}</span>

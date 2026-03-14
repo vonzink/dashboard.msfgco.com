@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getDbUser, getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { getDbUser, getUserId, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { preApproval, validate } = require('../validation/schemas');
 
 router.use(requireDbUser);
@@ -105,10 +105,17 @@ router.get('/', async (req, res, next) => {
 // GET /api/pre-approvals/summary - Get summary stats (units + volume)
 router.get('/summary', async (req, res, next) => {
   try {
+    const { lo_id } = req.query;
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (!isAdmin(req)) {
+    if (hasRole(req, 'admin', 'manager')) {
+      // Admin/Manager can filter by specific LO for goals view
+      if (lo_id) {
+        whereClause += ' AND assigned_lo_id = ?';
+        params.push(lo_id);
+      }
+    } else if (!isAdmin(req)) {
       const boardIds = await getAccessibleBoardIds(getUserId(req));
       if (boardIds.length === 0) {
         return res.json({ units: 0, total_amount: 0, active_count: 0 });

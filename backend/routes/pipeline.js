@@ -2,10 +2,32 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getDbUser, getUserId, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { pipelineUpdate, validate } = require('../validation/schemas');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
+
+/**
+ * Get board IDs accessible to a user (from monday_board_access)
+ */
+async function getAccessibleBoardIds(userId) {
+  const [rows] = await db.query(
+    'SELECT board_id FROM monday_board_access WHERE user_id = ?',
+    [userId]
+  );
+  return rows.map(r => r.board_id);
+}
+
+/**
+ * Get LO IDs that a processor is assigned to
+ */
+async function getProcessorLOIds(processorUserId) {
+  const [assignments] = await db.query(
+    'SELECT lo_user_id FROM processor_lo_assignments WHERE processor_user_id = ?',
+    [processorUserId]
+  );
+  return assignments.map(a => a.lo_user_id);
+}
 
 router.use(requireDbUser);
 
@@ -13,34 +35,56 @@ router.use(requireDbUser);
 router.get('/', async (req, res, next) => {
   try {
     const { stage, status, investor_id, investor } = req.query;
-    
-    let query = 'SELECT * FROM pipeline WHERE 1=1';
+    const role = getUserRole(req);
+    const userId = getUserId(req);
+
+    let query = 'SELECT p.* FROM pipeline p WHERE 1=1';
     const params = [];
-    
-    if (!isAdmin(req)) {
-      query += ' AND assigned_lo_id = ?';
-      params.push(getUserId(req));
+
+    if (hasRole(req, 'admin', 'manager')) {
+      // Admin/Manager: see all pipeline items
+    } else if (role === 'processor') {
+      // Processor: see loans from assigned LOs + accessible boards
+      const loIds = await getProcessorLOIds(userId);
+      const boardIds = await getAccessibleBoardIds(userId);
+      const conditions = [];
+      if (loIds.length > 0) {
+        conditions.push(`p.assigned_lo_id IN (${loIds.map(() => '?').join(',')})`);
+        params.push(...loIds);
+      }
+      if (boardIds.length > 0) {
+        conditions.push(`p.source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
+      if (conditions.length === 0) {
+        return res.json([]);
+      }
+      query += ` AND (${conditions.join(' OR ')})`;
+    } else {
+      // LO: see only own loans
+      query += ' AND p.assigned_lo_id = ?';
+      params.push(userId);
     }
-    
+
     if (stage) {
-      query += ' AND stage = ?';
+      query += ' AND p.stage = ?';
       params.push(stage);
     }
     if (status) {
-      query += ' AND status = ?';
+      query += ' AND p.status = ?';
       params.push(status);
     }
     if (investor_id) {
-      query += ' AND investor_id = ?';
+      query += ' AND p.investor_id = ?';
       params.push(investor_id);
     }
     if (investor) {
-      query += ' AND investor = ?';
+      query += ' AND p.investor = ?';
       params.push(investor);
     }
-    
-    query += ' ORDER BY target_close_date, created_at DESC';
-    
+
+    query += ' ORDER BY p.target_close_date, p.created_at DESC';
+
     const [pipeline] = await db.query(query, params);
     res.json(pipeline);
   } catch (error) {
@@ -51,12 +95,37 @@ router.get('/', async (req, res, next) => {
 // GET /api/pipeline/summary - Get summary stats (units + volume)
 router.get('/summary', async (req, res, next) => {
   try {
+    const { lo_id } = req.query;
+    const role = getUserRole(req);
+    const userId = getUserId(req);
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (!isAdmin(req)) {
+    if (hasRole(req, 'admin', 'manager')) {
+      // Admin/Manager can filter by specific LO for goals view
+      if (lo_id) {
+        whereClause += ' AND assigned_lo_id = ?';
+        params.push(lo_id);
+      }
+    } else if (role === 'processor') {
+      const loIds = await getProcessorLOIds(userId);
+      const boardIds = await getAccessibleBoardIds(userId);
+      const conditions = [];
+      if (loIds.length > 0) {
+        conditions.push(`assigned_lo_id IN (${loIds.map(() => '?').join(',')})`);
+        params.push(...loIds);
+      }
+      if (boardIds.length > 0) {
+        conditions.push(`source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
+      if (conditions.length === 0) {
+        return res.json({ units: 0, total_amount: 0 });
+      }
+      whereClause += ` AND (${conditions.join(' OR ')})`;
+    } else {
       whereClause += ' AND assigned_lo_id = ?';
-      params.push(getUserId(req));
+      params.push(userId);
     }
 
     const [summary] = await db.query(
@@ -81,16 +150,24 @@ router.get('/summary', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const [pipeline] = await db.query('SELECT * FROM pipeline WHERE id = ?', [req.params.id]);
-    
+
     if (pipeline.length === 0) {
       return res.status(404).json({ error: 'Pipeline item not found' });
     }
-    
+
     const currentUserId = getUserId(req);
-    if (!isAdmin(req) && pipeline[0].assigned_lo_id !== currentUserId) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasRole(req, 'admin', 'manager') && pipeline[0].assigned_lo_id !== currentUserId) {
+      // Processors can also access if the LO is assigned to them
+      if (getUserRole(req) === 'processor') {
+        const loIds = await getProcessorLOIds(currentUserId);
+        if (!loIds.includes(pipeline[0].assigned_lo_id)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+      } else {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
-    
+
     res.json(pipeline[0]);
   } catch (error) {
     next(error);
@@ -170,7 +247,7 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Pipeline item not found' });
     }
     
-    if (!isAdmin(req) && existing[0].assigned_lo_id !== getUserId(req)) {
+    if (!hasRole(req, 'admin', 'manager') && existing[0].assigned_lo_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
     

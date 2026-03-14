@@ -3,6 +3,10 @@
    Time period selection and editable goal sliders.
    Loans Closed + Volume Closed from Funded Loans.
    Pipeline from Pipeline data.
+   Pre-Approvals from Pre-Approval pipeline.
+
+   Admin/Manager: LO picker to view any LO's performance + set goals.
+   LO: Can only see and edit their own goals.
    ============================================ */
 
 const GoalsManager = {
@@ -10,6 +14,9 @@ const GoalsManager = {
     // PROPERTIES
     // ========================================
     currentPeriod: 'monthly',
+    selectedLOId: null,       // null = all (admin/manager aggregate), or specific LO id
+    selectedLOName: null,     // display name of selected LO
+    _loList: [],              // cached list of LOs for the picker
     goals: {
         'loans-closed': {
             current: 0,
@@ -29,11 +36,11 @@ const GoalsManager = {
             type: 'currency',
             format: (val) => `$${val.toFixed(1)}M`
         },
-        'pull-through': {
+        'pre-approvals': {
             current: 0,
             target: 0,
-            type: 'percentage',
-            format: (val) => `${Math.round(val)}%`
+            type: 'number',
+            format: (val) => Math.round(val).toString()
         }
     },
 
@@ -41,11 +48,86 @@ const GoalsManager = {
     // INITIALIZATION
     // ========================================
     async init() {
-        await this.loadSavedGoals();
         this.bindPeriodSelector();
         this.bindEditButtons();
         this.bindSliders();
-        this.updateAllGoals();
+        await this._initLOPicker();
+        await this._fetchAllGoalData();
+    },
+
+    // ========================================
+    // LO PICKER (Admin/Manager only)
+    // ========================================
+
+    /**
+     * Check if the current user is admin or manager
+     */
+    _isAdminOrManager() {
+        const role = String(CONFIG.currentUser?.role || '').toLowerCase();
+        return role === 'admin' || role === 'manager';
+    },
+
+    /**
+     * Initialize the LO picker dropdown for admin/manager users.
+     * LOs only see their own data — no picker shown.
+     */
+    async _initLOPicker() {
+        const loSelect = document.getElementById('goalLOSelect');
+        if (!loSelect) return;
+
+        if (!this._isAdminOrManager()) {
+            // LO/processor: hide the picker, always use own ID
+            loSelect.style.display = 'none';
+            this.selectedLOId = CONFIG.currentUser?.id || null;
+            return;
+        }
+
+        // Admin/Manager: show the picker and load LO list
+        loSelect.style.display = '';
+
+        try {
+            const users = await ServerAPI.get('/users/directory');
+            if (Array.isArray(users)) {
+                this._loList = users.filter(u => u.name).sort((a, b) => a.name.localeCompare(b.name));
+
+                loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
+                    this._loList.map(u =>
+                        `<option value="${u.id}">${Utils.escapeHtml(u.name)}</option>`
+                    ).join('');
+            }
+        } catch (err) {
+            console.warn('Failed to load user list for LO picker:', err.message);
+        }
+
+        // Restore saved selection
+        const savedLO = Utils.getStorage('goal_selected_lo', '');
+        if (savedLO) {
+            loSelect.value = savedLO;
+            this.selectedLOId = savedLO || null;
+            const opt = loSelect.options[loSelect.selectedIndex];
+            this.selectedLOName = opt && opt.value ? opt.textContent : null;
+        }
+
+        loSelect.addEventListener('change', async () => {
+            this.selectedLOId = loSelect.value || null;
+            const opt = loSelect.options[loSelect.selectedIndex];
+            this.selectedLOName = opt && opt.value ? opt.textContent : null;
+            Utils.setStorage('goal_selected_lo', loSelect.value);
+            await this._fetchAllGoalData();
+        });
+    },
+
+    /**
+     * Get the user ID to use for goals data fetching.
+     * Admin/Manager with no LO selected → null (aggregate).
+     * Admin/Manager with LO selected → that LO's id.
+     * LO → own id.
+     */
+    _getTargetUserId() {
+        if (this._isAdminOrManager()) {
+            return this.selectedLOId || null;
+        }
+        return CONFIG.currentUser?.id || null;
     },
 
     // ========================================
@@ -63,18 +145,18 @@ const GoalsManager = {
         selector.addEventListener('change', async (e) => {
             this.currentPeriod = e.target.value;
             Utils.setStorage('goal_period', this.currentPeriod);
-            await this.loadSavedGoals(); // Reload goal targets for new period
 
-            // Sync the funded loans period to match and reload data
+            // Sync the funded loans period to match and reload table
             this._syncFundedLoansPeriod();
 
-            this.updateAllGoals();
+            // Fetch all goal data for the new period
+            await this._fetchAllGoalData();
         });
     },
 
     /**
      * Sync the funded loans dropdown + data to match the goals period.
-     * This ensures Loans Closed / Volume Closed reflect the same timeframe.
+     * This ensures the funded loans table reflects the same timeframe.
      */
     _syncFundedLoansPeriod() {
         if (typeof FundedLoans === 'undefined') return;
@@ -84,8 +166,96 @@ const GoalsManager = {
         if (fundedPeriodSelect && fundedPeriodSelect.value !== this.currentPeriod) {
             fundedPeriodSelect.value = this.currentPeriod;
             FundedLoans._period = this.currentPeriod;
-            FundedLoans.load(); // Reload with new period → will call _updateGoalsFromFunded
+            FundedLoans.load(); // Reload table with new period
         }
+    },
+
+    // ========================================
+    // DATA FETCHING
+    // ========================================
+
+    /**
+     * Fetch all goal-related data in parallel:
+     * - Funded loans summary -> loans-closed + volume-closed
+     * - Pipeline summary -> pipeline + unit count
+     * - Pre-approvals summary -> pre-approvals
+     * - Saved goal targets from DB
+     *
+     * When admin/manager has an LO selected, all summaries
+     * are scoped to that LO via lo_id query param.
+     */
+    async _fetchAllGoalData() {
+        try {
+            const targetUserId = this._getTargetUserId();
+            const periodValue = this.getPeriodValue();
+
+            // Build params for summary endpoints
+            const loParams = targetUserId ? { lo_id: targetUserId } : {};
+
+            const [fundedResult, pipelineResult, preApprovalsResult, goalsResult] = await Promise.allSettled([
+                ServerAPI.getFundedLoansSummary({ period: this.currentPeriod, ...loParams }),
+                ServerAPI.getPipelineSummary(loParams),
+                ServerAPI.getPreApprovalsSummary(loParams),
+                ServerAPI.getGoals(targetUserId, this.currentPeriod, periodValue)
+            ]);
+
+            // --- Funded Loans -> Loans Closed + Volume Closed ---
+            if (fundedResult.status === 'fulfilled' && fundedResult.value) {
+                const summary = fundedResult.value;
+                const units = parseInt(summary.units || summary.count || 0);
+                const volume = parseFloat(summary.total_amount || 0) / 1000000;
+                this.goals['loans-closed'].current = units;
+                this.goals['volume-closed'].current = volume;
+            }
+
+            // --- Pipeline -> Pipeline value + unit count ---
+            if (pipelineResult.status === 'fulfilled' && pipelineResult.value) {
+                const summary = pipelineResult.value;
+                const units = parseInt(summary.units || 0);
+                const volume = parseFloat(summary.total_amount || 0) / 1000000;
+                this.goals['pipeline'].current = volume;
+
+                // Update pipeline unit count display
+                const unitCountEl = document.getElementById('pipelineUnitCount');
+                if (unitCountEl) {
+                    unitCountEl.textContent = `${units} loan${units !== 1 ? 's' : ''}`;
+                }
+            }
+
+            // --- Pre-Approvals (use active count, not total) ---
+            if (preApprovalsResult.status === 'fulfilled' && preApprovalsResult.value) {
+                const summary = preApprovalsResult.value;
+                const units = parseInt(summary.active_count || summary.units || 0);
+                this.goals['pre-approvals'].current = units;
+            }
+
+            // --- Saved Goal Targets ---
+            // Reset targets before applying saved values
+            Object.keys(this.goals).forEach(goalId => {
+                this.goals[goalId].target = 0;
+            });
+
+            if (goalsResult.status === 'fulfilled' && Array.isArray(goalsResult.value)) {
+                goalsResult.value.forEach(apiGoal => {
+                    const goalId = apiGoal.goal_type;
+                    if (this.goals[goalId]) {
+                        this.goals[goalId].target = parseFloat(apiGoal.target_value) || 0;
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Failed to fetch goal data:', error);
+            // Fallback: load targets from localStorage
+            Object.keys(this.goals).forEach(goalId => {
+                const key = `goal_${goalId}_${this.currentPeriod}`;
+                const saved = Utils.getStorage(key);
+                if (saved) {
+                    this.goals[goalId].target = saved.target;
+                }
+            });
+        }
+
+        this.updateAllGoals();
     },
 
     // ========================================
@@ -102,21 +272,24 @@ const GoalsManager = {
     },
 
     toggleSlider(goalId) {
-        const card = document.querySelector(`[data-goal="${goalId}"]`);
+        const card = document.querySelector(`.goal-card[data-goal="${goalId}"]`);
         if (!card) return;
 
         const sliderContainer = card.querySelector('.goal-slider-container');
         const editBtn = card.querySelector('.goal-edit-btn');
-        const isVisible = sliderContainer.style.display !== 'none';
+        if (!sliderContainer) return;
+
+        // Use classList for visibility (u-hidden has !important)
+        const isVisible = !sliderContainer.classList.contains('u-hidden');
 
         if (isVisible) {
             // Hide slider and save
-            sliderContainer.style.display = 'none';
+            sliderContainer.classList.add('u-hidden');
             editBtn.innerHTML = '<i class="fas fa-edit"></i>';
             this.saveGoal(goalId);
         } else {
             // Show slider
-            sliderContainer.style.display = 'block';
+            sliderContainer.classList.remove('u-hidden');
             editBtn.innerHTML = '<i class="fas fa-check"></i>';
             this.updateSlider(goalId);
         }
@@ -141,7 +314,7 @@ const GoalsManager = {
             'loansClosedSlider': 'loans-closed',
             'volumeClosedSlider': 'volume-closed',
             'pipelineSlider': 'pipeline',
-            'pullThroughSlider': 'pull-through'
+            'preApprovalsSlider': 'pre-approvals'
         };
         return map[sliderId];
     },
@@ -171,7 +344,7 @@ const GoalsManager = {
             'loans-closed': 'loansClosedSlider',
             'volume-closed': 'volumeClosedSlider',
             'pipeline': 'pipelineSlider',
-            'pull-through': 'pullThroughSlider'
+            'pre-approvals': 'preApprovalsSlider'
         };
         return map[goalId];
     },
@@ -185,8 +358,6 @@ const GoalsManager = {
             const goal = this.goals[goalId];
             if (goal.type === 'currency') {
                 display.textContent = value.toFixed(1);
-            } else if (goal.type === 'percentage') {
-                display.textContent = Math.round(value);
             } else {
                 display.textContent = Math.round(value);
             }
@@ -217,8 +388,6 @@ const GoalsManager = {
         if (targetEl) {
             if (goal.type === 'currency') {
                 targetEl.textContent = goal.target.toFixed(1);
-            } else if (goal.type === 'percentage') {
-                targetEl.textContent = Math.round(goal.target);
             } else {
                 targetEl.textContent = Math.round(goal.target);
             }
@@ -235,7 +404,7 @@ const GoalsManager = {
             'loans-closed': 'loansClosedValue',
             'volume-closed': 'volumeClosedValue',
             'pipeline': 'pipelineValue',
-            'pull-through': 'pullThroughValue'
+            'pre-approvals': 'preApprovalsValue'
         };
         return map[goalId];
     },
@@ -245,7 +414,7 @@ const GoalsManager = {
             'loans-closed': 'loansClosedTarget',
             'volume-closed': 'volumeClosedTarget',
             'pipeline': 'pipelineTarget',
-            'pull-through': 'pullThroughTarget'
+            'pre-approvals': 'preApprovalsTarget'
         };
         return map[goalId];
     },
@@ -254,17 +423,11 @@ const GoalsManager = {
         const goal = this.goals[goalId];
         if (!goal || goal.target === 0) return 0;
 
-        // Special handling for pull-through (current vs target)
-        if (goalId === 'pull-through') {
-            return Math.min(100, (goal.current / goal.target) * 100);
-        }
-
-        // For pipeline, show as "exceeded" if current >= target
         if (goalId === 'pipeline') {
             return goal.current >= goal.target ? 100 : (goal.current / goal.target) * 100;
         }
 
-        // Standard progress calculation
+        // Standard progress: current / target capped at 100
         return Math.min(100, (goal.current / goal.target) * 100);
     },
 
@@ -292,7 +455,7 @@ const GoalsManager = {
             'loans-closed': 'loansClosedProgress',
             'volume-closed': 'volumeClosedProgress',
             'pipeline': 'pipelineProgress',
-            'pull-through': 'pullThroughProgress'
+            'pre-approvals': 'preApprovalsProgress'
         };
         return map[goalId];
     },
@@ -305,7 +468,7 @@ const GoalsManager = {
 
         if (goalId === 'pipeline') {
             text = progress >= 100 ? 'Strong pipeline' : `${Math.round(progress)}% of target`;
-        } else if (goalId === 'pull-through') {
+        } else if (goalId === 'pre-approvals') {
             text = progress >= 100 ? 'Exceeding goal!' : `${Math.round(progress)}% complete`;
         } else {
             text = `${Math.round(progress)}% complete`;
@@ -319,7 +482,7 @@ const GoalsManager = {
             'loans-closed': 'loansClosedProgressText',
             'volume-closed': 'volumeClosedProgressText',
             'pipeline': 'pipelineProgressText',
-            'pull-through': 'pullThroughProgressText'
+            'pre-approvals': 'preApprovalsProgressText'
         };
         return map[goalId];
     },
@@ -367,11 +530,12 @@ const GoalsManager = {
         if (!goal) return;
 
         try {
-            const userId = CONFIG.currentUser?.id || null;
+            // Save to the target user (selected LO or self)
+            const targetUserId = this._getTargetUserId() || CONFIG.currentUser?.id || null;
             const periodValue = this.getPeriodValue();
 
             const goalData = {
-                user_id: userId,
+                user_id: targetUserId,
                 period_type: this.currentPeriod,
                 period_value: periodValue,
                 goal_type: goalId,
@@ -391,34 +555,6 @@ const GoalsManager = {
         }
     },
 
-    async loadSavedGoals() {
-        try {
-            const userId = CONFIG.currentUser?.id || null;
-            const periodValue = this.getPeriodValue();
-
-            const goals = await ServerAPI.getGoals(userId, this.currentPeriod, periodValue);
-
-            // Update local goal targets from API response (current values come from live data)
-            goals.forEach(apiGoal => {
-                const goalId = apiGoal.goal_type;
-                if (this.goals[goalId]) {
-                    this.goals[goalId].target = parseFloat(apiGoal.target_value) || this.goals[goalId].target;
-                    // Don't override current — it comes from live funded loans / pipeline data
-                }
-            });
-        } catch (error) {
-            console.error('Failed to load goals from API:', error);
-            // Fallback to localStorage
-            Object.keys(this.goals).forEach(goalId => {
-                const key = `goal_${goalId}_${this.currentPeriod}`;
-                const saved = Utils.getStorage(key);
-                if (saved) {
-                    this.goals[goalId].target = saved.target;
-                }
-            });
-        }
-    },
-
     // ========================================
     // PUBLIC API
     // ========================================
@@ -428,6 +564,13 @@ const GoalsManager = {
             if (target !== undefined) this.goals[goalId].target = target;
             this.updateGoalCard(goalId);
             this.saveGoal(goalId);
+        }
+    },
+
+    updateGoalValue(goalId, value) {
+        if (this.goals[goalId]) {
+            this.goals[goalId].current = value;
+            this.updateGoalCard(goalId);
         }
     },
 

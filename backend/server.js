@@ -40,6 +40,7 @@ const guidelinesRoutes = require('./routes/guidelines');
 const lendingpadRoutes = require('./routes/lendingpad');
 const processingRoutes = require('./routes/processing');
 const handbookRoutes = require('./routes/handbook');
+const myProfileRoutes = require('./routes/myProfile');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -132,6 +133,7 @@ app.use('/api/pre-approvals', authenticate, preApprovalsRoutes);
 app.use('/api/pipeline', authenticate, pipelineRoutes);
 app.use('/api/funded-loans', authenticate, fundedLoansRoutes);
 app.use('/api/admin', authenticate, adminRoutes);
+app.use('/api/me/profile', authenticate, myProfileRoutes);
 
 // Content Engine (all require JWT auth)
 app.use('/api/integrations', authenticate, integrationsRoutes);

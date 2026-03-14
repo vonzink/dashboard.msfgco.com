@@ -120,7 +120,13 @@
     // =====================
     // Tools
     // =====================
-    'open-settings': () => comingSoon('User Settings'),
+    'open-settings': () => {
+      if (typeof UserSettings !== 'undefined') {
+        UserSettings.open();
+      } else {
+        comingSoon('User Settings');
+      }
+    },
 
     'open-admin-settings': () => {
       const w = Math.min(1200, screen.availWidth - 80);

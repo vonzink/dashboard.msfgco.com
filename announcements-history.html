@@ -57,12 +57,27 @@
       let allAnnouncements = [];
       let displayed = 0;
 
+      function sanitizeHtml(html) {
+        if (!html) return '';
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        tmp.querySelectorAll('script,style,iframe,object,embed,form,link,meta').forEach(function(el){ el.remove(); });
+        tmp.querySelectorAll('*').forEach(function(el){
+          for (const attr of [...el.attributes]) {
+            if (attr.name.startsWith('on') || attr.name === 'srcdoc' || (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:'))) {
+              el.removeAttribute(attr.name);
+            }
+          }
+        });
+        return tmp.innerHTML;
+      }
+
       function buildCard(a) {
         const iconClass = a.icon || 'fa-bullhorn';
         const relativeTime = Utils.getRelativeTime(a.created_at);
         const author = Utils.escapeHtml(a.author_name || 'Unknown');
         const title = Utils.escapeHtml(a.title);
-        const content = Utils.escapeHtml(a.content);
+        const contentHtml = sanitizeHtml(a.content);
         const safeLink = a.link ? Utils.escapeHtml(a.link) : null;
 
         return `
@@ -70,7 +85,7 @@
             <div class="news-icon"><i class="fas ${iconClass}"></i></div>
             <div class="news-content">
               <div class="news-header"><h4>${title}</h4></div>
-              <p>${content}</p>
+              <div class="announcement-body">${contentHtml}</div>
               ${safeLink ? `<div style="margin-top:0.5rem;"><a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="news-link-external"><i class="fas fa-external-link-alt"></i> ${safeLink}</a></div>` : ''}
               ${a.file_name ? `<div class="news-file"><i class="fas fa-file"></i> ${Utils.escapeHtml(a.file_name)}</div>` : ''}
               <div class="news-meta">

@@ -186,6 +186,10 @@ async function syncAllBoards(userId) {
     funded_loans: new Set(),
   };
 
+  // Track which sections had a board fail — skip cleanup for those sections
+  // to prevent accidental deletion during Monday.com API outages
+  const failedSections = new Set();
+
   // Build a reverse map: first name (lowercase) → { id, name } for board-name LO inference
   const firstNameToUser = {};
   // Common nickname → full name mappings
@@ -287,6 +291,7 @@ async function syncAllBoards(userId) {
       totalCreated += created;
       totalUpdated += updated;
     } catch (fetchErr) {
+      failedSections.add(section);
       await db.query(
         'UPDATE monday_sync_log SET status = ?, error_message = ?, finished_at = NOW() WHERE id = ?',
         ['error', fetchErr.message, syncLogId]
@@ -296,8 +301,13 @@ async function syncAllBoards(userId) {
   }
 
   // Cleanup: delete rows from Monday.com that no longer exist on any active board
+  // Skip sections where any board failed to avoid deleting items due to API errors
   for (const [section, syncedIds] of Object.entries(syncedIdsBySection)) {
     if (syncedIds.size === 0) continue;
+    if (failedSections.has(section)) {
+      logger.info({ section }, 'Monday sync: skipping cleanup for section — a board failed to fetch');
+      continue;
+    }
     try {
       const tableName = getTableName(section);
       const [mondayRows] = await db.query(

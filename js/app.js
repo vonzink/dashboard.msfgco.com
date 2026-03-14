@@ -20,6 +20,7 @@ const App = {
             ['Goals',          () => this.initGoals()],
             ['Gauges',         () => this.initGauges()],
             ['Modals',         () => this.initModals()],
+            ['User Settings',  () => this.initUserSettings()],
             ['Monday',         () => this.initMondaySettings()],
             ['Progress Bars',  () => this.initProgressBars()],
             ['Collapsible',    () => this.initCollapsible()],
@@ -79,6 +80,12 @@ const App = {
 
     initModals() {
         ModalsManager.init();
+    },
+
+    initUserSettings() {
+        if (typeof UserSettings !== 'undefined') {
+            UserSettings.init();
+        }
     },
 
     initMondaySettings() {

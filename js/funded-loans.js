@@ -90,8 +90,7 @@ const FundedLoans = {
       this._renderGroupFilter();
       this._renderBoardFilter();
 
-      // Update goals with funded loans data
-      this._updateGoalsFromFunded();
+      // GoalsManager now fetches its own data via _fetchAllGoalData()
     } catch (err) {
       console.error('Funded loans load error:', err);
       if (tbody) {
