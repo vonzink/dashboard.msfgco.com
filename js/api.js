@@ -255,7 +255,7 @@ const API = {
         if (!data?.length) {
             tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" class="empty-state">
                 <i class="fas fa-database"></i>
-                <p>No pre-approval data yet. Click "Add" or sync from Monday.com.</p>
+                <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
             </td></tr>`;
             return;
         }
@@ -290,12 +290,6 @@ const API = {
 
         const modal = document.getElementById('preApprovalModal');
         if (!modal) return;
-
-        // Add button
-        const addBtn = document.getElementById('addPreApprovalBtn');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => this._openPreApprovalCreate());
-        }
 
         // Close buttons
         modal.querySelectorAll('.pa-modal-close').forEach(btn => {
@@ -340,8 +334,7 @@ const API = {
         if (title) title.innerHTML = '<i class="fas fa-clipboard-check" style="color:var(--green-bright);margin-right:0.5rem;"></i> New Pre-Approval';
         document.getElementById('paFormSubmit').innerHTML = '<i class="fas fa-save"></i> Create';
 
-        modal.setAttribute('aria-hidden', 'false');
-        modal.style.display = 'flex';
+        modal.classList.add('active');
         document.getElementById('paClientName').focus();
     },
 
@@ -354,11 +347,17 @@ const API = {
         const title = document.getElementById('paModalTitle');
         if (!modal) return;
 
+        const toDateStr = (v) => {
+            if (!v) return '';
+            if (v instanceof Date) return v.toISOString().substring(0, 10);
+            return String(v).substring(0, 10);
+        };
+
         document.getElementById('paFormId').value = id;
         document.getElementById('paClientName').value = item.client_name || '';
         document.getElementById('paLoanAmount').value = item.loan_amount || '';
-        document.getElementById('paPreApprovalDate').value = item.pre_approval_date ? item.pre_approval_date.substring(0, 10) : '';
-        document.getElementById('paExpirationDate').value = item.expiration_date ? item.expiration_date.substring(0, 10) : '';
+        document.getElementById('paPreApprovalDate').value = toDateStr(item.pre_approval_date);
+        document.getElementById('paExpirationDate').value = toDateStr(item.expiration_date);
         document.getElementById('paStatus').value = item.status || 'active';
         document.getElementById('paLoanType').value = item.loan_type || '';
         document.getElementById('paPropertyAddress').value = item.property_address || '';
@@ -367,16 +366,14 @@ const API = {
         if (title) title.innerHTML = '<i class="fas fa-pencil-alt" style="color:var(--green-bright);margin-right:0.5rem;"></i> Edit Pre-Approval';
         document.getElementById('paFormSubmit').innerHTML = '<i class="fas fa-save"></i> Update';
 
-        modal.setAttribute('aria-hidden', 'false');
-        modal.style.display = 'flex';
+        modal.classList.add('active');
         document.getElementById('paClientName').focus();
     },
 
     _closePreApprovalModal() {
         const modal = document.getElementById('preApprovalModal');
         if (modal) {
-            modal.setAttribute('aria-hidden', 'true');
-            modal.style.display = 'none';
+            modal.classList.remove('active');
         }
     },
 
