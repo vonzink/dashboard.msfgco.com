@@ -35,22 +35,27 @@ router.get('/', async (req, res, next) => {
 // POST /api/notifications - Create notification/reminder
 router.post('/', async (req, res, next) => {
   try {
-    const { user_id, reminder_date, reminder_time, note } = req.body;
-    
+    const { user_id, reminder_date, reminder_time, note, delivery_method, recurrence } = req.body;
+
     if (!user_id || !reminder_date || !reminder_time || !note) {
-      return res.status(400).json({ 
-        error: 'user_id, reminder_date, reminder_time, and note are required' 
+      return res.status(400).json({
+        error: 'user_id, reminder_date, reminder_time, and note are required'
       });
     }
-    
+
     const currentUserId = getUserId(req);
     const finalUserId = isAdmin(req) ? (user_id || currentUserId) : currentUserId;
 
+    const validDelivery = ['email', 'text', 'both'];
+    const validRecurrence = ['none', 'daily', 'weekly', 'monthly'];
+    const finalDelivery = validDelivery.includes(delivery_method) ? delivery_method : 'email';
+    const finalRecurrence = validRecurrence.includes(recurrence) ? recurrence : 'none';
+
     const [result] = await db.query(
-      'INSERT INTO notifications (user_id, reminder_date, reminder_time, note) VALUES (?, ?, ?, ?)',
-      [finalUserId, reminder_date, reminder_time, note]
+      'INSERT INTO notifications (user_id, reminder_date, reminder_time, note, delivery_method, recurrence) VALUES (?, ?, ?, ?, ?, ?)',
+      [finalUserId, reminder_date, reminder_time, note, finalDelivery, finalRecurrence]
     );
-    
+
     const [notifications] = await db.query('SELECT * FROM notifications WHERE id = ?', [result.insertId]);
     res.status(201).json(notifications[0]);
   } catch (error) {

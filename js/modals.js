@@ -135,14 +135,37 @@ const ModalsManager = {
     if (!modal) return;
 
     // Close buttons
-    const closeBtns = modal.querySelectorAll('.notifications-modal-close');
-    closeBtns.forEach((btn) => {
+    modal.querySelectorAll('.notifications-modal-close').forEach((btn) => {
       btn.addEventListener('click', () => this.hideNotificationsModal());
     });
 
     // Backdrop click
     modal.addEventListener('click', (e) => {
       if (e.target === modal) this.hideNotificationsModal();
+    });
+
+    // Toggle add form
+    document.getElementById('notifToggleFormBtn')?.addEventListener('click', () => {
+      const form = document.getElementById('notificationForm');
+      const btn = document.getElementById('notifToggleFormBtn');
+      if (form) {
+        form.style.display = 'flex';
+        btn.style.display = 'none';
+        // Set default date to today
+        const dateInput = document.getElementById('notificationDate');
+        if (dateInput) {
+          const today = new Date().toISOString().split('T')[0];
+          dateInput.value = today;
+          dateInput.min = today;
+        }
+      }
+    });
+
+    document.getElementById('notifCancelFormBtn')?.addEventListener('click', () => {
+      const form = document.getElementById('notificationForm');
+      const btn = document.getElementById('notifToggleFormBtn');
+      if (form) { form.style.display = 'none'; form.reset(); }
+      if (btn) btn.style.display = 'flex';
     });
 
     // Form submission
@@ -153,23 +176,11 @@ const ModalsManager = {
         this.handleNotificationSubmit();
       });
     }
-
-    // NOTE:
-    // Opening is handled by action-dispatcher.js calling showNotificationsModal()
-    // ARIA + focus trap are handled by a11y.js
   },
 
   showNotificationsModal() {
     const modal = document.getElementById('notificationsModal');
     if (!modal) return;
-
-    // Set default date to today
-    const dateInput = document.getElementById('notificationDate');
-    if (dateInput) {
-      const today = new Date().toISOString().split('T')[0];
-      dateInput.value = today;
-      dateInput.min = today; // Prevent past dates
-    }
 
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
@@ -178,6 +189,15 @@ const ModalsManager = {
       const content = modal.querySelector('.modal-content');
       if (content) content.style.transform = 'scale(1) translateY(0)';
     }, 10);
+
+    // Reset form visibility
+    const form = document.getElementById('notificationForm');
+    const btn = document.getElementById('notifToggleFormBtn');
+    if (form) { form.style.display = 'none'; form.reset(); }
+    if (btn) btn.style.display = 'flex';
+
+    // Load existing notifications
+    this.loadNotificationsList();
   },
 
   hideNotificationsModal() {
@@ -190,41 +210,112 @@ const ModalsManager = {
     setTimeout(() => {
       modal.classList.remove('active');
       document.body.style.overflow = '';
-
-      // Reset form
-      const form = document.getElementById('notificationForm');
-      if (form) form.reset();
     }, 200);
   },
 
-  handleNotificationSubmit() {
+  async loadNotificationsList() {
+    const container = document.getElementById('notificationsList');
+    if (!container) return;
+
+    container.innerHTML = '<div class="settings-loading" style="padding:24px;text-align:center;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+    try {
+      const userId = CONFIG?.currentUser?.id;
+      const notifications = await ServerAPI.get(`/notifications${userId ? '?user_id=' + userId : ''}`);
+
+      if (!notifications || notifications.length === 0) {
+        container.innerHTML = '<div class="notif-empty"><i class="fas fa-bell-slash"></i><p>No reminders set up yet.</p></div>';
+        return;
+      }
+
+      const esc = Utils.escapeHtml;
+      const now = new Date();
+
+      container.innerHTML = notifications.map(n => {
+        const reminderDate = new Date(n.reminder_date + 'T' + (n.reminder_time || '00:00'));
+        const isPast = reminderDate < now;
+        const isSent = n.sent;
+        const dateStr = reminderDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const timeStr = reminderDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const delivery = n.delivery_method || 'email';
+        const recurrence = n.recurrence || 'none';
+
+        return `
+          <div class="notif-item ${isSent ? 'notif-sent' : ''}">
+            <div class="notif-icon ${isSent ? 'notif-done' : 'notif-pending'}">
+              <i class="fas ${isSent ? 'fa-check' : isPast ? 'fa-exclamation' : 'fa-bell'}"></i>
+            </div>
+            <div class="notif-body">
+              <div class="notif-note">${esc(n.note)}</div>
+              <div class="notif-meta">
+                <span><i class="fas fa-calendar"></i> ${dateStr}</span>
+                <span><i class="fas fa-clock"></i> ${timeStr}</span>
+                ${delivery === 'email' || delivery === 'both' ? '<span class="notif-badge badge-email">Email</span>' : ''}
+                ${delivery === 'text' || delivery === 'both' ? '<span class="notif-badge badge-text">Text</span>' : ''}
+                ${recurrence !== 'none' ? `<span class="notif-badge badge-recur"><i class="fas fa-redo"></i> ${esc(recurrence)}</span>` : ''}
+              </div>
+            </div>
+            <button type="button" class="notif-delete" data-id="${n.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
+          </div>
+        `;
+      }).join('');
+
+      // Bind delete buttons
+      container.querySelectorAll('.notif-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Delete this reminder?')) return;
+          try {
+            await ServerAPI.delete(`/notifications/${btn.dataset.id}`);
+            this.loadNotificationsList();
+          } catch (err) {
+            Utils.showToast('Failed to delete: ' + err.message, 'error');
+          }
+        });
+      });
+    } catch (err) {
+      container.innerHTML = '<div class="notif-empty"><i class="fas fa-exclamation-triangle"></i><p>Failed to load notifications.</p></div>';
+    }
+  },
+
+  async handleNotificationSubmit() {
     const dateEl = document.getElementById('notificationDate');
     const timeEl = document.getElementById('notificationTime');
     const noteEl = document.getElementById('notificationNote');
+    const deliveryEl = document.getElementById('notifDelivery');
+    const recurrenceEl = document.getElementById('notifRecurrence');
 
-    const date = dateEl ? dateEl.value : '';
-    const time = timeEl ? timeEl.value : '';
-    const note = noteEl ? noteEl.value : '';
+    const date = dateEl?.value || '';
+    const time = timeEl?.value || '';
+    const note = noteEl?.value || '';
+    const delivery = deliveryEl?.value || 'email';
+    const recurrence = recurrenceEl?.value || 'none';
 
     if (!date || !time || !note) {
-      alert('Please complete date, time, and note.');
+      Utils.showToast('Please complete date, time, and note.', 'error');
       return;
     }
 
-    const userId =
-      (window.MSFG_CONFIG && MSFG_CONFIG.currentUser && MSFG_CONFIG.currentUser.id) ||
-      (window.CONFIG && CONFIG.currentUser && CONFIG.currentUser.id) ||
-      1;
+    const userId = CONFIG?.currentUser?.id || 1;
 
-    ServerAPI.createNotification(userId, date, time, note)
-      .then(() => {
-        alert(`Reminder set for ${date} at ${time}`);
-        this.hideNotificationsModal();
-      })
-      .catch((error) => {
-        console.error('Failed to save notification:', error);
-        alert('Failed to save notification. Please try again.');
+    try {
+      await ServerAPI.post('/notifications', {
+        user_id: userId,
+        reminder_date: date,
+        reminder_time: time,
+        note,
+        delivery_method: delivery,
+        recurrence,
       });
+      Utils.showToast('Reminder saved!', 'success');
+      // Hide form, reload list
+      const form = document.getElementById('notificationForm');
+      const btn = document.getElementById('notifToggleFormBtn');
+      if (form) { form.style.display = 'none'; form.reset(); }
+      if (btn) btn.style.display = 'flex';
+      this.loadNotificationsList();
+    } catch (err) {
+      Utils.showToast('Failed to save: ' + err.message, 'error');
+    }
   },
 
   // ========================================

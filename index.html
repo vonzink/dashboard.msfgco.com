@@ -654,32 +654,64 @@
 
     <!-- Notifications Modal -->
     <div id="notificationsModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content">
+      <div class="modal-content" style="max-width:620px;">
         <button type="button" class="modal-close notifications-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
-        <div class="modal-header">
+        <div class="modal-header" style="padding-bottom:0;">
           <div class="investor-header-content">
-            <h2 class="investor-name">Notifications</h2>
+            <h2 class="investor-name" style="display:flex;align-items:center;gap:0.5rem;"><i class="fas fa-bell" style="color:var(--green-bright);"></i> Notifications</h2>
           </div>
         </div>
-        <div class="modal-body">
-          <form id="notificationForm" class="form">
-            <div class="form-row">
-              <label for="notificationDate">Date</label>
-              <input type="date" id="notificationDate" required />
-            </div>
-            <div class="form-row">
-              <label for="notificationTime">Time</label>
-              <input type="time" id="notificationTime" required />
-            </div>
-            <div class="form-row">
-              <label for="notificationNote">Note</label>
-              <textarea id="notificationNote" rows="3" maxlength="1000" required></textarea>
-            </div>
-            <div class="form-actions">
-              <button type="button" class="btn btn-secondary notifications-modal-close">Cancel</button>
-              <button type="submit" class="btn btn-primary">Save Reminder</button>
-            </div>
-          </form>
+        <div class="modal-body" style="padding-top:var(--spacing-sm);">
+          <!-- Existing Notifications List -->
+          <div id="notificationsList" class="notif-list">
+            <div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+          </div>
+
+          <!-- Add New Reminder Form (collapsible) -->
+          <div class="notif-add-section">
+            <button type="button" class="btn btn-sm btn-primary" id="notifToggleFormBtn" style="display:flex;align-items:center;gap:0.4rem;">
+              <i class="fas fa-plus"></i> New Reminder
+            </button>
+            <form id="notificationForm" class="notif-form" style="display:none;">
+              <div class="notif-form-grid">
+                <div class="notif-form-field">
+                  <label for="notificationDate"><i class="fas fa-calendar"></i> Date</label>
+                  <input type="date" id="notificationDate" required />
+                </div>
+                <div class="notif-form-field">
+                  <label for="notificationTime"><i class="fas fa-clock"></i> Time</label>
+                  <input type="time" id="notificationTime" required />
+                </div>
+              </div>
+              <div class="notif-form-field">
+                <label for="notificationNote"><i class="fas fa-sticky-note"></i> Note</label>
+                <textarea id="notificationNote" rows="2" maxlength="1000" required placeholder="What should you be reminded about?"></textarea>
+              </div>
+              <div class="notif-form-grid">
+                <div class="notif-form-field">
+                  <label for="notifDelivery"><i class="fas fa-paper-plane"></i> Delivery</label>
+                  <select id="notifDelivery">
+                    <option value="email">Email</option>
+                    <option value="text">Text Message</option>
+                    <option value="both">Both</option>
+                  </select>
+                </div>
+                <div class="notif-form-field">
+                  <label for="notifRecurrence"><i class="fas fa-redo"></i> Recurrence</label>
+                  <select id="notifRecurrence">
+                    <option value="none">One-time</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
+                <button type="button" class="btn btn-secondary btn-sm" id="notifCancelFormBtn">Cancel</button>
+                <button type="submit" class="btn btn-primary btn-sm" style="display:flex;align-items:center;gap:0.4rem;"><i class="fas fa-save"></i> Save Reminder</button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>

@@ -1288,6 +1288,192 @@ textarea.form-input {
 }
 
 /* ============================================
+   NOTIFICATIONS MODAL
+   ============================================ */
+.notif-list {
+    max-height: 320px;
+    overflow-y: auto;
+    margin-bottom: var(--spacing-md);
+}
+
+.notif-empty {
+    text-align: center;
+    padding: var(--spacing-xl) var(--spacing-lg);
+    color: var(--text-muted);
+}
+
+.notif-empty i {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: var(--spacing-sm);
+    opacity: 0.4;
+}
+
+.notif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-sm);
+    background: var(--bg-primary);
+    transition: border-color 0.15s;
+}
+
+.notif-item:hover {
+    border-color: var(--green-bright);
+}
+
+.notif-item.notif-sent {
+    opacity: 0.55;
+}
+
+.notif-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+}
+
+.notif-icon.notif-pending {
+    background: rgba(140, 198, 62, 0.15);
+    color: var(--green-bright);
+}
+
+.notif-icon.notif-done {
+    background: var(--bg-tertiary);
+    color: var(--text-muted);
+}
+
+.notif-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-note {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    word-break: break-word;
+}
+
+.notif-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.notif-meta span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.notif-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.notif-badge.badge-email {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+}
+
+.notif-badge.badge-text {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+}
+
+.notif-badge.badge-recur {
+    background: rgba(140, 198, 62, 0.15);
+    color: var(--green-bright);
+}
+
+.notif-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 0.85rem;
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+}
+
+.notif-delete:hover {
+    opacity: 1;
+    color: var(--status-danger);
+}
+
+.notif-add-section {
+    border-top: 1px solid var(--border-color);
+    padding-top: var(--spacing-md);
+}
+
+.notif-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-md);
+    animation: fadeSlideIn 0.2s ease;
+}
+
+@keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.notif-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-sm);
+}
+
+.notif-form-field label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.notif-form-field label i {
+    color: var(--green-bright);
+    width: 14px;
+    margin-right: 2px;
+}
+
+.notif-form-field input,
+.notif-form-field textarea,
+.notif-form-field select {
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.88rem;
+    font-family: inherit;
+}
+
+.notif-form-field textarea {
+    resize: vertical;
+}
+
+/* ============================================
    USER SETTINGS MODAL
    ============================================ */
 .settings-modal-overlay {
@@ -1510,6 +1696,93 @@ textarea.form-input {
     text-transform: capitalize;
     width: fit-content;
     margin-left: auto;
+}
+
+/* Media Row (Business Card, QR Codes) */
+.settings-media-row {
+    display: flex;
+    gap: var(--spacing-lg);
+    padding-bottom: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.settings-media-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 120px;
+}
+
+.settings-media-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+.settings-media-preview {
+    width: 160px;
+    height: 100px;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.settings-media-preview:hover {
+    border-color: var(--green-bright);
+}
+
+.settings-media-preview.settings-media-qr {
+    width: 100px;
+    height: 100px;
+}
+
+.settings-media-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.settings-media-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-muted);
+}
+
+.settings-media-placeholder i {
+    font-size: 1.5rem;
+    opacity: 0.5;
+}
+
+.settings-media-placeholder span {
+    font-size: 0.7rem;
+}
+
+.settings-media-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.settings-media-label-input {
+    width: 100px;
+    padding: 3px 6px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    font-size: 0.72rem;
+    text-align: center;
+    background: var(--bg-primary);
+    color: var(--text-primary);
 }
 
 /* Settings Form */
@@ -1746,10 +2019,12 @@ textarea.form-input {
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    padding: var(--spacing-lg);
+    padding: var(--spacing-md);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
+    overflow: hidden;
+    min-width: 0;
 }
 
 .settings-goal-header {
@@ -1769,24 +2044,23 @@ textarea.form-input {
 .settings-goal-current {
     display: flex;
     align-items: baseline;
-    gap: var(--spacing-xs);
-    flex-wrap: wrap;
-    overflow: hidden;
+    gap: 4px;
+    min-width: 0;
 }
 
 .settings-goal-value {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: var(--text-primary);
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .settings-goal-of {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     color: var(--text-muted);
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .settings-goal-card .progress-bar {
@@ -1817,8 +2091,9 @@ textarea.form-input {
 .settings-goal-slider {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: 6px;
     margin-top: var(--spacing-xs);
+    min-width: 0;
 }
 
 .settings-goal-slider label {
@@ -1861,9 +2136,10 @@ textarea.form-input {
 }
 
 .settings-goal-slider-val {
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     font-weight: 600;
     color: var(--green-bright);
+    white-space: nowrap;
     min-width: 48px;
     text-align: right;
 }

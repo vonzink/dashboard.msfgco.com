@@ -104,6 +104,54 @@ const UserSettings = {
           </div>
         </div>
 
+        <!-- Business Card & QR Codes -->
+        <div class="settings-media-row">
+          <div class="settings-media-card">
+            <label class="settings-media-label">Business Card</label>
+            <div class="settings-media-preview" id="settingsBusinessCard" title="Click to upload">
+              ${p.business_card_url
+                ? `<img src="${esc(p.business_card_url)}" alt="Business Card" />`
+                : `<div class="settings-media-placeholder"><i class="fas fa-id-card"></i><span>No business card</span></div>`
+              }
+            </div>
+            <div class="settings-media-actions">
+              <label class="btn btn-sm btn-secondary" for="settingsBusinessCardInput"><i class="fas fa-upload"></i> Upload</label>
+              <input type="file" id="settingsBusinessCardInput" accept="image/*" style="display:none;" />
+              ${p.business_card_url ? '<button type="button" class="btn btn-sm btn-danger" id="settingsBusinessCardRemove"><i class="fas fa-trash"></i></button>' : ''}
+            </div>
+          </div>
+          <div class="settings-media-card">
+            <label class="settings-media-label">QR Code 1</label>
+            <div class="settings-media-preview settings-media-qr" id="settingsQr1" title="Click to upload">
+              ${p.qr_code_1_url
+                ? `<img src="${esc(p.qr_code_1_url)}" alt="QR Code 1" />`
+                : `<div class="settings-media-placeholder"><i class="fas fa-qrcode"></i><span>No QR code</span></div>`
+              }
+            </div>
+            <input type="text" name="qr_code_1_label" value="${esc(p.qr_code_1_label || '')}" placeholder="Label (optional)" class="settings-media-label-input" />
+            <div class="settings-media-actions">
+              <label class="btn btn-sm btn-secondary" for="settingsQr1Input"><i class="fas fa-upload"></i></label>
+              <input type="file" id="settingsQr1Input" accept="image/*" style="display:none;" />
+              ${p.qr_code_1_url ? '<button type="button" class="btn btn-sm btn-danger" id="settingsQr1Remove"><i class="fas fa-trash"></i></button>' : ''}
+            </div>
+          </div>
+          <div class="settings-media-card">
+            <label class="settings-media-label">QR Code 2</label>
+            <div class="settings-media-preview settings-media-qr" id="settingsQr2" title="Click to upload">
+              ${p.qr_code_2_url
+                ? `<img src="${esc(p.qr_code_2_url)}" alt="QR Code 2" />`
+                : `<div class="settings-media-placeholder"><i class="fas fa-qrcode"></i><span>No QR code</span></div>`
+              }
+            </div>
+            <input type="text" name="qr_code_2_label" value="${esc(p.qr_code_2_label || '')}" placeholder="Label (optional)" class="settings-media-label-input" />
+            <div class="settings-media-actions">
+              <label class="btn btn-sm btn-secondary" for="settingsQr2Input"><i class="fas fa-upload"></i></label>
+              <input type="file" id="settingsQr2Input" accept="image/*" style="display:none;" />
+              ${p.qr_code_2_url ? '<button type="button" class="btn btn-sm btn-danger" id="settingsQr2Remove"><i class="fas fa-trash"></i></button>' : ''}
+            </div>
+          </div>
+        </div>
+
         <!-- Profile Form -->
         <form id="settingsProfileForm" class="settings-form">
           <h4><i class="fas fa-address-card"></i> Contact Info</h4>
@@ -199,6 +247,28 @@ const UserSettings = {
     document.getElementById('settingsAvatarRemove')?.addEventListener('click', () => {
       this._removeAvatar();
     });
+
+    // Business card upload
+    document.getElementById('settingsBusinessCardInput')?.addEventListener('change', (e) => {
+      if (e.target.files?.[0]) this._uploadMedia(e.target.files[0], 'business_card');
+    });
+    document.getElementById('settingsBusinessCardRemove')?.addEventListener('click', () => {
+      this._removeMedia('business_card');
+    });
+
+    // QR code uploads
+    document.getElementById('settingsQr1Input')?.addEventListener('change', (e) => {
+      if (e.target.files?.[0]) this._uploadMedia(e.target.files[0], 'qr_code_1');
+    });
+    document.getElementById('settingsQr1Remove')?.addEventListener('click', () => {
+      this._removeMedia('qr_code_1');
+    });
+    document.getElementById('settingsQr2Input')?.addEventListener('change', (e) => {
+      if (e.target.files?.[0]) this._uploadMedia(e.target.files[0], 'qr_code_2');
+    });
+    document.getElementById('settingsQr2Remove')?.addEventListener('click', () => {
+      this._removeMedia('qr_code_2');
+    });
   },
 
   async _saveProfile() {
@@ -253,6 +323,32 @@ const UserSettings = {
       await this._loadProfile();
     } catch (err) {
       Utils.showToast('Failed to remove avatar: ' + err.message, 'error');
+    }
+  },
+
+  async _uploadMedia(file, purpose) {
+    try {
+      const { uploadUrl, fileKey } = await ServerAPI.post('/me/profile/media/upload-url', {
+        fileName: file.name, fileType: file.type, purpose,
+      });
+      await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      await ServerAPI.put('/me/profile/media/confirm', { fileKey, purpose });
+      Utils.showToast(`${purpose.replace(/_/g, ' ')} updated!`, 'success');
+      this._profile = null;
+      await this._loadProfile();
+    } catch (err) {
+      Utils.showToast('Upload failed: ' + err.message, 'error');
+    }
+  },
+
+  async _removeMedia(purpose) {
+    try {
+      await ServerAPI.delete(`/me/profile/media/${purpose}`);
+      Utils.showToast(`${purpose.replace(/_/g, ' ')} removed`, 'success');
+      this._profile = null;
+      await this._loadProfile();
+    } catch (err) {
+      Utils.showToast('Failed to remove: ' + err.message, 'error');
     }
   },
 

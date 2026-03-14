@@ -156,6 +156,61 @@ router.delete('/avatar', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// ── Media Upload (business card, QR codes) ──────
+const MEDIA_PURPOSES = {
+  business_card: { folder: 'business-cards', s3Col: 'business_card_s3_key' },
+  qr_code_1:    { folder: 'qr-codes',       s3Col: 'qr_code_1_s3_key' },
+  qr_code_2:    { folder: 'qr-codes',       s3Col: 'qr_code_2_s3_key' },
+};
+
+router.post('/media/upload-url', async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const { fileName, fileType, purpose } = req.body;
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+    if (!fileType || !fileType.startsWith('image/')) return res.status(400).json({ error: 'File must be an image' });
+    const mp = MEDIA_PURPOSES[purpose];
+    if (!mp) return res.status(400).json({ error: 'Invalid purpose. Must be: business_card, qr_code_1, qr_code_2' });
+    const fileKey = buildMediaKey(mp.folder, userId, fileName);
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType);
+    res.json(result);
+  } catch (error) { next(error); }
+});
+
+router.put('/media/confirm', async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const { fileKey, purpose } = req.body;
+    if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
+    const mp = MEDIA_PURPOSES[purpose];
+    if (!mp) return res.status(400).json({ error: 'Invalid purpose' });
+    const col = mp.s3Col;
+    const [old] = await db.query(`SELECT ${col} FROM user_profiles WHERE user_id = ?`, [userId]);
+    const oldKey = old[0]?.[col];
+    await db.query(
+      `INSERT INTO user_profiles (user_id, ${col}) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE ${col} = ?`,
+      [userId, fileKey, fileKey]
+    );
+    if (oldKey && oldKey !== fileKey) await deleteObject(BUCKETS.media, oldKey);
+    res.json({ success: true, fileKey });
+  } catch (error) { next(error); }
+});
+
+router.delete('/media/:purpose', async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const mp = MEDIA_PURPOSES[req.params.purpose];
+    if (!mp) return res.status(400).json({ error: 'Invalid purpose' });
+    const col = mp.s3Col;
+    const [rows] = await db.query(`SELECT ${col} FROM user_profiles WHERE user_id = ?`, [userId]);
+    const key = rows[0]?.[col];
+    if (key) await deleteObject(BUCKETS.media, key);
+    await db.query(`UPDATE user_profiles SET ${col} = NULL WHERE user_id = ?`, [userId]);
+    res.json({ success: true });
+  } catch (error) { next(error); }
+});
+
 // ── Custom Links (self) ─────────────────────────
 router.get('/custom-links', async (req, res, next) => {
   try {
