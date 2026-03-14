@@ -30,7 +30,7 @@ const preApproval = z.object({
   loan_amount: z.number().positive(),
   pre_approval_date: dateString,
   expiration_date: dateString,
-  status: z.enum(['active', 'expired', 'used', 'cancelled']).optional().default('active'),
+  status: z.enum(['active', 'expired', 'converted', 'cancelled']).optional().default('active'),
   assigned_lo_id: z.number().int().positive().optional().nullable(),
   assigned_lo_name: optionalString(200),
   property_address: optionalString(500),

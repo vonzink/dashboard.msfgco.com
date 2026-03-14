@@ -4,6 +4,9 @@ const router = express.Router();
 const db = require('../db/connection');
 const { getDbUser, getUserId, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { preApproval, preApprovalUpdate, validate } = require('../validation/schemas');
+const logger = require('../lib/logger');
+const { getMondayToken } = require('../services/monday/sync');
+const { createPreApproval, updatePreApproval, archivePreApproval } = require('../services/monday/writer');
 
 router.use(requireDbUser);
 
@@ -166,7 +169,7 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/pre-approvals - Create new pre-approval
+// POST /api/pre-approvals - Create new pre-approval (+ write-through to Monday.com)
 router.post('/', validate(preApproval), async (req, res, next) => {
   try {
     const { client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes } = req.body;
@@ -175,12 +178,39 @@ router.post('/', validate(preApproval), async (req, res, next) => {
     const currentUserId = getUserId(req);
     const finalAssignedLoId = isAdmin(req) ? (assigned_lo_id || currentUserId) : currentUserId;
     const finalAssignedLoName = isAdmin(req) ? (assigned_lo_name || dbUser?.name || null) : (dbUser?.name || null);
+    const finalStatus = status || 'active';
+
+    // Write-through to Monday.com (non-blocking — don't fail the request if Monday fails)
+    let mondayItemId = null;
+    let sourceBoardId = null;
+    try {
+      const token = await getMondayToken();
+      if (token) {
+        const mondayResult = await createPreApproval(token, finalAssignedLoId, {
+          client_name,
+          loan_amount,
+          pre_approval_date,
+          expiration_date,
+          status: finalStatus,
+          assigned_lo_name: finalAssignedLoName,
+          property_address,
+          loan_type,
+          notes,
+        });
+        if (mondayResult) {
+          mondayItemId = mondayResult.mondayItemId;
+          sourceBoardId = mondayResult.boardId;
+        }
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message }, 'Monday.com write-through failed on create — saved to DB only');
+    }
 
     const [result] = await db.query(
       `INSERT INTO pre_approvals
-       (client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [client_name, loan_amount, pre_approval_date, expiration_date, status || 'active', finalAssignedLoId, finalAssignedLoName, property_address || null, loan_type || null, notes || null]
+       (client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes, monday_item_id, source_board_id, source_system)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [client_name, loan_amount, pre_approval_date, expiration_date, finalStatus, finalAssignedLoId, finalAssignedLoName, property_address || null, loan_type || null, notes || null, mondayItemId, sourceBoardId, mondayItemId ? 'monday' : 'manual']
     );
 
     const [preApprovals] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [result.insertId]);
@@ -190,7 +220,7 @@ router.post('/', validate(preApproval), async (req, res, next) => {
   }
 });
 
-// PUT /api/pre-approvals/:id - Update pre-approval
+// PUT /api/pre-approvals/:id - Update pre-approval (+ write-through to Monday.com)
 router.put('/:id', validate(preApprovalUpdate), async (req, res, next) => {
   try {
     const { client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes } = req.body;
@@ -220,12 +250,28 @@ router.put('/:id', validate(preApprovalUpdate), async (req, res, next) => {
       return res.status(400).json({ error: 'No valid fields to update' });
     }
 
+    // Fetch current record before update (need monday_item_id + source_board_id)
+    const [existing] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Pre-approval not found' });
+    }
+
     values.push(req.params.id);
 
     await db.query(
       `UPDATE pre_approvals SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
       values
     );
+
+    // Write-through to Monday.com (non-blocking)
+    try {
+      const token = await getMondayToken();
+      if (token) {
+        await updatePreApproval(token, existing[0], req.body);
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message, id: req.params.id }, 'Monday.com write-through failed on update');
+    }
 
     const [preApprovals] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [req.params.id]);
     res.json(preApprovals[0]);
@@ -234,10 +280,10 @@ router.put('/:id', validate(preApprovalUpdate), async (req, res, next) => {
   }
 });
 
-// DELETE /api/pre-approvals/:id - Delete pre-approval
+// DELETE /api/pre-approvals/:id - Delete pre-approval (+ archive on Monday.com)
 router.delete('/:id', async (req, res, next) => {
   try {
-    const [existing] = await db.query('SELECT source_board_id, assigned_lo_id FROM pre_approvals WHERE id = ?', [req.params.id]);
+    const [existing] = await db.query('SELECT * FROM pre_approvals WHERE id = ?', [req.params.id]);
 
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Pre-approval not found' });
@@ -248,6 +294,16 @@ router.delete('/:id', async (req, res, next) => {
       if (!boardIds.includes(existing[0].source_board_id)) {
         return res.status(403).json({ error: 'Access denied' });
       }
+    }
+
+    // Archive on Monday.com before deleting from DB (non-blocking)
+    try {
+      const token = await getMondayToken();
+      if (token) {
+        await archivePreApproval(token, existing[0]);
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message, id: req.params.id }, 'Monday.com archive failed on delete');
     }
 
     const [result] = await db.query('DELETE FROM pre_approvals WHERE id = ?', [req.params.id]);

@@ -127,6 +127,7 @@ const API = {
             }
             this.renderPreApprovals(this.preApprovalData);
             this._populatePreApprovalFilters();
+            this._initPreApprovalModal();
         } catch (err) {
             console.warn('Pre-approvals load failed:', err.message);
         }
@@ -239,11 +240,12 @@ const API = {
 
         const cols = this._getVisiblePreApprovalColumns();
 
-        // Update thead
+        // Update thead — add Actions column
         const thead = document.getElementById('preApprovalsHead');
         if (thead) {
             thead.innerHTML = '<tr>' +
                 cols.map(c => `<th class="sortable">${Utils.escapeHtml(c.label)}</th>`).join('') +
+                '<th style="width:70px;text-align:center;">Actions</th>' +
                 '</tr>';
             thead.querySelectorAll('.sortable').forEach(header => {
                 header.addEventListener('click', (e) => TableManager.handleSort(e));
@@ -251,16 +253,182 @@ const API = {
         }
 
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="${cols.length}" class="empty-state">
+            tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" class="empty-state">
                 <i class="fas fa-database"></i>
-                <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
+                <p>No pre-approval data yet. Click "Add" or sync from Monday.com.</p>
             </td></tr>`;
             return;
         }
 
         tbody.innerHTML = data.map(item =>
-            `<tr data-id="${item.id}">${cols.map(c => this._renderPreApprovalCell(item, c.field)).join('')}</tr>`
+            `<tr data-id="${item.id}">
+                ${cols.map(c => this._renderPreApprovalCell(item, c.field)).join('')}
+                <td class="pa-row-actions">
+                    <button type="button" class="pa-edit-btn" data-id="${item.id}" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                    <button type="button" class="pa-delete-btn" data-id="${item.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                </td>
+            </tr>`
         ).join('');
+
+        // Bind row action buttons
+        tbody.querySelectorAll('.pa-edit-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._openPreApprovalEdit(parseInt(btn.dataset.id)));
+        });
+        tbody.querySelectorAll('.pa-delete-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._deletePreApproval(parseInt(btn.dataset.id)));
+        });
+    },
+
+    // ========================================
+    // PRE-APPROVAL CRUD
+    // ========================================
+    _paModalInitialized: false,
+
+    _initPreApprovalModal() {
+        if (this._paModalInitialized) return;
+        this._paModalInitialized = true;
+
+        const modal = document.getElementById('preApprovalModal');
+        if (!modal) return;
+
+        // Add button
+        const addBtn = document.getElementById('addPreApprovalBtn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => this._openPreApprovalCreate());
+        }
+
+        // Close buttons
+        modal.querySelectorAll('.pa-modal-close').forEach(btn => {
+            btn.addEventListener('click', () => this._closePreApprovalModal());
+        });
+
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) this._closePreApprovalModal();
+        });
+
+        // Form submit
+        const form = document.getElementById('preApprovalForm');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this._submitPreApproval();
+            });
+        }
+    },
+
+    _openPreApprovalCreate() {
+        this._initPreApprovalModal();
+        const modal = document.getElementById('preApprovalModal');
+        const title = document.getElementById('paModalTitle');
+        const form = document.getElementById('preApprovalForm');
+        if (!modal || !form) return;
+
+        // Reset form
+        form.reset();
+        document.getElementById('paFormId').value = '';
+        document.getElementById('paStatus').value = 'active';
+
+        // Default dates
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('paPreApprovalDate').value = today;
+        // Default expiration: 90 days from now
+        const exp = new Date();
+        exp.setDate(exp.getDate() + 90);
+        document.getElementById('paExpirationDate').value = exp.toISOString().split('T')[0];
+
+        if (title) title.innerHTML = '<i class="fas fa-clipboard-check" style="color:var(--green-bright);margin-right:0.5rem;"></i> New Pre-Approval';
+        document.getElementById('paFormSubmit').innerHTML = '<i class="fas fa-save"></i> Create';
+
+        modal.setAttribute('aria-hidden', 'false');
+        modal.style.display = 'flex';
+        document.getElementById('paClientName').focus();
+    },
+
+    _openPreApprovalEdit(id) {
+        this._initPreApprovalModal();
+        const item = this.preApprovalData?.find(pa => pa.id === id);
+        if (!item) return;
+
+        const modal = document.getElementById('preApprovalModal');
+        const title = document.getElementById('paModalTitle');
+        if (!modal) return;
+
+        document.getElementById('paFormId').value = id;
+        document.getElementById('paClientName').value = item.client_name || '';
+        document.getElementById('paLoanAmount').value = item.loan_amount || '';
+        document.getElementById('paPreApprovalDate').value = item.pre_approval_date ? item.pre_approval_date.substring(0, 10) : '';
+        document.getElementById('paExpirationDate').value = item.expiration_date ? item.expiration_date.substring(0, 10) : '';
+        document.getElementById('paStatus').value = item.status || 'active';
+        document.getElementById('paLoanType').value = item.loan_type || '';
+        document.getElementById('paPropertyAddress').value = item.property_address || '';
+        document.getElementById('paNotes').value = item.notes || '';
+
+        if (title) title.innerHTML = '<i class="fas fa-pencil-alt" style="color:var(--green-bright);margin-right:0.5rem;"></i> Edit Pre-Approval';
+        document.getElementById('paFormSubmit').innerHTML = '<i class="fas fa-save"></i> Update';
+
+        modal.setAttribute('aria-hidden', 'false');
+        modal.style.display = 'flex';
+        document.getElementById('paClientName').focus();
+    },
+
+    _closePreApprovalModal() {
+        const modal = document.getElementById('preApprovalModal');
+        if (modal) {
+            modal.setAttribute('aria-hidden', 'true');
+            modal.style.display = 'none';
+        }
+    },
+
+    async _submitPreApproval() {
+        const submitBtn = document.getElementById('paFormSubmit');
+        const originalHtml = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        try {
+            const id = document.getElementById('paFormId').value;
+            const data = {
+                client_name: document.getElementById('paClientName').value.trim(),
+                loan_amount: parseFloat(document.getElementById('paLoanAmount').value),
+                pre_approval_date: document.getElementById('paPreApprovalDate').value,
+                expiration_date: document.getElementById('paExpirationDate').value,
+                status: document.getElementById('paStatus').value,
+                loan_type: document.getElementById('paLoanType').value.trim() || null,
+                property_address: document.getElementById('paPropertyAddress').value.trim() || null,
+                notes: document.getElementById('paNotes').value.trim() || null,
+            };
+
+            if (id) {
+                await ServerAPI.updatePreApproval(id, data);
+            } else {
+                await ServerAPI.createPreApproval(data);
+            }
+
+            this._closePreApprovalModal();
+            await this.loadPreApprovals();
+        } catch (err) {
+            console.error('Pre-approval save error:', err);
+            alert('Failed to save pre-approval: ' + (err.message || 'Unknown error'));
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalHtml;
+        }
+    },
+
+    async _deletePreApproval(id) {
+        const item = this.preApprovalData?.find(pa => pa.id === id);
+        const name = item?.client_name || 'this pre-approval';
+
+        if (!confirm(`Delete "${name}"? This will also archive it on Monday.com.`)) return;
+
+        try {
+            await ServerAPI.deletePreApproval(id);
+            await this.loadPreApprovals();
+        } catch (err) {
+            console.error('Pre-approval delete error:', err);
+            alert('Failed to delete: ' + (err.message || 'Unknown error'));
+        }
     },
 
     // ========================================

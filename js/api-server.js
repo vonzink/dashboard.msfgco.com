@@ -355,6 +355,18 @@ const ServerAPI = {
         return this.get(`/pre-approvals/summary${qs}`);
     },
 
+    createPreApproval(data) {
+        return this.post('/pre-approvals', data);
+    },
+
+    updatePreApproval(id, data) {
+        return this.put(`/pre-approvals/${id}`, data);
+    },
+
+    deletePreApproval(id) {
+        return this.delete(`/pre-approvals/${id}`);
+    },
+
     // ========================================
     // CURRENT USER
     // ========================================

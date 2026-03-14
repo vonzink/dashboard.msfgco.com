@@ -317,6 +317,9 @@
           <select id="preApprovalGroupSelect" class="filter-select" style="display:none;">
             <option value="">All Groups</option>
           </select>
+          <button type="button" class="btn btn-primary btn-sm" id="addPreApprovalBtn" title="Add new pre-approval">
+            <i class="fas fa-plus"></i> Add
+          </button>
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
           </button>
@@ -652,6 +655,68 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pre-Approval Modal -->
+    <div id="preApprovalModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content" style="max-width:560px;">
+        <button type="button" class="modal-close pa-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name" id="paModalTitle"><i class="fas fa-clipboard-check" style="color:var(--green-bright);margin-right:0.5rem;"></i> New Pre-Approval</h2>
+          </div>
+        </div>
+        <div class="modal-body">
+          <form id="preApprovalForm" class="pa-form">
+            <input type="hidden" id="paFormId" value="" />
+            <div class="pa-form-grid">
+              <div class="pa-form-field">
+                <label for="paClientName">Client Name *</label>
+                <input type="text" id="paClientName" required maxlength="200" placeholder="Borrower name" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paLoanAmount">Loan Amount *</label>
+                <input type="number" id="paLoanAmount" required min="1" step="0.01" placeholder="250000" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paPreApprovalDate">Pre-Approval Date *</label>
+                <input type="date" id="paPreApprovalDate" required />
+              </div>
+              <div class="pa-form-field">
+                <label for="paExpirationDate">Expiration Date *</label>
+                <input type="date" id="paExpirationDate" required />
+              </div>
+              <div class="pa-form-field">
+                <label for="paStatus">Status</label>
+                <select id="paStatus">
+                  <option value="active">Active</option>
+                  <option value="expired">Expired</option>
+                  <option value="converted">Converted</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div class="pa-form-field">
+                <label for="paLoanType">Loan Type</label>
+                <input type="text" id="paLoanType" maxlength="100" placeholder="e.g. Conventional" />
+              </div>
+              <div class="pa-form-field full-width">
+                <label for="paPropertyAddress">Property Address</label>
+                <input type="text" id="paPropertyAddress" maxlength="500" placeholder="TBD or enter address" />
+              </div>
+              <div class="pa-form-field full-width">
+                <label for="paNotes">Notes</label>
+                <textarea id="paNotes" rows="2" maxlength="2000" placeholder="Optional notes..."></textarea>
+              </div>
+            </div>
+            <div class="pa-form-actions">
+              <button type="button" class="btn btn-secondary pa-modal-close">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="paFormSubmit">
+                <i class="fas fa-save"></i> Save
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
