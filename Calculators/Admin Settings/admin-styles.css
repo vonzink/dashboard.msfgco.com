@@ -386,11 +386,13 @@ body {
   border-radius: 8px;
   padding: 4px;
   border: 1px solid #eee;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .profile-tab {
-  flex: 1;
-  padding: 8px 12px;
+  flex: 0 0 auto;
+  padding: 8px 14px;
   border: none;
   background: transparent;
   color: var(--msfg-gray);
@@ -405,6 +407,8 @@ body {
   justify-content: center;
   gap: 6px;
   white-space: nowrap;
+  position: relative;
+  z-index: 1;
 }
 
 .profile-tab:hover {
