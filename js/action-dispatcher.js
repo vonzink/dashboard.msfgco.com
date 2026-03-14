@@ -18,7 +18,7 @@
       window.ModalsManager?.showNotificationsModal(),
 
     'open-add-announcement': () =>
-      window.ModalsManager?.showAnnouncementModal(),
+      window.Announcements?.showAnnouncementModal(),
 
     'open-company-contacts': () =>
       window.Investors?.showCompanyContactsModal?.(),
