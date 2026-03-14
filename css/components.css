@@ -1273,11 +1273,17 @@ textarea.form-input {
     background: #fafbf8;
     border: 1px solid #eee;
     border-radius: 8px;
-    padding: 16px;
+    padding: 12px;
     font-size: 13px;
     line-height: 1.5;
-    max-height: 200px;
+    max-height: 220px;
     overflow-y: auto;
+    transform: scale(0.75);
+    transform-origin: top left;
+    width: 133.33%;
+}
+
+.signature-preview a {
     pointer-events: none;
 }
 
