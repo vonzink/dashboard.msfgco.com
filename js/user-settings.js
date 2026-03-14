@@ -355,47 +355,33 @@ const UserSettings = {
   // ========================================
   // DISPLAY PREFERENCES TAB
   // ========================================
-  _myBoards: [],
-  _boardMappings: {},
+  _sectionConfigs: {},
 
   async _loadDisplayPreferences() {
     const container = document.getElementById('settingsDisplayContent');
     if (!container) return;
 
-    container.innerHTML = '<div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading your boards...</div>';
+    container.innerHTML = '<div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading column configuration...</div>';
 
     try {
-      // Fetch boards assigned to this user + saved preferences in parallel
-      const [boardsResult, prefsResult] = await Promise.allSettled([
-        ServerAPI.getMondayMyBoards(),
+      // Fetch view-config for all three sections + saved preferences in parallel
+      const [pipelineResult, preAppResult, fundedResult, prefsResult] = await Promise.allSettled([
+        ServerAPI.getMondayViewConfig('pipeline'),
+        ServerAPI.getMondayViewConfig('pre_approvals'),
+        ServerAPI.getMondayViewConfig('funded_loans'),
         ServerAPI.get('/me/profile/display-preferences'),
       ]);
 
-      const boardsData = boardsResult.status === 'fulfilled' ? boardsResult.value : {};
-      this._myBoards = boardsData.boards || [];
+      this._sectionConfigs = {
+        pipeline: (pipelineResult.status === 'fulfilled' ? pipelineResult.value?.columns : null) || [],
+        pre_approvals: (preAppResult.status === 'fulfilled' ? preAppResult.value?.columns : null) || [],
+        funded_loans: (fundedResult.status === 'fulfilled' ? fundedResult.value?.columns : null) || [],
+      };
       this._displayPrefs = prefsResult.status === 'fulfilled' ? prefsResult.value : {};
-
-      if (this._myBoards.length === 0) {
-        container.innerHTML = `
-          <div class="settings-empty">
-            <i class="fas fa-columns"></i>
-            <p>No Monday.com boards are assigned to you yet.</p>
-            <p class="settings-hint">Contact your admin to assign boards to your account.</p>
-          </div>`;
-        return;
-      }
-
-      // Fetch mappings for each board in parallel
-      const mappingPromises = this._myBoards.map(b =>
-        ServerAPI.getMondayMappings(b.board_id).then(mappings => ({ boardId: b.board_id, mappings })).catch(() => ({ boardId: b.board_id, mappings: [] }))
-      );
-      const mappingResults = await Promise.all(mappingPromises);
-      this._boardMappings = {};
-      mappingResults.forEach(r => { this._boardMappings[r.boardId] = r.mappings; });
 
       this._renderDisplayPreferences();
     } catch (err) {
-      container.innerHTML = '<div class="settings-error"><i class="fas fa-exclamation-triangle"></i> Failed to load board data.</div>';
+      container.innerHTML = '<div class="settings-error"><i class="fas fa-exclamation-triangle"></i> Failed to load column data.</div>';
     }
   },
 
@@ -407,77 +393,78 @@ const UserSettings = {
     const SECTION_ICONS = { pipeline: 'fa-tasks', pre_approvals: 'fa-clipboard-check', funded_loans: 'fa-check-circle' };
     const SECTION_LABELS = { pipeline: 'Active Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Funded Loans' };
 
-    // Group boards by target_section
-    const bySection = {};
-    this._myBoards.forEach(b => {
-      const sec = b.target_section;
-      if (!bySection[sec]) bySection[sec] = [];
-      bySection[sec].push(b);
-    });
+    const sectionKeys = ['pipeline', 'pre_approvals', 'funded_loans'].filter(k =>
+      this._sectionConfigs[k] && this._sectionConfigs[k].length > 0
+    );
 
-    const sectionKeys = ['pipeline', 'pre_approvals', 'funded_loans'].filter(k => bySection[k]);
+    if (sectionKeys.length === 0) {
+      container.innerHTML = `
+        <div class="settings-empty">
+          <i class="fas fa-columns"></i>
+          <p>No column configurations available yet.</p>
+          <p class="settings-hint">Contact your admin to set up Monday.com board mappings.</p>
+        </div>`;
+      return;
+    }
 
     container.innerHTML = sectionKeys.map(sectionKey => {
-      const boards = bySection[sectionKey];
+      const globalColumns = this._sectionConfigs[sectionKey] || [];
       const icon = SECTION_ICONS[sectionKey] || 'fa-table';
       const sectionLabel = SECTION_LABELS[sectionKey] || sectionKey;
-
-      // Collect all unique mapped columns across this user's boards for this section
-      const columnMap = new Map(); // field → { label, locked }
-      columnMap.set('client_name', { label: sectionKey === 'funded_loans' ? 'Borrower' : 'Client Name', locked: true });
-
-      boards.forEach(b => {
-        const mappings = this._boardMappings[b.board_id] || [];
-        mappings.forEach(m => {
-          if (m.pipeline_field && m.pipeline_field !== 'client_name') {
-            if (!columnMap.has(m.pipeline_field)) {
-              columnMap.set(m.pipeline_field, {
-                label: m.display_label || m.monday_column_title || m.pipeline_field,
-                locked: false,
-              });
-            }
-          }
-        });
-      });
 
       const savedPref = this._displayPrefs[`display_columns_${sectionKey}`] || [];
       const savedMap = {};
       savedPref.forEach(col => { savedMap[col.field] = col; });
 
-      // Build ordered column list: saved order first, then any new unmapped columns
+      // Build ordered column list: saved order first, then any new columns
       const orderedColumns = [];
-      // Add columns in saved order first
       if (savedPref.length > 0) {
         const sortedSaved = [...savedPref].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+        const globalMap = {};
+        globalColumns.forEach(c => { globalMap[c.field] = c; });
+
         sortedSaved.forEach(saved => {
-          if (columnMap.has(saved.field)) {
-            const col = columnMap.get(saved.field);
-            orderedColumns.push({ field: saved.field, label: col.label, locked: col.locked, visible: saved.visible !== false });
+          const gc = globalMap[saved.field];
+          if (gc) {
+            orderedColumns.push({
+              field: saved.field,
+              label: gc.label || saved.field,
+              locked: gc.locked || false,
+              visible: saved.visible !== false,
+            });
           }
         });
-        // Add any columns not in saved prefs (new columns)
-        columnMap.forEach((col, field) => {
-          if (!savedMap[field]) {
-            orderedColumns.push({ field, label: col.label, locked: col.locked, visible: true });
+        // Add any new columns not in saved prefs
+        globalColumns.forEach(gc => {
+          if (!savedMap[gc.field]) {
+            orderedColumns.push({
+              field: gc.field,
+              label: gc.label || gc.field,
+              locked: gc.locked || false,
+              visible: gc.visible !== false,
+            });
           }
         });
       } else {
-        // No saved prefs — show all in default order
-        columnMap.forEach((col, field) => {
-          orderedColumns.push({ field, label: col.label, locked: col.locked, visible: true });
+        // No saved prefs — show all in global order
+        globalColumns.forEach(gc => {
+          orderedColumns.push({
+            field: gc.field,
+            label: gc.label || gc.field,
+            locked: gc.locked || false,
+            visible: gc.visible !== false,
+          });
         });
       }
 
-      const boardNames = boards.map(b => esc(b.board_name)).join(', ');
       const tableId = `displayConfigTable_${sectionKey}`;
 
       return `
         <div class="settings-display-section" data-section="${sectionKey}">
           <h4><i class="fas ${icon}"></i> ${esc(sectionLabel)}</h4>
-          <p class="settings-hint">Boards: ${boardNames}</p>
           <p class="settings-hint">Toggle visibility and use arrows to reorder columns.</p>
           ${orderedColumns.length <= 1
-            ? '<p class="settings-hint" style="color:var(--status-warning);">No column mappings configured for your boards yet. Contact your admin.</p>'
+            ? '<p class="settings-hint" style="color:var(--status-warning);">No column mappings configured yet. Contact your admin.</p>'
             : `<div class="settings-column-table-wrap">
               <table class="settings-column-table" id="${tableId}">
                 <thead>
@@ -491,7 +478,10 @@ const UserSettings = {
                   ${orderedColumns.map((col, idx) => `
                     <tr data-field="${col.field}" class="${col.locked ? 'sct-locked' : ''}">
                       <td class="sct-show">
-                        <input type="checkbox" class="sct-visible" ${col.visible ? 'checked' : ''} ${col.locked ? 'disabled' : ''} />
+                        <label class="sct-toggle">
+                          <input type="checkbox" class="sct-visible" ${col.visible ? 'checked' : ''} ${col.locked ? 'disabled' : ''} />
+                          <span class="sct-toggle-slider"></span>
+                        </label>
                       </td>
                       <td class="sct-name">${esc(col.label)}</td>
                       <td class="sct-order">
