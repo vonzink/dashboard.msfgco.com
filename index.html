@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <!-- AUTH GATE (must be first script in head) -->
-  <script src="js/auth-gate.js?v=20260314"></script>
+  <script src="js/auth-gate.js?v=20260314b"></script>
 
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -20,18 +20,18 @@
   <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
 
   <!-- Styles -->
-  <link rel="stylesheet" href="css/variables.css?v=20260314" />
-  <link rel="stylesheet" href="css/base.css?v=20260314" />
-  <link rel="stylesheet" href="css/layout.css?v=20260314" />
-  <link rel="stylesheet" href="css/components.css?v=20260314" />
-  <link rel="stylesheet" href="css/investors.css?v=20260314" />
-  <link rel="stylesheet" href="css/directory.css?v=20260314" />
-  <link rel="stylesheet" href="css/notifications.css?v=20260314" />
-  <link rel="stylesheet" href="css/settings.css?v=20260314" />
-  <link rel="stylesheet" href="css/tables.css?v=20260314" />
-  <link rel="stylesheet" href="css/sections.css?v=20260314" />
-  <link rel="stylesheet" href="css/chat.css?v=20260314" />
-  <link rel="stylesheet" href="css/animations.css?v=20260314" />
+  <link rel="stylesheet" href="css/variables.css?v=20260314b" />
+  <link rel="stylesheet" href="css/base.css?v=20260314b" />
+  <link rel="stylesheet" href="css/layout.css?v=20260314b" />
+  <link rel="stylesheet" href="css/components.css?v=20260314b" />
+  <link rel="stylesheet" href="css/investors.css?v=20260314b" />
+  <link rel="stylesheet" href="css/directory.css?v=20260314b" />
+  <link rel="stylesheet" href="css/notifications.css?v=20260314b" />
+  <link rel="stylesheet" href="css/settings.css?v=20260314b" />
+  <link rel="stylesheet" href="css/tables.css?v=20260314b" />
+  <link rel="stylesheet" href="css/sections.css?v=20260314b" />
+  <link rel="stylesheet" href="css/chat.css?v=20260314b" />
+  <link rel="stylesheet" href="css/animations.css?v=20260314b" />
 </head>
 
 <body>
@@ -632,7 +632,7 @@
 
     <!-- Pre-Approval Modal -->
     <div id="preApprovalModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:560px;">
+      <div class="modal-content" style="max-width:720px;">
         <button type="button" class="modal-close pa-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
@@ -671,6 +671,50 @@
               <div class="pa-form-field">
                 <label for="paLoanType">Loan Type</label>
                 <input type="text" id="paLoanType" maxlength="100" placeholder="e.g. Conventional" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paLoanNumber">Loan Number</label>
+                <input type="text" id="paLoanNumber" maxlength="50" placeholder="Loan #" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paLender">Lender</label>
+                <input type="text" id="paLender" maxlength="200" placeholder="Lender name" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paLoanPurpose">Loan Purpose</label>
+                <input type="text" id="paLoanPurpose" maxlength="100" placeholder="e.g. Purchase" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paOccupancy">Occupancy</label>
+                <input type="text" id="paOccupancy" maxlength="100" placeholder="e.g. Primary" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paPropertyType">Property Type</label>
+                <input type="text" id="paPropertyType" maxlength="100" placeholder="e.g. SFR, Condo" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paRate">Rate</label>
+                <input type="text" id="paRate" maxlength="20" placeholder="e.g. 6.5%" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paCreditScore">Credit Score</label>
+                <input type="number" id="paCreditScore" min="300" max="900" placeholder="720" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paIncome">Income</label>
+                <input type="number" id="paIncome" min="0" step="0.01" placeholder="Monthly income" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paReferringAgent">Referring Agent</label>
+                <input type="text" id="paReferringAgent" maxlength="200" placeholder="Agent name" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paContactDate">Contact Date</label>
+                <input type="date" id="paContactDate" />
+              </div>
+              <div class="pa-form-field full-width">
+                <label for="paSubjectProperty">Subject Property</label>
+                <input type="text" id="paSubjectProperty" maxlength="500" placeholder="Subject property address" />
               </div>
               <div class="pa-form-field full-width">
                 <label for="paPropertyAddress">Property Address</label>
@@ -963,34 +1007,34 @@
   </footer>
 
   <!-- Scripts (load order matters) -->
-  <script src="js/config.js?v=20260314"></script>
-  <script src="js/link-init.js?v=20260314"></script>
-  <script src="js/event-bus.js?v=20260314"></script>
-  <script src="js/action-dispatcher.js?v=20260314"></script>
+  <script src="js/config.js?v=20260314b"></script>
+  <script src="js/link-init.js?v=20260314b"></script>
+  <script src="js/event-bus.js?v=20260314b"></script>
+  <script src="js/action-dispatcher.js?v=20260314b"></script>
 
-  <script src="js/api-server.js?v=20260314"></script>
-  <script src="js/utils.js?v=20260314"></script>
-  <script src="js/theme.js?v=20260314"></script>
-  <script src="js/tables.js?v=20260314"></script>
-  <script src="js/chat.js?v=20260314"></script>
-  <script src="js/api.js?v=20260314"></script>
-  <script src="js/sync-manager.js?v=20260314"></script>
-  <script src="js/investors.js?v=20260314"></script>
-  <script src="js/funded-loans.js?v=20260314"></script>
-  <script src="js/goals.js?v=20260314"></script>
-  <script src="js/announcements.js?v=20260314"></script>
-  <script src="js/modals.js?v=20260314"></script>
-  <script src="js/settings-goals.js?v=20260314"></script>
-  <script src="js/user-settings.js?v=20260314"></script>
-  <script src="js/collapsible.js?v=20260314"></script>
+  <script src="js/api-server.js?v=20260314b"></script>
+  <script src="js/utils.js?v=20260314b"></script>
+  <script src="js/theme.js?v=20260314b"></script>
+  <script src="js/tables.js?v=20260314b"></script>
+  <script src="js/chat.js?v=20260314b"></script>
+  <script src="js/api.js?v=20260314b"></script>
+  <script src="js/sync-manager.js?v=20260314b"></script>
+  <script src="js/investors.js?v=20260314b"></script>
+  <script src="js/funded-loans.js?v=20260314b"></script>
+  <script src="js/goals.js?v=20260314b"></script>
+  <script src="js/announcements.js?v=20260314b"></script>
+  <script src="js/modals.js?v=20260314b"></script>
+  <script src="js/settings-goals.js?v=20260314b"></script>
+  <script src="js/user-settings.js?v=20260314b"></script>
+  <script src="js/collapsible.js?v=20260314b"></script>
 
   <!-- Accessibility -->
-  <script src="js/a11y.js?v=20260314"></script>
+  <script src="js/a11y.js?v=20260314b"></script>
 
   <!-- CSP-friendly progress widths -->
-  <script src="js/progress-init.js?v=20260314"></script>
-  <script src="js/announcement-editor.js?v=20260314"></script>
+  <script src="js/progress-init.js?v=20260314b"></script>
+  <script src="js/announcement-editor.js?v=20260314b"></script>
 
-  <script src="js/app.js?v=20260314"></script>
+  <script src="js/app.js?v=20260314b"></script>
 </body>
 </html>

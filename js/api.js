@@ -175,6 +175,17 @@ const API = {
         { field: 'assigned_lo_name', label: 'Loan Officer' },
         { field: 'property_address', label: 'Property' },
         { field: 'loan_type', label: 'Loan Type' },
+        { field: 'loan_number', label: 'Loan Number' },
+        { field: 'lender', label: 'Lender' },
+        { field: 'subject_property', label: 'Subject Property' },
+        { field: 'loan_purpose', label: 'Loan Purpose' },
+        { field: 'occupancy', label: 'Occupancy' },
+        { field: 'rate', label: 'Rate' },
+        { field: 'credit_score', label: 'Credit Score' },
+        { field: 'income', label: 'Income' },
+        { field: 'property_type', label: 'Property Type' },
+        { field: 'referring_agent', label: 'Referring Agent' },
+        { field: 'contact_date', label: 'Contact Date' },
         { field: 'notes', label: 'Notes' },
     ],
 
@@ -191,14 +202,18 @@ const API = {
             if (cols.length > 1) {
                 this.PRE_APPROVAL_COLUMNS = cols.map(c => ({ field: c.field, label: c.label }));
             }
-            // Apply user display preferences (hide unchecked columns)
+            // Apply user display preferences (hide unchecked columns + reorder)
             const userPref = prefs?.display_columns_pre_approvals;
             if (Array.isArray(userPref) && userPref.length > 0) {
                 const prefMap = {};
                 userPref.forEach(p => { prefMap[p.field] = p; });
-                this.PRE_APPROVAL_COLUMNS = this.PRE_APPROVAL_COLUMNS.filter(c =>
-                    prefMap[c.field] === undefined || prefMap[c.field].visible !== false
-                );
+                this.PRE_APPROVAL_COLUMNS = this.PRE_APPROVAL_COLUMNS
+                    .filter(c => prefMap[c.field] === undefined || prefMap[c.field].visible !== false)
+                    .sort((a, b) => {
+                        const orderA = prefMap[a.field]?.order ?? Infinity;
+                        const orderB = prefMap[b.field]?.order ?? Infinity;
+                        return orderA - orderB;
+                    });
             }
             this._preApprovalColumnsLoaded = true;
         } catch (e) {
@@ -226,7 +241,14 @@ const API = {
             case 'assigned_lo_name':
                 return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
             case 'property_address':
+            case 'subject_property':
                 return `<td>${Utils.escapeHtml(val || 'TBD')}</td>`;
+            case 'income':
+                return `<td class="currency">${val != null ? Utils.formatCurrency(val) : ''}</td>`;
+            case 'contact_date':
+                return `<td>${val ? Utils.formatDate(val) : ''}</td>`;
+            case 'credit_score':
+                return `<td>${val != null ? val : ''}</td>`;
             case 'notes':
                 return `<td class="notes-cell" title="${Utils.escapeHtml(val || '')}">${Utils.escapeHtml(val || '')}</td>`;
             default:
@@ -360,6 +382,17 @@ const API = {
         document.getElementById('paExpirationDate').value = toDateStr(item.expiration_date);
         document.getElementById('paStatus').value = item.status || 'active';
         document.getElementById('paLoanType').value = item.loan_type || '';
+        document.getElementById('paLoanNumber').value = item.loan_number || '';
+        document.getElementById('paLender').value = item.lender || '';
+        document.getElementById('paLoanPurpose').value = item.loan_purpose || '';
+        document.getElementById('paOccupancy').value = item.occupancy || '';
+        document.getElementById('paPropertyType').value = item.property_type || '';
+        document.getElementById('paRate').value = item.rate || '';
+        document.getElementById('paCreditScore').value = item.credit_score || '';
+        document.getElementById('paIncome').value = item.income || '';
+        document.getElementById('paReferringAgent').value = item.referring_agent || '';
+        document.getElementById('paContactDate').value = toDateStr(item.contact_date);
+        document.getElementById('paSubjectProperty').value = item.subject_property || '';
         document.getElementById('paPropertyAddress').value = item.property_address || '';
         document.getElementById('paNotes').value = item.notes || '';
 
@@ -385,6 +418,9 @@ const API = {
 
         try {
             const id = document.getElementById('paFormId').value;
+            const creditScoreVal = document.getElementById('paCreditScore').value;
+            const incomeVal = document.getElementById('paIncome').value;
+
             const data = {
                 client_name: document.getElementById('paClientName').value.trim(),
                 loan_amount: parseFloat(document.getElementById('paLoanAmount').value),
@@ -392,6 +428,17 @@ const API = {
                 expiration_date: document.getElementById('paExpirationDate').value,
                 status: document.getElementById('paStatus').value,
                 loan_type: document.getElementById('paLoanType').value.trim() || null,
+                loan_number: document.getElementById('paLoanNumber').value.trim() || null,
+                lender: document.getElementById('paLender').value.trim() || null,
+                loan_purpose: document.getElementById('paLoanPurpose').value.trim() || null,
+                occupancy: document.getElementById('paOccupancy').value.trim() || null,
+                property_type: document.getElementById('paPropertyType').value.trim() || null,
+                rate: document.getElementById('paRate').value.trim() || null,
+                credit_score: creditScoreVal ? parseInt(creditScoreVal, 10) : null,
+                income: incomeVal ? parseFloat(incomeVal) : null,
+                referring_agent: document.getElementById('paReferringAgent').value.trim() || null,
+                contact_date: document.getElementById('paContactDate').value || null,
+                subject_property: document.getElementById('paSubjectProperty').value.trim() || null,
                 property_address: document.getElementById('paPropertyAddress').value.trim() || null,
                 notes: document.getElementById('paNotes').value.trim() || null,
             };
@@ -476,14 +523,18 @@ const API = {
             } else {
                 this.pipelineColumns = this.FALLBACK_PIPELINE_COLUMNS;
             }
-            // Apply user display preferences (hide unchecked columns)
+            // Apply user display preferences (hide unchecked columns + reorder)
             const userPref = prefs.display_columns_pipeline;
             if (Array.isArray(userPref) && userPref.length > 0) {
                 const prefMap = {};
                 userPref.forEach(p => { prefMap[p.field] = p; });
-                this.pipelineColumns = this.pipelineColumns.filter(c =>
-                    prefMap[c.field] === undefined || prefMap[c.field].visible !== false
-                );
+                this.pipelineColumns = this.pipelineColumns
+                    .filter(c => prefMap[c.field] === undefined || prefMap[c.field].visible !== false)
+                    .sort((a, b) => {
+                        const orderA = prefMap[a.field]?.order ?? Infinity;
+                        const orderB = prefMap[b.field]?.order ?? Infinity;
+                        return orderA - orderB;
+                    });
             }
         } catch (e) {
             console.warn('Failed to load pipeline view config, using defaults:', e.message || e);

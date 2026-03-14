@@ -214,28 +214,30 @@ router.post('/', validate(preApproval), async (req, res, next) => {
 // PUT /api/pre-approvals/:id - Update pre-approval (+ write-through to Monday.com)
 router.put('/:id', validate(preApprovalUpdate), async (req, res, next) => {
   try {
-    const { client_name, loan_amount, pre_approval_date, expiration_date, status, assigned_lo_id, assigned_lo_name, property_address, loan_type, notes } = req.body;
-
     const updates = [];
     const values = [];
 
-    if (assigned_lo_id !== undefined) {
-      if (!isAdmin(req) && assigned_lo_id !== getUserId(req)) {
+    if (req.body.assigned_lo_id !== undefined) {
+      if (!isAdmin(req) && req.body.assigned_lo_id !== getUserId(req)) {
         return res.status(403).json({ error: 'Access denied' });
       }
       updates.push('assigned_lo_id = ?');
-      values.push(assigned_lo_id);
+      values.push(req.body.assigned_lo_id);
     }
 
-    if (client_name !== undefined) { updates.push('client_name = ?'); values.push(client_name); }
-    if (loan_amount !== undefined) { updates.push('loan_amount = ?'); values.push(loan_amount); }
-    if (pre_approval_date !== undefined) { updates.push('pre_approval_date = ?'); values.push(pre_approval_date); }
-    if (expiration_date !== undefined) { updates.push('expiration_date = ?'); values.push(expiration_date); }
-    if (status !== undefined) { updates.push('status = ?'); values.push(status); }
-    if (assigned_lo_name !== undefined) { updates.push('assigned_lo_name = ?'); values.push(assigned_lo_name); }
-    if (property_address !== undefined) { updates.push('property_address = ?'); values.push(property_address); }
-    if (loan_type !== undefined) { updates.push('loan_type = ?'); values.push(loan_type); }
-    if (notes !== undefined) { updates.push('notes = ?'); values.push(notes); }
+    const updateableFields = [
+      'client_name', 'loan_amount', 'pre_approval_date', 'expiration_date',
+      'status', 'assigned_lo_name', 'property_address', 'loan_type', 'notes',
+      'loan_number', 'lender', 'subject_property', 'loan_purpose', 'occupancy',
+      'rate', 'credit_score', 'income', 'property_type', 'referring_agent', 'contact_date'
+    ];
+
+    for (const field of updateableFields) {
+      if (req.body[field] !== undefined) {
+        updates.push(`\`${field}\` = ?`);
+        values.push(req.body[field]);
+      }
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No valid fields to update' });

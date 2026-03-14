@@ -37,14 +37,18 @@ const FundedLoans = {
       if (cols.length > 1) {
         this.COLUMNS = cols.map(c => ({ field: c.field, label: c.label }));
       }
-      // Apply user display preferences (hide unchecked columns)
+      // Apply user display preferences (hide unchecked columns + reorder)
       const userPref = prefs?.display_columns_funded_loans;
       if (Array.isArray(userPref) && userPref.length > 0) {
         const prefMap = {};
         userPref.forEach(p => { prefMap[p.field] = p; });
-        this.COLUMNS = this.COLUMNS.filter(c =>
-          prefMap[c.field] === undefined || prefMap[c.field].visible !== false
-        );
+        this.COLUMNS = this.COLUMNS
+          .filter(c => prefMap[c.field] === undefined || prefMap[c.field].visible !== false)
+          .sort((a, b) => {
+            const orderA = prefMap[a.field]?.order ?? Infinity;
+            const orderB = prefMap[b.field]?.order ?? Infinity;
+            return orderA - orderB;
+          });
       }
       this._columnsLoaded = true;
     } catch (e) {
