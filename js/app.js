@@ -3,24 +3,31 @@
    Application initialization and orchestration
 
    SCRIPT LOAD ORDER (index.html):
-     1. auth-gate.js     — Blocks render until JWT exists (redirects to login)
-     2. config.js        — CONFIG global (api urls, cognito, feature flags)
-     3. api-server.js    — ServerAPI (HTTP client, token refresh, response cache)
-     4. utils.js         — Utils (formatting, DOM, toast, openPopup)
-     5. theme.js         — ThemeManager (dark/light)
-     6. tables.js        — TableManager (sorting, search, pagination)
-     7. chat.js          — Chat (messages, tags, polling)
-     8. investors.js     — Investors (modals, CRUD, contact cards)
-     9. api.js           — API (data loading, pipeline/PA rendering) — depends on ServerAPI, Utils
-    10. funded-loans.js  — FundedLoans — depends on API._displayPrefs, ServerAPI
-    11. goals.js         — GoalsManager — depends on API (pipeline/funded data)
-    12. gauges.js         — DashboardGauges
-    13. modals.js         — ModalsManager (support ticket, notifications, announcements)
-    14. user-settings.js  — UserSettings
-    15. monday.js         — MondaySettings
-    16. data-refresher.js — DataRefresher (auto-refresh intervals)
-    17. action-dispatcher.js — Global [data-action] click handler
-    18. app.js            — THIS FILE — orchestrates init of all modules above
+     1. auth-gate.js          — Blocks render until JWT exists (redirects to login)
+     2. config.js             — CONFIG global (api urls, cognito, feature flags)
+     3. link-init.js          — SPA link routing
+     4. event-bus.js          — Lightweight pub/sub for decoupled module communication
+     5. action-dispatcher.js  — Global [data-action] click handler
+     6. api-server.js         — ServerAPI (HTTP client, token refresh, response cache)
+     7. utils.js              — Utils (formatting, DOM, toast, openPopup)
+     8. theme.js              — ThemeManager (dark/light)
+     9. tables.js             — TableManager (sorting, search, pagination)
+    10. chat.js               — Chat (messages, tags, polling)
+    11. api.js                — API (data loading, pipeline/PA rendering)
+    12. sync-manager.js       — SyncManager (data sync orchestration)
+    13. investors.js          — Investors (modals, CRUD, contact cards)
+    14. funded-loans.js       — FundedLoans — depends on API._displayPrefs, ServerAPI
+    15. goals.js              — GoalsManager — depends on API (pipeline/funded data)
+    16. announcements.js      — Announcements carousel
+    17. modals.js             — ModalsManager (support ticket, notifications, announcements)
+    18. settings-goals.js     — Goal settings panel
+    19. user-settings.js      — UserSettings
+    20. collapsible.js        — CollapsibleSections (toggle sections with persistence)
+    21. gauges.js             — DashboardGauges
+    22. a11y.js               — Accessibility helpers
+    23. progress-init.js      — Progress bar animation
+    24. announcement-editor.js — Announcement editor modal
+    25. app.js                — THIS FILE — orchestrates init of all modules above
    ============================================ */
 
 const App = {
@@ -32,17 +39,21 @@ const App = {
         // Initialize modules — each wrapped in try/catch so one
         // failing module doesn't prevent the rest from loading
         const modules = [
-            ['Theme',          () => this.initTheme()],
-            ['Tables',         () => this.initTables()],
-            ['Chat',           () => this.initChat()],
-            ['Investors',      () => this.initInvestors()],
-            ['Funded Loans',   () => this.initFundedLoans()],
-            ['Gauges',         () => this.initGauges()],
-            ['Modals',         () => this.initModals()],
-            ['User Settings',  () => this.initUserSettings()],
-            ['Monday',         () => this.initMondaySettings()],
-            ['Progress Bars',  () => this.initProgressBars()],
-            ['Collapsible',    () => this.initCollapsible()],
+            ['Theme',          () => ThemeManager.init()],
+            ['Tables',         () => TableManager.init()],
+            ['Chat',           () => Chat.init()],
+            ['Investors',      () => Investors.init()],
+            ['Funded Loans',   () => typeof FundedLoans !== 'undefined' && FundedLoans.init()],
+            ['Gauges',         () => typeof DashboardGauges !== 'undefined' && DashboardGauges.init()],
+            ['Modals',         () => ModalsManager.init()],
+            ['User Settings',  () => typeof UserSettings !== 'undefined' && UserSettings.init()],
+            ['Monday',         () => typeof MondaySettings !== 'undefined' && MondaySettings.init()],
+            ['Progress Bars',  () => setTimeout(() => {
+                document.querySelectorAll('.progress-fill').forEach(bar => {
+                    bar.style.transition = 'width 1s ease-out';
+                });
+            }, 500)],
+            ['Collapsible',    () => typeof CollapsibleSections !== 'undefined' && CollapsibleSections.init()],
         ];
 
         for (const [name, initFn] of modules) {
@@ -59,7 +70,7 @@ const App = {
 
         // Now init Goals — it reads CONFIG.currentUser for LO/admin detection
         try {
-            this.initGoals();
+            GoalsManager.init();
         } catch (err) {
             console.error('Failed to init Goals:', err);
         }
@@ -70,72 +81,6 @@ const App = {
 
         // Start auto-refresh
         if (typeof DataRefresher !== 'undefined') DataRefresher.start();
-    },
-
-    // ========================================
-    // MODULE INITIALIZATION
-    // ========================================
-    initTheme() {
-        ThemeManager.init();
-    },
-
-    initTables() {
-        TableManager.init();
-    },
-
-    initChat() {
-        Chat.init();
-    },
-
-    initInvestors() {
-        Investors.init();
-    },
-
-    initFundedLoans() {
-        if (typeof FundedLoans !== 'undefined') {
-            FundedLoans.init();
-        }
-    },
-
-    initGoals() {
-        GoalsManager.init();
-    },
-
-    initGauges() {
-        if (typeof DashboardGauges !== 'undefined') {
-            DashboardGauges.init();
-        }
-    },
-
-    initModals() {
-        ModalsManager.init();
-    },
-
-    initUserSettings() {
-        if (typeof UserSettings !== 'undefined') {
-            UserSettings.init();
-        }
-    },
-
-    initMondaySettings() {
-        if (typeof MondaySettings !== 'undefined') {
-            MondaySettings.init();
-        }
-    },
-
-    initProgressBars() {
-        // Animate progress bars after a short delay
-        setTimeout(() => {
-            document.querySelectorAll('.progress-fill').forEach(bar => {
-                bar.style.transition = 'width 1s ease-out';
-            });
-        }, 500);
-    },
-
-    initCollapsible() {
-        if (typeof CollapsibleSections !== 'undefined') {
-            CollapsibleSections.init();
-        }
     },
 
     // ========================================

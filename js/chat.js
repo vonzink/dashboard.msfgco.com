@@ -230,7 +230,7 @@ const Chat = {
     if (!fab || !panel) return;
 
     // Restore saved state
-    if (localStorage.getItem('msfg_chat_open') === 'true') {
+    if (Utils.getStorage('msfg_chat_open', false) === true) {
       this._openPanel();
     }
 
@@ -256,7 +256,7 @@ const Chat = {
     panel.setAttribute('aria-hidden', 'false');
     if (fab) fab.classList.add('is-open');
 
-    localStorage.setItem('msfg_chat_open', 'true');
+    Utils.setStorage('msfg_chat_open', true);
     this.scrollToBottom();
   },
 
@@ -269,7 +269,7 @@ const Chat = {
     panel.setAttribute('aria-hidden', 'true');
     if (fab) fab.classList.remove('is-open');
 
-    localStorage.setItem('msfg_chat_open', 'false');
+    Utils.setStorage('msfg_chat_open', false);
   },
 
   // ========================================

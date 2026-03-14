@@ -101,12 +101,7 @@ const CollapsibleSections = {
   },
 
   _loadState() {
-    try {
-      const raw = localStorage.getItem(this.STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-      return null;
-    }
+    return Utils.getStorage(this.STORAGE_KEY, null);
   },
 
   _saveCurrentState() {
@@ -116,11 +111,7 @@ const CollapsibleSections = {
         state[section.id] = section.classList.contains('collapsed');
       }
     });
-    try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(state));
-    } catch (e) {
-      // localStorage full or unavailable
-    }
+    Utils.setStorage(this.STORAGE_KEY, state);
   }
 };
 
