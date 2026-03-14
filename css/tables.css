@@ -115,27 +115,35 @@
     position: relative;
 }
 
-/* Visible scrollbar for pipeline table */
+/* Always-visible scrollbar for all data tables */
 .table-responsive::-webkit-scrollbar {
-    height: 10px;
+    height: 12px;
+    display: block;
 }
 .table-responsive::-webkit-scrollbar-track {
     background: var(--bg-secondary, #f1f1f1);
-    border-radius: 5px;
+    border-radius: 6px;
 }
 .table-responsive::-webkit-scrollbar-thumb {
-    background: var(--text-muted, #aaa);
-    border-radius: 5px;
+    background: var(--green-bright, #22c55e);
+    border-radius: 6px;
     min-width: 40px;
+    border: 2px solid var(--bg-secondary, #f1f1f1);
 }
 .table-responsive::-webkit-scrollbar-thumb:hover {
-    background: var(--text-secondary, #888);
+    background: var(--green-dark, #1a9c4a);
 }
 
 /* Firefox scrollbar */
 .table-responsive {
-    scrollbar-width: thin;
-    scrollbar-color: var(--text-muted, #aaa) var(--bg-secondary, #f1f1f1);
+    scrollbar-width: auto;
+    scrollbar-color: var(--green-bright, #22c55e) var(--bg-secondary, #f1f1f1);
+}
+
+/* Ensure scrollbar always appears when content overflows */
+.table-responsive {
+    overflow-x: scroll;
+    padding-bottom: 2px;
 }
 
 /* No-wrap helper for date cells */
@@ -143,13 +151,19 @@
     white-space: nowrap;
 }
 
-/* Pipeline table: prevent all cells from wrapping so scroll works */
+/* All data tables: prevent cells from wrapping so horizontal scroll works */
 #pipelineTable th,
-#pipelineTable td {
+#pipelineTable td,
+#preApprovalsTable th,
+#preApprovalsTable td,
+#fundedLoansTable th,
+#fundedLoansTable td {
     white-space: nowrap;
     padding: 0.6rem 0.75rem;
 }
-#pipelineTable th {
+#pipelineTable th,
+#preApprovalsTable th,
+#fundedLoansTable th {
     position: sticky;
     top: 0;
     z-index: 1;
