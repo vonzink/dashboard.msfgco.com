@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Escrow Prepaids & Aggregate Adjustment Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Reuse your existing styles -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1>Escrow Prepaids & Aggregate Adjustment</h1>
+      <p>Internal tool to estimate tax/insurance escrows, aggregate adjustment, and LE Section F vs G.</p>
+    </header>
+
+    <main class="app-main">
+      <form id="escrow-calculator-form" class="card">
+        <!-- Loan / Property Info -->
+        <section class="section">
+          <h2 class="section-title">Loan & Property Info</h2>
+
+          <div class="field-row">
+            <div class="field">
+              <div class="field-label-row">
+                <label for="loanType">Loan Type</label>
+                <span
+                  class="help-icon"
+                  data-help="Choose Purchase or Refinance. Determines what belongs in Section F vs Section G."
+                >?</span>
+              </div>
+              <select id="loanType" name="loanType">
+                <option value="purchase">Purchase</option>
+                <option value="refi">Refinance</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="state">State</label>
+                <span
+                  class="help-icon"
+                  data-help="Select the property state. Logic uses this for defaults if you later plug in a state-specific tax matrix."
+                >?</span>
+              </div>
+              <select id="state" name="state">
+                <option value="CO">Colorado</option>
+                <option value="AZ">Arizona</option>
+                <option value="CA">California</option>
+                <option value="TX">Texas</option>
+                <option value="FL">Florida</option>
+                <option value="UT">Utah</option>
+                <option value="NM">New Mexico</option>
+                <option value="MN">Minnesota</option>
+                <option value="ND">North Dakota</option>
+                <option value="SD">South Dakota</option>
+                <option value="OTHER">Other / Not Listed</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="closingDate">Closing Date</label>
+                <span
+                  class="help-icon"
+                  data-help="The scheduled consummation/closing date for the new loan."
+                >?</span>
+              </div>
+              <input type="date" id="closingDate" name="closingDate" />
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="firstPaymentDate">First Payment Date</label>
+                <span
+                  class="help-icon"
+                  data-help="Typically the 1st of the month after the first full month after closing. Enter what will appear on the note."
+                >?</span>
+              </div>
+              <input type="date" id="firstPaymentDate" name="firstPaymentDate" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <div class="field-label-row">
+                <label for="cushionMonths">Cushion Months</label>
+                <span
+                  class="help-icon"
+                  data-help="Escrow cushion in months. RESPA allows up to 2 months (1/6 of annual disbursements)."
+                >?</span>
+              </div>
+              <input
+                type="number"
+                id="cushionMonths"
+                name="cushionMonths"
+                min="0"
+                max="2"
+                step="1"
+                value="2"
+              />
+              <small>Typical: 2 months.</small>
+            </div>
+          </div>
+        </section>
+
+        <!-- Property Taxes -->
+        <section class="section">
+          <h2 class="section-title">Property Taxes</h2>
+
+          <div class="field-row">
+            <div class="field">
+              <div class="field-label-row">
+                <label for="annualTax">Annual Property Tax Amount</label>
+                <span
+                  class="help-icon"
+                  data-help="Total yearly property tax bill for the subject property."
+                >?</span>
+              </div>
+              <input
+                type="number"
+                id="annualTax"
+                name="annualTax"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="taxFrequency">Tax Billing Frequency</label>
+                <span
+                  class="help-icon"
+                  data-help="How often the tax bill is actually paid from escrow: annual, semiannual, or quarterly."
+                >?</span>
+              </div>
+              <select id="taxFrequency" name="taxFrequency">
+                <option value="annual">Annual (1x per year)</option>
+                <option value="semiannual">Semiannual (2x per year)</option>
+                <option value="quarterly">Quarterly (4x per year)</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="nextTaxDueMonth">Next Tax Due Month</label>
+                <span
+                  class="help-icon"
+                  data-help="Month of the next tax payment due from escrow (e.g., April = 4). State/local matrices can drive this."
+                >?</span>
+              </div>
+              <select id="nextTaxDueMonth" name="nextTaxDueMonth">
+                <option value="1">January</option>
+                <option value="2">February</option>
+                <option value="3">March</option>
+                <option value="4">April</option>
+                <option value="5">May</option>
+                <option value="6">June</option>
+                <option value="7">July</option>
+                <option value="8">August</option>
+                <option value="9">September</option>
+                <option value="10">October</option>
+                <option value="11">November</option>
+                <option value="12">December</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Homeowners Insurance -->
+        <section class="section">
+          <h2 class="section-title">Homeowners Insurance</h2>
+
+          <div class="field-row">
+            <div class="field">
+              <div class="field-label-row">
+                <label for="annualIns">Annual HOI Premium</label>
+                <span
+                  class="help-icon"
+                  data-help="Total yearly homeowners insurance premium to be escrowed."
+                >?</span>
+              </div>
+              <input
+                type="number"
+                id="annualIns"
+                name="annualIns"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+              />
+            </div>
+
+            <div class="field">
+              <div class="field-label-row">
+                <label for="nextInsDueDate">Next Insurance Renewal Date</label>
+                <span
+                  class="help-icon"
+                  data-help="The effective/renewal date for the next insurance premium to be paid from escrow."
+                >?</span>
+              </div>
+              <input type="date" id="nextInsDueDate" name="nextInsDueDate" />
+            </div>
+          </div>
+        </section>
+
+        <!-- Actions -->
+        <section class="section section-actions">
+          <button type="button" id="escrowCalculateBtn" class="btn-primary">
+            Calculate
+          </button>
+          <button type="reset" class="btn-secondary">
+            Reset
+          </button>
+        </section>
+      </form>
+
+      <!-- Results -->
+      <section class="card results-card">
+        <h2 class="section-title">Results</h2>
+
+        <div class="results-grid">
+          <div class="result-item">
+            <h3>Tax Escrow Deposit</h3>
+            <p id="resultTaxDeposit" class="result-value">—</p>
+            <small id="resultTaxMonths">Months collected: —</small>
+          </div>
+
+          <div class="result-item">
+            <h3>Insurance Escrow Deposit</h3>
+            <p id="resultInsDeposit" class="result-value">—</p>
+            <small id="resultInsMonths">Months collected: —</small>
+          </div>
+
+          <div class="result-item">
+            <h3>Total Initial Escrow Deposit</h3>
+            <p id="resultTotalDeposit" class="result-value">—</p>
+          </div>
+
+          <div class="result-item">
+            <h3>Aggregate Adjustment</h3>
+            <p id="resultAggregateAdj" class="result-value">—</p>
+            <small id="resultAggregateDetails">—</small>
+          </div>
+
+          <div class="result-item">
+            <h3>Section F (Prepaids)</h3>
+            <ul id="resultSectionF"></ul>
+          </div>
+
+          <div class="result-item">
+            <h3>Section G (Initial Escrow)</h3>
+            <ul id="resultSectionG"></ul>
+          </div>
+        </div>
+
+        <div class="results-notes">
+          <h4>Notes & Flags</h4>
+          <ul id="escrowResultNotes"></ul>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>
+        For internal guidance only. Confirm against your state tax matrix, investor requirements, and LOS output.
+      </small>
+    </footer>
+  </div>
+
+  <script src="escrow.js"></script>
+</body>
+</html>

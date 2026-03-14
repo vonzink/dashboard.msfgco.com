@@ -15,6 +15,9 @@ const VALID_PIPELINE_FIELDS = [
 const VALID_PRE_APPROVAL_FIELDS = [
   'client_name', 'loan_amount', 'pre_approval_date', 'expiration_date',
   'status', 'assigned_lo_name', 'property_address', 'loan_type', 'notes',
+  'loan_number', 'lender', 'subject_property', 'loan_purpose', 'occupancy',
+  'rate', 'credit_score', 'income', 'property_type', 'referring_agent',
+  'contact_date',
 ];
 
 const VALID_FUNDED_LOAN_FIELDS = [
@@ -22,6 +25,9 @@ const VALID_FUNDED_LOAN_FIELDS = [
   'funded_date', 'investor', 'property_address',
   'client_name', 'notes', 'loan_number', 'status',
   'group_name',
+  'closing_date', 'loan_status', 'purchase_price', 'appraised_value',
+  'rate', 'occupancy', 'lender', 'loan_purpose', 'credit_score',
+  'subject_property', 'referring_agent',
 ];
 
 const VALID_FIELDS_BY_SECTION = {
@@ -61,6 +67,14 @@ const FIELD_LABELS = {
   funded_date: 'Funded Date',
   investor: 'Investor',
   group_name: 'Group',
+  credit_score: 'Credit Score',
+  income: 'Income',
+  property_type: 'Property Type',
+  referring_agent: 'Referring Agent',
+  contact_date: 'Contact Date',
+  loan_status: 'Loan Status',
+  purchase_price: 'Purchase Price',
+  appraised_value: 'Appraised Value',
 };
 
 const FIELD_LABELS_BY_SECTION = {
@@ -130,11 +144,31 @@ const DEFAULT_TITLE_MAP = {
   'funded':               'funded_date',
   'funded amount':        'loan_amount',
   'address':              'property_address',
+  'credit score':         'credit_score',
+  'fico':                 'credit_score',
+  'fico score':           'credit_score',
+  'credit':               'credit_score',
+  'income':               'income',
+  'monthly income':       'income',
+  'property type':        'property_type',
+  'prop type':            'property_type',
+  'contact date':         'contact_date',
+  'referring agent':      'referring_agent',
+  'referral agent':       'referring_agent',
+  'referral partner':     'referring_agent',
+  'realtor':              'referring_agent',
+  'purchase price':       'purchase_price',
+  'sales price':          'purchase_price',
+  'appraised value':      'appraised_value',
+  'appraisal value':      'appraised_value',
+  'purpose':              'loan_purpose',
+  'sbj property':         'subject_property',
 };
 
 const DATE_FIELDS = [
   'application_date', 'lock_expiration_date', 'closing_date', 'funding_date',
   'target_close_date', 'pre_approval_date', 'expiration_date', 'funded_date',
+  'contact_date',
 ];
 
 function mapItemToRow(item, columnMap, userNameMap) {
@@ -154,9 +188,12 @@ function mapItemToRow(item, columnMap, userNameMap) {
     const text = (cv.text || '').trim();
     if (!text) continue;
 
-    if (field === 'loan_amount') {
+    if (['loan_amount', 'income', 'purchase_price', 'appraised_value'].includes(field)) {
       const num = parseFloat(text.replace(/[$,\s]/g, ''));
-      row.loan_amount = isNaN(num) ? null : num;
+      row[field] = isNaN(num) ? null : num;
+    } else if (field === 'credit_score') {
+      const num = parseInt(text.replace(/[^0-9]/g, ''));
+      row[field] = isNaN(num) ? null : num;
     } else if (field === 'assigned_lo_name') {
       row.assigned_lo_name = text;
       const loId = userNameMap[text.toLowerCase().trim()];

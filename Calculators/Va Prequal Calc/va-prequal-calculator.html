@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VA Loan Pre-Qualification Worksheet</title>
+    <link rel="stylesheet" href="va-prequal-calculator.css" />
+  </head>
+  <body>
+    <div class="main-container">
+      <div class="header">
+        <img src="https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/Compass/Compass+Home+Loan+-+Color+Transparent+Background.png" 
+             alt="Compass Home Loan" 
+             class="header-logo" />
+        <h1>VA Loan Pre-Qualification Worksheet</h1>
+        <p>
+          This pre-qualification worksheet automatically calculates monthly housing expense, 
+          residual income, and debt-to-income ratio for VA loan applicants. Enter the requested 
+          information below to determine loan eligibility.
+        </p>
+      </div>
+      
+      <div class="content">
+
+        <!-- Borrower Information -->
+        <div class="section">
+          <h2>Borrower Information</h2>
+          <div class="input-grid">
+            <div class="input-group">
+              <label for="borrowerName">Borrower Name</label>
+              <input type="text" id="borrowerName" placeholder="Enter name" />
+            </div>
+            <div class="input-group">
+              <label for="familySize">Family Size</label>
+              <select id="familySize" onchange="calculate()">
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3" selected>3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="region">Geographic Region</label>
+              <select id="region" onchange="calculate()">
+                <option value="Northeast">Northeast</option>
+                <option value="Midwest">Midwest</option>
+                <option value="South" selected>South</option>
+                <option value="West">West</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loan Information -->
+        <div class="section">
+          <h2>Loan Information</h2>
+          <div class="input-grid">
+            <div class="input-group">
+              <label for="mortgageAmount">Mortgage Amount ($)</label>
+              <input type="number" id="mortgageAmount" value="300000" onchange="calculate()" class="input-highlight" />
+            </div>
+            <div class="input-group">
+              <label for="interestRate">Interest Rate (%)</label>
+              <select id="interestRate" onchange="calculate()" class="input-highlight">
+                <!-- Populated by JavaScript -->
+              </select>
+            </div>
+            <div class="input-group">
+              <label for="loanTerm">Loan Term</label>
+              <select id="loanTerm" onchange="calculate()" class="input-highlight">
+                <option value="15">15-Year</option>
+                <option value="20">20-Year</option>
+                <option value="30" selected>30-Year</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 1: Gross Monthly Income -->
+        <div class="section">
+          <h2><span class="section-number">1</span> Gross Monthly Income</h2>
+          <div class="input-grid">
+            <div class="input-group">
+              <label for="grossIncome">Gross Monthly Income ($)</label>
+              <input type="number" id="grossIncome" value="8000" onchange="calculate()" class="input-highlight" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Monthly Housing Expense -->
+        <div class="section">
+          <h2><span class="section-number">2</span> Monthly Housing Expense (PITI)</h2>
+          <div class="input-row">
+            <label class="sub-item">a. Payment Factor (per $1,000)</label>
+            <input type="number" id="paymentFactor" readonly class="calculated-field" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">b. Principal & Interest Payment ($)</label>
+            <input type="number" id="piPayment" readonly class="calculated-field" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">c. Property Taxes ($)</label>
+            <input type="number" id="propertyTaxes" value="250" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">d. Homeowners Insurance ($)</label>
+            <input type="number" id="homeInsurance" value="125" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">e. HOA Dues ($)</label>
+            <input type="number" id="hoaDues" value="0" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="total-row">
+            <label>Total Monthly Housing Expense</label>
+            <span class="total-value" id="totalHousing">$0</span>
+          </div>
+        </div>
+
+        <!-- Section 3: Monthly Debts -->
+        <div class="section">
+          <h2><span class="section-number">3</span> Monthly Debts and Obligations</h2>
+          <div class="input-row">
+            <label class="sub-item">a. Car Payment(s) ($)</label>
+            <input type="number" id="carPayments" value="0" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">b. Revolving Charge Accounts ($)</label>
+            <input type="number" id="revolvingAccounts" value="0" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">c. Installment Loans ($)</label>
+            <input type="number" id="installmentLoans" value="0" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">d. Child Care Expenses ($)</label>
+            <input type="number" id="childCare" value="0" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">e. Other ($)</label>
+            <input type="number" id="otherDebts" value="0" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="total-row">
+            <label>Total Monthly Debts</label>
+            <span class="total-value" id="totalDebts">$0</span>
+          </div>
+        </div>
+
+        <!-- Section 4: Maintenance & Utilities -->
+        <div class="section">
+          <h2><span class="section-number">4</span> Monthly Maintenance & Utilities</h2>
+          <div class="input-row">
+            <label class="sub-item">a. Total Square Footage</label>
+            <input type="number" id="squareFootage" value="2000" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">b. Estimated Cost ($0.14 per sq. ft.)</label>
+            <input type="number" id="maintenanceCost" readonly class="calculated-field" />
+          </div>
+          <div class="total-row">
+            <label>Total Maintenance & Utilities</label>
+            <span class="total-value" id="totalMaintenance">$0</span>
+          </div>
+        </div>
+
+        <!-- Section 5: Monthly Taxes -->
+        <div class="section">
+          <h2><span class="section-number">5</span> Monthly Taxes (from pay stubs)</h2>
+          <div class="input-row">
+            <label class="sub-item">a. Federal Income Tax ($)</label>
+            <input type="number" id="federalTax" value="800" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">b. State Income Tax ($)</label>
+            <input type="number" id="stateTax" value="300" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="input-row">
+            <label class="sub-item">c. Social Security / Medicare ($)</label>
+            <input type="number" id="socialSecurity" value="612" onchange="calculate()" class="input-highlight" />
+          </div>
+          <div class="total-row">
+            <label>Total Monthly Taxes</label>
+            <span class="total-value" id="totalTaxes">$0</span>
+          </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section">
+          <h2>Pre-Qualification Results</h2>
+          
+          <!-- Section 6: Residual Income -->
+          <h3 style="color: var(--primary); margin-bottom: 1rem;"><span class="section-number">6</span> Residual Income Analysis</h3>
+          <div class="residual-comparison">
+            <div class="residual-item">
+              <h4>Required Residual Income</h4>
+              <div class="value" id="requiredResidual" style="color: var(--gray);">$0</div>
+              <p class="info-text">Based on region, family size, and loan amount</p>
+            </div>
+            <div class="residual-item">
+              <h4>Actual Residual Income</h4>
+              <div class="value" id="actualResidual" style="color: var(--primary);">$0</div>
+              <p class="info-text">Income minus all deductions</p>
+            </div>
+          </div>
+          <div class="residual-status" id="residualStatus">
+            Calculating...
+          </div>
+
+          <!-- Section 7: DTI Ratio -->
+          <div class="dti-display">
+            <h3><span class="section-number">7</span> Debt-to-Income Ratio</h3>
+            <div class="dti-value" id="dtiRatio">0%</div>
+            <p class="dti-guideline">VA guideline: 41% maximum (may exceed with strong compensating factors)</p>
+          </div>
+
+          <!-- Summary Cards -->
+          <div class="results-grid" style="margin-top: 1.5rem;">
+            <div class="result-card">
+              <h3>Monthly P&I</h3>
+              <div class="result-value" id="summaryPI">$0</div>
+            </div>
+            <div class="result-card">
+              <h3>Total Housing</h3>
+              <div class="result-value" id="summaryHousing">$0</div>
+            </div>
+            <div class="result-card">
+              <h3>Total Debts</h3>
+              <div class="result-value" id="summaryDebts">$0</div>
+            </div>
+            <div class="result-card">
+              <h3>Gross Income</h3>
+              <div class="result-value" id="summaryIncome">$0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- P&I Chart Section (Collapsible & Editable) -->
+        <div class="chart-section">
+          <div class="chart-header" onclick="toggleChart('piChart')">
+            <h2>📊 P&I Payment Factor Chart</h2>
+            <button class="chart-toggle" id="piChartToggle">Show Chart</button>
+          </div>
+          <div class="chart-content" id="piChart">
+            <div class="chart-description">
+              <strong>Monthly Principal & Interest Payment Factors (per $1,000)</strong><br>
+              These values are used to calculate the monthly P&I payment. You can edit any value for this session.
+              Changes will immediately update the calculator results.
+            </div>
+            <div class="editable-table-container">
+              <table class="editable-table" id="piTable">
+                <thead>
+                  <tr>
+                    <th>Interest Rate</th>
+                    <th>15-Year</th>
+                    <th>20-Year</th>
+                    <th>30-Year</th>
+                  </tr>
+                </thead>
+                <tbody id="piTableBody">
+                  <!-- Populated by JavaScript -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Residual Income Chart Section (Collapsible & Editable) -->
+        <div class="chart-section">
+          <div class="chart-header" onclick="toggleChart('residualChart')">
+            <h2>📊 Residual Income Requirements Chart</h2>
+            <button class="chart-toggle" id="residualChartToggle">Show Chart</button>
+          </div>
+          <div class="chart-content" id="residualChart">
+            <div class="chart-description">
+              <strong>Minimum Residual Income by Region & Family Size</strong><br>
+              These values determine the minimum residual income required. You can edit any value for this session.
+            </div>
+            <div class="residual-tables-container">
+              <div class="residual-table-wrapper">
+                <h3>Loan Amounts Under $80,000</h3>
+                <table class="editable-table" id="residualUnder80k">
+                  <thead>
+                    <tr>
+                      <th>Family Size</th>
+                      <th>Northeast</th>
+                      <th>Midwest</th>
+                      <th>South</th>
+                      <th>West</th>
+                    </tr>
+                  </thead>
+                  <tbody id="residualUnder80kBody">
+                    <!-- Populated by JavaScript -->
+                  </tbody>
+                </table>
+                <p class="table-note">Over 5: Add $75 for each additional member (up to 7)</p>
+              </div>
+              <div class="residual-table-wrapper">
+                <h3>Loan Amounts $80,000 and Above</h3>
+                <table class="editable-table" id="residualOver80k">
+                  <thead>
+                    <tr>
+                      <th>Family Size</th>
+                      <th>Northeast</th>
+                      <th>Midwest</th>
+                      <th>South</th>
+                      <th>West</th>
+                    </tr>
+                  </thead>
+                  <tbody id="residualOver80kBody">
+                    <!-- Populated by JavaScript -->
+                  </tbody>
+                </table>
+                <p class="table-note">Over 5: Add $80 for each additional member (up to 7)</p>
+              </div>
+            </div>
+            
+            <!-- Region Key -->
+            <div class="region-key">
+              <h4>Geographic Regions by State</h4>
+              <div class="region-grid">
+                <div class="region-column">
+                  <h5>Northeast</h5>
+                  <ul>
+                    <li>Connecticut</li>
+                    <li>Maine</li>
+                    <li>Massachusetts</li>
+                    <li>New Hampshire</li>
+                    <li>New Jersey</li>
+                    <li>New York</li>
+                    <li>Pennsylvania</li>
+                    <li>Rhode Island</li>
+                    <li>Vermont</li>
+                  </ul>
+                </div>
+                <div class="region-column">
+                  <h5>Midwest</h5>
+                  <ul>
+                    <li>Illinois</li>
+                    <li>Indiana</li>
+                    <li>Iowa</li>
+                    <li>Kansas</li>
+                    <li>Michigan</li>
+                    <li>Minnesota</li>
+                    <li>Missouri</li>
+                    <li>Nebraska</li>
+                    <li>North Dakota</li>
+                    <li>Ohio</li>
+                    <li>South Dakota</li>
+                    <li>Wisconsin</li>
+                  </ul>
+                </div>
+                <div class="region-column">
+                  <h5>South</h5>
+                  <ul>
+                    <li>Alabama</li>
+                    <li>Arkansas</li>
+                    <li>Delaware</li>
+                    <li>DC</li>
+                    <li>Florida</li>
+                    <li>Georgia</li>
+                    <li>Kentucky</li>
+                    <li>Louisiana</li>
+                    <li>Maryland</li>
+                    <li>Mississippi</li>
+                    <li>North Carolina</li>
+                    <li>Oklahoma</li>
+                    <li>Puerto Rico</li>
+                    <li>South Carolina</li>
+                    <li>Tennessee</li>
+                    <li>Texas</li>
+                    <li>Virginia</li>
+                    <li>West Virginia</li>
+                  </ul>
+                </div>
+                <div class="region-column">
+                  <h5>West</h5>
+                  <ul>
+                    <li>Alaska</li>
+                    <li>Arizona</li>
+                    <li>California</li>
+                    <li>Colorado</li>
+                    <li>Hawaii</li>
+                    <li>Idaho</li>
+                    <li>Montana</li>
+                    <li>Nevada</li>
+                    <li>New Mexico</li>
+                    <li>Oregon</li>
+                    <li>Utah</li>
+                    <li>Washington</li>
+                    <li>Wyoming</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <script>
+      // =====================================================
+      // EDITABLE DATA STORES (session-based)
+      // =====================================================
+      
+      // P&I Payment Factor Chart (per $1,000)
+      const piFactors = {
+        '4.000': { 15: 7.40, 20: 6.06, 30: 4.77 },
+        '4.125': { 15: 7.46, 20: 6.13, 30: 4.85 },
+        '4.250': { 15: 7.52, 20: 6.19, 30: 4.92 },
+        '4.375': { 15: 7.59, 20: 6.26, 30: 4.99 },
+        '4.500': { 15: 7.65, 20: 6.33, 30: 5.07 },
+        '4.625': { 15: 7.71, 20: 6.39, 30: 5.14 },
+        '4.750': { 15: 7.78, 20: 6.46, 30: 5.22 },
+        '4.875': { 15: 7.84, 20: 6.53, 30: 5.29 },
+        '5.000': { 15: 7.91, 20: 6.60, 30: 5.37 },
+        '5.125': { 15: 7.97, 20: 6.67, 30: 5.44 },
+        '5.250': { 15: 8.04, 20: 6.74, 30: 5.52 },
+        '5.375': { 15: 8.10, 20: 6.81, 30: 5.60 },
+        '5.500': { 15: 8.17, 20: 6.88, 30: 5.68 },
+        '5.625': { 15: 8.24, 20: 6.95, 30: 5.76 },
+        '5.750': { 15: 8.30, 20: 7.02, 30: 5.84 },
+        '5.875': { 15: 8.37, 20: 7.09, 30: 5.92 },
+        '6.000': { 15: 8.44, 20: 7.16, 30: 6.00 },
+        '6.125': { 15: 8.51, 20: 7.24, 30: 6.08 },
+        '6.250': { 15: 8.57, 20: 7.31, 30: 6.16 },
+        '6.375': { 15: 8.64, 20: 7.38, 30: 6.24 },
+        '6.500': { 15: 8.71, 20: 7.46, 30: 6.32 },
+        '6.625': { 15: 8.78, 20: 7.53, 30: 6.40 },
+        '6.750': { 15: 8.85, 20: 7.60, 30: 6.49 },
+        '6.875': { 15: 8.92, 20: 7.68, 30: 6.57 },
+        '7.000': { 15: 8.99, 20: 7.75, 30: 6.65 },
+        '7.125': { 15: 9.06, 20: 7.83, 30: 6.74 },
+        '7.250': { 15: 9.13, 20: 7.90, 30: 6.82 },
+        '7.375': { 15: 9.20, 20: 7.98, 30: 6.91 },
+        '7.500': { 15: 9.27, 20: 8.06, 30: 6.99 },
+        '7.625': { 15: 9.34, 20: 8.13, 30: 7.08 },
+        '7.750': { 15: 9.41, 20: 8.21, 30: 7.16 },
+        '7.875': { 15: 9.48, 20: 8.29, 30: 7.25 },
+        '8.000': { 15: 9.56, 20: 8.36, 30: 7.34 },
+        '8.125': { 15: 9.63, 20: 8.44, 30: 7.42 },
+        '8.250': { 15: 9.70, 20: 8.52, 30: 7.51 },
+        '8.375': { 15: 9.77, 20: 8.60, 30: 7.60 },
+        '8.500': { 15: 9.85, 20: 8.68, 30: 7.69 },
+        '8.625': { 15: 9.92, 20: 8.76, 30: 7.78 },
+        '8.750': { 15: 9.99, 20: 8.84, 30: 7.87 },
+        '8.875': { 15: 10.07, 20: 8.92, 30: 7.96 },
+        '9.000': { 15: 10.14, 20: 9.00, 30: 8.05 },
+        '9.125': { 15: 10.22, 20: 9.08, 30: 8.14 },
+        '9.250': { 15: 10.29, 20: 9.16, 30: 8.23 },
+        '9.375': { 15: 10.37, 20: 9.24, 30: 8.32 },
+        '9.500': { 15: 10.44, 20: 9.32, 30: 8.41 }
+      };
+
+      // Residual Income Requirements
+      const residualData = {
+        under80k: {
+          Northeast: { 1: 390, 2: 654, 3: 788, 4: 888, 5: 921 },
+          Midwest:   { 1: 382, 2: 641, 3: 772, 4: 868, 5: 902 },
+          South:     { 1: 382, 2: 641, 3: 772, 4: 868, 5: 902 },
+          West:      { 1: 425, 2: 713, 3: 859, 4: 967, 5: 1004 }
+        },
+        over80k: {
+          Northeast: { 1: 450, 2: 755, 3: 909, 4: 1025, 5: 1062 },
+          Midwest:   { 1: 441, 2: 738, 3: 889, 4: 1003, 5: 1039 },
+          South:     { 1: 441, 2: 738, 3: 889, 4: 1003, 5: 1039 },
+          West:      { 1: 491, 2: 823, 3: 990, 4: 1117, 5: 1158 }
+        },
+        additionalUnder80k: 75,
+        additionalOver80k: 80
+      };
+
+      // =====================================================
+      // CHART TOGGLE FUNCTIONS
+      // =====================================================
+      
+      function toggleChart(chartId) {
+        const content = document.getElementById(chartId);
+        const toggle = document.getElementById(chartId + 'Toggle');
+        
+        if (content.classList.contains('open')) {
+          content.classList.remove('open');
+          toggle.textContent = 'Show Chart';
+        } else {
+          content.classList.add('open');
+          toggle.textContent = 'Hide Chart';
+        }
+      }
+
+      // =====================================================
+      // BUILD EDITABLE TABLES
+      // =====================================================
+      
+      function buildPITable() {
+        const tbody = document.getElementById('piTableBody');
+        tbody.innerHTML = '';
+        
+        const rates = Object.keys(piFactors).sort((a, b) => parseFloat(a) - parseFloat(b));
+        
+        rates.forEach(rate => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="rate-cell">${parseFloat(rate).toFixed(3)}%</td>
+            <td><input type="number" step="0.01" value="${piFactors[rate][15]}" 
+                onchange="updatePIFactor('${rate}', 15, this.value)" /></td>
+            <td><input type="number" step="0.01" value="${piFactors[rate][20]}" 
+                onchange="updatePIFactor('${rate}', 20, this.value)" /></td>
+            <td><input type="number" step="0.01" value="${piFactors[rate][30]}" 
+                onchange="updatePIFactor('${rate}', 30, this.value)" /></td>
+          `;
+          tbody.appendChild(row);
+        });
+      }
+      
+      function buildResidualTables() {
+        const regions = ['Northeast', 'Midwest', 'South', 'West'];
+        
+        // Under $80k table
+        const under80kBody = document.getElementById('residualUnder80kBody');
+        under80kBody.innerHTML = '';
+        
+        for (let size = 1; size <= 5; size++) {
+          const row = document.createElement('tr');
+          let html = `<td class="label-cell">${size}</td>`;
+          regions.forEach(region => {
+            html += `<td><input type="number" value="${residualData.under80k[region][size]}" 
+                     onchange="updateResidual('under80k', '${region}', ${size}, this.value)" /></td>`;
+          });
+          row.innerHTML = html;
+          under80kBody.appendChild(row);
+        }
+        
+        // Over $80k table
+        const over80kBody = document.getElementById('residualOver80kBody');
+        over80kBody.innerHTML = '';
+        
+        for (let size = 1; size <= 5; size++) {
+          const row = document.createElement('tr');
+          let html = `<td class="label-cell">${size}</td>`;
+          regions.forEach(region => {
+            html += `<td><input type="number" value="${residualData.over80k[region][size]}" 
+                     onchange="updateResidual('over80k', '${region}', ${size}, this.value)" /></td>`;
+          });
+          row.innerHTML = html;
+          over80kBody.appendChild(row);
+        }
+      }
+
+      // =====================================================
+      // UPDATE FUNCTIONS (when user edits tables)
+      // =====================================================
+      
+      function updatePIFactor(rate, term, value) {
+        const numValue = parseFloat(value);
+        if (!isNaN(numValue)) {
+          piFactors[rate][term] = numValue;
+          calculate();
+        }
+      }
+      
+      function updateResidual(table, region, size, value) {
+        const numValue = parseInt(value);
+        if (!isNaN(numValue)) {
+          residualData[table][region][size] = numValue;
+          calculate();
+        }
+      }
+
+      // =====================================================
+      // POPULATE DROPDOWNS
+      // =====================================================
+      
+      function populateRates() {
+        const select = document.getElementById('interestRate');
+        const rates = Object.keys(piFactors).sort((a, b) => parseFloat(a) - parseFloat(b));
+        
+        rates.forEach(rate => {
+          const option = document.createElement('option');
+          option.value = rate;
+          option.textContent = parseFloat(rate).toFixed(3) + '%';
+          if (rate === '6.500') option.selected = true;
+          select.appendChild(option);
+        });
+      }
+
+      // =====================================================
+      // HELPER FUNCTIONS
+      // =====================================================
+      
+      function parseNum(id) {
+        const val = parseFloat(document.getElementById(id).value);
+        return isNaN(val) ? 0 : val;
+      }
+
+      function formatCurrency(amount) {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0
+        }).format(amount);
+      }
+
+      // Get P&I Factor from editable chart
+      function getPaymentFactor(rate, term) {
+        const rateKey = parseFloat(rate).toFixed(3);
+        if (piFactors[rateKey] && piFactors[rateKey][term]) {
+          return piFactors[rateKey][term];
+        }
+        return 0;
+      }
+
+      // Get Required Residual Income from editable chart
+      function getRequiredResidual(loanAmount, region, familySize) {
+        const table = loanAmount >= 80000 ? 'over80k' : 'under80k';
+        const additional = loanAmount >= 80000 ? residualData.additionalOver80k : residualData.additionalUnder80k;
+        
+        let size = Math.min(familySize, 5);
+        let baseAmount = residualData[table][region][size];
+        
+        // Add extra for family sizes 6 and 7
+        if (familySize > 5) {
+          baseAmount += (familySize - 5) * additional;
+        }
+        
+        return baseAmount;
+      }
+
+      // =====================================================
+      // MAIN CALCULATION
+      // =====================================================
+      
+      function calculate() {
+        // Get inputs
+        const mortgageAmount = parseNum('mortgageAmount');
+        const interestRate = document.getElementById('interestRate').value;
+        const loanTerm = parseInt(document.getElementById('loanTerm').value);
+        const grossIncome = parseNum('grossIncome');
+        const familySize = parseInt(document.getElementById('familySize').value);
+        const region = document.getElementById('region').value;
+
+        // Get P&I Factor and calculate P&I payment
+        const paymentFactor = getPaymentFactor(interestRate, loanTerm);
+        const piPayment = (mortgageAmount / 1000) * paymentFactor;
+        
+        document.getElementById('paymentFactor').value = paymentFactor.toFixed(2);
+        document.getElementById('piPayment').value = piPayment.toFixed(2);
+
+        // Section 2: Total Housing Expense
+        const propertyTaxes = parseNum('propertyTaxes');
+        const homeInsurance = parseNum('homeInsurance');
+        const hoaDues = parseNum('hoaDues');
+        const totalHousing = piPayment + propertyTaxes + homeInsurance + hoaDues;
+        document.getElementById('totalHousing').textContent = formatCurrency(totalHousing);
+
+        // Section 3: Total Debts
+        const carPayments = parseNum('carPayments');
+        const revolvingAccounts = parseNum('revolvingAccounts');
+        const installmentLoans = parseNum('installmentLoans');
+        const childCare = parseNum('childCare');
+        const otherDebts = parseNum('otherDebts');
+        const totalDebts = carPayments + revolvingAccounts + installmentLoans + childCare + otherDebts;
+        document.getElementById('totalDebts').textContent = formatCurrency(totalDebts);
+
+        // Section 4: Maintenance & Utilities
+        const squareFootage = parseNum('squareFootage');
+        const maintenanceCost = squareFootage * 0.14;
+        document.getElementById('maintenanceCost').value = maintenanceCost.toFixed(2);
+        document.getElementById('totalMaintenance').textContent = formatCurrency(maintenanceCost);
+
+        // Section 5: Total Taxes
+        const federalTax = parseNum('federalTax');
+        const stateTax = parseNum('stateTax');
+        const socialSecurity = parseNum('socialSecurity');
+        const totalTaxes = federalTax + stateTax + socialSecurity;
+        document.getElementById('totalTaxes').textContent = formatCurrency(totalTaxes);
+
+        // Section 6: Residual Income
+        const requiredResidual = getRequiredResidual(mortgageAmount, region, familySize);
+        const actualResidual = grossIncome - totalHousing - totalDebts - maintenanceCost - totalTaxes;
+        
+        document.getElementById('requiredResidual').textContent = formatCurrency(requiredResidual);
+        document.getElementById('actualResidual').textContent = formatCurrency(actualResidual);
+        
+        const residualStatus = document.getElementById('residualStatus');
+        if (actualResidual >= requiredResidual) {
+          residualStatus.className = 'residual-status pass';
+          residualStatus.innerHTML = '✓ PASSES Residual Income Requirement (Actual exceeds Required by ' + formatCurrency(actualResidual - requiredResidual) + ')';
+        } else {
+          residualStatus.className = 'residual-status fail';
+          residualStatus.innerHTML = '✗ DOES NOT MEET Residual Income Requirement (Short by ' + formatCurrency(requiredResidual - actualResidual) + ')';
+        }
+
+        // Section 7: DTI Ratio
+        const dtiRatio = grossIncome > 0 ? ((totalHousing + totalDebts) / grossIncome) * 100 : 0;
+        const dtiElement = document.getElementById('dtiRatio');
+        dtiElement.textContent = dtiRatio.toFixed(1) + '%';
+        
+        // Color code DTI
+        if (dtiRatio <= 41) {
+          dtiElement.style.color = 'var(--success)';
+        } else if (dtiRatio <= 50) {
+          dtiElement.style.color = 'var(--warning)';
+        } else {
+          dtiElement.style.color = 'var(--danger)';
+        }
+
+        // Update summary cards
+        document.getElementById('summaryPI').textContent = formatCurrency(piPayment);
+        document.getElementById('summaryHousing').textContent = formatCurrency(totalHousing);
+        document.getElementById('summaryDebts').textContent = formatCurrency(totalDebts);
+        document.getElementById('summaryIncome').textContent = formatCurrency(grossIncome);
+      }
+
+      // =====================================================
+      // INITIALIZE
+      // =====================================================
+      
+      populateRates();
+      buildPITable();
+      buildResidualTables();
+      calculate();
+    </script>
+  </body>
+</html>

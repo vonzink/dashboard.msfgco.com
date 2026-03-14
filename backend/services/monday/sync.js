@@ -78,6 +78,18 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
     group_name: row.stage || null,
     source_system: 'monday',
     last_synced_at: new Date(),
+    // Extended fields
+    loan_number: row.loan_number || null,
+    lender: row.lender || null,
+    subject_property: row.subject_property || null,
+    loan_purpose: row.loan_purpose || null,
+    occupancy: row.occupancy || null,
+    rate: row.rate || null,
+    credit_score: row.credit_score || null,
+    income: row.income || null,
+    property_type: row.property_type || null,
+    referring_agent: row.referring_agent || null,
+    contact_date: row.contact_date || null,
   };
 
   if (row.assigned_lo_name) {
@@ -127,6 +139,18 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
     source_board_id: boardId || null,
     source_system: 'monday',
     last_synced_at: new Date(),
+    // Extended fields
+    closing_date: row.closing_date || null,
+    loan_status: row.loan_status || null,
+    purchase_price: row.purchase_price || null,
+    appraised_value: row.appraised_value || null,
+    rate: row.rate || null,
+    occupancy: row.occupancy || null,
+    lender: row.lender || null,
+    loan_purpose: row.loan_purpose || null,
+    credit_score: row.credit_score || null,
+    subject_property: row.subject_property || null,
+    referring_agent: row.referring_agent || null,
   };
 
   // Map loan_number to external_loan_id (funded_loans uses external_loan_id column)

@@ -36,6 +36,17 @@ const preApproval = z.object({
   property_address: optionalString(500),
   loan_type: optionalString(100),
   notes: optionalString(2000),
+  loan_number: optionalString(50),
+  lender: optionalString(200),
+  subject_property: optionalString(500),
+  loan_purpose: optionalString(100),
+  occupancy: optionalString(100),
+  rate: optionalString(20),
+  credit_score: z.number().int().min(300).max(900).optional().nullable(),
+  income: z.number().positive().optional().nullable(),
+  property_type: optionalString(100),
+  referring_agent: optionalString(200),
+  contact_date: dateString.optional().nullable(),
 });
 
 // ── Pipeline ────────────────────────────────────
