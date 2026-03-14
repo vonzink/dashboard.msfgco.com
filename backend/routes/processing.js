@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, isAdmin, hasRole, requireDbUser, requireProcessorOrAdmin } = require('../middleware/userContext');
+const { buildUpdateClauses } = require('../utils/queryBuilder');
 
 router.use(requireDbUser);
 
@@ -113,23 +114,14 @@ router.put('/title-companies/:id', requireProcessorOrAdmin, async (req, res, nex
       contactPhone: 'contact_phone'
     };
 
-    const updates = [];
-    const values = [];
+    const { setClauses, values } = buildUpdateClauses(fieldMap, req.body, {
+      state: (val) => typeof val === 'string' ? val.toUpperCase() : val,
+    });
 
-    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
-      if (req.body[bodyKey] !== undefined) {
-        let val = req.body[bodyKey];
-        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
-        else if (typeof val === 'string') val = val.trim() || null;
-        updates.push(`${dbCol} = ?`);
-        values.push(val);
-      }
-    }
-
-    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
 
     values.push(id);
-    await db.query(`UPDATE title_companies SET ${updates.join(', ')} WHERE id = ?`, values);
+    await db.query(`UPDATE title_companies SET ${setClauses.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
     res.json({ success: true, record: rows[0] });
@@ -241,23 +233,14 @@ router.put('/realtors/:id', requireProcessorOrAdmin, async (req, res, next) => {
       zipCode: 'zip_code'
     };
 
-    const updates = [];
-    const values = [];
+    const { setClauses, values } = buildUpdateClauses(fieldMap, req.body, {
+      state: (val) => typeof val === 'string' ? val.toUpperCase() : val,
+    });
 
-    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
-      if (req.body[bodyKey] !== undefined) {
-        let val = req.body[bodyKey];
-        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
-        else if (typeof val === 'string') val = val.trim() || null;
-        updates.push(`${dbCol} = ?`);
-        values.push(val);
-      }
-    }
-
-    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
 
     values.push(id);
-    await db.query(`UPDATE realtors SET ${updates.join(', ')} WHERE id = ?`, values);
+    await db.query(`UPDATE realtors SET ${setClauses.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await db.query('SELECT * FROM realtors WHERE id = ?', [id]);
     res.json({ success: true, record: rows[0] });
@@ -371,23 +354,14 @@ router.put('/insurance-companies/:id', requireProcessorOrAdmin, async (req, res,
       zipCode: 'zip_code'
     };
 
-    const updates = [];
-    const values = [];
+    const { setClauses, values } = buildUpdateClauses(fieldMap, req.body, {
+      state: (val) => typeof val === 'string' ? val.toUpperCase() : val,
+    });
 
-    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
-      if (req.body[bodyKey] !== undefined) {
-        let val = req.body[bodyKey];
-        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
-        else if (typeof val === 'string') val = val.trim() || null;
-        updates.push(`${dbCol} = ?`);
-        values.push(val);
-      }
-    }
-
-    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
 
     values.push(id);
-    await db.query(`UPDATE insurance_companies SET ${updates.join(', ')} WHERE id = ?`, values);
+    await db.query(`UPDATE insurance_companies SET ${setClauses.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await db.query('SELECT * FROM insurance_companies WHERE id = ?', [id]);
     res.json({ success: true, record: rows[0] });
@@ -495,24 +469,16 @@ router.put('/tax-counties/:id', requireProcessorOrAdmin, async (req, res, next) 
       notes: 'notes'
     };
 
-    const updates = [];
-    const values = [];
+    const { setClauses, values } = buildUpdateClauses(fieldMap, req.body, {
+      state: (val) => typeof val === 'string' ? val.toUpperCase() : val,
+      login_required: (val) => val ? 1 : 0,
+      online_portal: (val) => val ? 1 : 0,
+    });
 
-    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
-      if (req.body[bodyKey] !== undefined) {
-        let val = req.body[bodyKey];
-        if (dbCol === 'state' && typeof val === 'string') val = val.toUpperCase();
-        if (dbCol === 'login_required' || dbCol === 'online_portal') val = val ? 1 : 0;
-        else if (typeof val === 'string') val = val.trim() || null;
-        updates.push(`${dbCol} = ?`);
-        values.push(val);
-      }
-    }
-
-    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
 
     values.push(id);
-    await db.query(`UPDATE tax_counties SET ${updates.join(', ')} WHERE id = ?`, values);
+    await db.query(`UPDATE tax_counties SET ${setClauses.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
     res.json({ success: true, record: rows[0] });
@@ -616,22 +582,13 @@ router.put('/links/:sectionType/:id', requireProcessorOrAdmin, async (req, res, 
     if (existing.length === 0) return res.status(404).json({ error: 'Link not found.' });
 
     const fieldMap = { name: 'name', url: 'url', email: 'email', phone: 'phone', fax: 'fax', agentName: 'agent_name', agentEmail: 'agent_email', icon: 'icon', groupLabel: 'group_label', notes: 'notes', sortOrder: 'sort_order' };
-    const updates = [];
-    const values = [];
 
-    for (const [bodyKey, dbCol] of Object.entries(fieldMap)) {
-      if (req.body[bodyKey] !== undefined) {
-        let val = req.body[bodyKey];
-        if (typeof val === 'string') val = val.trim() || null;
-        updates.push(`${dbCol} = ?`);
-        values.push(val);
-      }
-    }
+    const { setClauses, values } = buildUpdateClauses(fieldMap, req.body);
 
-    if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
 
     values.push(id);
-    await db.query(`UPDATE processing_links SET ${updates.join(', ')} WHERE id = ?`, values);
+    await db.query(`UPDATE processing_links SET ${setClauses.join(', ')} WHERE id = ?`, values);
 
     const [rows] = await db.query('SELECT * FROM processing_links WHERE id = ?', [id]);
     res.json({ success: true, record: rows[0] });
