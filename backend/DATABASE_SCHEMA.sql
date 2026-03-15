@@ -66,8 +66,13 @@ CREATE TABLE IF NOT EXISTS investors (
     minimum_fico VARCHAR(64),
     in_house_dpa VARCHAR(64),
     epo VARCHAR(128),
-    doc_review_wire VARCHAR(64),
-    remote_closing_review VARCHAR(64),
+
+    servicing TINYINT(1) DEFAULT NULL,
+    manual_underwriting TINYINT(1) DEFAULT NULL,
+    non_qm TINYINT(1) DEFAULT NULL,
+    jumbo TINYINT(1) DEFAULT NULL,
+    subordinate_financing TINYINT(1) DEFAULT NULL,
+    review_wire_release TINYINT(1) DEFAULT NULL,
 
     is_active BOOLEAN DEFAULT TRUE,
 
@@ -98,8 +103,21 @@ CREATE TABLE IF NOT EXISTS investor_lender_ids (
     investor_id INT NOT NULL,
     fha_id VARCHAR(100),
     va_id VARCHAR(100),
+    rd_id VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE,
+    INDEX idx_investor (investor_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS investor_turn_times (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    investor_id INT NOT NULL,
+    label VARCHAR(255) NOT NULL,
+    value DECIMAL(10,1) NOT NULL,
+    unit ENUM('days', 'hours') NOT NULL DEFAULT 'days',
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (investor_id) REFERENCES investors(id) ON DELETE CASCADE,
     INDEX idx_investor (investor_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

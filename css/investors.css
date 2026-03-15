@@ -470,6 +470,123 @@ textarea.form-input {
 .u-grid-span-all { grid-column: 1 / -1; }
 
 /* ========================================
+   INVESTOR TOGGLE PILLS
+======================================== */
+.investor-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: var(--spacing-md);
+}
+
+.investor-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.investor-pill i {
+    font-size: 0.6rem;
+}
+
+.pill-yes {
+    background: rgba(140, 198, 62, 0.15);
+    color: #5a8a1a;
+    border: 1px solid rgba(140, 198, 62, 0.3);
+}
+
+.pill-no {
+    background: rgba(231, 76, 60, 0.1);
+    color: #c0392b;
+    border: 1px solid rgba(231, 76, 60, 0.2);
+}
+
+[data-theme="dark"] .pill-yes {
+    background: rgba(140, 198, 62, 0.2);
+    color: #8cc63e;
+}
+
+[data-theme="dark"] .pill-no {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
+/* ========================================
+   TURN TIMES
+======================================== */
+.turn-times-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.turn-time-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+}
+
+.turn-time-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.turn-time-value {
+    font-size: 0.85rem;
+    color: var(--green-forest);
+    font-weight: 600;
+}
+
+/* ========================================
+   DROPDOWN PILLS (mini pills in nav dropdown)
+======================================== */
+.investor-dropdown-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 2px;
+}
+
+.investor-dropdown-name {
+    white-space: nowrap;
+}
+
+.dropdown-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 1px;
+}
+
+.dropdown-pill {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.6rem;
+    font-weight: 600;
+    background: rgba(140, 198, 62, 0.15);
+    color: #5a8a1a;
+    border: 1px solid rgba(140, 198, 62, 0.25);
+    line-height: 1.4;
+}
+
+[data-theme="dark"] .dropdown-pill {
+    background: rgba(140, 198, 62, 0.2);
+    color: #8cc63e;
+}
+
+/* ========================================
    INVESTOR DETAILS GRID
 ======================================== */
 .details-grid {

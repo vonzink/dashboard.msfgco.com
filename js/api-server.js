@@ -439,6 +439,11 @@ const ServerAPI = {
         return this.put(`/investors/${investorId}/links`, { links });
     },
 
+    /** Replace investor turn times */
+    updateInvestorTurnTimes(investorId, turnTimes) {
+        return this.put(`/investors/${investorId}/turn-times`, { turnTimes });
+    },
+
     // ========================================
     // FUNDED LOANS
     // ========================================

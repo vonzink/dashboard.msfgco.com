@@ -519,6 +519,7 @@
       <div class="profile-tabs" id="invProfileTabs">
         <button class="profile-tab active" data-inv-tab="inv-basic"><i class="fas fa-info-circle"></i> Basic Info</button>
         <button class="profile-tab" data-inv-tab="inv-team"><i class="fas fa-users"></i> Team</button>
+        <button class="profile-tab" data-inv-tab="inv-turntimes"><i class="fas fa-clock"></i> Turn Times</button>
         <button class="profile-tab" data-inv-tab="inv-lender"><i class="fas fa-id-card"></i> Lender IDs</button>
         <button class="profile-tab" data-inv-tab="inv-clauses"><i class="fas fa-file-contract"></i> Mortgagee Clauses</button>
         <button class="profile-tab" data-inv-tab="inv-links"><i class="fas fa-link"></i> Links</button>
@@ -605,13 +606,29 @@
                 <label>Max Comp</label>
                 <input type="number" id="invEditMaxComp" step="0.01" />
               </div>
-              <div class="form-group">
-                <label>Doc Review for Wire Release</label>
-                <input type="text" id="invEditDocReview" />
-              </div>
-              <div class="form-group">
-                <label>Remote Closing Review</label>
-                <input type="text" id="invEditRemoteClosing" />
+              <!-- Toggle fields -->
+              <div class="form-group" style="grid-column: 1 / -1;">
+                <label style="margin-bottom:8px;">Product &amp; Service Toggles</label>
+                <div style="display:flex; flex-wrap:wrap; gap:16px;">
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleServicing" /> Servicing
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleManualUw" /> Manual Underwriting
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleNonQm" /> Non-QM
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleJumbo" /> Jumbo
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleSubFin" /> Subordinate Financing
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleWireReview" /> Review for Wire Release
+                  </label>
+                </div>
               </div>
             </div>
             <div class="form-actions">
@@ -634,6 +651,18 @@
       </div>
 
       <!-- ── SUB-TAB: Lender IDs ── -->
+      <!-- ── SUB-TAB: Turn Times ── -->
+      <div class="inv-profile-section" id="inv-turntimes">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <p style="margin:0; font-size:13px; color:#888;">Manage turn times for this investor. Add a label (e.g. "Initial UW", "Conditions") and the time in days or hours.</p>
+          <button class="btn btn-sm btn-primary" id="invAddTurnTimeBtn"><i class="fas fa-plus"></i> Add Turn Time</button>
+        </div>
+        <div id="invTurnTimeRows"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="invTurnTimeSaveBtn"><i class="fas fa-save"></i> Save Turn Times</button>
+        </div>
+      </div>
+
       <div class="inv-profile-section" id="inv-lender">
         <div class="form-grid">
           <div class="form-group">
@@ -643,6 +672,10 @@
           <div class="form-group">
             <label>VA Lender ID</label>
             <input type="text" id="invEditVaId" placeholder="e.g. 678900" />
+          </div>
+          <div class="form-group">
+            <label>RD Lender ID</label>
+            <input type="text" id="invEditRdId" placeholder="e.g. 123456" />
           </div>
         </div>
         <div class="form-actions">
@@ -2112,6 +2145,7 @@
 
         // Populate sub-sections
         populateInvestorTeam(data.team || []);
+        populateInvestorTurnTimes(data.turnTimes || []);
         populateInvestorLenderIds(data.lenderIds || {});
         populateInvestorClauses(data.mortgageeClauses || []);
         populateInvestorLinks(data.links || []);
@@ -2185,8 +2219,13 @@
       document.getElementById('invEditDpa').value = data.in_house_dpa || '';
       document.getElementById('invEditEpo').value = data.epo || '';
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
-      document.getElementById('invEditDocReview').value = data.doc_review_wire || '';
-      document.getElementById('invEditRemoteClosing').value = data.remote_closing_review || '';
+      // Toggle fields
+      document.getElementById('invToggleServicing').checked = !!data.servicing;
+      document.getElementById('invToggleManualUw').checked = !!data.manual_underwriting;
+      document.getElementById('invToggleNonQm').checked = !!data.non_qm;
+      document.getElementById('invToggleJumbo').checked = !!data.jumbo;
+      document.getElementById('invToggleSubFin').checked = !!data.subordinate_financing;
+      document.getElementById('invToggleWireReview').checked = !!data.review_wire_release;
       // AE Photo
       loadAePhoto(data);
     }
@@ -2267,8 +2306,12 @@
             in_house_dpa: document.getElementById('invEditDpa').value.trim() || null,
             epo: document.getElementById('invEditEpo').value.trim() || null,
             max_comp: document.getElementById('invEditMaxComp').value || null,
-            doc_review_wire: document.getElementById('invEditDocReview').value.trim() || null,
-            remote_closing_review: document.getElementById('invEditRemoteClosing').value.trim() || null,
+            servicing: document.getElementById('invToggleServicing').checked ? 1 : 0,
+            manual_underwriting: document.getElementById('invToggleManualUw').checked ? 1 : 0,
+            non_qm: document.getElementById('invToggleNonQm').checked ? 1 : 0,
+            jumbo: document.getElementById('invToggleJumbo').checked ? 1 : 0,
+            subordinate_financing: document.getElementById('invToggleSubFin').checked ? 1 : 0,
+            review_wire_release: document.getElementById('invToggleWireReview').checked ? 1 : 0,
           }),
         });
         document.getElementById('invProfileTitle').textContent = document.getElementById('invEditName').value.trim() + ' — Profile';
@@ -2435,10 +2478,62 @@
       }
     });
 
+    // --- Turn Times ---
+    function addTurnTimeRow(container, data) {
+      const row = document.createElement('div');
+      row.className = 'team-member-row';
+      row.style.cssText = 'display:flex; gap:8px; align-items:center; margin-bottom:8px; padding:8px; background:#f9f9f9; border-radius:8px; border:1px solid #eee;';
+      row.innerHTML =
+        '<div style="flex:2;"><label style="font-size:11px; color:#888;">Label</label><input type="text" class="form-input tt-label" value="' + (data && data.label ? data.label : '') + '" placeholder="e.g. Initial UW" style="width:100%;" /></div>' +
+        '<div style="flex:1;"><label style="font-size:11px; color:#888;">Value</label><input type="number" class="form-input tt-value" value="' + (data && data.value != null ? Number(data.value) : '') + '" placeholder="e.g. 3" step="0.5" min="0" style="width:100%;" /></div>' +
+        '<div style="flex:1;"><label style="font-size:11px; color:#888;">Unit</label><select class="form-input tt-unit" style="width:100%;"><option value="days"' + (data && data.unit === 'hours' ? '' : ' selected') + '>Days</option><option value="hours"' + (data && data.unit === 'hours' ? ' selected' : '') + '>Hours</option></select></div>' +
+        '<button type="button" class="btn btn-sm btn-danger tt-remove-btn" style="margin-top:16px;" title="Remove"><i class="fas fa-trash"></i></button>';
+      row.querySelector('.tt-remove-btn').addEventListener('click', () => row.remove());
+      container.appendChild(row);
+    }
+
+    function populateInvestorTurnTimes(times) {
+      const container = document.getElementById('invTurnTimeRows');
+      container.innerHTML = '';
+      if (times.length === 0) {
+        addTurnTimeRow(container);
+        return;
+      }
+      times.forEach(t => addTurnTimeRow(container, t));
+    }
+
+    document.getElementById('invAddTurnTimeBtn').addEventListener('click', () => {
+      addTurnTimeRow(document.getElementById('invTurnTimeRows'));
+    });
+
+    document.getElementById('invTurnTimeSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      try {
+        const rows = document.querySelectorAll('#invTurnTimeRows .team-member-row');
+        const turnTimes = [];
+        rows.forEach((row, i) => {
+          const label = row.querySelector('.tt-label').value.trim();
+          const value = row.querySelector('.tt-value').value;
+          const unit = row.querySelector('.tt-unit').value;
+          if (label && value) {
+            turnTimes.push({ label, value: parseFloat(value), unit, sort_order: i });
+          }
+        });
+        await api('/investors/' + currentInvestorId + '/turn-times', {
+          method: 'PUT',
+          body: JSON.stringify({ turnTimes }),
+        });
+        alert('Turn times saved!');
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
     // --- Lender IDs ---
     function populateInvestorLenderIds(data) {
       document.getElementById('invEditFhaId').value = data.fha_id || '';
       document.getElementById('invEditVaId').value = data.va_id || '';
+      document.getElementById('invEditRdId').value = data.rd_id || '';
     }
 
     document.getElementById('invLenderSaveBtn').addEventListener('click', async () => {
@@ -2449,6 +2544,7 @@
           body: JSON.stringify({
             fha_id: document.getElementById('invEditFhaId').value.trim() || null,
             va_id: document.getElementById('invEditVaId').value.trim() || null,
+            rd_id: document.getElementById('invEditRdId').value.trim() || null,
           }),
         });
         alert('Lender IDs saved!');

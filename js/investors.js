@@ -45,8 +45,13 @@ const Investors = {
           inHouseDpa:              row.in_house_dpa || null,
           epo:                     row.epo || null,
           maxComp:                 row.max_comp != null ? Number(row.max_comp) : null,
-          docReviewForWireRelease: row.doc_review_wire || null,
-          remoteClosingReview:     row.remote_closing_review || null,
+          // Toggle fields
+          servicing:               row.servicing,
+          manualUnderwriting:      row.manual_underwriting,
+          nonQm:                   row.non_qm,
+          jumbo:                   row.jumbo,
+          subordinateFinancing:    row.subordinate_financing,
+          reviewWireRelease:       row.review_wire_release,
           websiteUrl:              row.website_url || null,
           logoUrl:                 row.logo_url || null,
           notes:                   row.notes || ''
@@ -159,7 +164,7 @@ const Investors = {
       // Also check flat API response fields
       const aeName = ae.name || investor.account_executive_name;
       const aeEmail = ae.email || investor.account_executive_email;
-      const aePhone = ae.mobile || investor.account_executive_phone;
+      const aePhone = ae.mobile || investor.account_executive_mobile;
       const aePhoto = investor.account_executive_photo_url;
 
       if (aeName && aeName !== 'TBD') {
@@ -186,7 +191,31 @@ const Investors = {
     // Investor details grid (read-only)
     const detailsSection = modal.querySelector('.investor-details');
     if (detailsSection) {
-      let html = '<h4><i class="fas fa-info-circle"></i> Investor Details</h4><div class="details-grid">';
+      let html = '<h4><i class="fas fa-info-circle"></i> Investor Details</h4>';
+
+      // Toggle pills
+      const toggles = [
+        { key: 'servicing',            label: 'Servicing',            val: investor.servicing ?? investor.servicing },
+        { key: 'manualUnderwriting',   label: 'Manual UW',            val: investor.manualUnderwriting ?? investor.manual_underwriting },
+        { key: 'nonQm',               label: 'Non-QM',               val: investor.nonQm ?? investor.non_qm },
+        { key: 'jumbo',               label: 'Jumbo',                 val: investor.jumbo ?? investor.jumbo },
+        { key: 'subordinateFinancing', label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
+        { key: 'reviewWireRelease',    label: 'Review for Wire Release', val: investor.reviewWireRelease ?? investor.review_wire_release },
+      ];
+      const hasAnyToggle = toggles.some(t => t.val != null);
+      if (hasAnyToggle) {
+        html += '<div class="investor-pills">';
+        toggles.forEach(t => {
+          if (t.val == null) return;
+          const isYes = Number(t.val) === 1;
+          html += '<span class="investor-pill ' + (isYes ? 'pill-yes' : 'pill-no') + '">' +
+            '<i class="fas fa-' + (isYes ? 'check' : 'times') + '"></i> ' + esc(t.label) +
+          '</span>';
+        });
+        html += '</div>';
+      }
+
+      html += '<div class="details-grid">';
       const details = [
         { label: 'States',                    value: investor.states },
         { label: 'Best Programs',             value: investor.bestPrograms || investor.best_programs },
@@ -194,8 +223,6 @@ const Investors = {
         { label: 'In-house DPA',              value: investor.inHouseDpa || investor.in_house_dpa },
         { label: 'EPO',                       value: investor.epo },
         { label: 'Max Comp',                  value: (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : null },
-        { label: 'Doc Review for Wire Release', value: investor.docReviewForWireRelease || investor.doc_review_for_wire_release },
-        { label: 'Remote Closing Review',     value: investor.remoteClosingReview || investor.remote_closing_review }
       ];
       details.forEach(d => {
         html += '<div class="detail-row">' +
@@ -205,6 +232,28 @@ const Investors = {
       });
       html += '</div>';
       detailsSection.innerHTML = html;
+    }
+
+    // Turn Times (read-only)
+    const turnTimesSection = modal.querySelector('.investor-turn-times');
+    if (turnTimesSection) {
+      const times = investor.turnTimes || [];
+      if (times.length > 0) {
+        let ttHtml = '<h4><i class="fas fa-clock"></i> Turn Times</h4><div class="turn-times-list">';
+        times.forEach(t => {
+          const unitLabel = t.unit === 'hours' ? (Number(t.value) === 1 ? 'hour' : 'hours') : (Number(t.value) === 1 ? 'day' : 'days');
+          ttHtml += '<div class="turn-time-item">' +
+            '<span class="turn-time-label">' + esc(t.label) + '</span>' +
+            '<span class="turn-time-value">' + esc(String(Number(t.value))) + ' ' + unitLabel + '</span>' +
+          '</div>';
+        });
+        ttHtml += '</div>';
+        turnTimesSection.innerHTML = ttHtml;
+      } else {
+        turnTimesSection.innerHTML =
+          '<h4><i class="fas fa-clock"></i> Turn Times</h4>' +
+          '<p class="tbd">No turn times listed</p>';
+      }
     }
 
     // Team (read-only)
@@ -239,12 +288,13 @@ const Investors = {
     const lenderSection = modal.querySelector('.lender-ids');
     if (lenderSection) {
       const ids = investor.lenderIds || {};
-      if (ids.fha_id || ids.va_id || ids.fha || ids.va) {
+      if (ids.fha_id || ids.va_id || ids.rd_id || ids.fha || ids.va || ids.rd) {
         lenderSection.innerHTML =
           '<h4><i class="fas fa-id-card"></i> Lender IDs</h4>' +
           '<div class="lender-ids-list">' +
             ((ids.fha_id || ids.fha) ? '<div><strong>FHA:</strong> ' + esc(ids.fha_id || ids.fha) + '</div>' : '') +
             ((ids.va_id || ids.va) ? '<div><strong>VA:</strong> ' + esc(ids.va_id || ids.va) + '</div>' : '') +
+            ((ids.rd_id || ids.rd) ? '<div><strong>RD:</strong> ' + esc(ids.rd_id || ids.rd) + '</div>' : '') +
           '</div>';
       } else {
         lenderSection.innerHTML =
@@ -579,8 +629,28 @@ const Investors = {
       '<div class="investor-dropdown-items" id="investorDropdownItems">';
 
     sorted.forEach(([key, inv]) => {
-      html += '<button type="button" class="dropdown-item" data-action="open-investor" data-investor="' + key + '">' +
-        '<i class="fas fa-building"></i> ' + esc(inv.name || key) +
+      // Build mini pills for dropdown
+      let pillsHtml = '';
+      const toggleDefs = [
+        { val: inv.servicing,            label: 'Servicing' },
+        { val: inv.manualUnderwriting,   label: 'Manual UW' },
+        { val: inv.nonQm,               label: 'Non-QM' },
+        { val: inv.jumbo,               label: 'Jumbo' },
+        { val: inv.subordinateFinancing, label: 'Sub. Fin.' },
+        { val: inv.reviewWireRelease,    label: 'Wire Review' },
+      ];
+      const activePills = toggleDefs.filter(t => Number(t.val) === 1);
+      if (activePills.length > 0) {
+        pillsHtml = '<span class="dropdown-pills">';
+        activePills.forEach(t => {
+          pillsHtml += '<span class="dropdown-pill">' + esc(t.label) + '</span>';
+        });
+        pillsHtml += '</span>';
+      }
+
+      html += '<button type="button" class="dropdown-item investor-dropdown-btn" data-action="open-investor" data-investor="' + key + '">' +
+        '<span class="investor-dropdown-name"><i class="fas fa-building"></i> ' + esc(inv.name || key) + '</span>' +
+        pillsHtml +
       '</button>';
     });
 

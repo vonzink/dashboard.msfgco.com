@@ -45,7 +45,9 @@ router.get('/', async (req, res, next) => {
       `SELECT id, investor_key, name,
               account_executive_name, account_executive_email, account_executive_mobile,
               states, best_programs, minimum_fico, in_house_dpa,
-              epo, max_comp, doc_review_wire, remote_closing_review,
+              epo, max_comp,
+              servicing, manual_underwriting, non_qm, jumbo,
+              subordinate_financing, review_wire_release,
               website_url, logo_url, notes, is_active
        FROM investors ${whereClause} ORDER BY name`
     );
@@ -77,18 +79,20 @@ router.get('/:key', async (req, res, next) => {
 
     const investor = investors[0];
 
-    // Parallel queries — reduces 4 sequential DB round-trips to 1
-    const [teamResult, lenderIdsResult, clausesResult, linksResult] = await Promise.all([
+    // Parallel queries — reduces 5 sequential DB round-trips to 1
+    const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult] = await Promise.all([
       db.query('SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name', [investor.id]),
       db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [investor.id]),
       db.query('SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?', [investor.id]),
       db.query('SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type', [investor.id]),
+      db.query('SELECT * FROM investor_turn_times WHERE investor_id = ? ORDER BY sort_order', [investor.id]),
     ]);
 
     investor.team = teamResult[0];
     investor.lenderIds = lenderIdsResult[0]?.[0] || {};
     investor.mortgageeClauses = clausesResult[0];
     investor.links = linksResult[0];
+    investor.turnTimes = turnTimesResult[0];
 
     // Resolve S3 keys → presigned download URLs
     investor.logo_url = await resolveLogoUrl(investor.logo_url);
@@ -117,7 +121,9 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
       investor_key: rawKey, name,
       account_executive_name, account_executive_email, account_executive_mobile, account_executive_address,
       states, best_programs, minimum_fico, in_house_dpa,
-      epo, max_comp, doc_review_wire, remote_closing_review,
+      epo, max_comp,
+      servicing, manual_underwriting, non_qm, jumbo,
+      subordinate_financing, review_wire_release,
       website_url, logo_url, login_url, notes
     } = req.body;
 
@@ -129,9 +135,11 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         (investor_key, name, account_executive_name, account_executive_email,
          account_executive_mobile, account_executive_address,
          states, best_programs, minimum_fico, in_house_dpa,
-         epo, max_comp, doc_review_wire, remote_closing_review,
+         epo, max_comp,
+         servicing, manual_underwriting, non_qm, jumbo,
+         subordinate_financing, review_wire_release,
          website_url, logo_url, login_url, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          account_executive_name = VALUES(account_executive_name),
@@ -144,8 +152,12 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          in_house_dpa = VALUES(in_house_dpa),
          epo = VALUES(epo),
          max_comp = VALUES(max_comp),
-         doc_review_wire = VALUES(doc_review_wire),
-         remote_closing_review = VALUES(remote_closing_review),
+         servicing = VALUES(servicing),
+         manual_underwriting = VALUES(manual_underwriting),
+         non_qm = VALUES(non_qm),
+         jumbo = VALUES(jumbo),
+         subordinate_financing = VALUES(subordinate_financing),
+         review_wire_release = VALUES(review_wire_release),
          website_url = VALUES(website_url),
          logo_url = VALUES(logo_url),
          login_url = VALUES(login_url),
@@ -156,7 +168,9 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         account_executive_name || null, account_executive_email || null,
         account_executive_mobile || null, account_executive_address || null,
         states || null, best_programs || null, minimum_fico || null, in_house_dpa || null,
-        epo || null, max_comp || null, doc_review_wire || null, remote_closing_review || null,
+        epo || null, max_comp || null,
+        servicing ?? null, manual_underwriting ?? null, non_qm ?? null, jumbo ?? null,
+        subordinate_financing ?? null, review_wire_release ?? null,
         website_url || null, logo_url || null, login_url || null, notes || null
       ]
     );
@@ -181,7 +195,9 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'account_executive_email', 'account_executive_address',
       'account_executive_photo_url',
       'states', 'best_programs', 'minimum_fico', 'in_house_dpa',
-      'epo', 'max_comp', 'doc_review_wire', 'remote_closing_review',
+      'epo', 'max_comp',
+      'servicing', 'manual_underwriting', 'non_qm', 'jumbo',
+      'subordinate_financing', 'review_wire_release',
       'website_url', 'logo_url', 'login_url', 'is_active',
     ];
     const allowedFields = admin ? ['notes', ...ADMIN_FIELDS] : ['notes'];
@@ -474,7 +490,7 @@ router.put('/:id/team', requireAdmin, async (req, res, next) => {
 router.put('/:id/lender-ids', requireAdmin, async (req, res, next) => {
   try {
     const investorId = req.params.id;
-    const { fha_id, va_id } = req.body;
+    const { fha_id, va_id, rd_id } = req.body;
 
     const [existing] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
     if (existing.length === 0) {
@@ -482,10 +498,10 @@ router.put('/:id/lender-ids', requireAdmin, async (req, res, next) => {
     }
 
     await db.query(
-      `INSERT INTO investor_lender_ids (investor_id, fha_id, va_id)
-       VALUES (?, ?, ?)
-       ON DUPLICATE KEY UPDATE fha_id = ?, va_id = ?`,
-      [investorId, fha_id || null, va_id || null, fha_id || null, va_id || null]
+      `INSERT INTO investor_lender_ids (investor_id, fha_id, va_id, rd_id)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE fha_id = ?, va_id = ?, rd_id = ?`,
+      [investorId, fha_id || null, va_id || null, rd_id || null, fha_id || null, va_id || null, rd_id || null]
     );
 
     const [rows] = await db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [investorId]);
@@ -557,6 +573,42 @@ router.put('/:id/links', requireAdmin, async (req, res, next) => {
     }
 
     const [rows] = await db.query('SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type', [investorId]);
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// PUT /api/investors/:id/turn-times — Replace turn times (admin only)
+// ──────────────────────────────────────────────
+router.put('/:id/turn-times', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { turnTimes } = req.body; // [{label, value, unit}]
+
+    if (!Array.isArray(turnTimes)) {
+      return res.status(400).json({ error: 'turnTimes must be an array' });
+    }
+
+    const [existing] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+
+    await db.query('DELETE FROM investor_turn_times WHERE investor_id = ?', [investorId]);
+
+    for (let i = 0; i < turnTimes.length; i++) {
+      const t = turnTimes[i];
+      if (!t.label || t.value == null) continue;
+      const unit = t.unit === 'hours' ? 'hours' : 'days';
+      await db.query(
+        'INSERT INTO investor_turn_times (investor_id, label, value, unit, sort_order) VALUES (?, ?, ?, ?, ?)',
+        [investorId, t.label, t.value, unit, t.sort_order ?? i]
+      );
+    }
+
+    const [rows] = await db.query('SELECT * FROM investor_turn_times WHERE investor_id = ? ORDER BY sort_order', [investorId]);
     res.json(rows);
   } catch (error) {
     next(error);
