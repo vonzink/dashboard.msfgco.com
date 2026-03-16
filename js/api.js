@@ -226,34 +226,31 @@ const API = {
         return this.PRE_APPROVAL_COLUMNS;
     },
 
+    PA_DATE_FIELDS: ['pre_approval_date', 'expiration_date', 'contact_date', 'borrower_dob',
+        'coborrower_dob', 'credit_report_date'],
+    PA_CURRENCY_FIELDS: ['loan_amount', 'income'],
+
     _renderPreApprovalCell(item, field) {
         const val = item[field];
-        switch (field) {
-            case 'client_name':
-                return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
-            case 'loan_amount':
-                return `<td class="currency">${Utils.formatCurrency(val)}</td>`;
-            case 'pre_approval_date':
-            case 'expiration_date':
-                return `<td>${Utils.formatDate(val)}</td>`;
-            case 'status':
-                return `<td><span class="status-badge ${(val || '').toLowerCase().replace(/[^a-z]/g, '-')}">${Utils.escapeHtml(val || 'Unknown')}</span></td>`;
-            case 'assigned_lo_name':
-                return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
-            case 'property_address':
-            case 'subject_property':
-                return `<td>${Utils.escapeHtml(val || 'TBD')}</td>`;
-            case 'income':
-                return `<td class="currency">${val != null ? Utils.formatCurrency(val) : ''}</td>`;
-            case 'contact_date':
-                return `<td>${val ? Utils.formatDate(val) : ''}</td>`;
-            case 'credit_score':
-                return `<td>${val != null ? val : ''}</td>`;
-            case 'notes':
-                return `<td class="notes-cell" title="${Utils.escapeHtml(val || '')}">${Utils.escapeHtml(val || '')}</td>`;
-            default:
-                return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
+        if (field === 'client_name') {
+            return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
         }
+        if (field === 'status') {
+            return `<td><span class="status-badge ${(val || '').toLowerCase().replace(/[^a-z]/g, '-')}">${Utils.escapeHtml(val || 'Unknown')}</span></td>`;
+        }
+        if (field === 'assigned_lo_name') {
+            return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
+        }
+        if (field === 'notes' || field === 'next_steps' || field === 'special_request') {
+            return `<td class="notes-cell" title="${Utils.escapeHtml(val || '')}">${Utils.escapeHtml(val || '')}</td>`;
+        }
+        if (this.PA_CURRENCY_FIELDS.includes(field)) {
+            return `<td class="currency">${val != null ? Utils.formatCurrency(val) : ''}</td>`;
+        }
+        if (this.PA_DATE_FIELDS.includes(field)) {
+            return `<td>${val ? Utils.formatDate(val) : ''}</td>`;
+        }
+        return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
     },
 
     renderPreApprovals(data) {

@@ -27,6 +27,13 @@ const VALID_PRE_APPROVAL_FIELDS = [
   'loan_number', 'lender', 'subject_property', 'loan_purpose', 'occupancy',
   'rate', 'credit_score', 'income', 'property_type', 'referring_agent',
   'contact_date',
+  // Full Monday.com mirror fields
+  'next_steps', 'special_request', 'stage', 'partners',
+  'borrower_email', 'borrower_phone',
+  'coborrower_first_name', 'coborrower_last_name', 'coborrower_phone', 'coborrower_email',
+  'current_address', 'city', 'state', 'zip',
+  'borrower_dob', 'citizenship', 'borrower_first_name', 'borrower_last_name',
+  'coborrower_dob', 'credit_report_date', 'coborrower_name', 'campaign',
 ];
 
 const VALID_FUNDED_LOAN_FIELDS = [
@@ -150,6 +157,21 @@ const FIELD_LABELS = {
   lien_status: 'Lien Status',
   state: 'State',
   broker_fee: 'Broker Fee',
+  // Pre-approval full mirror fields
+  next_steps: 'Next Steps / Tasks',
+  special_request: 'Special Request',
+  stage: 'Stage',
+  partners: 'Partners',
+  coborrower_first_name: 'Co-Borrower First Name',
+  coborrower_last_name: 'Co-Borrower Last Name',
+  coborrower_phone: 'Co-Borrower Phone',
+  coborrower_name: 'Co-Borrower Name',
+  current_address: 'Current Address',
+  city: 'City',
+  zip: 'Zip',
+  citizenship: 'Citizenship',
+  credit_report_date: 'Credit Report Date',
+  campaign: 'Campaign',
 };
 
 const FIELD_LABELS_BY_SECTION = {
@@ -301,6 +323,32 @@ const DEFAULT_TITLE_MAP = {
   'lien status':          'lien_status',
   'broker fee':           'broker_fee',
   'state':                'state',
+  // Pre-approval board field mappings
+  'next steps / tasks':   'next_steps',
+  'next steps':           'next_steps',
+  'special request':      'special_request',
+  'stage':                'stage',
+  'assignments':          'assigned_lo_name',
+  'partners':             'partners',
+  'b1 email':             'borrower_email',
+  'b1 phone':             'borrower_phone',
+  'co b first':           'coborrower_first_name',
+  'co b last':            'coborrower_last_name',
+  'co b phone':           'coborrower_phone',
+  'co b email':           'coborrower_email',
+  'current address':      'current_address',
+  'city':                 'city',
+  'zip':                  'zip',
+  'b1 birth date':        'borrower_dob',
+  'citizenship':          'citizenship',
+  'b1 first name':        'borrower_first_name',
+  'b1 last name':         'borrower_last_name',
+  'full name':            'client_name',
+  'credit report date':   'credit_report_date',
+  'co borrower name':     'coborrower_name',
+  'remove from pipeline': 'status',
+  'campaign':             'campaign',
+  'date':                 'contact_date',
 };
 
 const DATE_FIELDS = [
@@ -309,6 +357,7 @@ const DATE_FIELDS = [
   'contact_date',
   'appraisal_deadline', 'appraisal_due_date', 'payoff_date', 'estimated_fund_date',
   'borrower_dob', 'coborrower_dob', 'first_payment_date',
+  'credit_report_date',
 ];
 
 function mapItemToRow(item, columnMap, userNameMap) {
@@ -376,6 +425,10 @@ const SECTION_TITLE_OVERRIDES = {
   funded_loans: {
     'title': 'title_company',
     'loan status': 'loan_status',  // funded_loans uses loan_status, not stage
+  },
+  pre_approvals: {
+    'stage': 'stage',              // explicit stage column, not from groups
+    'status': 'status',
   },
 };
 
