@@ -79,19 +79,52 @@ router.post('/', validate(announcement), async (req, res, next) => {
   }
 });
 
-// DELETE /api/announcements/:id - Delete announcement (admin only)
+// PUT /api/announcements/:id - Update announcement (admin or author only)
+router.put('/:id', parseId(), validate(announcement), async (req, res, next) => {
+  try {
+    const [existing] = await db.query('SELECT * FROM announcements WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Announcement not found' });
+
+    // Admin can edit any; others can only edit their own
+    if (!hasRole(req, 'admin') && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'You can only edit your own announcements' });
+    }
+
+    const { title, content, link, icon, file_s3_key, file_name, file_size, file_type } = req.body;
+    const sanitizedContent = sanitizeHtml(content);
+
+    await db.query(
+      `UPDATE announcements SET title = ?, content = ?, link = ?, icon = ?,
+       file_s3_key = ?, file_name = ?, file_size = ?, file_type = ?
+       WHERE id = ?`,
+      [title, sanitizedContent, link || null, icon || null,
+       file_s3_key || null, file_name || null, file_size || null, file_type || null,
+       req.params.id]
+    );
+
+    const [updated] = await db.query(
+      `SELECT a.*, u.name AS author_name FROM announcements a
+       LEFT JOIN users u ON a.author_id = u.id WHERE a.id = ?`,
+      [req.params.id]
+    );
+    res.json(updated[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/announcements/:id - Delete announcement (admin or author only)
 router.delete('/:id', parseId(), async (req, res, next) => {
   try {
-    if (!hasRole(req, 'admin')) {
-      return res.status(403).json({ error: 'Only admins can delete announcements' });
+    const [existing] = await db.query('SELECT * FROM announcements WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Announcement not found' });
+
+    // Admin can delete any; others can only delete their own
+    if (!hasRole(req, 'admin') && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'You can only delete your own announcements' });
     }
 
-    const [result] = await db.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Announcement not found' });
-    }
-
+    await db.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
     deleted(res, 'Announcement deleted');
   } catch (error) {
     next(error);

@@ -1,7 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getUserId, isAdmin, hasRole, requireDbUser, requireProcessorOrAdmin } = require('../middleware/userContext');
+const { getUserId, isAdmin, hasRole, requireDbUser, requireProcessorOrAdmin, getUserRole } = require('../middleware/userContext');
+
+/**
+ * Middleware: allow processor, manager, admin, OR LO to add/edit (not delete).
+ * Used on POST/PUT routes for lookup tables.
+ */
+function requireWriteAccess(req, res, next) {
+  if (hasRole(req, 'admin', 'processor', 'manager', 'lo')) {
+    return next();
+  }
+  return res.status(403).json({ error: 'Processor, LO, manager, or admin access required' });
+}
 const { buildUpdateClauses } = require('../utils/queryBuilder');
 
 router.use(requireDbUser);
@@ -48,7 +59,7 @@ router.get('/title-companies', async (req, res, next) => {
 });
 
 // POST /api/processing/title-companies - Add a title company
-router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) => {
+router.post('/title-companies', requireWriteAccess, async (req, res, next) => {
   try {
     const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone, licenseNumber, nmls, stateLicense, contactNmls, contactEmail, contactPhone } = req.body;
 
@@ -87,7 +98,7 @@ router.post('/title-companies', requireProcessorOrAdmin, async (req, res, next) 
 });
 
 // PUT /api/processing/title-companies/:id - Update a title company
-router.put('/title-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
+router.put('/title-companies/:id', requireWriteAccess, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM title_companies WHERE id = ?', [id]);
@@ -179,7 +190,7 @@ router.get('/realtors', async (req, res, next) => {
 });
 
 // POST /api/processing/realtors - Add a realtor
-router.post('/realtors', requireProcessorOrAdmin, async (req, res, next) => {
+router.post('/realtors', requireWriteAccess, async (req, res, next) => {
   try {
     const { companyName, agentName, companyNmlsId, email, stateLicenseId, contactNmlsId, workPhone, fax, street, city, state, zipCode } = req.body;
 
@@ -212,7 +223,7 @@ router.post('/realtors', requireProcessorOrAdmin, async (req, res, next) => {
 });
 
 // PUT /api/processing/realtors/:id - Update a realtor
-router.put('/realtors/:id', requireProcessorOrAdmin, async (req, res, next) => {
+router.put('/realtors/:id', requireWriteAccess, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM realtors WHERE id = ?', [id]);
@@ -298,7 +309,7 @@ router.get('/insurance-companies', async (req, res, next) => {
 });
 
 // POST /api/processing/insurance-companies - Add an insurance company
-router.post('/insurance-companies', requireProcessorOrAdmin, async (req, res, next) => {
+router.post('/insurance-companies', requireWriteAccess, async (req, res, next) => {
   try {
     const { companyName, pointOfContact, contactPhone, workPhone, fax, email, nmls, stateLicense, contactNmls, street, city, state, zipCode } = req.body;
 
@@ -332,7 +343,7 @@ router.post('/insurance-companies', requireProcessorOrAdmin, async (req, res, ne
 });
 
 // PUT /api/processing/insurance-companies/:id - Update an insurance company
-router.put('/insurance-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
+router.put('/insurance-companies/:id', requireWriteAccess, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM insurance_companies WHERE id = ?', [id]);
@@ -419,7 +430,7 @@ router.get('/tax-counties', async (req, res, next) => {
 });
 
 // POST /api/processing/tax-counties - Add a county
-router.post('/tax-counties', requireProcessorOrAdmin, async (req, res, next) => {
+router.post('/tax-counties', requireWriteAccess, async (req, res, next) => {
   try {
     const { county, state, assessorUrl, treasurerUrl, loginRequired, knownCostsFees, onlinePortal, notes } = req.body;
 
@@ -452,7 +463,7 @@ router.post('/tax-counties', requireProcessorOrAdmin, async (req, res, next) => 
 });
 
 // PUT /api/processing/tax-counties/:id - Update a county
-router.put('/tax-counties/:id', requireProcessorOrAdmin, async (req, res, next) => {
+router.put('/tax-counties/:id', requireWriteAccess, async (req, res, next) => {
   try {
     const { id } = req.params;
     const [existing] = await db.query('SELECT * FROM tax_counties WHERE id = ?', [id]);
@@ -544,7 +555,7 @@ router.get('/links/:sectionType', async (req, res, next) => {
 });
 
 // POST /api/processing/links/:sectionType - Add a link
-router.post('/links/:sectionType', requireProcessorOrAdmin, async (req, res, next) => {
+router.post('/links/:sectionType', requireWriteAccess, async (req, res, next) => {
   try {
     const { sectionType } = req.params;
     if (!VALID_LINK_TYPES.includes(sectionType)) return res.status(400).json({ error: 'Invalid section type.' });
@@ -573,7 +584,7 @@ router.post('/links/:sectionType', requireProcessorOrAdmin, async (req, res, nex
 });
 
 // PUT /api/processing/links/:sectionType/:id - Update a link
-router.put('/links/:sectionType/:id', requireProcessorOrAdmin, async (req, res, next) => {
+router.put('/links/:sectionType/:id', requireWriteAccess, async (req, res, next) => {
   try {
     const { sectionType, id } = req.params;
     if (!VALID_LINK_TYPES.includes(sectionType)) return res.status(400).json({ error: 'Invalid section type.' });

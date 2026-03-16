@@ -68,19 +68,22 @@ const App = {
         // before modules that depend on it (e.g. GoalsManager) initialize
         await this.loadCurrentUser();
 
-        // Now init Goals — it reads CONFIG.currentUser for LO/admin detection
-        try {
-            GoalsManager.init();
-        } catch (err) {
-            console.error('Failed to init Goals:', err);
+        const isExternal = (CONFIG.currentUser.activeRole || '').toLowerCase() === 'external';
+
+        // Skip data-heavy modules for External users (they only see news + calendar)
+        if (!isExternal) {
+            try {
+                GoalsManager.init();
+            } catch (err) {
+                console.error('Failed to init Goals:', err);
+            }
+            this.loadData();
         }
 
-        // Load data + employee directory (can run in parallel)
-        this.loadData();
         this.loadEmployeeDirectory();
 
-        // Start auto-refresh
-        if (typeof DataRefresher !== 'undefined') DataRefresher.start();
+        // Start auto-refresh (skip for External — nothing to refresh)
+        if (!isExternal && typeof DataRefresher !== 'undefined') DataRefresher.start();
     },
 
     // ========================================
@@ -126,18 +129,50 @@ const App = {
                     this.initRoleSwitcher(groups, activeRole);
                 }
 
-                // Show admin-only elements based on active role
-                if (activeRole.toLowerCase() === 'admin') {
-                    document.querySelectorAll('.admin-only-item').forEach(el => {
-                        el.style.display = '';
-                    });
-                }
+                // Apply role-based visibility
+                this.applyRoleVisibility(activeRole.toLowerCase());
 
                 // Board/group filters are shown dynamically when data loads
                 // (see api.js _populatePreApprovalFilters and funded-loans.js _renderBoardFilter/_renderGroupFilter)
             }
         } catch (err) {
             console.warn('Could not load current user:', err);
+        }
+    },
+
+    // ========================================
+    // ROLE-BASED VISIBILITY
+    // ========================================
+    applyRoleVisibility(role) {
+        // Admin: show admin-only elements
+        if (role === 'admin') {
+            document.querySelectorAll('.admin-only-item').forEach(el => {
+                el.style.display = '';
+            });
+        }
+
+        // External: hide everything except news/announcements and calendar
+        if (role === 'external') {
+            const hiddenSections = [
+                'preApprovalsSection', 'pipelineSection', 'fundedLoansSection',
+                'goalsSection', 'chatSection', 'investorsSection',
+                'processingSection', 'contentSection',
+            ];
+            hiddenSections.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'none';
+            });
+            // Also hide admin-only sidebar items
+            document.querySelectorAll('.admin-only-item').forEach(el => {
+                el.style.display = 'none';
+            });
+            // Hide sidebar links that External shouldn't access
+            document.querySelectorAll('[data-section-link]').forEach(el => {
+                const target = el.getAttribute('data-section-link');
+                if (target && !['news', 'calendar'].includes(target)) {
+                    el.style.display = 'none';
+                }
+            });
         }
     },
 

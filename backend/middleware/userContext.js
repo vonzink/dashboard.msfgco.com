@@ -78,6 +78,17 @@ function requireManagerOrAdmin(req, res, next) {
 }
 
 /**
+ * Express middleware: reject with 403 if user has External role.
+ * External users can only access announcements, calendar, and notifications.
+ */
+function requireNonExternal(req, res, next) {
+  if (getActiveRole(req) === 'external') {
+    return res.status(403).json({ error: 'External users do not have access to this resource' });
+  }
+  return next();
+}
+
+/**
  * Check whether the current user owns a record or is an admin.
  *
  * @param {object} req        - Express request (must have req.user.db set)
@@ -105,5 +116,6 @@ module.exports = {
   requireAdmin,
   requireProcessorOrAdmin,
   requireManagerOrAdmin,
+  requireNonExternal,
   requireDbUser,
 };

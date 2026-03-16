@@ -9,6 +9,7 @@ const rateLimit = require('express-rate-limit');
 
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
+const { requireNonExternal } = require('./middleware/userContext');
 const logger = require('./lib/logger');
 const pinoHttp = require('pino-http');
 const websocket = require('./lib/websocket');
@@ -156,43 +157,43 @@ app.get('/api/me', authenticate, (req, res) => {
   });
 });
 
-// All other routes require JWT authentication
-app.use('/api/users', authenticate, usersRoutes);
-app.use('/api/investors', authenticate, investorsRoutes);
-app.use('/api/chat', authenticate, chatRoutes);
+// Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);
 app.use('/api/notifications', authenticate, notificationsRoutes);
-app.use('/api/goals', authenticate, goalsRoutes);
-app.use('/api/files', authenticate, filesRoutes);
-app.use('/api/tasks', authenticate, tasksRoutes);
-app.use('/api/pre-approvals', authenticate, preApprovalsRoutes);
-app.use('/api/pipeline', authenticate, pipelineRoutes);
-app.use('/api/funded-loans', authenticate, fundedLoansRoutes);
-app.use('/api/admin', authenticate, adminRoutes);
+app.use('/api/calendar-events', authenticate, calendarEventsRoutes);
 app.use('/api/me/profile', authenticate, myProfileRoutes);
 
-// Content Engine (all require JWT auth)
-app.use('/api/integrations', authenticate, integrationsRoutes);
-app.use('/api/content/templates', authenticate, contentTemplatesRoutes);
-app.use('/api/content/search', authenticate, contentSearchRoutes);
-app.use('/api/content/generate', authenticate, contentGenerateRoutes);
-app.use('/api/content/items', authenticate, contentItemsRoutes);
-app.use('/api/content/publish', authenticate, contentPublishRoutes);
+// Routes blocked for External users
+app.use('/api/users', authenticate, requireNonExternal, usersRoutes);
+app.use('/api/investors', authenticate, requireNonExternal, investorsRoutes);
+app.use('/api/chat', authenticate, requireNonExternal, chatRoutes);
+app.use('/api/goals', authenticate, requireNonExternal, goalsRoutes);
+app.use('/api/files', authenticate, requireNonExternal, filesRoutes);
+app.use('/api/tasks', authenticate, requireNonExternal, tasksRoutes);
+app.use('/api/pre-approvals', authenticate, requireNonExternal, preApprovalsRoutes);
+app.use('/api/pipeline', authenticate, requireNonExternal, pipelineRoutes);
+app.use('/api/funded-loans', authenticate, requireNonExternal, fundedLoansRoutes);
+app.use('/api/admin', authenticate, requireNonExternal, adminRoutes);
 
-// Monday.com integration (read-only sync)
-app.use('/api/monday', authenticate, mondayRoutes);
+// Content Engine (blocked for External)
+app.use('/api/integrations', authenticate, requireNonExternal, integrationsRoutes);
+app.use('/api/content/templates', authenticate, requireNonExternal, contentTemplatesRoutes);
+app.use('/api/content/search', authenticate, requireNonExternal, contentSearchRoutes);
+app.use('/api/content/generate', authenticate, requireNonExternal, contentGenerateRoutes);
+app.use('/api/content/items', authenticate, requireNonExternal, contentItemsRoutes);
+app.use('/api/content/publish', authenticate, requireNonExternal, contentPublishRoutes);
 
-// Company Calendar
-app.use('/api/calendar-events', authenticate, calendarEventsRoutes);
+// Monday.com integration (blocked for External)
+app.use('/api/monday', authenticate, requireNonExternal, mondayRoutes);
 
 // Lending Guidelines
-app.use('/api/guidelines', authenticate, guidelinesRoutes);
+app.use('/api/guidelines', authenticate, requireNonExternal, guidelinesRoutes);
 
 // LendingPad integration
-app.use('/api/lendingpad', authenticate, lendingpadRoutes);
+app.use('/api/lendingpad', authenticate, requireNonExternal, lendingpadRoutes);
 
 // Processing order tracking
-app.use('/api/processing', authenticate, processingRoutes);
+app.use('/api/processing', authenticate, requireNonExternal, processingRoutes);
 
 // Employee Handbook
 app.use('/api/handbook', authenticate, handbookRoutes);
