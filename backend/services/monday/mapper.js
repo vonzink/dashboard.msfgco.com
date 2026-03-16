@@ -10,6 +10,15 @@ const VALID_PIPELINE_FIELDS = [
   'closing_date', 'funding_date', 'stage', 'notes',
   'prelims_status', 'mini_set_status', 'cd_status',
   'assigned_lo_name',
+  // Full Monday.com mirror fields
+  'conditions', 'lp_loan_number', 'property_type', 'assistant_mgr',
+  'initial_loan_amount', 'purchase_price',
+  'appraisal_deadline', 'appraisal_due_date', 'appraised_value',
+  'title_order_number', 'payoffs', 'payoff_date',
+  'wvoes', 'vvoes', 'hoa',
+  'cd_info', 'cd_signed', 'dpa',
+  'closing_details', 'estimated_fund_date', 'closing_docs',
+  'send_to_compliance',
 ];
 
 const VALID_PRE_APPROVAL_FIELDS = [
@@ -75,6 +84,25 @@ const FIELD_LABELS = {
   loan_status: 'Loan Status',
   purchase_price: 'Purchase Price',
   appraised_value: 'Appraised Value',
+  conditions: 'Conditions',
+  lp_loan_number: 'LP Loan #',
+  assistant_mgr: 'Assistant/Mgr',
+  initial_loan_amount: 'Initial Loan Amt',
+  appraisal_deadline: 'Appraisal Deadline',
+  appraisal_due_date: 'Appraisal Due Date',
+  title_order_number: 'Title Order #',
+  payoffs: 'Payoffs',
+  payoff_date: 'Payoff Date',
+  wvoes: 'WVOEs',
+  vvoes: 'VVOEs',
+  hoa: 'HOA',
+  cd_info: 'CD Info',
+  cd_signed: 'CD Signed',
+  dpa: 'DPA',
+  closing_details: 'Closing Details',
+  estimated_fund_date: 'Est. Fund Date',
+  closing_docs: 'Closing Docs',
+  send_to_compliance: 'Send to Compliance',
 };
 
 const FIELD_LABELS_BY_SECTION = {
@@ -163,12 +191,39 @@ const DEFAULT_TITLE_MAP = {
   'appraisal value':      'appraised_value',
   'purpose':              'loan_purpose',
   'sbj property':         'subject_property',
+  // Full Monday.com board field mappings
+  'conditions':           'conditions',
+  'lp loan number':       'lp_loan_number',
+  'assistant/mgr':        'assistant_mgr',
+  'assistant':            'assistant_mgr',
+  'initial loan amount':  'initial_loan_amount',
+  'appraisal deadline':   'appraisal_deadline',
+  'appraisal due date':   'appraisal_due_date',
+  'title order number':   'title_order_number',
+  'title order':          'title_order_number',
+  'payoffs':              'payoffs',
+  'payoff date':          'payoff_date',
+  'payoff':               'payoffs',
+  'wvoes':                'wvoes',
+  'vvoes':                'vvoes',
+  'hoa':                  'hoa',
+  'cd info':              'cd_info',
+  'cd signed':            'cd_signed',
+  'dpa':                  'dpa',
+  'closing details':      'closing_details',
+  'estimated fund date':  'estimated_fund_date',
+  'est fund date':        'estimated_fund_date',
+  'closing docs':         'closing_docs',
+  'send to compliance':   'send_to_compliance',
+  'compliance':           'send_to_compliance',
+  'lock date.':           'lock_expiration_date',
 };
 
 const DATE_FIELDS = [
   'application_date', 'lock_expiration_date', 'closing_date', 'funding_date',
   'target_close_date', 'pre_approval_date', 'expiration_date', 'funded_date',
   'contact_date',
+  'appraisal_deadline', 'appraisal_due_date', 'payoff_date', 'estimated_fund_date',
 ];
 
 function mapItemToRow(item, columnMap, userNameMap) {
@@ -188,7 +243,7 @@ function mapItemToRow(item, columnMap, userNameMap) {
     const text = (cv.text || '').trim();
     if (!text) continue;
 
-    if (['loan_amount', 'income', 'purchase_price', 'appraised_value'].includes(field)) {
+    if (['loan_amount', 'income', 'purchase_price', 'appraised_value', 'initial_loan_amount'].includes(field)) {
       const num = parseFloat(text.replace(/[$,\s]/g, ''));
       row[field] = isNaN(num) ? null : num;
     } else if (field === 'credit_score') {
@@ -223,6 +278,12 @@ function mapItemToRow(item, columnMap, userNameMap) {
   return row;
 }
 
+// Columns where a more specific title should take priority over a shorter alias.
+// e.g. "Loan Officer" should win over "LO" for assigned_lo_name.
+const PREFERRED_TITLES = {
+  assigned_lo_name: 'loan officer',
+};
+
 async function autoMapColumns(token, boardId) {
   const data = await mondayQuery(token, `query {
     boards(ids: [${boardId}]) {
@@ -233,14 +294,39 @@ async function autoMapColumns(token, boardId) {
   const columns = data.boards?.[0]?.columns || [];
   const mappings = [];
   const usedFields = new Set();
+  // Track fields that have a preferred title so we can upgrade them
+  const fieldToMapping = {};
 
   for (const col of columns) {
     const normalizedTitle = col.title.toLowerCase().trim();
+    // Skip columns explicitly marked as unused
+    if (normalizedTitle === 'do not use') continue;
+    // Skip Monday.com internal doc columns
+    if (normalizedTitle.startsWith('monday doc')) continue;
+
     const field = DEFAULT_TITLE_MAP[normalizedTitle];
-    if (field && !usedFields.has(field)) {
-      usedFields.add(field);
-      mappings.push({ monday_column_id: col.id, pipeline_field: field });
+    if (!field) continue;
+
+    if (usedFields.has(field)) {
+      // If this title is the preferred one for the field, replace the earlier mapping
+      const preferred = PREFERRED_TITLES[field];
+      if (preferred && normalizedTitle === preferred) {
+        const oldMapping = fieldToMapping[field];
+        if (oldMapping) {
+          const idx = mappings.indexOf(oldMapping);
+          if (idx !== -1) mappings.splice(idx, 1);
+        }
+        const newMapping = { monday_column_id: col.id, pipeline_field: field };
+        mappings.push(newMapping);
+        fieldToMapping[field] = newMapping;
+      }
+      continue;
     }
+
+    usedFields.add(field);
+    const mapping = { monday_column_id: col.id, pipeline_field: field };
+    mappings.push(mapping);
+    fieldToMapping[field] = mapping;
   }
 
   return mappings;

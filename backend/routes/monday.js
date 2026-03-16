@@ -281,8 +281,12 @@ router.get('/view-config', async (req, res, next) => {
     const boards = await getActiveBoards(section);
     const boardIds = boards.map(b => b.board_id);
 
+    const columns = [
+      { field: 'client_name', label: 'Client Name', order: -1, visible: true, locked: true }
+    ];
+
     if (boardIds.length === 0) {
-      return res.json({ columns: [{ field: 'client_name', label: 'Client Name', order: -1, visible: true, locked: true }] });
+      return res.json({ columns });
     }
 
     const [mappings] = await db.query(
@@ -302,17 +306,28 @@ router.get('/view-config', async (req, res, next) => {
       }
     }
 
-    const columns = [
-      { field: 'client_name', label: 'Client Name', order: -1, visible: true, locked: true }
-    ];
-
-    for (const m of unique) {
-      columns.push({
-        field: m.pipeline_field,
-        label: m.display_label || FIELD_LABELS[m.pipeline_field] || m.pipeline_field,
-        order: m.display_order ?? 99,
-        visible: m.visible !== 0,
-      });
+    if (unique.length > 0) {
+      for (const m of unique) {
+        columns.push({
+          field: m.pipeline_field,
+          label: m.display_label || FIELD_LABELS[m.pipeline_field] || m.pipeline_field,
+          order: m.display_order ?? 99,
+          visible: m.visible !== 0,
+        });
+      }
+    } else {
+      // No saved mappings — return all valid fields for this section so the
+      // dashboard shows every column the auto-mapper will populate on next sync
+      const validFields = VALID_FIELDS_BY_SECTION[section] || [];
+      let order = 0;
+      for (const field of validFields) {
+        columns.push({
+          field,
+          label: FIELD_LABELS[field] || field,
+          order: order++,
+          visible: true,
+        });
+      }
     }
 
     res.json({ columns });
