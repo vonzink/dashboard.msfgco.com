@@ -95,18 +95,39 @@ const App = {
                 CONFIG.currentUser.email = me.email;
                 CONFIG.currentUser.initials = me.initials || CONFIG.currentUser.initials;
                 CONFIG.currentUser.role = me.role || 'user';
+                CONFIG.currentUser.cognitoGroups = me.cognitoGroups || [];
+
+                // Determine active role — saved preference > 'Admin' default > first group > DB role
+                const groups = me.cognitoGroups || [];
+                const saved = localStorage.getItem('active_role');
+                let activeRole;
+                if (saved && groups.includes(saved)) {
+                    activeRole = saved;
+                } else if (groups.includes('Admin')) {
+                    activeRole = 'Admin';
+                } else if (groups.length > 0) {
+                    activeRole = groups[0];
+                } else {
+                    activeRole = me.role || 'user';
+                }
+                localStorage.setItem('active_role', activeRole);
+                CONFIG.currentUser.activeRole = activeRole;
 
                 // Update header UI
                 const nameEl = document.getElementById('userName');
                 const roleEl = document.getElementById('userRole');
                 const avatarEl = document.getElementById('userAvatar');
                 if (nameEl && me.name) nameEl.textContent = me.name;
-                if (roleEl && me.role) roleEl.textContent = me.role;
+                if (roleEl) roleEl.textContent = activeRole;
                 if (avatarEl && me.initials) avatarEl.textContent = me.initials;
 
-                // Show admin-only elements
-                const role = String(me.role).toLowerCase();
-                if (role === 'admin') {
+                // Build role switcher if user has multiple groups
+                if (groups.length > 1) {
+                    this.initRoleSwitcher(groups, activeRole);
+                }
+
+                // Show admin-only elements based on active role
+                if (activeRole.toLowerCase() === 'admin') {
                     document.querySelectorAll('.admin-only-item').forEach(el => {
                         el.style.display = '';
                     });
@@ -118,6 +139,45 @@ const App = {
         } catch (err) {
             console.warn('Could not load current user:', err);
         }
+    },
+
+    // ========================================
+    // ROLE SWITCHER
+    // ========================================
+    initRoleSwitcher(groups, activeRole) {
+        const switcher = document.getElementById('roleSwitcher');
+        const btn = document.getElementById('roleSwitcherBtn');
+        const menu = document.getElementById('roleSwitcherMenu');
+        if (!switcher || !btn || !menu) return;
+
+        switcher.style.display = '';
+
+        // Build menu items
+        menu.innerHTML = groups.map(g => {
+            const isActive = g === activeRole ? ' active' : '';
+            return '<button type="button" class="role-switcher__item' + isActive + '" data-role="' + g + '">' + g + '</button>';
+        }).join('');
+
+        // Toggle menu
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+        });
+
+        // Close on outside click
+        document.addEventListener('click', () => menu.classList.remove('open'));
+
+        // Role selection
+        menu.addEventListener('click', (e) => {
+            const item = e.target.closest('.role-switcher__item');
+            if (!item) return;
+            const newRole = item.dataset.role;
+            if (newRole === activeRole) { menu.classList.remove('open'); return; }
+
+            localStorage.setItem('active_role', newRole);
+            // Reload to apply the new role everywhere
+            window.location.reload();
+        });
     },
 
     // ========================================

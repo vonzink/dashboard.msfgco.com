@@ -78,11 +78,17 @@
 
         <div class="header-divider"></div>
 
-        <div class="user-info">
+        <div class="user-info" id="userInfo">
           <div class="user-avatar" id="userAvatar">ZB</div>
           <div>
             <div class="user-name" id="userName">Zachary</div>
             <div class="user-role" id="userRole">Loan Officer</div>
+          </div>
+          <div class="role-switcher" id="roleSwitcher" style="display:none;">
+            <button type="button" class="role-switcher__toggle" id="roleSwitcherBtn" title="Switch Role">
+              <i class="fas fa-exchange-alt"></i>
+            </button>
+            <div class="role-switcher__menu" id="roleSwitcherMenu"></div>
           </div>
         </div>
 

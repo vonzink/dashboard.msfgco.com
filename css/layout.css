@@ -69,6 +69,86 @@
     opacity: 0.8;
 }
 
+/* Role Switcher */
+.role-switcher {
+    position: relative;
+    margin-left: 0.25rem;
+}
+
+.role-switcher__toggle {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-md, 6px);
+    background: rgba(255,255,255,0.15);
+    border: none;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    transition: background 0.2s;
+}
+
+.role-switcher__toggle:hover {
+    background: rgba(255,255,255,0.3);
+}
+
+.role-switcher__menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 160px;
+    background: var(--bg-primary, #fff);
+    border: 1px solid var(--border-color, #ddd);
+    border-radius: var(--radius-md, 6px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    padding: 4px 0;
+}
+
+.role-switcher__menu.open {
+    display: block;
+}
+
+.role-switcher__item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: none;
+    background: none;
+    color: var(--text-primary, #333);
+    font-size: 0.8rem;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.role-switcher__item:hover {
+    background: var(--bg-hover, #f0f0f0);
+}
+
+.role-switcher__item.active {
+    font-weight: 600;
+    color: var(--accent, #4a90d9);
+}
+
+.role-switcher__item.active::before {
+    content: '\f00c';
+    font-family: 'Font Awesome 5 Free';
+    font-weight: 900;
+    font-size: 0.65rem;
+}
+
+.role-switcher__item:not(.active)::before {
+    content: '';
+    width: 0.65rem;
+    display: inline-block;
+}
+
 /* Theme Toggle */
 .theme-toggle {
     width: 44px;

@@ -6,17 +6,33 @@ function getUserId(req) {
   return req.user?.db?.id || null;
 }
 
-function isAdmin(req) {
-  const role = String(req.user?.db?.role || '').toLowerCase();
-  return role === 'admin';
-}
-
-function getUserRole(req) {
+/**
+ * Get the user's effective active role.
+ * Checks the X-Active-Role header and validates it against the user's
+ * actual Cognito groups. Falls back to the DB role if the header is
+ * missing or invalid.
+ */
+function getActiveRole(req) {
+  const requested = req.headers['x-active-role'];
+  if (requested) {
+    const groups = req.user?.groups || [];
+    if (groups.includes(requested)) {
+      return requested.toLowerCase();
+    }
+  }
   return String(req.user?.db?.role || '').toLowerCase();
 }
 
+function isAdmin(req) {
+  return getActiveRole(req) === 'admin';
+}
+
+function getUserRole(req) {
+  return getActiveRole(req);
+}
+
 function hasRole(req, ...roles) {
-  return roles.includes(getUserRole(req));
+  return roles.includes(getActiveRole(req));
 }
 
 function requireDbUser(req, res, next) {

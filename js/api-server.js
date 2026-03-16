@@ -179,9 +179,11 @@ const ServerAPI = {
             CONFIG.api.timeout
         );
 
+        const activeRole = localStorage.getItem('active_role');
         const headers = {
             ...(options.headers || {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(activeRole ? { 'X-Active-Role': activeRole } : {}),
         };
 
         try {

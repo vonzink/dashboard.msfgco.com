@@ -89,7 +89,8 @@ app.use(cors({
     }
     callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Active-Role']
 }));
 
 // Rate limiting - 1000 requests per 15 minutes per IP
@@ -150,7 +151,8 @@ app.get('/api/me', authenticate, (req, res) => {
     email: user.email || null,
     name: user.name || null,
     initials: user.initials || null,
-    role: user.role || 'user'
+    role: user.role || 'user',
+    cognitoGroups: req.user?.groups || []
   });
 });
 
