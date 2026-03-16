@@ -608,8 +608,9 @@ const API = {
     },
 
     // Date fields that need formatting
-    DATE_FIELDS: ['application_date', 'lock_expiration_date', 'closing_date', 'funding_date', 'target_close_date'],
-    CURRENCY_FIELDS: ['loan_amount'],
+    DATE_FIELDS: ['application_date', 'lock_expiration_date', 'closing_date', 'funding_date', 'target_close_date',
+        'appraisal_deadline', 'appraisal_due_date', 'payoff_date', 'estimated_fund_date'],
+    CURRENCY_FIELDS: ['loan_amount', 'initial_loan_amount', 'purchase_price', 'appraised_value'],
 
     renderPipeline(data) {
         const tbody = document.getElementById('pipelineBody');
