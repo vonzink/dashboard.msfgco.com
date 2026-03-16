@@ -23,14 +23,20 @@ router.get('/', async (req, res, next) => {
                  WHERE 1=1`;
     const params = [];
 
-    if (!isAdmin(req)) {
-      // Non-admin: only see pre-approvals from boards they have access to
+    if (!isAdmin(req) && !hasRole(req, 'manager')) {
+      // Non-admin/manager: only see pre-approvals from boards they have access to
       const boardIds = await getAccessibleBoardIds(getUserId(req));
       if (boardIds.length === 0) {
         return res.json({ data: [], boards: [], groups: [] });
       }
       query += ` AND pa.source_board_id IN (${boardIds.map(() => '?').join(',')})`;
       params.push(...boardIds);
+
+      // LO: further restrict to only their own pre-approvals
+      if (hasRole(req, 'lo')) {
+        query += ' AND pa.assigned_lo_id = ?';
+        params.push(getUserId(req));
+      }
     }
 
     // Optional board filter
@@ -116,6 +122,12 @@ router.get('/summary', async (req, res, next) => {
       }
       whereClause += ` AND source_board_id IN (${boardIds.map(() => '?').join(',')})`;
       params.push(...boardIds);
+
+      // LO: further restrict to only their own pre-approvals
+      if (hasRole(req, 'lo')) {
+        whereClause += ' AND assigned_lo_id = ?';
+        params.push(getUserId(req));
+      }
     }
 
     const [summary] = await db.query(

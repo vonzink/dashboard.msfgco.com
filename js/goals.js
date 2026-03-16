@@ -87,7 +87,7 @@ const GoalsManager = {
     // LO PICKER (Admin/Manager only)
     // ========================================
     _isAdminOrManager() {
-        const role = String(CONFIG.currentUser?.role || '').toLowerCase();
+        const role = String(CONFIG.currentUser?.activeRole || CONFIG.currentUser?.role || '').toLowerCase();
         return role === 'admin' || role === 'manager';
     },
 

@@ -125,13 +125,15 @@ router.get('/', async (req, res, next) => {
         params.push(board_id);
       }
     } else if (userGroup === 'lo') {
-      // LO: See only loans from boards they have access to
+      // LO: See only their own loans on boards they have access to
       const boardIds = await getAccessibleBoardIds(userId);
       if (boardIds.length === 0) {
         return res.json({ data: [], summary: { count: 0, total_amount: 0 }, groups: [], boards: [] });
       }
       whereClause += ` AND fl.source_board_id IN (${boardIds.map(() => '?').join(',')})`;
       params.push(...boardIds);
+      whereClause += ' AND fl.assigned_lo_id = ?';
+      params.push(userId);
 
       if (board_id) {
         whereClause += ' AND fl.source_board_id = ?';
@@ -310,6 +312,8 @@ router.get('/summary', async (req, res, next) => {
       }
       whereClause += ` AND source_board_id IN (${boardIds.map(() => '?').join(',')})`;
       params.push(...boardIds);
+      whereClause += ' AND assigned_lo_id = ?';
+      params.push(userId);
     } else {
       return res.status(403).json({ error: 'Access denied' });
     }

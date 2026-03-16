@@ -576,11 +576,26 @@ const UserSettings = {
 
     try {
       await ServerAPI.put('/me/profile/display-preferences', { section, columns });
-      // Invalidate cached prefs so tables re-render with new visibility
+      // Invalidate both cache layers so tables re-render with new config
+      ServerAPI.invalidateCache('/me/profile/display-preferences');
       if (API._displayPrefs) API._displayPrefs = null;
+
+      // Live-reload the affected table so changes appear immediately
+      if (section === 'funded_loans' && typeof FundedLoans !== 'undefined') {
+        FundedLoans._columnsLoaded = false;
+        await FundedLoans._loadColumnConfig();
+        FundedLoans._renderTable();
+      } else if (section === 'pipeline' && typeof API !== 'undefined') {
+        await API.loadPipelineConfig();
+        API.renderPipeline(API.pipelineData || []);
+      } else if (section === 'pre_approvals' && typeof API !== 'undefined') {
+        await API._loadDisplayPrefs();
+        API.renderPreApprovals(API.preApprovalData || []);
+      }
+
       btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
       setTimeout(() => { btn.innerHTML = origHtml; btn.disabled = false; }, 2000);
-      Utils.showToast(`${section.replace(/_/g, ' ')} columns updated — refresh to see changes`, 'success');
+      Utils.showToast(`${section.replace(/_/g, ' ')} columns updated`, 'success');
     } catch (err) {
       Utils.showToast('Failed to save: ' + err.message, 'error');
       btn.innerHTML = origHtml;
