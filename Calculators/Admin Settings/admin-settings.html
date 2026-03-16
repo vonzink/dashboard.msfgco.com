@@ -28,6 +28,9 @@
     <button class="admin-tab" data-tab="forms">
       <i class="fas fa-file-upload"></i> Forms Library
     </button>
+    <button class="admin-tab" data-tab="processors">
+      <i class="fas fa-user-cog"></i> Processors
+    </button>
     <button class="admin-tab" data-tab="system">
       <i class="fas fa-server"></i> System
     </button>
@@ -749,6 +752,25 @@
   </div>
 
   <!-- ================================================
+       TAB: Processors (LO Assignments)
+  ================================================ -->
+  <div class="admin-panel" id="panel-processors">
+    <div class="toolbar">
+      <h3 style="margin:0; font-size:16px; color:#104547;">
+        <i class="fas fa-user-cog"></i> Processor — Loan Officer Assignments
+      </h3>
+    </div>
+    <p style="font-size:13px; color:#888; margin:8px 0 16px;">
+      Assign which Loan Officers each Processor can see in their pipeline, funded loans, and pre-approvals.
+    </p>
+    <div id="processorAssignmentsContainer">
+      <div style="text-align:center; padding:30px; color:#999;">
+        <i class="fas fa-spinner fa-spin"></i> Loading...
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================
        TAB: System
   ================================================ -->
   <div class="admin-panel" id="panel-system">
@@ -1027,6 +1049,7 @@
         const tabName = tab.dataset.tab;
         if (tabName === 'employees') loadUsers();
         if (tabName === 'investors') loadInvestors();
+        if (tabName === 'processors') loadProcessorAssignments();
         if (tabName === 'system') loadSystem();
         if (tabName === 'monday') loadMondayTab();
       });
@@ -3290,6 +3313,103 @@
 
     document.getElementById('mondayRunSyncBtn').addEventListener('click', runMondaySync);
 
+    /* ═══════════════════════════════════════
+       PROCESSORS TAB
+    ═══════════════════════════════════════ */
+    async function loadProcessorAssignments() {
+      const container = document.getElementById('processorAssignmentsContainer');
+      container.innerHTML = '<div style="text-align:center; padding:30px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+      try {
+        const data = await api('/admin/processor-assignments');
+        if (!data) return;
+
+        const { processors, los, assignments } = data;
+
+        if (processors.length === 0) {
+          container.innerHTML = '<div style="text-align:center; padding:30px; color:#999;">No processors found. Add a user with the "processor" role first.</div>';
+          return;
+        }
+
+        // Build a map of processor -> Set of assigned LO ids
+        const assignmentMap = {};
+        processors.forEach(p => { assignmentMap[p.id] = new Set(); });
+        assignments.forEach(a => {
+          if (assignmentMap[a.processor_user_id]) {
+            assignmentMap[a.processor_user_id].add(a.lo_user_id);
+          }
+        });
+
+        let html = '';
+        for (const proc of processors) {
+          const assignedSet = assignmentMap[proc.id] || new Set();
+          html += '<div class="processor-card" data-processor-id="' + proc.id + '">' +
+            '<div class="processor-header">' +
+              '<div>' +
+                '<strong style="font-size:15px;">' + escHtml(proc.name) + '</strong>' +
+                '<span style="font-size:12px; color:#888; margin-left:8px;">' + escHtml(proc.email) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary btn-sm proc-save-btn" data-processor-id="' + proc.id + '">' +
+                '<i class="fas fa-save"></i> Save' +
+              '</button>' +
+            '</div>' +
+            '<div class="processor-lo-grid">';
+
+          for (const lo of los) {
+            const checked = assignedSet.has(lo.id) ? ' checked' : '';
+            html += '<label class="lo-checkbox-label">' +
+              '<input type="checkbox" class="proc-lo-cb" data-processor-id="' + proc.id + '" data-lo-id="' + lo.id + '"' + checked + '>' +
+              '<span>' + escHtml(lo.name) + '</span>' +
+            '</label>';
+          }
+
+          html += '</div></div>';
+        }
+
+        container.innerHTML = html;
+
+        // Bind save buttons
+        container.querySelectorAll('.proc-save-btn').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const processorId = btn.dataset.processorId;
+            const checkboxes = container.querySelectorAll('.proc-lo-cb[data-processor-id="' + processorId + '"]');
+            const loIds = [];
+            checkboxes.forEach(cb => { if (cb.checked) loIds.push(parseInt(cb.dataset.loId, 10)); });
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            try {
+              const result = await api('/admin/processor-assignments/' + processorId, {
+                method: 'PUT',
+                body: JSON.stringify({ lo_ids: loIds }),
+              });
+              if (result) {
+                btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
+                setTimeout(() => {
+                  btn.innerHTML = '<i class="fas fa-save"></i> Save';
+                  btn.classList.remove('btn-success');
+                  btn.classList.add('btn-primary');
+                  btn.disabled = false;
+                }, 1500);
+              } else {
+                btn.innerHTML = '<i class="fas fa-save"></i> Save';
+                btn.disabled = false;
+              }
+            } catch (err) {
+              alert('Failed to save: ' + err.message);
+              btn.innerHTML = '<i class="fas fa-save"></i> Save';
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch (err) {
+        container.innerHTML = '<div style="text-align:center; padding:30px; color:#e74c3c;"><i class="fas fa-exclamation-triangle"></i> Failed to load: ' + escHtml(err.message) + '</div>';
+      }
+    }
+
     /* ── Init ── */
     document.addEventListener('DOMContentLoaded', () => {
       // Verify admin access
@@ -3305,6 +3425,8 @@
           document.querySelector('[data-tab="monday"]').click();
         } else if (hash === '#investors') {
           document.querySelector('[data-tab="investors"]').click();
+        } else if (hash === '#processors') {
+          document.querySelector('[data-tab="processors"]').click();
         } else {
           loadUsers();
         }
