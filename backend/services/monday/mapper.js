@@ -37,6 +37,19 @@ const VALID_FUNDED_LOAN_FIELDS = [
   'closing_date', 'loan_status', 'purchase_price', 'appraised_value',
   'rate', 'occupancy', 'lender', 'loan_purpose', 'credit_score',
   'subject_property', 'referring_agent',
+  // Full Monday.com mirror fields
+  'borrower_email', 'borrower_phone', 'borrower_dob',
+  'coborrower_email', 'coborrower_dob',
+  'sbj_city', 'sbj_state', 'sbj_county', 'sbj_zip',
+  'buyer_agent', 'seller_agent', 'title_company',
+  'hazard_insurance_company', 'hazard_insurance_amount',
+  'cltv', 'ltv', 'first_payment_date', 'mortgage_payment',
+  'taxes', 'borrower_first_name', 'borrower_last_name', 'term',
+  'borrower2_first_name', 'borrower2_last_name', 'borrower2_phone',
+  'seller_comp', 'mortgage_insurance', 'escrow_waiver',
+  'occupancy_type', 'lp_loan_number', 'property_type',
+  'lender_or_broker_pd', 'application_date', 'lien_status',
+  'state', 'broker_fee',
 ];
 
 const VALID_FIELDS_BY_SECTION = {
@@ -103,6 +116,40 @@ const FIELD_LABELS = {
   estimated_fund_date: 'Est. Fund Date',
   closing_docs: 'Closing Docs',
   send_to_compliance: 'Send to Compliance',
+  // Funded loan full mirror fields
+  borrower_email: 'Borrower Email',
+  borrower_phone: 'Borrower Phone',
+  borrower_dob: 'Borrower DOB',
+  coborrower_email: 'Co-Borrower Email',
+  coborrower_dob: 'Co-Borrower DOB',
+  sbj_city: 'City',
+  sbj_state: 'State',
+  sbj_county: 'County',
+  sbj_zip: 'Zip',
+  buyer_agent: 'Buyer Agent',
+  seller_agent: 'Seller Agent',
+  title_company: 'Title',
+  hazard_insurance_company: 'Hazard Ins. Company',
+  hazard_insurance_amount: 'Hazard Ins. Amount',
+  cltv: 'CLTV',
+  ltv: 'LTV',
+  first_payment_date: 'First Payment Date',
+  mortgage_payment: 'Mortgage Payment',
+  taxes: 'Taxes',
+  borrower_first_name: 'Borrower First Name',
+  borrower_last_name: 'Borrower Last Name',
+  term: 'Term',
+  borrower2_first_name: 'Borrower 2 First Name',
+  borrower2_last_name: 'Borrower 2 Last Name',
+  borrower2_phone: 'Borrower 2 Phone',
+  seller_comp: 'Seller Comp',
+  mortgage_insurance: 'Mortgage Insurance',
+  escrow_waiver: 'Escrow Waiver',
+  occupancy_type: 'Occupancy Type',
+  lender_or_broker_pd: 'Lender/Broker Pd',
+  lien_status: 'Lien Status',
+  state: 'State',
+  broker_fee: 'Broker Fee',
 };
 
 const FIELD_LABELS_BY_SECTION = {
@@ -217,6 +264,43 @@ const DEFAULT_TITLE_MAP = {
   'send to compliance':   'send_to_compliance',
   'compliance':           'send_to_compliance',
   'lock date.':           'lock_expiration_date',
+  // Funded loan board field mappings
+  'borrower email':       'borrower_email',
+  'borrower phone':       'borrower_phone',
+  'borrower date of birth': 'borrower_dob',
+  'coborrower email':     'coborrower_email',
+  'coborrower date of birth': 'coborrower_dob',
+  'sbj city':             'sbj_city',
+  'sbj state':            'sbj_state',
+  'sbj county':           'sbj_county',
+  'sbj zip':              'sbj_zip',
+  'buyer agent':          'buyer_agent',
+  'seller agent':         'seller_agent',
+  'hazard insurance company': 'hazard_insurance_company',
+  'hazard insurance amount': 'hazard_insurance_amount',
+  'cltv':                 'cltv',
+  'ltv':                  'ltv',
+  'first payment date':   'first_payment_date',
+  'mortgage payment':     'mortgage_payment',
+  'taxes':                'taxes',
+  'borrower first name':  'borrower_first_name',
+  'borrower last name':   'borrower_last_name',
+  'term':                 'term',
+  'borrower 2 first name': 'borrower2_first_name',
+  'borrower 2 last name': 'borrower2_last_name',
+  'borrower 2 phone':     'borrower2_phone',
+  'seller':               'seller_agent',
+  'comp':                 'seller_comp',
+  'mortgage insurance':   'mortgage_insurance',
+  'escrow waiver':        'escrow_waiver',
+  'occupancy type':       'occupancy_type',
+  'purchase':             'loan_purpose',
+  'lender or broker pd':  'lender_or_broker_pd',
+  'first name':           'borrower_first_name',
+  'last name':            'borrower_last_name',
+  'lien status':          'lien_status',
+  'broker fee':           'broker_fee',
+  'state':                'state',
 };
 
 const DATE_FIELDS = [
@@ -224,6 +308,7 @@ const DATE_FIELDS = [
   'target_close_date', 'pre_approval_date', 'expiration_date', 'funded_date',
   'contact_date',
   'appraisal_deadline', 'appraisal_due_date', 'payoff_date', 'estimated_fund_date',
+  'borrower_dob', 'coborrower_dob', 'first_payment_date',
 ];
 
 function mapItemToRow(item, columnMap, userNameMap) {
@@ -243,7 +328,8 @@ function mapItemToRow(item, columnMap, userNameMap) {
     const text = (cv.text || '').trim();
     if (!text) continue;
 
-    if (['loan_amount', 'income', 'purchase_price', 'appraised_value', 'initial_loan_amount'].includes(field)) {
+    if (['loan_amount', 'income', 'purchase_price', 'appraised_value', 'initial_loan_amount',
+         'hazard_insurance_amount', 'mortgage_payment', 'seller_comp', 'mortgage_insurance', 'broker_fee'].includes(field)) {
       const num = parseFloat(text.replace(/[$,\s]/g, ''));
       row[field] = isNaN(num) ? null : num;
     } else if (field === 'credit_score') {
@@ -284,7 +370,16 @@ const PREFERRED_TITLES = {
   assigned_lo_name: 'loan officer',
 };
 
-async function autoMapColumns(token, boardId) {
+// Section-specific overrides: some column titles mean different things per section.
+// e.g. "Title" = title_status (pipeline) vs title_company (funded_loans)
+const SECTION_TITLE_OVERRIDES = {
+  funded_loans: {
+    'title': 'title_company',
+    'loan status': 'loan_status',  // funded_loans uses loan_status, not stage
+  },
+};
+
+async function autoMapColumns(token, boardId, section = 'pipeline') {
   const data = await mondayQuery(token, `query {
     boards(ids: [${boardId}]) {
       columns { id title type }
@@ -304,7 +399,9 @@ async function autoMapColumns(token, boardId) {
     // Skip Monday.com internal doc columns
     if (normalizedTitle.startsWith('monday doc')) continue;
 
-    const field = DEFAULT_TITLE_MAP[normalizedTitle];
+    // Check section-specific overrides first, then fall back to default map
+    const overrides = SECTION_TITLE_OVERRIDES[section] || {};
+    const field = overrides[normalizedTitle] || DEFAULT_TITLE_MAP[normalizedTitle];
     if (!field) continue;
 
     if (usedFields.has(field)) {
@@ -340,6 +437,7 @@ module.exports = {
   FIELD_LABELS,
   FIELD_LABELS_BY_SECTION,
   DEFAULT_TITLE_MAP,
+  SECTION_TITLE_OVERRIDES,
   DATE_FIELDS,
   mapItemToRow,
   autoMapColumns,

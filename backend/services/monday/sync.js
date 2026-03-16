@@ -151,6 +151,43 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
     credit_score: row.credit_score || null,
     subject_property: row.subject_property || null,
     referring_agent: row.referring_agent || null,
+    // Full Monday.com mirror fields
+    borrower_email: row.borrower_email || null,
+    borrower_phone: row.borrower_phone || null,
+    borrower_dob: row.borrower_dob || null,
+    coborrower_email: row.coborrower_email || null,
+    coborrower_dob: row.coborrower_dob || null,
+    sbj_city: row.sbj_city || null,
+    sbj_state: row.sbj_state || null,
+    sbj_county: row.sbj_county || null,
+    sbj_zip: row.sbj_zip || null,
+    buyer_agent: row.buyer_agent || null,
+    seller_agent: row.seller_agent || null,
+    title_company: row.title_company || null,
+    hazard_insurance_company: row.hazard_insurance_company || null,
+    hazard_insurance_amount: row.hazard_insurance_amount || null,
+    cltv: row.cltv || null,
+    ltv: row.ltv || null,
+    first_payment_date: row.first_payment_date || null,
+    mortgage_payment: row.mortgage_payment || null,
+    taxes: row.taxes || null,
+    borrower_first_name: row.borrower_first_name || null,
+    borrower_last_name: row.borrower_last_name || null,
+    term: row.term || null,
+    borrower2_first_name: row.borrower2_first_name || null,
+    borrower2_last_name: row.borrower2_last_name || null,
+    borrower2_phone: row.borrower2_phone || null,
+    seller_comp: row.seller_comp || null,
+    mortgage_insurance: row.mortgage_insurance || null,
+    escrow_waiver: row.escrow_waiver || null,
+    occupancy_type: row.occupancy_type || null,
+    lp_loan_number: row.lp_loan_number || null,
+    property_type: row.property_type || null,
+    lender_or_broker_pd: row.lender_or_broker_pd || null,
+    application_date: row.application_date || null,
+    lien_status: row.lien_status || null,
+    state: row.state || null,
+    broker_fee: row.broker_fee || null,
   };
 
   // Map loan_number to external_loan_id (funded_loans uses external_loan_id column)
@@ -238,7 +275,7 @@ async function syncAllBoards(userId) {
     );
 
     if (mappings.length === 0) {
-      const autoMappings = await autoMapColumns(token, boardId);
+      const autoMappings = await autoMapColumns(token, boardId, section);
       if (autoMappings.length === 0) {
         logger.info({ boardId }, 'Monday sync: no mappings for board, skipping');
         continue;

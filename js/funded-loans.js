@@ -153,33 +153,35 @@ const FundedLoans = {
     return this.COLUMNS;
   },
 
+  // Fields that should be formatted as currency
+  CURRENCY_FIELDS: ['loan_amount', 'purchase_price', 'appraised_value', 'hazard_insurance_amount',
+    'mortgage_payment', 'seller_comp', 'mortgage_insurance', 'broker_fee'],
+  // Fields that should be formatted as dates
+  DATE_FIELDS: ['funded_date', 'closing_date', 'first_payment_date', 'borrower_dob',
+    'coborrower_dob', 'application_date'],
+
   _renderCell(loan, field) {
-    switch (field) {
-      case 'client_name':
-        return '<td>' + Utils.escapeHtml(loan.client_name || loan.borrower_name || loan.borrower || '--') + '</td>';
-      case 'loan_amount':
-        return '<td class="text-right">' + Utils.formatCurrency(loan.loan_amount) + '</td>';
-      case 'assigned_lo_name':
-        return '<td>' + Utils.escapeHtml(loan.lo_name || loan.assigned_lo_name || '--') + '</td>';
-      case 'group_name':
-        return '<td>' + Utils.escapeHtml(loan.group_name || '--') + '</td>';
-      case 'loan_type':
-        return '<td>' + Utils.escapeHtml(loan.loan_type || loan.product_type || '--') + '</td>';
-      case 'funded_date':
-        return '<td>' + (loan.funded_date ? Utils.formatDate(loan.funded_date, 'short') : '--') + '</td>';
-      case 'investor':
-        return '<td>' + Utils.escapeHtml(loan.investor || '--') + '</td>';
-      case 'loan_number':
-        return '<td>' + Utils.escapeHtml(loan.loan_number || '--') + '</td>';
-      case 'property_address':
-        return '<td>' + Utils.escapeHtml(loan.property_address || '--') + '</td>';
-      case 'status':
-        return '<td>' + Utils.escapeHtml(loan.status || '--') + '</td>';
-      case 'notes':
-        return '<td class="notes-cell" title="' + Utils.escapeHtml(loan.notes || '') + '">' + Utils.escapeHtml(loan.notes || '--') + '</td>';
-      default:
-        return '<td>' + Utils.escapeHtml(loan[field] != null ? String(loan[field]) : '--') + '</td>';
+    const val = loan[field];
+    // Special rendering per field type
+    if (field === 'client_name') {
+      return '<td>' + Utils.escapeHtml(loan.client_name || loan.borrower_name || loan.borrower || '--') + '</td>';
     }
+    if (field === 'assigned_lo_name') {
+      return '<td>' + Utils.escapeHtml(loan.lo_name || loan.assigned_lo_name || '--') + '</td>';
+    }
+    if (field === 'loan_type') {
+      return '<td>' + Utils.escapeHtml(loan.loan_type || loan.product_type || '--') + '</td>';
+    }
+    if (field === 'notes') {
+      return '<td class="notes-cell" title="' + Utils.escapeHtml(loan.notes || '') + '">' + Utils.escapeHtml(loan.notes || '--') + '</td>';
+    }
+    if (this.CURRENCY_FIELDS.includes(field)) {
+      return '<td class="text-right">' + (val ? Utils.formatCurrency(val) : '--') + '</td>';
+    }
+    if (this.DATE_FIELDS.includes(field)) {
+      return '<td>' + (val ? Utils.formatDate(val, 'short') : '--') + '</td>';
+    }
+    return '<td>' + Utils.escapeHtml(val != null ? String(val) : '--') + '</td>';
   },
 
   // ========================================
