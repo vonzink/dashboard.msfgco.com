@@ -583,47 +583,151 @@ body {
 /* ── Processor Assignments ── */
 .processor-card {
   background: #fff;
-  border: 1px solid #e8e8e8;
+  border: 1px solid #e2e5e0;
   border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
 }
 
 .processor-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, var(--msfg-teal), #1a5e60);
+  color: #fff;
+}
+
+.processor-header .proc-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+.processor-header .proc-email {
+  font-size: 11px;
+  opacity: .7;
+  margin-top: 2px;
+}
+
+.processor-header .proc-save-btn {
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.3);
+  color: #fff;
+  backdrop-filter: blur(4px);
+}
+
+.processor-header .proc-save-btn:hover {
+  background: rgba(255,255,255,.3);
+}
+
+.processor-body {
+  padding: 16px 20px 20px;
+}
+
+.processor-search {
+  width: 100%;
+  padding: 9px 14px 9px 36px;
+  border: 1px solid #e2e5e0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fafbf9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%23999' viewBox='0 0 512 512'%3E%3Cpath d='M416 208c0 45.9-14.9 88.3-40 122.7l126.6 126.7c12.5 12.5 12.5 32.8 0 45.3s-32.8 12.5-45.3 0L330.7 376c-34.4 25.2-76.8 40-122.7 40C93.1 416 0 322.9 0 208S93.1 0 208 0s208 93.1 208 208zM208 352a144 144 0 1 0 0-288 144 144 0 1 0 0 288z'/%3E%3C/svg%3E") 12px center no-repeat;
+  outline: none;
+  transition: border-color .2s;
   margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #f0f0f0;
+}
+
+.processor-search:focus {
+  border-color: var(--msfg-green);
+}
+
+.processor-select-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.processor-select-actions a {
+  color: var(--msfg-green);
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.processor-select-actions a:hover {
+  text-decoration: underline;
+}
+
+.processor-count {
+  margin-left: auto;
+  color: #999;
+  font-size: 12px;
 }
 
 .processor-lo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.processor-lo-grid::-webkit-scrollbar {
+  width: 5px;
+}
+
+.processor-lo-grid::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 10px;
 }
 
 .lo-checkbox-label {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 7px 12px;
   border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
-  transition: background .15s;
-  border: 1px solid #eee;
+  transition: all .15s;
+  border: 1px solid transparent;
+  background: #fafbf9;
 }
 
 .lo-checkbox-label:hover {
   background: var(--msfg-light-green);
+  border-color: var(--msfg-green-border);
+}
+
+.lo-checkbox-label.checked {
+  background: var(--msfg-light-green);
+  border-color: rgba(140, 198, 62, .4);
+}
+
+.lo-checkbox-label .lo-name {
+  font-weight: 500;
+  color: var(--msfg-gray);
+}
+
+.lo-checkbox-label .lo-role {
+  font-size: 10px;
+  color: #aaa;
+  background: #f0f0f0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .lo-checkbox-label input[type="checkbox"] {
   accent-color: var(--msfg-green);
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
 }
 
 .btn-success {

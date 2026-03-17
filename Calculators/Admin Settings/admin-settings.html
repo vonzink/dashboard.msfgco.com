@@ -3287,33 +3287,96 @@
         let html = '';
         for (const proc of processors) {
           const assignedSet = assignmentMap[proc.id] || new Set();
+          const cleanProcName = proc.name.replace(/\b\w/g, c => c.toUpperCase());
+          const assignedCount = assignedSet.size;
+
           html += '<div class="processor-card" data-processor-id="' + proc.id + '">' +
             '<div class="processor-header">' +
               '<div>' +
-                '<strong style="font-size:15px;">' + escHtml(proc.name.replace(/\b\w/g, c => c.toUpperCase())) + '</strong>' +
-                '<span style="font-size:12px; color:#888; margin-left:8px;">' + escHtml(proc.email) + '</span>' +
+                '<div class="proc-name"><i class="fas fa-user-shield" style="margin-right:6px; opacity:.7;"></i>' + escHtml(cleanProcName) + '</div>' +
+                '<div class="proc-email">' + escHtml(proc.email) + '</div>' +
               '</div>' +
-              '<button class="btn btn-primary btn-sm proc-save-btn" data-processor-id="' + proc.id + '">' +
-                '<i class="fas fa-save"></i> Save' +
+              '<button class="btn btn-sm proc-save-btn" data-processor-id="' + proc.id + '">' +
+                '<i class="fas fa-save"></i> Save Assignments' +
               '</button>' +
             '</div>' +
-            '<div class="processor-lo-grid">';
+            '<div class="processor-body">' +
+              '<input type="text" class="processor-search" data-processor-id="' + proc.id + '" placeholder="Search employees...">' +
+              '<div class="processor-select-actions">' +
+                '<a class="proc-select-all" data-processor-id="' + proc.id + '">Select All</a>' +
+                '<a class="proc-deselect-all" data-processor-id="' + proc.id + '">Deselect All</a>' +
+                '<span class="processor-count" data-processor-id="' + proc.id + '">' + assignedCount + ' of ' + los.length + ' selected</span>' +
+              '</div>' +
+              '<div class="processor-lo-grid" data-processor-id="' + proc.id + '">';
 
           for (const lo of los) {
-            const checked = assignedSet.has(lo.id) ? ' checked' : '';
-            // Clean up name: capitalize each word
+            const isChecked = assignedSet.has(lo.id);
+            const checked = isChecked ? ' checked' : '';
+            const checkedClass = isChecked ? ' checked' : '';
             const cleanName = lo.name.replace(/\b\w/g, c => c.toUpperCase());
-            const roleBadge = lo.role ? '<span style="font-size:10px; color:#888; margin-left:4px;">(' + escHtml(lo.role) + ')</span>' : '';
-            html += '<label class="lo-checkbox-label">' +
+            const roleLabel = lo.role || '';
+            html += '<label class="lo-checkbox-label' + checkedClass + '" data-name="' + escHtml(cleanName.toLowerCase()) + '">' +
               '<input type="checkbox" class="proc-lo-cb" data-processor-id="' + proc.id + '" data-lo-id="' + lo.id + '"' + checked + '>' +
-              '<span>' + escHtml(cleanName) + roleBadge + '</span>' +
+              '<span class="lo-name">' + escHtml(cleanName) + '</span>' +
+              (roleLabel ? '<span class="lo-role">' + escHtml(roleLabel) + '</span>' : '') +
             '</label>';
           }
 
-          html += '</div></div>';
+          html += '</div></div></div>';
         }
 
         container.innerHTML = html;
+
+        // Search filter
+        container.querySelectorAll('.processor-search').forEach(input => {
+          input.addEventListener('input', () => {
+            const query = input.value.toLowerCase().trim();
+            const pid = input.dataset.processorId;
+            const grid = container.querySelector('.processor-lo-grid[data-processor-id="' + pid + '"]');
+            grid.querySelectorAll('.lo-checkbox-label').forEach(label => {
+              const name = label.dataset.name || '';
+              label.style.display = name.includes(query) ? '' : 'none';
+            });
+          });
+        });
+
+        // Select All / Deselect All
+        container.querySelectorAll('.proc-select-all').forEach(link => {
+          link.addEventListener('click', () => {
+            const pid = link.dataset.processorId;
+            const grid = container.querySelector('.processor-lo-grid[data-processor-id="' + pid + '"]');
+            grid.querySelectorAll('.proc-lo-cb').forEach(cb => {
+              cb.checked = true;
+              cb.closest('.lo-checkbox-label').classList.add('checked');
+            });
+            updateProcCount(container, pid, los.length);
+          });
+        });
+        container.querySelectorAll('.proc-deselect-all').forEach(link => {
+          link.addEventListener('click', () => {
+            const pid = link.dataset.processorId;
+            const grid = container.querySelector('.processor-lo-grid[data-processor-id="' + pid + '"]');
+            grid.querySelectorAll('.proc-lo-cb').forEach(cb => {
+              cb.checked = false;
+              cb.closest('.lo-checkbox-label').classList.remove('checked');
+            });
+            updateProcCount(container, pid, los.length);
+          });
+        });
+
+        // Toggle checked class + update count on checkbox change
+        container.querySelectorAll('.proc-lo-cb').forEach(cb => {
+          cb.addEventListener('change', () => {
+            cb.closest('.lo-checkbox-label').classList.toggle('checked', cb.checked);
+            updateProcCount(container, cb.dataset.processorId, los.length);
+          });
+        });
+
+        function updateProcCount(container, pid, total) {
+          const checked = container.querySelectorAll('.proc-lo-cb[data-processor-id="' + pid + '"]:checked').length;
+          const counter = container.querySelector('.processor-count[data-processor-id="' + pid + '"]');
+          if (counter) counter.textContent = checked + ' of ' + total + ' selected';
+        }
 
         // Bind save buttons
         container.querySelectorAll('.proc-save-btn').forEach(btn => {
@@ -3333,21 +3396,19 @@
               });
               if (result) {
                 btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
-                btn.classList.remove('btn-primary');
                 btn.classList.add('btn-success');
                 setTimeout(() => {
-                  btn.innerHTML = '<i class="fas fa-save"></i> Save';
+                  btn.innerHTML = '<i class="fas fa-save"></i> Save Assignments';
                   btn.classList.remove('btn-success');
-                  btn.classList.add('btn-primary');
                   btn.disabled = false;
                 }, 1500);
               } else {
-                btn.innerHTML = '<i class="fas fa-save"></i> Save';
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Assignments';
                 btn.disabled = false;
               }
             } catch (err) {
               alert('Failed to save: ' + err.message);
-              btn.innerHTML = '<i class="fas fa-save"></i> Save';
+              btn.innerHTML = '<i class="fas fa-save"></i> Save Assignments';
               btn.disabled = false;
             }
           });
