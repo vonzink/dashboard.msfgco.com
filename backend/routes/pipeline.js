@@ -195,7 +195,7 @@ router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
 
     const PIPELINE_FIELDS = [
       'client_name', 'loan_amount', 'loan_type', 'stage', 'target_close_date',
-      'assigned_lo_id', 'assigned_lo_name', 'investor', 'investor_id', 'status', 'notes',
+      'assigned_lo_id', 'assigned_lo_name', 'lo_display', 'investor', 'investor_id', 'status', 'notes',
       'loan_number', 'loan_status', 'lender', 'subject_property', 'rate',
       'appraisal_status', 'loan_purpose', 'occupancy', 'title_status', 'hoi_status',
       'loan_estimate', 'application_date', 'lock_expiration_date', 'closing_date', 'funding_date',
