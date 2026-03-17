@@ -35,17 +35,17 @@ router.post('/files/upload-url', requireAdmin, async (req, res, next) => {
 // ── Processor-LO Assignments (admin-only) ───────
 router.get('/processor-assignments', requireAdmin, async (req, res, next) => {
   try {
-    // Get all processors
+    // Get all processors (by role)
     const [processors] = await db.query(
       `SELECT id, name, email, role FROM users
        WHERE LOWER(role) IN ('processor') AND is_active = 1
        ORDER BY name`
     );
 
-    // Get all LOs
+    // Get ALL active employees as assignable options (not just LOs)
     const [los] = await db.query(
       `SELECT id, name, email, role FROM users
-       WHERE LOWER(role) IN ('loan officer', 'lo') AND is_active = 1
+       WHERE is_active = 1
        ORDER BY name`
     );
 
