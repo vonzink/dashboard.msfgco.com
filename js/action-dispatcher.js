@@ -111,6 +111,14 @@
     },
 
     // =====================
+    // Programs
+    // =====================
+    'open-program': (el) => {
+      const category = el?.dataset?.category;
+      if (category && window.Programs) Programs.open(category);
+    },
+
+    // =====================
     // Guidelines
     // =====================
     'open-guidelines': () => {

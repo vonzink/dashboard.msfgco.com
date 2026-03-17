@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="css/tables.css?v=20260314b" />
   <link rel="stylesheet" href="css/sections.css?v=20260314b" />
   <link rel="stylesheet" href="css/chat.css?v=20260314b" />
+  <link rel="stylesheet" href="css/programs.css?v=20260317" />
   <link rel="stylesheet" href="css/animations.css?v=20260314b" />
 </head>
 
@@ -222,25 +223,13 @@
             Programs
             <i class="fas fa-chevron-down"></i>
           </button>
-          <div class="dropdown-menu dropdown-menu-scrollable">
-            <div class="dropdown-header">Conventional</div>
-            <a href="https://selling-guide.fanniemae.com/sel/b/origination-through-closing" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-book"></i> Fannie Mae Selling Guide</a>
-            <a href="https://yourhome.fanniemae.com/calculators-tools/loan-lookup" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-search"></i> Fannie Mae Loan Lookup</a>
-            <a href="https://ami-lookup-tool.fanniemae.com/" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-map-marker-alt"></i> AMI Lookup Tool</a>
-            <a href="https://guide.freddiemac.com/" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-book-open"></i> Freddie Mac Guide</a>
-            <a href="https://sf.freddiemac.com/working-with-us/affordable-lending/home-possible-eligibility-map" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-map"></i> Home Possible Eligibility Map</a>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-header">FHA</div>
-            <button type="button" class="dropdown-item" data-action="open-program-fha"><i class="fas fa-flag-usa"></i> FHA</button>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-header">VA</div>
-            <a href="https://www.benefits.va.gov/homeloans/index.asp" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-medal"></i> VA Home Loans</a>
-            <a href="https://www.va.gov/vapubs/search_action.cfm?dType=2" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-file-alt"></i> VA Publications</a>
-            <a href="https://lgy.va.gov/lgyhub/" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-landmark"></i> LGY Hub</a>
-            <a href="https://yourit.va.gov/csm?id=rlc_test_test&sysparam_card=lender_appraisal" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-clipboard-list"></i> VA Appraisal Portal</a>
-            <div class="dropdown-divider"></div>
-            <div class="dropdown-header">USDA</div>
-            <a href="https://eligibility.sc.egov.usda.gov/eligibility/welcomeAction.do" target="_blank" rel="noopener" class="dropdown-item"><i class="fas fa-tractor"></i> USDA Eligibility Map</a>
+          <div class="dropdown-menu dropdown-menu-programs">
+            <button type="button" class="dropdown-item" data-action="open-program" data-category="conventional"><i class="fas fa-home"></i> Conventional</button>
+            <button type="button" class="dropdown-item" data-action="open-program" data-category="fha"><i class="fas fa-flag-usa"></i> FHA</button>
+            <button type="button" class="dropdown-item" data-action="open-program" data-category="va"><i class="fas fa-medal"></i> VA</button>
+            <button type="button" class="dropdown-item" data-action="open-program" data-category="usda"><i class="fas fa-tractor"></i> USDA</button>
+            <button type="button" class="dropdown-item" data-action="open-program" data-category="non-qm"><i class="fas fa-chart-line"></i> Non-QM</button>
+            <button type="button" class="dropdown-item" data-action="open-program" data-category="other"><i class="fas fa-folder-open"></i> Other</button>
           </div>
         </li>
 
@@ -600,6 +589,69 @@
             <div class="info-section investor-notes u-grid-span-all">
               <h4><i class="fas fa-note-sticky"></i> Notes</h4>
               <div class="notes-content empty" contenteditable="true"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Programs Modal (populated dynamically by Programs module) -->
+    <div id="programsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content programs-modal-content">
+        <button type="button" class="modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+
+        <div class="modal-header programs-modal-header">
+          <h2 id="programsModalTitle">Program</h2>
+        </div>
+
+        <div class="modal-body programs-modal-body">
+          <!-- Links Section -->
+          <div class="programs-section">
+            <div class="programs-section-header">
+              <h3><i class="fas fa-link"></i> Links</h3>
+              <button type="button" class="btn btn-sm btn-primary programs-add-link-btn" style="display:none;">
+                <i class="fas fa-plus"></i> Add Link
+              </button>
+            </div>
+            <div id="programsLinksContainer" class="programs-links-grid">
+              <p class="text-muted">No links yet.</p>
+            </div>
+          </div>
+
+          <!-- Add/Edit Link Form (hidden by default) -->
+          <div id="programsLinkForm" class="programs-link-form" style="display:none;">
+            <h4 id="programsLinkFormTitle">Add Link</h4>
+            <div class="form-group">
+              <label>Label *</label>
+              <input type="text" id="programsLinkLabel" class="form-control" placeholder="e.g. Fannie Mae Selling Guide" />
+            </div>
+            <div class="form-group">
+              <label>URL *</label>
+              <input type="url" id="programsLinkUrl" class="form-control" placeholder="https://..." />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" id="programsLinkDesc" class="form-control" placeholder="Short description (optional)" />
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-sm btn-secondary" id="programsLinkCancel">Cancel</button>
+              <button type="button" class="btn btn-sm btn-primary" id="programsLinkSave">Save</button>
+            </div>
+          </div>
+
+          <!-- Notes Section -->
+          <div class="programs-section programs-notes-section">
+            <div class="programs-section-header">
+              <h3><i class="fas fa-sticky-note"></i> Notes</h3>
+            </div>
+            <div class="programs-note-input">
+              <textarea id="programsNoteInput" class="form-control" placeholder="Add a note..." rows="2"></textarea>
+              <button type="button" class="btn btn-sm btn-primary" id="programsNoteSubmit">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+            <div id="programsNotesContainer" class="programs-notes-list">
+              <p class="text-muted">No notes yet.</p>
             </div>
           </div>
         </div>
@@ -1033,6 +1085,7 @@
   <script src="js/modals.js?v=20260314b"></script>
   <script src="js/settings-goals.js?v=20260314b"></script>
   <script src="js/user-settings.js?v=20260314b"></script>
+  <script src="js/programs.js?v=20260317"></script>
   <script src="js/collapsible.js?v=20260314b"></script>
 
   <!-- Accessibility -->

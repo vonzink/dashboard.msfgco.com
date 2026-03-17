@@ -47,6 +47,7 @@ const App = {
             ['Gauges',         () => typeof DashboardGauges !== 'undefined' && DashboardGauges.init()],
             ['Modals',         () => ModalsManager.init()],
             ['User Settings',  () => typeof UserSettings !== 'undefined' && UserSettings.init()],
+            ['Programs',       () => typeof Programs !== 'undefined' && Programs.init()],
             ['Monday',         () => typeof MondaySettings !== 'undefined' && MondaySettings.init()],
             ['Progress Bars',  () => setTimeout(() => {
                 document.querySelectorAll('.progress-fill').forEach(bar => {

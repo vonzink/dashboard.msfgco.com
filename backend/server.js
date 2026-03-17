@@ -43,6 +43,7 @@ const lendingpadRoutes = require('./routes/lendingpad');
 const processingRoutes = require('./routes/processing');
 const handbookRoutes = require('./routes/handbook');
 const myProfileRoutes = require('./routes/myProfile');
+const programsRoutes = require('./routes/programs');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -173,6 +174,7 @@ app.use('/api/tasks', authenticate, requireNonExternal, tasksRoutes);
 app.use('/api/pre-approvals', authenticate, requireNonExternal, preApprovalsRoutes);
 app.use('/api/pipeline', authenticate, requireNonExternal, pipelineRoutes);
 app.use('/api/funded-loans', authenticate, requireNonExternal, fundedLoansRoutes);
+app.use('/api/programs', authenticate, requireNonExternal, programsRoutes);
 app.use('/api/admin', authenticate, requireNonExternal, adminRoutes);
 
 // Content Engine (blocked for External)

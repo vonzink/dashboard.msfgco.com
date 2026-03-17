@@ -447,6 +447,18 @@ const ServerAPI = {
     },
 
     // ========================================
+    // PROGRAMS
+    // ========================================
+    getPrograms() { return this.get('/programs'); },
+    getProgramCategory(category) { return this.get(`/programs/${category}`); },
+    createProgramLink(data) { return this.post('/programs/links', data); },
+    updateProgramLink(id, data) { return this.put(`/programs/links/${id}`, data); },
+    deleteProgramLink(id) { return this.delete(`/programs/links/${id}`); },
+    createProgramNote(data) { return this.post('/programs/notes', data); },
+    updateProgramNote(id, data) { return this.put(`/programs/notes/${id}`, data); },
+    deleteProgramNote(id) { return this.delete(`/programs/notes/${id}`); },
+
+    // ========================================
     // FUNDED LOANS
     // ========================================
     getFundedLoans(params = {}) {
