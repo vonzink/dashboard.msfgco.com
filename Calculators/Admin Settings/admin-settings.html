@@ -609,6 +609,10 @@
                 <label>Max Comp</label>
                 <input type="number" id="invEditMaxComp" step="0.01" />
               </div>
+              <div class="form-group">
+                <label>In House Servicing</label>
+                <input type="text" id="invEditInHouseServicing" placeholder="e.g. Yes, No, Partial" />
+              </div>
               <!-- Toggle fields -->
               <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="margin-bottom:8px;">Product &amp; Service Toggles</label>
@@ -2242,6 +2246,7 @@
       document.getElementById('invEditDpa').value = data.in_house_dpa || '';
       document.getElementById('invEditEpo').value = data.epo || '';
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
+      document.getElementById('invEditInHouseServicing').value = data.in_house_servicing || '';
       // Toggle fields
       document.getElementById('invToggleServicing').checked = !!data.servicing;
       document.getElementById('invToggleManualUw').checked = !!data.manual_underwriting;
@@ -2329,6 +2334,7 @@
             in_house_dpa: document.getElementById('invEditDpa').value.trim() || null,
             epo: document.getElementById('invEditEpo').value.trim() || null,
             max_comp: document.getElementById('invEditMaxComp').value || null,
+            in_house_servicing: document.getElementById('invEditInHouseServicing').value.trim() || null,
             servicing: document.getElementById('invToggleServicing').checked ? 1 : 0,
             manual_underwriting: document.getElementById('invToggleManualUw').checked ? 1 : 0,
             non_qm: document.getElementById('invToggleNonQm').checked ? 1 : 0,

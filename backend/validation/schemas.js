@@ -187,6 +187,7 @@ const investor = z.object({
   minimum_fico: optionalString(20),
   in_house_dpa: optionalString(500),
   epo: optionalString(500),
+  in_house_servicing: optionalString(255),
   max_comp: optionalString(200),
   servicing: z.union([z.boolean(), z.number()]).optional().nullable(),
   manual_underwriting: z.union([z.boolean(), z.number()]).optional().nullable(),

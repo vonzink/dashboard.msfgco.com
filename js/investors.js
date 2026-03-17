@@ -44,6 +44,7 @@ const Investors = {
           minimumFico:             row.minimum_fico || null,
           inHouseDpa:              row.in_house_dpa || null,
           epo:                     row.epo || null,
+          inHouseServicing:        row.in_house_servicing || null,
           maxComp:                 row.max_comp != null ? Number(row.max_comp) : null,
           // Toggle fields
           servicing:               row.servicing,
@@ -222,6 +223,7 @@ const Investors = {
         { label: 'Minimum FICO',              value: investor.minimumFico || investor.min_fico },
         { label: 'In-house DPA',              value: investor.inHouseDpa || investor.in_house_dpa },
         { label: 'EPO',                       value: investor.epo },
+        { label: 'In House Servicing',        value: investor.inHouseServicing || investor.in_house_servicing },
         { label: 'Max Comp',                  value: (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : null },
       ];
       details.forEach(d => {
@@ -234,26 +236,10 @@ const Investors = {
       detailsSection.innerHTML = html;
     }
 
-    // Turn Times (read-only)
+    // Turn Times — hidden (too volatile to track)
     const turnTimesSection = modal.querySelector('.investor-turn-times');
     if (turnTimesSection) {
-      const times = investor.turnTimes || [];
-      if (times.length > 0) {
-        let ttHtml = '<h4><i class="fas fa-clock"></i> Turn Times</h4><div class="turn-times-list">';
-        times.forEach(t => {
-          const unitLabel = t.unit === 'hours' ? (Number(t.value) === 1 ? 'hour' : 'hours') : (Number(t.value) === 1 ? 'day' : 'days');
-          ttHtml += '<div class="turn-time-item">' +
-            '<span class="turn-time-label">' + esc(t.label) + '</span>' +
-            '<span class="turn-time-value">' + esc(String(Number(t.value))) + ' ' + unitLabel + '</span>' +
-          '</div>';
-        });
-        ttHtml += '</div>';
-        turnTimesSection.innerHTML = ttHtml;
-      } else {
-        turnTimesSection.innerHTML =
-          '<h4><i class="fas fa-clock"></i> Turn Times</h4>' +
-          '<p class="tbd">No turn times listed</p>';
-      }
+      turnTimesSection.style.display = 'none';
     }
 
     // Team (read-only)

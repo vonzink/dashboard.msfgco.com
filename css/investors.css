@@ -155,12 +155,15 @@
     gap: var(--spacing-sm);
     font-size: 0.9rem;
     color: var(--text-secondary);
+    min-width: 0;
+    overflow: hidden;
 }
 
 .contact-info div {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
+    min-width: 0;
 }
 
 .contact-info i {
@@ -172,6 +175,9 @@
     color: var(--green-forest);
     text-decoration: none;
     transition: color var(--transition-fast);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .contact-info a:hover {

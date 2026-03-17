@@ -45,7 +45,7 @@ router.get('/', async (req, res, next) => {
       `SELECT id, investor_key, name,
               account_executive_name, account_executive_email, account_executive_mobile,
               states, best_programs, minimum_fico, in_house_dpa,
-              epo, max_comp,
+              epo, max_comp, in_house_servicing,
               servicing, manual_underwriting, non_qm, jumbo,
               subordinate_financing, review_wire_release,
               website_url, logo_url, notes, is_active
@@ -121,7 +121,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
       investor_key: rawKey, name,
       account_executive_name, account_executive_email, account_executive_mobile, account_executive_address,
       states, best_programs, minimum_fico, in_house_dpa,
-      epo, max_comp,
+      epo, max_comp, in_house_servicing,
       servicing, manual_underwriting, non_qm, jumbo,
       subordinate_financing, review_wire_release,
       website_url, logo_url, login_url, notes
@@ -135,11 +135,11 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         (investor_key, name, account_executive_name, account_executive_email,
          account_executive_mobile, account_executive_address,
          states, best_programs, minimum_fico, in_house_dpa,
-         epo, max_comp,
+         epo, max_comp, in_house_servicing,
          servicing, manual_underwriting, non_qm, jumbo,
          subordinate_financing, review_wire_release,
          website_url, logo_url, login_url, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          account_executive_name = VALUES(account_executive_name),
@@ -152,6 +152,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          in_house_dpa = VALUES(in_house_dpa),
          epo = VALUES(epo),
          max_comp = VALUES(max_comp),
+         in_house_servicing = VALUES(in_house_servicing),
          servicing = VALUES(servicing),
          manual_underwriting = VALUES(manual_underwriting),
          non_qm = VALUES(non_qm),
@@ -168,7 +169,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         account_executive_name || null, account_executive_email || null,
         account_executive_mobile || null, account_executive_address || null,
         states || null, best_programs || null, minimum_fico || null, in_house_dpa || null,
-        epo || null, max_comp || null,
+        epo || null, max_comp || null, in_house_servicing || null,
         servicing ?? null, manual_underwriting ?? null, non_qm ?? null, jumbo ?? null,
         subordinate_financing ?? null, review_wire_release ?? null,
         website_url || null, logo_url || null, login_url || null, notes || null
@@ -195,7 +196,7 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'account_executive_email', 'account_executive_address',
       'account_executive_photo_url',
       'states', 'best_programs', 'minimum_fico', 'in_house_dpa',
-      'epo', 'max_comp',
+      'epo', 'max_comp', 'in_house_servicing',
       'servicing', 'manual_underwriting', 'non_qm', 'jumbo',
       'subordinate_financing', 'review_wire_release',
       'website_url', 'logo_url', 'login_url', 'is_active',
