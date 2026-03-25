@@ -48,6 +48,7 @@ router.get('/', async (req, res, next) => {
               epo, max_comp, in_house_servicing,
               servicing, manual_underwriting, non_qm, jumbo,
               subordinate_financing, review_wire_release,
+              usda, land_loans, va_loans, bridge_loans, dscr,
               website_url, logo_url, notes, is_active
        FROM investors ${whereClause} ORDER BY name`
     );
@@ -124,6 +125,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
       epo, max_comp, in_house_servicing,
       servicing, manual_underwriting, non_qm, jumbo,
       subordinate_financing, review_wire_release,
+      usda, land_loans, va_loans, bridge_loans, dscr,
       website_url, logo_url, login_url, notes
     } = req.body;
 
@@ -138,8 +140,9 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          epo, max_comp, in_house_servicing,
          servicing, manual_underwriting, non_qm, jumbo,
          subordinate_financing, review_wire_release,
+         usda, land_loans, va_loans, bridge_loans, dscr,
          website_url, logo_url, login_url, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          account_executive_name = VALUES(account_executive_name),
@@ -159,6 +162,11 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          jumbo = VALUES(jumbo),
          subordinate_financing = VALUES(subordinate_financing),
          review_wire_release = VALUES(review_wire_release),
+         usda = VALUES(usda),
+         land_loans = VALUES(land_loans),
+         va_loans = VALUES(va_loans),
+         bridge_loans = VALUES(bridge_loans),
+         dscr = VALUES(dscr),
          website_url = VALUES(website_url),
          logo_url = VALUES(logo_url),
          login_url = VALUES(login_url),
@@ -172,6 +180,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         epo || null, max_comp || null, in_house_servicing || null,
         servicing ?? null, manual_underwriting ?? null, non_qm ?? null, jumbo ?? null,
         subordinate_financing ?? null, review_wire_release ?? null,
+        usda ?? null, land_loans ?? null, va_loans ?? null, bridge_loans ?? null, dscr ?? null,
         website_url || null, logo_url || null, login_url || null, notes || null
       ]
     );
@@ -199,6 +208,7 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'epo', 'max_comp', 'in_house_servicing',
       'servicing', 'manual_underwriting', 'non_qm', 'jumbo',
       'subordinate_financing', 'review_wire_release',
+      'usda', 'land_loans', 'va_loans', 'bridge_loans', 'dscr',
       'website_url', 'logo_url', 'login_url', 'is_active',
     ];
     const allowedFields = admin ? ['notes', ...ADMIN_FIELDS] : ['notes'];

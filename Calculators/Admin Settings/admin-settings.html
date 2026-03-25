@@ -634,6 +634,21 @@
                   <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
                     <input type="checkbox" id="invToggleWireReview" /> Review for Wire Release
                   </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleUsda" /> USDA
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleLandLoans" /> Land Loans
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleVaLoans" /> VA Loans
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleBridgeLoans" /> Bridge Loans
+                  </label>
+                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
+                    <input type="checkbox" id="invToggleDscr" /> DSCR
+                  </label>
                 </div>
               </div>
             </div>
@@ -2243,6 +2258,11 @@
       document.getElementById('invToggleJumbo').checked = !!data.jumbo;
       document.getElementById('invToggleSubFin').checked = !!data.subordinate_financing;
       document.getElementById('invToggleWireReview').checked = !!data.review_wire_release;
+      document.getElementById('invToggleUsda').checked = !!data.usda;
+      document.getElementById('invToggleLandLoans').checked = !!data.land_loans;
+      document.getElementById('invToggleVaLoans').checked = !!data.va_loans;
+      document.getElementById('invToggleBridgeLoans').checked = !!data.bridge_loans;
+      document.getElementById('invToggleDscr').checked = !!data.dscr;
       // AE Photo
       loadAePhoto(data);
     }
@@ -2330,6 +2350,11 @@
             jumbo: document.getElementById('invToggleJumbo').checked ? 1 : 0,
             subordinate_financing: document.getElementById('invToggleSubFin').checked ? 1 : 0,
             review_wire_release: document.getElementById('invToggleWireReview').checked ? 1 : 0,
+            usda: document.getElementById('invToggleUsda').checked ? 1 : 0,
+            land_loans: document.getElementById('invToggleLandLoans').checked ? 1 : 0,
+            va_loans: document.getElementById('invToggleVaLoans').checked ? 1 : 0,
+            bridge_loans: document.getElementById('invToggleBridgeLoans').checked ? 1 : 0,
+            dscr: document.getElementById('invToggleDscr').checked ? 1 : 0,
           }),
         });
         document.getElementById('invProfileTitle').textContent = document.getElementById('invEditName').value.trim() + ' — Profile';

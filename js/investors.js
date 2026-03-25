@@ -53,6 +53,11 @@ const Investors = {
           jumbo:                   row.jumbo,
           subordinateFinancing:    row.subordinate_financing,
           reviewWireRelease:       row.review_wire_release,
+          usda:                    row.usda,
+          landLoans:               row.land_loans,
+          vaLoans:                 row.va_loans,
+          bridgeLoans:             row.bridge_loans,
+          dscr:                    row.dscr,
           websiteUrl:              row.website_url || null,
           logoUrl:                 row.logo_url || null,
           notes:                   row.notes || ''
@@ -202,6 +207,11 @@ const Investors = {
         { key: 'jumbo',               label: 'Jumbo',                 val: investor.jumbo ?? investor.jumbo },
         { key: 'subordinateFinancing', label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
         { key: 'reviewWireRelease',    label: 'Review for Wire Release', val: investor.reviewWireRelease ?? investor.review_wire_release },
+        { key: 'usda',                  label: 'USDA',                  val: investor.usda ?? investor.usda },
+        { key: 'landLoans',             label: 'Land Loans',            val: investor.landLoans ?? investor.land_loans },
+        { key: 'vaLoans',               label: 'VA Loans',              val: investor.vaLoans ?? investor.va_loans },
+        { key: 'bridgeLoans',           label: 'Bridge Loans',          val: investor.bridgeLoans ?? investor.bridge_loans },
+        { key: 'dscr',                  label: 'DSCR',                  val: investor.dscr ?? investor.dscr },
       ];
       const hasAnyToggle = toggles.some(t => t.val != null);
       if (hasAnyToggle) {
@@ -624,6 +634,11 @@ const Investors = {
         { val: inv.jumbo,               label: 'Jumbo' },
         { val: inv.subordinateFinancing, label: 'Sub. Fin.' },
         { val: inv.reviewWireRelease,    label: 'Wire Review' },
+        { val: inv.usda,                 label: 'USDA' },
+        { val: inv.landLoans,            label: 'Land Loans' },
+        { val: inv.vaLoans,              label: 'VA Loans' },
+        { val: inv.bridgeLoans,          label: 'Bridge Loans' },
+        { val: inv.dscr,                 label: 'DSCR' },
       ];
       const activePills = toggleDefs.filter(t => Number(t.val) === 1);
       if (activePills.length > 0) {
