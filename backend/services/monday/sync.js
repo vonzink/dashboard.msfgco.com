@@ -75,7 +75,7 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
     loan_type: row.loan_type || null,
     notes: row.notes || null,
     source_board_id: boardId || null,
-    group_name: row.stage || null,
+    group_name: row._board_group || null,
     source_system: 'monday',
     last_synced_at: new Date(),
     // Extended fields
@@ -158,7 +158,7 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
     investor: row.investor || null,
     property_address: row.property_address || null,
     notes: row.notes || null,
-    group_name: row.stage || null,
+    group_name: row._board_group || null,
     source_board_id: boardId || null,
     source_system: 'monday',
     last_synced_at: new Date(),

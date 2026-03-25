@@ -370,6 +370,7 @@ function mapItemToRow(item, columnMap, userNameMap) {
 
   if (item.group?.title) {
     row.stage = item.group.title;
+    row._board_group = item.group.title;  // preserve actual board group (not overwritten by column mappings)
   }
 
   for (const cv of (item.column_values || [])) {

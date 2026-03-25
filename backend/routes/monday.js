@@ -468,7 +468,7 @@ router.post('/mappings', requireAdmin, async (req, res, next) => {
 // ── POST /sync — trigger a sync from ALL active Monday.com boards ──
 // Runs asynchronously to avoid HTTP timeout — returns immediately,
 // then the client polls GET /sync/status for completion.
-router.post('/sync', requireAdmin, async (req, res, next) => {
+router.post('/sync', requireDbUser, async (req, res, next) => {
   try {
     const userId = getUserId(req);
 
