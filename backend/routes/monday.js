@@ -29,7 +29,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getUserId, isAdmin, requireDbUser, requireAdmin } = require('../middleware/userContext');
+const { getUserId, isAdmin, requireDbUser, requireAdmin, requireNonExternal } = require('../middleware/userContext');
 const { mondayBoardUpdate, validate } = require('../validation/schemas');
 
 const {
@@ -468,7 +468,7 @@ router.post('/mappings', requireAdmin, async (req, res, next) => {
 // ── POST /sync — trigger a sync from ALL active Monday.com boards ──
 // Runs asynchronously to avoid HTTP timeout — returns immediately,
 // then the client polls GET /sync/status for completion.
-router.post('/sync', requireDbUser, async (req, res, next) => {
+router.post('/sync', requireNonExternal, async (req, res, next) => {
   try {
     const userId = getUserId(req);
 

@@ -117,8 +117,9 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
 
   if (row.assigned_lo_name) {
     paRow.assigned_lo_name = row.assigned_lo_name;
-    // Use pre-resolved ID (from board-level inference) or look up by name
-    const loId = row.assigned_lo_id || userNameMap[row.assigned_lo_name.toLowerCase().trim()];
+    // Use pre-resolved ID, or look up by name, or look up by email
+    const name = row.assigned_lo_name.toLowerCase().trim();
+    const loId = row.assigned_lo_id || userNameMap[name] || userNameMap['email:' + name];
     if (loId) paRow.assigned_lo_id = loId;
   }
 
@@ -220,7 +221,8 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
 
   if (row.assigned_lo_name) {
     flRow.assigned_lo_name = row.assigned_lo_name;
-    const loId = row.assigned_lo_id || userNameMap[row.assigned_lo_name.toLowerCase().trim()];
+    const name = row.assigned_lo_name.toLowerCase().trim();
+    const loId = row.assigned_lo_id || userNameMap[name] || userNameMap['email:' + name];
     if (loId) flRow.assigned_lo_id = loId;
   }
 
@@ -255,6 +257,7 @@ async function syncAllBoards(userId) {
   const userNameMap = {};
   for (const u of users) {
     if (u.name) userNameMap[u.name.toLowerCase().trim()] = u.id;
+    if (u.email) userNameMap['email:' + u.email.toLowerCase().trim()] = u.id;
   }
 
   const activeBoards = await getActiveBoards();

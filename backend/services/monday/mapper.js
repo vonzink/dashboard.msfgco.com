@@ -388,8 +388,13 @@ function mapItemToRow(item, columnMap, userNameMap) {
       const num = parseInt(text.replace(/[^0-9]/g, ''));
       row[field] = isNaN(num) ? null : num;
     } else if (field === 'assigned_lo_name') {
-      row.assigned_lo_name = text;
-      const loId = userNameMap[text.toLowerCase().trim()];
+      // Monday People columns may return multiple names comma-separated
+      // e.g. "Laura Schloer, Seth Angell" — take the first as the primary LO
+      const primaryName = text.includes(',') ? text.split(',')[0].trim() : text;
+      row.assigned_lo_name = primaryName;
+      // Try name match first, then email match
+      const loId = userNameMap[primaryName.toLowerCase().trim()]
+        || userNameMap['email:' + primaryName.toLowerCase().trim()];
       if (loId) row.assigned_lo_id = loId;
     } else if (DATE_FIELDS.includes(field)) {
       let dateVal = null;
