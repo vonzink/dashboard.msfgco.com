@@ -119,6 +119,14 @@
     },
 
     // =====================
+    // HR Resources
+    // =====================
+    'open-hr-resource': (el) => {
+      const category = el?.dataset?.category;
+      if (category && window.HRResources) HRResources.open(category);
+    },
+
+    // =====================
     // Guidelines
     // =====================
     'open-guidelines': () => {

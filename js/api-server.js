@@ -459,6 +459,18 @@ const ServerAPI = {
     deleteProgramNote(id) { return this.delete(`/programs/notes/${id}`); },
 
     // ========================================
+    // HR RESOURCES
+    // ========================================
+    getHRResources() { return this.get('/hr-resources'); },
+    getHRCategory(category) { return this.get(`/hr-resources/${category}`); },
+    createHRLink(data) { return this.post('/hr-resources/links', data); },
+    updateHRLink(id, data) { return this.put(`/hr-resources/links/${id}`, data); },
+    deleteHRLink(id) { return this.delete(`/hr-resources/links/${id}`); },
+    createHRNote(data) { return this.post('/hr-resources/notes', data); },
+    updateHRNote(id, data) { return this.put(`/hr-resources/notes/${id}`, data); },
+    deleteHRNote(id) { return this.delete(`/hr-resources/notes/${id}`); },
+
+    // ========================================
     // FUNDED LOANS
     // ========================================
     getFundedLoans(params = {}) {

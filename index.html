@@ -131,6 +131,10 @@
               <i class="fas fa-graduation-cap"></i> Training
             </button>
 
+            <button type="button" class="dropdown-item" data-action="open-hr-resource" data-category="famli">
+              <i class="fas fa-umbrella-beach"></i> FAMLI
+            </button>
+
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Team Directory</div>
             <div id="contactsEmployeeList" class="dropdown-contacts-list">
@@ -659,6 +663,69 @@
       </div>
     </div>
 
+    <!-- HR Resources Modal (populated dynamically by HRResources module) -->
+    <div id="hrResourcesModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content programs-modal-content">
+        <button type="button" class="modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+
+        <div class="modal-header programs-modal-header">
+          <h2 id="hrModalTitle">HR Resource</h2>
+        </div>
+
+        <div class="modal-body programs-modal-body">
+          <!-- Links Section -->
+          <div class="programs-section">
+            <div class="programs-section-header">
+              <h3><i class="fas fa-link"></i> Links</h3>
+              <button type="button" class="btn btn-sm btn-primary hr-add-link-btn" style="display:none;">
+                <i class="fas fa-plus"></i> Add Link
+              </button>
+            </div>
+            <div id="hrLinksContainer" class="programs-links-grid">
+              <p class="text-muted">No links yet.</p>
+            </div>
+          </div>
+
+          <!-- Add/Edit Link Form (hidden by default) -->
+          <div id="hrLinkForm" class="programs-link-form" style="display:none;">
+            <h4 id="hrLinkFormTitle">Add Link</h4>
+            <div class="form-group">
+              <label>Label *</label>
+              <input type="text" id="hrLinkLabel" class="form-control" placeholder="e.g. FAMLI Employer Guide" />
+            </div>
+            <div class="form-group">
+              <label>URL *</label>
+              <input type="url" id="hrLinkUrl" class="form-control" placeholder="https://..." />
+            </div>
+            <div class="form-group">
+              <label>Description</label>
+              <input type="text" id="hrLinkDesc" class="form-control" placeholder="Short description (optional)" />
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-sm btn-secondary" id="hrLinkCancel">Cancel</button>
+              <button type="button" class="btn btn-sm btn-primary" id="hrLinkSave">Save</button>
+            </div>
+          </div>
+
+          <!-- Notes Section -->
+          <div class="programs-section programs-notes-section">
+            <div class="programs-section-header">
+              <h3><i class="fas fa-sticky-note"></i> Notes</h3>
+            </div>
+            <div class="programs-note-input">
+              <textarea id="hrNoteInput" class="form-control" placeholder="Add a note..." rows="2"></textarea>
+              <button type="button" class="btn btn-sm btn-primary" id="hrNoteSubmit">
+                <i class="fas fa-paper-plane"></i>
+              </button>
+            </div>
+            <div id="hrNotesContainer" class="programs-notes-list">
+              <p class="text-muted">No notes yet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Contact Card Modal (populated dynamically by Investors.showContactCard) -->
     <div id="companyContactsModal" class="investor-modal" aria-hidden="true">
       <div class="modal-content" style="max-width:480px;">
@@ -1087,6 +1154,7 @@
   <script src="js/settings-goals.js?v=20260314b"></script>
   <script src="js/user-settings.js?v=20260314b"></script>
   <script src="js/programs.js?v=20260317"></script>
+  <script src="js/hr-resources.js?v=20260326"></script>
   <script src="js/collapsible.js?v=20260314b"></script>
 
   <!-- Accessibility -->

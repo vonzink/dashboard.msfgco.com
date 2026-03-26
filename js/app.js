@@ -48,6 +48,7 @@ const App = {
             ['Modals',         () => ModalsManager.init()],
             ['User Settings',  () => typeof UserSettings !== 'undefined' && UserSettings.init()],
             ['Programs',       () => typeof Programs !== 'undefined' && Programs.init()],
+            ['HRResources',    () => typeof HRResources !== 'undefined' && HRResources.init()],
             ['Monday',         () => typeof MondaySettings !== 'undefined' && MondaySettings.init()],
             ['Progress Bars',  () => setTimeout(() => {
                 document.querySelectorAll('.progress-fill').forEach(bar => {
