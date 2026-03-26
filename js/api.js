@@ -146,7 +146,12 @@ const API = {
             boardSelect.value = currentVal;
             boardSelect.style.display = '';
             if (!this._paFiltersInitialized) {
-                boardSelect.addEventListener('change', () => this.loadPreApprovals());
+                boardSelect.addEventListener('change', () => {
+                    // Reset group filter when board changes — groups are board-specific
+                    const gs = document.getElementById('preApprovalGroupSelect');
+                    if (gs) gs.value = '';
+                    this.loadPreApprovals();
+                });
             }
         }
 

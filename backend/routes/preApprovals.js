@@ -86,14 +86,25 @@ router.get('/', async (req, res, next) => {
     }
     const [boards] = await db.query(boardQuery, boardParams);
 
-    // Get available groups for filter dropdown
-    const [groupRows] = await db.query(
-      `SELECT DISTINCT group_name FROM pre_approvals
-       WHERE group_name IS NOT NULL AND group_name != ''
-       ${!isAdmin(req) ? 'AND source_board_id IN (?)' : ''}
-       ORDER BY group_name`,
-      !isAdmin(req) ? [await getAccessibleBoardIds(getUserId(req))] : []
-    );
+    // Get available groups for filter dropdown — scoped to selected board
+    let groupQuery = `SELECT DISTINCT group_name FROM pre_approvals
+       WHERE group_name IS NOT NULL AND group_name != ''`;
+    const groupParams = [];
+
+    if (board_id) {
+      // When a specific board is selected, only show groups from that board
+      groupQuery += ' AND source_board_id = ?';
+      groupParams.push(board_id);
+    } else if (!isAdmin(req)) {
+      // No board selected: scope to accessible boards for non-admins
+      const accessibleIds = await getAccessibleBoardIds(getUserId(req));
+      if (accessibleIds.length > 0) {
+        groupQuery += ` AND source_board_id IN (${accessibleIds.map(() => '?').join(',')})`;
+        groupParams.push(...accessibleIds);
+      }
+    }
+    groupQuery += ' ORDER BY group_name';
+    const [groupRows] = await db.query(groupQuery, groupParams);
     const groups = groupRows.map(r => r.group_name);
 
     res.json({ data: preApprovals, boards, groups });
