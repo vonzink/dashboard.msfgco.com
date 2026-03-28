@@ -1,49 +1,86 @@
 /* ============================================
-   MSFG Dashboard - Goals Management
-   Displays performance goals on the main dashboard.
-   Goal TARGETS are set only in individual user settings.
+   MSFG Dashboard - Goals & Performance (Phase 1 Rebuild)
 
-   Timeframe behavior:
-   - Loans Closed + Volume Closed: match Funded Loans period
-   - Pipeline: always shows all active pipeline (no date filter)
-   - Pre-Approvals: always shows all active pre-approvals (no date filter)
-
-   Admin/Manager: LO picker to view any LO's performance.
-   LO: Can only see their own data.
+   Key improvements:
+   - Own period selector (decoupled from Funded Loans)
+   - Click-to-edit goal targets (simple modal, not sliders)
+   - Pace tracking ("At this pace you'll close X by end of month")
+   - YTD summary bar
+   - Celebration toasts when hitting milestones
+   - User-friendly for non-technical users
    ============================================ */
 
 const GoalsManager = {
     // ========================================
     // PROPERTIES
     // ========================================
-    currentPeriod: 'monthly',   // driven by Funded Loans period
+    currentPeriod: 'monthly',
     selectedLOId: null,
     selectedLOName: null,
     _loList: [],
+    _previousProgress: {},  // Track previous progress for celebrations
+    _ytdData: { units: 0, volume: 0 },
+
     goals: {
         'loans-closed': {
             current: 0,
             target: 0,
             type: 'number',
-            format: (val) => Math.round(val).toString()
+            label: 'Loans Closed',
+            icon: 'fa-file-signature',
+            format: (val) => Math.round(val).toString(),
+            inputLabel: 'How many loans do you want to close?',
+            hint: 'This is the number of loans you want to fund this period.',
+            prefix: '',
+            suffix: '',
+            step: 1,
         },
         'volume-closed': {
             current: 0,
             target: 0,
             type: 'currency',
-            format: (val) => `$${val.toFixed(1)}M`
+            label: 'Volume Closed',
+            icon: 'fa-dollar-sign',
+            format: (val) => {
+                if (val >= 1) return `$${val.toFixed(1)}M`;
+                if (val > 0) return `$${Math.round(val * 1000)}K`;
+                return '$0';
+            },
+            inputLabel: 'What is your volume target? (in millions)',
+            hint: 'Example: Enter 5 for $5 million.',
+            prefix: '$',
+            suffix: 'M',
+            step: 0.5,
         },
         'pipeline': {
             current: 0,
             target: 0,
             type: 'currency',
-            format: (val) => `$${val.toFixed(1)}M`
+            label: 'Pipeline',
+            icon: 'fa-chart-line',
+            format: (val) => {
+                if (val >= 1) return `$${val.toFixed(1)}M`;
+                if (val > 0) return `$${Math.round(val * 1000)}K`;
+                return '$0';
+            },
+            inputLabel: 'What is your pipeline target? (in millions)',
+            hint: 'Total value of loans you want in your active pipeline.',
+            prefix: '$',
+            suffix: 'M',
+            step: 0.5,
         },
         'pre-approvals': {
             current: 0,
             target: 0,
             type: 'number',
-            format: (val) => Math.round(val).toString()
+            label: 'Pre-Approvals',
+            icon: 'fa-clipboard-check',
+            format: (val) => Math.round(val).toString(),
+            inputLabel: 'How many active pre-approvals is your target?',
+            hint: 'Number of active pre-approval letters you want to maintain.',
+            prefix: '',
+            suffix: '',
+            step: 1,
         }
     },
 
@@ -51,36 +88,127 @@ const GoalsManager = {
     // INITIALIZATION
     // ========================================
     async init() {
-        this._listenForFundedLoansPeriod();
+        this._bindPeriodSelector();
+        this._bindCardClicks();
+        this._bindModalEvents();
         await this._initLOPicker();
         await this._fetchAllGoalData();
+        this._fetchYTDData();
     },
 
     // ========================================
-    // FUNDED LOANS PERIOD SYNC
-    // Listen for Funded Loans period changes and update goals accordingly
+    // PERIOD SELECTOR (own, decoupled from Funded Loans)
     // ========================================
-    _listenForFundedLoansPeriod() {
-        const fundedPeriodSelect = document.getElementById('fundedPeriodSelect');
-        if (fundedPeriodSelect) {
-            // Initialize from current funded loans period
-            this.currentPeriod = fundedPeriodSelect.value || 'monthly';
-            this._updatePeriodLabel();
+    _bindPeriodSelector() {
+        const select = document.getElementById('goalPeriodSelect');
+        if (!select) return;
 
-            fundedPeriodSelect.addEventListener('change', async () => {
-                this.currentPeriod = fundedPeriodSelect.value || 'monthly';
-                this._updatePeriodLabel();
-                await this._fetchAllGoalData();
+        // Restore saved preference
+        const saved = Utils.getStorage('goal_period', 'monthly');
+        select.value = saved;
+        this.currentPeriod = saved;
+
+        select.addEventListener('change', async () => {
+            this.currentPeriod = select.value;
+            Utils.setStorage('goal_period', select.value);
+            await this._fetchAllGoalData();
+        });
+    },
+
+    // ========================================
+    // CLICK-TO-EDIT TARGETS
+    // ========================================
+    _bindCardClicks() {
+        document.querySelectorAll('.goal-card-interactive').forEach(card => {
+            card.addEventListener('click', (e) => {
+                // Don't open if clicking inside the edit button itself (it does the same)
+                const goalId = card.dataset.goal;
+                if (goalId) this._openEditModal(goalId);
             });
-        }
+        });
     },
 
-    /** Show which period is active in the Goals header */
-    _updatePeriodLabel() {
-        const label = document.getElementById('goalsPeriodLabel');
-        if (!label) return;
-        const names = { weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly', yearly: 'Yearly', all: 'All Time' };
-        label.textContent = names[this.currentPeriod] || this.currentPeriod;
+    _openEditModal(goalId) {
+        const goal = this.goals[goalId];
+        if (!goal) return;
+
+        const modal = document.getElementById('goalEditModal');
+        if (!modal) return;
+
+        // Populate modal
+        document.getElementById('goalEditTitle').textContent = `Set ${goal.label} Target`;
+        document.getElementById('goalEditCurrentValue').textContent = goal.format(goal.current);
+        document.getElementById('goalEditInputLabel').textContent = goal.inputLabel;
+        document.getElementById('goalEditHint').textContent = goal.hint;
+        document.getElementById('goalEditPrefix').textContent = goal.prefix;
+        document.getElementById('goalEditSuffix').textContent = goal.suffix;
+
+        const input = document.getElementById('goalEditInput');
+        input.value = goal.target > 0 ? goal.target : '';
+        input.step = goal.step;
+        input.placeholder = goal.type === 'currency' ? '5.0' : '10';
+
+        // Store which goal we're editing
+        modal.dataset.goalId = goalId;
+        modal.style.display = 'flex';
+
+        // Focus the input after a tick
+        setTimeout(() => input.focus(), 100);
+    },
+
+    _bindModalEvents() {
+        const modal = document.getElementById('goalEditModal');
+        if (!modal) return;
+
+        const close = () => { modal.style.display = 'none'; };
+
+        document.getElementById('goalEditClose')?.addEventListener('click', close);
+        document.getElementById('goalEditCancel')?.addEventListener('click', close);
+
+        // Close on overlay click
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) close();
+        });
+
+        // Save
+        document.getElementById('goalEditSave')?.addEventListener('click', () => {
+            const goalId = modal.dataset.goalId;
+            const input = document.getElementById('goalEditInput');
+            const value = parseFloat(input.value) || 0;
+            this._saveGoalTarget(goalId, value);
+            close();
+        });
+
+        // Enter key saves
+        document.getElementById('goalEditInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('goalEditSave')?.click();
+            }
+        });
+    },
+
+    async _saveGoalTarget(goalId, targetValue) {
+        try {
+            const userId = this._getTargetUserId() || CONFIG.currentUser?.id;
+            const periodValue = this.getPeriodValue();
+
+            await ServerAPI.updateGoals({
+                user_id: userId,
+                period_type: this.currentPeriod,
+                period_value: periodValue,
+                goal_type: goalId,
+                target_value: targetValue,
+            });
+
+            if (this.goals[goalId]) {
+                this.goals[goalId].target = targetValue;
+                this.updateGoalCard(goalId);
+            }
+
+            Utils.showToast('Target saved!', 'success');
+        } catch (err) {
+            Utils.showToast('Failed to save target: ' + err.message, 'error');
+        }
     },
 
     // ========================================
@@ -130,6 +258,7 @@ const GoalsManager = {
             this.selectedLOName = opt && opt.value ? opt.textContent : null;
             Utils.setStorage('goal_selected_lo', loSelect.value);
             await this._fetchAllGoalData();
+            this._fetchYTDData();
         });
     },
 
@@ -143,14 +272,6 @@ const GoalsManager = {
     // ========================================
     // DATA FETCHING
     // ========================================
-
-    /**
-     * Fetch all goal-related data in parallel:
-     * - Funded loans summary (uses currentPeriod) -> loans-closed + volume-closed
-     * - Pipeline summary (all active, no period) -> pipeline + unit count
-     * - Pre-approvals summary (all active, no period) -> pre-approvals
-     * - Saved goal targets from DB (uses currentPeriod for target lookup)
-     */
     async _fetchAllGoalData() {
         try {
             const targetUserId = this._getTargetUserId();
@@ -158,43 +279,34 @@ const GoalsManager = {
             const loParams = targetUserId ? { lo_id: targetUserId } : {};
 
             const [fundedResult, pipelineResult, preApprovalsResult, goalsResult] = await Promise.allSettled([
-                // Loans Closed + Volume Closed: match Funded Loans period
                 ServerAPI.getFundedLoansSummary({ period: this.currentPeriod, ...loParams }),
-                // Pipeline: always all active (no period filter)
                 ServerAPI.getPipelineSummary(loParams),
-                // Pre-Approvals: always all active (no period filter)
                 ServerAPI.getPreApprovalsSummary(loParams),
-                // Goal targets: use the current period so targets match
                 ServerAPI.getGoals(targetUserId, this.currentPeriod, periodValue)
             ]);
 
             // --- Funded Loans -> Loans Closed + Volume Closed ---
             if (fundedResult.status === 'fulfilled' && fundedResult.value) {
                 const summary = fundedResult.value;
-                const units = parseInt(summary.units || summary.count || 0);
-                const volume = parseFloat(summary.total_amount || 0) / 1000000;
-                this.goals['loans-closed'].current = units;
-                this.goals['volume-closed'].current = volume;
+                this.goals['loans-closed'].current = parseInt(summary.units || summary.count || 0);
+                this.goals['volume-closed'].current = parseFloat(summary.total_amount || 0) / 1000000;
             }
 
-            // --- Pipeline -> Pipeline value + unit count ---
+            // --- Pipeline ---
             if (pipelineResult.status === 'fulfilled' && pipelineResult.value) {
                 const summary = pipelineResult.value;
+                this.goals['pipeline'].current = parseFloat(summary.total_amount || 0) / 1000000;
                 const units = parseInt(summary.units || 0);
-                const volume = parseFloat(summary.total_amount || 0) / 1000000;
-                this.goals['pipeline'].current = volume;
-
                 const unitCountEl = document.getElementById('pipelineUnitCount');
                 if (unitCountEl) {
                     unitCountEl.textContent = `${units} loan${units !== 1 ? 's' : ''}`;
                 }
             }
 
-            // --- Pre-Approvals (active count) ---
+            // --- Pre-Approvals ---
             if (preApprovalsResult.status === 'fulfilled' && preApprovalsResult.value) {
                 const summary = preApprovalsResult.value;
-                const units = parseInt(summary.active_count || summary.units || 0);
-                this.goals['pre-approvals'].current = units;
+                this.goals['pre-approvals'].current = parseInt(summary.active_count || summary.units || 0);
             }
 
             // --- Saved Goal Targets ---
@@ -212,20 +324,129 @@ const GoalsManager = {
             }
         } catch (error) {
             console.error('Failed to fetch goal data:', error);
-            Object.keys(this.goals).forEach(goalId => {
-                const key = `goal_${goalId}_${this.currentPeriod}`;
-                const saved = Utils.getStorage(key);
-                if (saved) {
-                    this.goals[goalId].target = saved.target;
-                }
-            });
         }
 
         this.updateAllGoals();
+        this._updatePaceBanner();
+    },
+
+    /** Fetch YTD totals (always yearly, independent of selected period) */
+    async _fetchYTDData() {
+        try {
+            const targetUserId = this._getTargetUserId();
+            const loParams = targetUserId ? { lo_id: targetUserId } : {};
+            const [fundedResult, pipelineResult] = await Promise.allSettled([
+                ServerAPI.getFundedLoansSummary({ period: 'yearly', ...loParams }),
+                ServerAPI.getPipelineSummary(loParams),
+            ]);
+
+            let ytdUnits = 0, ytdVolume = 0, pipelineUnits = 0;
+
+            if (fundedResult.status === 'fulfilled' && fundedResult.value) {
+                ytdUnits = parseInt(fundedResult.value.units || fundedResult.value.count || 0);
+                ytdVolume = parseFloat(fundedResult.value.total_amount || 0);
+            }
+            if (pipelineResult.status === 'fulfilled' && pipelineResult.value) {
+                pipelineUnits = parseInt(pipelineResult.value.units || 0);
+            }
+
+            this._ytdData = { units: ytdUnits, volume: ytdVolume };
+
+            // Update YTD bar
+            const unitsEl = document.getElementById('ytdUnits');
+            const volEl = document.getElementById('ytdVolume');
+            const ptEl = document.getElementById('ytdPullThrough');
+
+            if (unitsEl) unitsEl.textContent = ytdUnits;
+            if (volEl) volEl.textContent = this._formatDollar(ytdVolume);
+            if (ptEl) {
+                const pt = pipelineUnits > 0 ? Math.round((ytdUnits / pipelineUnits) * 100) : 0;
+                ptEl.textContent = pt + '%';
+            }
+        } catch (err) {
+            console.warn('Failed to fetch YTD data:', err);
+        }
     },
 
     // ========================================
-    // GOAL UPDATES (display-only on main page)
+    // PACE TRACKING
+    // ========================================
+    _updatePaceBanner() {
+        const banner = document.getElementById('goalPaceBanner');
+        const textEl = document.getElementById('goalPaceText');
+        if (!banner || !textEl) return;
+
+        // Only show pace for loans-closed with a target set, on monthly/quarterly/yearly
+        const loansGoal = this.goals['loans-closed'];
+        if (!loansGoal || loansGoal.target <= 0 || this.currentPeriod === 'all') {
+            banner.style.display = 'none';
+            return;
+        }
+
+        const now = new Date();
+        let daysElapsed, totalDays, periodLabel;
+
+        switch (this.currentPeriod) {
+            case 'weekly':
+                daysElapsed = now.getDay() || 7; // 1=Mon ... 7=Sun
+                totalDays = 7;
+                periodLabel = 'this week';
+                break;
+            case 'monthly':
+                daysElapsed = now.getDate();
+                totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                periodLabel = 'this month';
+                break;
+            case 'quarterly': {
+                const qMonth = Math.floor(now.getMonth() / 3) * 3;
+                const qStart = new Date(now.getFullYear(), qMonth, 1);
+                const qEnd = new Date(now.getFullYear(), qMonth + 3, 0);
+                daysElapsed = Math.ceil((now - qStart) / 86400000) + 1;
+                totalDays = Math.ceil((qEnd - qStart) / 86400000) + 1;
+                periodLabel = 'this quarter';
+                break;
+            }
+            case 'yearly':
+                daysElapsed = Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1;
+                totalDays = (now.getFullYear() % 4 === 0) ? 366 : 365;
+                periodLabel = 'this year';
+                break;
+            default:
+                banner.style.display = 'none';
+                return;
+        }
+
+        if (daysElapsed <= 0) daysElapsed = 1;
+        const daysLeft = totalDays - daysElapsed;
+        const pace = (loansGoal.current / daysElapsed) * totalDays;
+        const projected = Math.round(pace * 10) / 10;
+        const pct = loansGoal.target > 0 ? (projected / loansGoal.target) * 100 : 0;
+
+        let message, statusClass;
+
+        if (loansGoal.current >= loansGoal.target) {
+            message = `You hit your goal of ${loansGoal.target} loans ${periodLabel}!`;
+            statusClass = 'pace-ahead';
+        } else if (pct >= 100) {
+            message = `On pace for ${projected.toFixed(0)} loans ${periodLabel} — you'll beat your target of ${loansGoal.target}!`;
+            statusClass = 'pace-ahead';
+        } else if (pct >= 75) {
+            const needed = loansGoal.target - loansGoal.current;
+            message = `You need ${needed} more loan${needed !== 1 ? 's' : ''} in ${daysLeft} day${daysLeft !== 1 ? 's' : ''} to hit your goal. You're close!`;
+            statusClass = 'pace-on-track';
+        } else {
+            const needed = loansGoal.target - loansGoal.current;
+            message = `${needed} more loan${needed !== 1 ? 's' : ''} needed in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}. Stay focused — you've got this!`;
+            statusClass = 'pace-behind';
+        }
+
+        textEl.textContent = message;
+        banner.className = 'goal-pace-banner ' + statusClass;
+        banner.style.display = 'flex';
+    },
+
+    // ========================================
+    // GOAL CARD UPDATES
     // ========================================
     updateAllGoals() {
         Object.keys(this.goals).forEach(goalId => {
@@ -244,16 +465,21 @@ const GoalsManager = {
 
         const targetEl = document.getElementById(this.getTargetId(goalId));
         if (targetEl) {
-            if (goal.type === 'currency') {
-                targetEl.textContent = goal.target.toFixed(1);
+            if (goal.target > 0) {
+                if (goal.type === 'currency') {
+                    targetEl.textContent = goal.target.toFixed(1);
+                } else {
+                    targetEl.textContent = Math.round(goal.target);
+                }
             } else {
-                targetEl.textContent = Math.round(goal.target);
+                targetEl.textContent = '--';
             }
         }
 
         const progress = this.calculateProgress(goalId);
         this.updateProgressBar(goalId, progress);
         this.updateProgressText(goalId, progress);
+        this._checkCelebration(goalId, progress);
     },
 
     getValueId(goalId) {
@@ -279,11 +505,6 @@ const GoalsManager = {
     calculateProgress(goalId) {
         const goal = this.goals[goalId];
         if (!goal || goal.target === 0) return 0;
-
-        if (goalId === 'pipeline') {
-            return goal.current >= goal.target ? 100 : (goal.current / goal.target) * 100;
-        }
-
         return Math.min(100, (goal.current / goal.target) * 100);
     },
 
@@ -297,7 +518,7 @@ const GoalsManager = {
             progressBar.classList.add('exceeded');
         } else if (progress >= 50) {
             progressBar.classList.add('on-track');
-        } else {
+        } else if (progress > 0) {
             progressBar.classList.add('behind');
         }
     },
@@ -316,16 +537,20 @@ const GoalsManager = {
         const textEl = document.getElementById(this.getProgressTextId(goalId));
         if (!textEl) return;
 
-        let text = '';
-        if (goalId === 'pipeline') {
-            text = progress >= 100 ? 'Strong pipeline' : `${Math.round(progress)}% of target`;
-        } else if (goalId === 'pre-approvals') {
-            text = progress >= 100 ? 'Exceeding goal!' : `${Math.round(progress)}% complete`;
-        } else {
-            text = `${Math.round(progress)}% complete`;
+        const goal = this.goals[goalId];
+        if (!goal || goal.target <= 0) {
+            textEl.textContent = 'Click to set a target';
+            textEl.style.fontStyle = 'italic';
+            return;
         }
 
-        textEl.textContent = text;
+        textEl.style.fontStyle = 'normal';
+
+        if (progress >= 100) {
+            textEl.textContent = 'Goal reached!';
+        } else {
+            textEl.textContent = `${Math.round(progress)}% of target`;
+        }
     },
 
     getProgressTextId(goalId) {
@@ -336,6 +561,41 @@ const GoalsManager = {
             'pre-approvals': 'preApprovalsProgressText'
         };
         return map[goalId];
+    },
+
+    // ========================================
+    // CELEBRATIONS
+    // ========================================
+    _checkCelebration(goalId, progress) {
+        const prevProgress = this._previousProgress[goalId] || 0;
+        this._previousProgress[goalId] = progress;
+
+        // Only celebrate on transitions (not initial load with no previous)
+        if (prevProgress === 0 && progress > 0 && Object.keys(this._previousProgress).length <= 4) return;
+
+        const goal = this.goals[goalId];
+        if (!goal || goal.target <= 0) return;
+
+        // Crossed 100%
+        if (prevProgress < 100 && progress >= 100) {
+            this._celebrate(goalId, `You hit your ${goal.label} goal!`);
+        }
+        // Crossed 75%
+        else if (prevProgress < 75 && progress >= 75) {
+            Utils.showToast(`Almost there! ${Math.round(progress)}% of your ${goal.label} goal.`, 'success');
+        }
+    },
+
+    _celebrate(goalId, message) {
+        // Animate the card
+        const card = document.querySelector(`.goal-card[data-goal="${goalId}"]`);
+        if (card) {
+            card.classList.add('celebrating');
+            setTimeout(() => card.classList.remove('celebrating'), 1500);
+        }
+
+        // Show toast
+        Utils.showToast(message, 'success');
     },
 
     // ========================================
@@ -375,7 +635,17 @@ const GoalsManager = {
     },
 
     // ========================================
-    // PUBLIC API
+    // HELPERS
+    // ========================================
+    _formatDollar(amount) {
+        if (!amount || amount === 0) return '$0';
+        if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}M`;
+        if (amount >= 1000) return `$${Math.round(amount / 1000)}K`;
+        return `$${amount.toLocaleString()}`;
+    },
+
+    // ========================================
+    // PUBLIC API (for gauges + settings)
     // ========================================
     updateGoalValue(goalId, value) {
         if (this.goals[goalId]) {

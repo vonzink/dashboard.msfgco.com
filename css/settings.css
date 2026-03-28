@@ -754,60 +754,65 @@
     background: var(--status-success);
 }
 
-.settings-goal-slider {
+/* Goal number input (replaces slider) */
+.settings-goal-input-row {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-top: var(--spacing-xs);
-    min-width: 0;
+    gap: 8px;
+    margin-top: var(--spacing-sm);
 }
 
-.settings-goal-slider label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    white-space: nowrap;
-}
-
-.settings-goal-range {
-    flex: 1;
-    height: 4px;
-    appearance: none;
-    -webkit-appearance: none;
-    background: var(--bg-tertiary);
-    border-radius: 2px;
-    outline: none;
-    cursor: pointer;
-}
-
-.settings-goal-range::-webkit-slider-thumb {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 16px;
-    height: 16px;
-    background: var(--green-bright);
-    border-radius: 50%;
-    cursor: pointer;
-    border: 2px solid var(--bg-secondary);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-.settings-goal-range::-moz-range-thumb {
-    width: 16px;
-    height: 16px;
-    background: var(--green-bright);
-    border-radius: 50%;
-    cursor: pointer;
-    border: 2px solid var(--bg-secondary);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-.settings-goal-slider-val {
-    font-size: 0.78rem;
+.settings-goal-input-row label {
+    font-size: 0.8rem;
     font-weight: 600;
-    color: var(--green-bright);
+    color: var(--text-secondary);
     white-space: nowrap;
-    min-width: 48px;
-    text-align: right;
+}
+
+.settings-goal-input-wrap {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 0 8px;
+    transition: border-color 0.2s;
+}
+
+.settings-goal-input-wrap:focus-within {
+    border-color: var(--green-bright);
+}
+
+.settings-goal-prefix, .settings-goal-suffix {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.settings-goal-number-input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 6px 4px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    outline: none;
+    text-align: center;
+    min-width: 60px;
+}
+
+.settings-goal-number-input::placeholder {
+    color: var(--text-muted);
+    font-weight: 400;
+}
+
+.settings-goal-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+    margin-bottom: 0;
 }
 
 /* Responsive */

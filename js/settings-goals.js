@@ -1,5 +1,7 @@
 /**
- * SettingsGoals – Goals tab logic extracted from UserSettings.
+ * SettingsGoals – Goals tab in Settings panel.
+ * Simplified: shows current goals at a glance with easy number inputs.
+ * No more sliders — just clear, simple target fields.
  * Depends on globals: GoalsManager, CONFIG, ServerAPI, Utils
  */
 const SettingsGoals = {
@@ -30,7 +32,6 @@ const SettingsGoals = {
     const container = document.getElementById('settingsGoalsContent');
     if (!container) return;
 
-    // Default to GoalsManager period or monthly
     if (!this._goalsPeriod) {
       this._goalsPeriod = GoalsManager?.currentPeriod || 'monthly';
     }
@@ -49,7 +50,6 @@ const SettingsGoals = {
         ServerAPI.getGoals(userId, period, periodValue),
       ]);
 
-      // Parse current values
       const funded = fundedResult.status === 'fulfilled' ? fundedResult.value : {};
       const pipeline = pipelineResult.status === 'fulfilled' ? pipelineResult.value : {};
       const preApprovals = preApprovalsResult.status === 'fulfilled' ? preApprovalsResult.value : {};
@@ -63,25 +63,29 @@ const SettingsGoals = {
           id: 'loans-closed', label: 'Loans Closed', icon: 'fa-file-signature',
           current: parseInt(funded.units || funded.count || 0),
           target: targetMap['loans-closed'] || 0,
-          type: 'number', max: 100, step: 1, suffix: '',
+          type: 'number', step: 1, prefix: '', suffix: '',
+          hint: 'Number of loans you want to close',
         },
         {
           id: 'volume-closed', label: 'Volume Closed', icon: 'fa-dollar-sign',
           current: parseFloat(funded.total_amount || 0) / 1000000,
           target: targetMap['volume-closed'] || 0,
-          type: 'currency', max: 50, step: 0.5, prefix: '$', suffix: 'M',
+          type: 'currency', step: 0.5, prefix: '$', suffix: 'M',
+          hint: 'Target in millions (e.g. 5 = $5M)',
         },
         {
           id: 'pipeline', label: 'Pipeline', icon: 'fa-chart-line',
           current: parseFloat(pipeline.total_amount || 0) / 1000000,
           target: targetMap['pipeline'] || 0,
-          type: 'currency', max: 50, step: 0.5, prefix: '$', suffix: 'M',
+          type: 'currency', step: 0.5, prefix: '$', suffix: 'M',
+          hint: 'Pipeline target in millions',
         },
         {
           id: 'pre-approvals', label: 'Pre-Approvals', icon: 'fa-clipboard-check',
           current: parseInt(preApprovals.active_count || preApprovals.units || 0),
           target: targetMap['pre-approvals'] || 0,
-          type: 'number', max: 200, step: 5, suffix: '',
+          type: 'number', step: 1, prefix: '', suffix: '',
+          hint: 'Number of active pre-approvals',
         },
       ];
 
@@ -99,7 +103,7 @@ const SettingsGoals = {
 
     container.innerHTML = `
       <div class="settings-goals-header">
-        <h4><i class="fas fa-trophy"></i> Goals</h4>
+        <h4><i class="fas fa-trophy"></i> My Goals</h4>
         <select class="settings-goals-period-select" id="settingsGoalsPeriodSelect">
           <option value="weekly" ${period === 'weekly' ? 'selected' : ''}>Weekly</option>
           <option value="monthly" ${period === 'monthly' ? 'selected' : ''}>Monthly</option>
@@ -107,12 +111,13 @@ const SettingsGoals = {
           <option value="yearly" ${period === 'yearly' ? 'selected' : ''}>Yearly</option>
         </select>
       </div>
-      <p class="settings-hint" style="margin-top:-8px;margin-bottom:12px;">Set your targets. Changes save automatically when you adjust the slider.</p>
+      <p class="settings-hint" style="margin-top:-8px;margin-bottom:12px;">
+        Set your targets below. You can also set them by clicking any goal card on your dashboard.
+      </p>
       <div class="settings-goals-grid">
         ${goalDefs.map(g => {
           const pct = g.target > 0 ? Math.min(100, (g.current / g.target) * 100) : 0;
           const currentDisplay = g.type === 'currency' ? `$${g.current.toFixed(1)}M` : Math.round(g.current);
-          const targetDisplay = g.type === 'currency' ? `$${g.target.toFixed(1)}M` : Math.round(g.target);
 
           return `
             <div class="settings-goal-card" data-goal-id="${g.id}">
@@ -122,35 +127,39 @@ const SettingsGoals = {
               </div>
               <div class="settings-goal-current">
                 <span class="settings-goal-value">${currentDisplay}</span>
-                <span class="settings-goal-of">of ${targetDisplay} target</span>
+                <span class="settings-goal-of">current</span>
               </div>
               <div class="progress-bar"><div class="progress-fill ${pct >= 100 ? 'exceeded' : pct >= 50 ? 'on-track' : 'behind'}" style="width:${pct}%"></div></div>
-              <div class="settings-goal-slider">
+              <div class="settings-goal-input-row">
                 <label>Target:</label>
-                <input type="range" min="0" max="${g.max}" step="${g.step}" value="${g.target}"
-                       data-goal-id="${g.id}" data-goal-type="${g.type}" class="settings-goal-range" />
-                <span class="settings-goal-slider-val">${g.type === 'currency' ? `${(g.prefix || '')}${g.target.toFixed(1)}${g.suffix}` : Math.round(g.target)}</span>
+                <div class="settings-goal-input-wrap">
+                  <span class="settings-goal-prefix">${g.prefix}</span>
+                  <input type="number" min="0" step="${g.step}" value="${g.target || ''}"
+                         placeholder="Enter target"
+                         data-goal-id="${g.id}" class="settings-goal-number-input" />
+                  <span class="settings-goal-suffix">${g.suffix}</span>
+                </div>
               </div>
+              <p class="settings-goal-hint">${g.hint}</p>
             </div>
           `;
         }).join('')}
       </div>
     `;
 
-    // Bind sliders
-    container.querySelectorAll('.settings-goal-range').forEach(slider => {
-      slider.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
-        const card = slider.closest('.settings-goal-card');
-        const display = card.querySelector('.settings-goal-slider-val');
-        const goalType = slider.dataset.goalType;
-        display.textContent = goalType === 'currency' ? `$${val.toFixed(1)}M` : Math.round(val);
-      });
-
-      slider.addEventListener('change', (e) => {
-        const goalId = slider.dataset.goalId;
-        const val = parseFloat(e.target.value);
+    // Bind number inputs (save on blur or Enter)
+    container.querySelectorAll('.settings-goal-number-input').forEach(input => {
+      const save = () => {
+        const goalId = input.dataset.goalId;
+        const val = parseFloat(input.value) || 0;
         this._saveGoalTarget(goalId, val);
+      };
+
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          input.blur();
+        }
       });
     });
 
@@ -180,6 +189,8 @@ const SettingsGoals = {
         GoalsManager.goals[goalId].target = targetValue;
         GoalsManager.updateGoalCard(goalId);
       }
+
+      Utils.showToast('Target saved!', 'success');
     } catch (err) {
       Utils.showToast('Failed to save goal: ' + err.message, 'error');
     }
