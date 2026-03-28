@@ -49,6 +49,7 @@ const App = {
             ['User Settings',  () => typeof UserSettings !== 'undefined' && UserSettings.init()],
             ['Programs',       () => typeof Programs !== 'undefined' && Programs.init()],
             ['HRResources',    () => typeof HRResources !== 'undefined' && HRResources.init()],
+            ['ContentStudio',  () => typeof ContentStudio !== 'undefined' && ContentStudio.init()],
             ['Monday',         () => typeof MondaySettings !== 'undefined' && MondaySettings.init()],
             ['Progress Bars',  () => setTimeout(() => {
                 document.querySelectorAll('.progress-fill').forEach(bar => {

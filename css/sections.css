@@ -1065,3 +1065,250 @@
 /* Rich content styling inside editor */
 #announcementContent ul,#announcementContent ol{margin:0.25rem 0;padding-left:1.5rem;}
 #announcementContent li{margin:0.15rem 0;}
+
+/* ========================================
+   CONTENT STUDIO
+======================================== */
+.cs-modal {
+    max-width: 780px;
+    width: 95vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.cs-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing-lg);
+}
+.cs-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    padding: 0 var(--spacing-lg);
+}
+.cs-tab-btn {
+    background: none;
+    border: none;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+}
+.cs-tab-btn.active {
+    color: var(--green-bright);
+    border-bottom-color: var(--green-bright);
+}
+.cs-tab-btn:hover:not(.active) {
+    color: var(--text-primary);
+}
+.cs-tab-panel { display: none; }
+.cs-tab-panel.active { display: block; }
+
+/* Input section */
+.cs-label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.35rem;
+}
+.cs-label-small { margin-top: var(--spacing-sm); font-size: 0.8rem; }
+.cs-optional { font-weight: 400; color: var(--text-muted); font-size: 0.75rem; }
+
+.cs-topic-input {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s;
+}
+.cs-topic-input:focus { border-color: var(--green-bright); }
+.cs-topic-input::placeholder { color: var(--text-muted); }
+
+.cs-instructions-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    outline: none;
+    resize: vertical;
+    min-height: 48px;
+}
+.cs-instructions-input:focus { border-color: var(--green-bright); }
+
+/* Platform toggles */
+.cs-platform-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: var(--spacing-md);
+}
+.cs-platform-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    font-size: 0.82rem;
+    transition: all 0.2s;
+    user-select: none;
+}
+.cs-platform-toggle:has(input:checked) {
+    border-color: var(--green-bright);
+    background: rgba(140, 198, 62, 0.08);
+    color: var(--green-bright);
+}
+.cs-platform-toggle input { display: none; }
+.cs-platform-toggle i { font-size: 1rem; }
+.cs-no-platforms {
+    padding: 0.75rem;
+    background: rgba(251, 191, 36, 0.08);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: var(--radius-md);
+    font-size: 0.82rem;
+    color: #fbbf24;
+}
+.cs-no-platforms a { color: var(--green-bright); text-decoration: underline; }
+
+.cs-generate-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-lg);
+}
+
+/* Results */
+.cs-results { margin-top: var(--spacing-sm); }
+.cs-result-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: var(--spacing-md);
+}
+.cs-result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+.cs-result-platform {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.cs-result-platform i { font-size: 1.1rem; }
+.cs-char-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+.cs-result-text {
+    width: 100%;
+    min-height: 80px;
+    padding: 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    resize: vertical;
+    outline: none;
+    font-family: inherit;
+}
+.cs-result-text:focus { border-color: var(--green-bright); }
+.cs-result-hashtags {
+    font-size: 0.78rem;
+    color: var(--green-bright);
+    margin-top: 0.4rem;
+    word-break: break-all;
+}
+.cs-result-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    justify-content: flex-end;
+}
+
+/* Loading / Empty / Error states */
+.cs-loading, .cs-empty, .cs-error {
+    text-align: center;
+    padding: 2rem 1rem;
+    color: var(--text-muted);
+}
+.cs-loading i, .cs-empty i { font-size: 1.5rem; margin-bottom: 0.5rem; display: block; }
+.cs-error { color: var(--status-danger); }
+
+/* Queue tab */
+.cs-queue-stats {
+    display: flex;
+    gap: var(--spacing-lg);
+    padding: 0.6rem 0;
+    margin-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--border-color);
+}
+.cs-stat { font-size: 0.82rem; color: var(--text-secondary); }
+.cs-stat strong { color: var(--text-primary); }
+
+.cs-queue-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    transition: background 0.15s;
+}
+.cs-queue-item:hover { background: var(--bg-tertiary); }
+.cs-queue-platform { font-size: 1.1rem; width: 28px; text-align: center; }
+.cs-queue-content { flex: 1; min-width: 0; }
+.cs-queue-text {
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cs-queue-meta {
+    display: flex;
+    gap: var(--spacing-sm);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+.cs-queue-keyword {
+    background: var(--bg-tertiary);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.cs-queue-actions { display: flex; gap: 4px; }
+
+.btn-xs {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+    border-radius: var(--radius-sm);
+}
+.btn-success {
+    background: var(--status-success);
+    color: white;
+    border: none;
+}
+
+@media (max-width: 640px) {
+    .cs-modal { max-width: 100vw; }
+    .cs-platform-toggles { flex-direction: column; }
+}

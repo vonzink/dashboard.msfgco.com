@@ -210,6 +210,7 @@
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Content Engine</div>
             <a data-link-key="keyword_explorer" class="dropdown-item"><i class="fas fa-search"></i> Keyword Explorer</a>
+            <button type="button" class="dropdown-item" data-action="open-content-studio"><i class="fas fa-magic"></i> Content Studio</button>
 
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Social</div>
@@ -589,6 +590,58 @@
         <div class="modal-footer">
           <button class="btn btn-secondary" id="goalEditCancel">Cancel</button>
           <button class="btn btn-primary" id="goalEditSave"><i class="fas fa-check"></i> Save Target</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content Studio Modal -->
+    <div class="modal-overlay" id="contentStudioModal" style="display:none;">
+      <div class="modal cs-modal">
+        <div class="modal-header">
+          <h3><i class="fas fa-magic"></i> Content Studio</h3>
+          <button class="modal-close" id="csClose">&times;</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="cs-tabs">
+          <button class="cs-tab-btn active" data-tab="generate"><i class="fas fa-pen-fancy"></i> Create</button>
+          <button class="cs-tab-btn" data-tab="queue"><i class="fas fa-list"></i> My Posts</button>
+        </div>
+
+        <div class="modal-body cs-body">
+          <!-- Generate Tab -->
+          <div class="cs-tab-panel active" id="csTab-generate">
+            <div class="cs-input-section">
+              <label for="csTopic" class="cs-label">What do you want to post about?</label>
+              <input type="text" id="csTopic" class="cs-topic-input" placeholder="e.g. First-time homebuyer tips, Spring market update, VA loan benefits..." />
+
+              <label for="csInstructions" class="cs-label cs-label-small">Special instructions <span class="cs-optional">(optional)</span></label>
+              <textarea id="csInstructions" class="cs-instructions-input" rows="2" placeholder="e.g. Keep it casual, mention our Spring special, target Colorado buyers..."></textarea>
+
+              <label class="cs-label">Post to these platforms:</label>
+              <div class="cs-platform-toggles" id="csPlatformToggles">
+                <div class="cs-loading"><i class="fas fa-spinner fa-spin"></i> Loading your profiles...</div>
+              </div>
+
+              <div class="cs-generate-row">
+                <button class="btn btn-primary" id="csGenerateBtn"><i class="fas fa-magic"></i> Generate Posts</button>
+                <button class="btn btn-success" id="csPublishAllBtn" style="display:none;"><i class="fas fa-paper-plane"></i> Publish All</button>
+              </div>
+            </div>
+
+            <div class="cs-results" id="csResults">
+              <div class="cs-empty">
+                <i class="fas fa-pen-fancy" style="font-size:2rem; opacity:0.3;"></i>
+                <p>Enter a topic above and click Generate to create platform-specific posts.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Queue Tab -->
+          <div class="cs-tab-panel" id="csTab-queue">
+            <div class="cs-queue-stats" id="csQueueStats"></div>
+            <div class="cs-queue-list" id="csQueueList"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1215,6 +1268,7 @@
   <script src="js/user-settings.js?v=20260314b"></script>
   <script src="js/programs.js?v=20260317"></script>
   <script src="js/hr-resources.js?v=20260326"></script>
+  <script src="js/content-studio.js?v=20260327"></script>
   <script src="js/collapsible.js?v=20260314b"></script>
 
   <!-- Accessibility -->

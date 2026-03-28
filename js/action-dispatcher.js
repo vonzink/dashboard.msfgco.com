@@ -90,6 +90,10 @@
     'open-logos-browser': () =>
       Utils.openPopup('Calculators/File Browser/file-browser.html?library=logos', 'MSFGLogosBrowser', 1100, 800),
 
+    'open-content-studio': () => {
+      if (typeof ContentStudio !== 'undefined') ContentStudio.open();
+    },
+
     // =====================
     // Monday.com Integration
     // =====================
