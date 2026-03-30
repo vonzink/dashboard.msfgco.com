@@ -230,7 +230,7 @@ const mondayBoardUpdate = z.object({
 const userUpdate = z.object({
   name: optionalString(200),
   initials: optionalString(10),
-  role: z.enum(['admin', 'manager', 'user']).optional(),
+  role: z.enum(['admin', 'manager', 'user', 'lo', 'processor', 'external']).optional(),
   is_active: z.union([z.boolean(), z.number()]).optional(),
 }).refine(
   data => Object.keys(data).length > 0,
