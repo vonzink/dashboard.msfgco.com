@@ -38,13 +38,24 @@ function getTableName(section) {
 
 // ── Per-Section Upserts ─────────────────────────
 
+// Cache valid pipeline table columns to avoid inserting unmapped fields
+let _pipelineColumnsCache = null;
+async function _getPipelineColumns() {
+  if (!_pipelineColumnsCache) {
+    const [cols] = await db.query('SHOW COLUMNS FROM pipeline');
+    _pipelineColumnsCache = new Set(cols.map(c => c.Field));
+  }
+  return _pipelineColumnsCache;
+}
+
 async function upsertPipelineRow(mondayItemId, row) {
   const [existing] = await db.query('SELECT id FROM pipeline WHERE monday_item_id = ?', [mondayItemId]);
+  const validCols = await _getPipelineColumns();
 
-  // Filter out internal fields (prefixed with _) that aren't DB columns
+  // Filter out internal fields and fields not in the pipeline table
   const dbRow = {};
   for (const [k, v] of Object.entries(row)) {
-    if (!k.startsWith('_')) dbRow[k] = v;
+    if (!k.startsWith('_') && validCols.has(k)) dbRow[k] = v;
   }
 
   if (existing.length > 0) {
