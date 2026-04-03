@@ -40,7 +40,7 @@
        GRADIENTS
     ======================================== */
     --gradient-brand: linear-gradient(135deg, var(--green-bright) 0%, var(--green-forest) 50%, var(--green-teal) 100%);
-    --gradient-header: linear-gradient(90deg, var(--green-teal) 0%, var(--green-dark) 40%, var(--green-forest) 70%, var(--green-medium) 100%);
+    --gradient-header: linear-gradient(90deg, #0c2e30 0%, var(--green-teal) 30%, var(--green-dark) 65%, #1a3a2a 100%);
     
     /* ========================================
        STATUS COLORS

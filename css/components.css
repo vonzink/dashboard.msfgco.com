@@ -36,6 +36,7 @@
     padding: 1.25rem var(--spacing-lg);
     border-bottom: 1px solid var(--border-color);
     background: var(--bg-tertiary);
+    border-left: 4px solid var(--green-bright);
 }
 
 .section-title {

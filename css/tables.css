@@ -20,6 +20,22 @@
     overflow-x: auto;
 }
 
+/* Scrollable table body with sticky headers */
+.table-scroll {
+    max-height: 600px;
+    overflow-y: auto;
+    overflow-x: auto;
+    position: relative;
+}
+
+.table-scroll thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-tertiary);
+    box-shadow: 0 1px 0 var(--border-color);
+}
+
 /* ========================================
    DATA TABLE
 ======================================== */
@@ -179,10 +195,76 @@
     font-variant-numeric: tabular-nums;
 }
 
+/* ========================================
+   PIPELINE STATUS BADGES
+======================================== */
+.pipeline-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-full);
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+.pipeline-badge.status-complete {
+    background: rgba(34, 197, 94, 0.15);
+    color: #16a34a;
+}
+.pipeline-badge.status-pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #d97706;
+}
+.pipeline-badge.status-danger {
+    background: rgba(239, 68, 68, 0.15);
+    color: #dc2626;
+}
+.pipeline-badge.status-neutral {
+    background: rgba(107, 114, 128, 0.12);
+    color: #6b7280;
+}
+.pipeline-badge.status-default {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] .pipeline-badge.status-complete { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+[data-theme="dark"] .pipeline-badge.status-pending { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+[data-theme="dark"] .pipeline-badge.status-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+[data-theme="dark"] .pipeline-badge.status-neutral { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
+[data-theme="dark"] .pipeline-badge.status-default { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+
+/* ========================================
+   PINNED FIRST COLUMN (Client Name)
+======================================== */
+.table-scroll td:first-child,
+.table-scroll th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--bg-secondary);
+}
+.table-scroll thead th:first-child {
+    z-index: 4;
+    background: var(--bg-tertiary);
+}
+.table-scroll td:first-child::after,
+.table-scroll th:first-child::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -6px;
+    bottom: 0;
+    width: 6px;
+    background: linear-gradient(to right, rgba(0,0,0,0.06), transparent);
+    pointer-events: none;
+}
+
 /* Empty state inside tables */
 .empty-state {
     text-align: center;
-    padding: 2rem !important;
+    padding: 3rem 2rem !important;
     color: var(--text-muted);
 }
 
@@ -191,6 +273,41 @@
     margin-bottom: 0.5rem;
     display: block;
     opacity: 0.4;
+}
+
+.empty-state-enhanced {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--text-muted);
+}
+
+.empty-state-enhanced svg {
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 1.25rem;
+    display: block;
+    opacity: 0.5;
+}
+
+.empty-state-enhanced h4 {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
+    font-weight: 600;
+}
+
+.empty-state-enhanced p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+    line-height: 1.5;
+}
+
+.empty-state-enhanced .btn {
+    margin-top: 0.5rem;
 }
 
 /* ========================================

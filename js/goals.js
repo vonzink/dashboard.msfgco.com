@@ -454,13 +454,39 @@ const GoalsManager = {
         });
     },
 
+    _animateCountUp(el, endValue, format, duration = 800) {
+        const startValue = parseFloat(el.dataset.lastValue || '0') || 0;
+        if (startValue === endValue) {
+            el.textContent = format(endValue);
+            return;
+        }
+        el.dataset.counting = 'true';
+        const startTime = performance.now();
+        const step = (now) => {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            // Ease out cubic
+            const eased = 1 - Math.pow(1 - progress, 3);
+            const current = startValue + (endValue - startValue) * eased;
+            el.textContent = format(current);
+            if (progress < 1) {
+                requestAnimationFrame(step);
+            } else {
+                el.textContent = format(endValue);
+                el.dataset.lastValue = String(endValue);
+                delete el.dataset.counting;
+            }
+        };
+        requestAnimationFrame(step);
+    },
+
     updateGoalCard(goalId) {
         const goal = this.goals[goalId];
         if (!goal) return;
 
         const valueEl = document.getElementById(this.getValueId(goalId));
         if (valueEl) {
-            valueEl.textContent = goal.format(goal.current);
+            this._animateCountUp(valueEl, goal.current, goal.format);
         }
 
         const targetEl = document.getElementById(this.getTargetId(goalId));

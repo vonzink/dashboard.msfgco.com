@@ -114,6 +114,56 @@
 }
 
 /* ========================================
+   SKELETON LOADERS
+======================================== */
+@keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+
+.skeleton {
+    background: linear-gradient(90deg,
+        var(--bg-tertiary) 25%,
+        var(--bg-hover, rgba(255,255,255,0.15)) 50%,
+        var(--bg-tertiary) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.5s infinite ease-in-out;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-line {
+    height: 14px;
+    margin-bottom: 8px;
+    border-radius: var(--radius-sm);
+}
+
+.skeleton-line.short { width: 40%; }
+.skeleton-line.medium { width: 65%; }
+.skeleton-line.long { width: 90%; }
+
+.skeleton-row {
+    display: flex;
+    gap: var(--spacing-md);
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.skeleton-cell {
+    height: 16px;
+    flex: 1;
+    border-radius: var(--radius-sm);
+}
+
+/* KPI count-up transition */
+.goal-value[data-counting] {
+    transition: none;
+}
+
+.goal-value {
+    transition: color 0.3s ease;
+}
+
+/* ========================================
    STAGGERED ANIMATION DELAYS
 ======================================== */
 .section-card:nth-child(1) { animation-delay: 0.1s; }

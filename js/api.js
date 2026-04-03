@@ -277,9 +277,21 @@ const API = {
         }
 
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" class="empty-state">
-                <i class="fas fa-database"></i>
-                <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
+            tbody.innerHTML = `<tr><td colspan="${cols.length + 1}">
+                <div class="empty-state-enhanced">
+                    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="20" y="25" width="55" height="70" rx="4" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                        <rect x="28" y="35" width="30" height="3" rx="1.5" fill="currentColor" opacity="0.15"/>
+                        <rect x="28" y="43" width="38" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
+                        <rect x="28" y="51" width="25" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
+                        <rect x="28" y="59" width="32" height="3" rx="1.5" fill="currentColor" opacity="0.1"/>
+                        <circle cx="85" cy="70" r="25" stroke="var(--green-bright)" stroke-width="2" fill="none" opacity="0.35"/>
+                        <path d="M76 70 L82 76 L94 64" stroke="var(--green-bright)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+                    </svg>
+                    <h4>No Pre-Approvals Yet</h4>
+                    <p>Sync from Monday.com to see your pre-approval pipeline.</p>
+                    <button type="button" class="btn btn-secondary btn-sm" data-action="monday-sync"><i class="fas fa-sync-alt"></i> Sync Now</button>
+                </div>
             </td></tr>`;
             return;
         }
@@ -482,6 +494,9 @@ const API = {
     // ========================================
     pipelineColumns: [],   // loaded from /monday/view-config
 
+    PRIORITY_FIELDS: ['client_name', 'assigned_lo_name', 'lender', 'loan_amount', 'stage', 'closing_date', 'loan_number', 'subject_property'],
+    _showAllColumns: false,
+
     FALLBACK_PIPELINE_COLUMNS: [
         { field: 'client_name', label: 'Client Name' },
         { field: 'loan_number', label: 'Loan #' },
@@ -499,6 +514,25 @@ const API = {
         { field: 'lock_expiration_date', label: 'Lock Exp' },
         { field: 'funding_date', label: 'Funding Date' },
     ],
+
+    _getVisibleColumns() {
+        const cols = this.pipelineColumns.length > 0 ? this.pipelineColumns : this.FALLBACK_PIPELINE_COLUMNS;
+        if (this._showAllColumns || cols.length <= 8) return cols;
+        return cols.filter(c => this.PRIORITY_FIELDS.includes(c.field));
+    },
+
+    togglePipelineColumns() {
+        this._showAllColumns = !this._showAllColumns;
+        this.renderPipelineHead();
+        this.renderPipeline(this.pipelineData);
+        const btn = document.getElementById('toggleColumnsBtn');
+        if (btn) {
+            const count = this.pipelineColumns.length - this.PRIORITY_FIELDS.filter(f => this.pipelineColumns.some(c => c.field === f)).length;
+            btn.innerHTML = this._showAllColumns
+                ? '<i class="fas fa-compress-alt"></i> Fewer Columns'
+                : `<i class="fas fa-expand-alt"></i> +${count} Columns`;
+        }
+    },
 
     _displayPrefs: null,
 
@@ -548,10 +582,7 @@ const API = {
     renderPipelineHead() {
         const thead = document.getElementById('pipelineHead');
         if (!thead) return;
-        // Use current columns, or fallback if somehow empty
-        const cols = this.pipelineColumns.length > 0
-            ? this.pipelineColumns
-            : this.FALLBACK_PIPELINE_COLUMNS;
+        const cols = this._getVisibleColumns();
         thead.innerHTML = '<tr>' +
             cols.map(c => `<th class="sortable">${Utils.escapeHtml(Utils.toTitleCase(c.label || c.field))}</th>`).join('') +
             '</tr>';
@@ -613,16 +644,48 @@ const API = {
     DATE_FIELDS: ['application_date', 'lock_expiration_date', 'closing_date', 'funding_date', 'target_close_date',
         'appraisal_deadline', 'appraisal_due_date', 'payoff_date', 'estimated_fund_date'],
     CURRENCY_FIELDS: ['loan_amount', 'initial_loan_amount', 'purchase_price', 'appraised_value'],
+    STATUS_FIELDS: ['stage', 'appraisal_status', 'prelims_status', 'mini_set_status', 'cd_status',
+        'hoi_status', 'title_status', 'loan_status', 'status', 'payoffs', 'wvoes', 'vvoes',
+        'closing_details', 'closing_docs', 'cd_info', 'dpa', 'hoa', 'send_to_compliance'],
+
+    _statusBadgeClass(val) {
+        if (!val) return '';
+        const v = val.toLowerCase();
+        if (/complete|done|approved|cleared|received|ordered|signed|funded|ctc|clear/i.test(v)) return 'status-complete';
+        if (/pending|in progress|working|submitted|waiting|conditional|review|open/i.test(v)) return 'status-pending';
+        if (/not ready|missing|denied|rejected|expired|overdue|cancel|fail|stuck/i.test(v)) return 'status-danger';
+        if (/n\/a|waived|exempt/i.test(v)) return 'status-neutral';
+        return 'status-default';
+    },
 
     renderPipeline(data) {
         const tbody = document.getElementById('pipelineBody');
         if (!tbody) return;
-        const cols = this.pipelineColumns;
+        const cols = this._getVisibleColumns();
 
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="${cols.length || 1}" class="empty-state">
-                <i class="fas fa-database"></i>
-                <p>No pipeline data yet. Sync from Monday.com to populate.</p>
+            tbody.innerHTML = `<tr><td colspan="${cols.length || 1}">
+                <div class="empty-state-enhanced">
+                    <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <rect x="15" y="30" width="90" height="65" rx="6" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                        <line x1="15" y1="48" x2="105" y2="48" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+                        <rect x="22" y="38" width="25" height="5" rx="2" fill="currentColor" opacity="0.15"/>
+                        <rect x="52" y="38" width="20" height="5" rx="2" fill="currentColor" opacity="0.15"/>
+                        <rect x="77" y="38" width="22" height="5" rx="2" fill="currentColor" opacity="0.15"/>
+                        <rect x="22" y="56" width="30" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+                        <rect x="22" y="66" width="25" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+                        <rect x="22" y="76" width="28" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+                        <rect x="52" y="56" width="18" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+                        <rect x="52" y="66" width="22" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+                        <rect x="77" y="56" width="20" height="4" rx="2" fill="currentColor" opacity="0.1"/>
+                        <circle cx="95" cy="25" r="18" stroke="var(--green-bright)" stroke-width="2" fill="none" opacity="0.4"/>
+                        <line x1="95" y1="18" x2="95" y2="32" stroke="var(--green-bright)" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+                        <line x1="88" y1="25" x2="102" y2="25" stroke="var(--green-bright)" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+                    </svg>
+                    <h4>No Pipeline Data Yet</h4>
+                    <p>Sync your Monday.com boards to see your active loans here.</p>
+                    <button type="button" class="btn btn-secondary btn-sm" data-action="monday-sync"><i class="fas fa-sync-alt"></i> Sync Now</button>
+                </div>
             </td></tr>`;
             return;
         }
@@ -642,6 +705,10 @@ const API = {
                 }
                 if (this.DATE_FIELDS.includes(col.field)) {
                     return `<td class="nowrap">${Utils.formatDate(val, 'short')}</td>`;
+                }
+                if (this.STATUS_FIELDS.includes(col.field) && val) {
+                    const cls = this._statusBadgeClass(val);
+                    return `<td><span class="pipeline-badge ${cls}">${Utils.escapeHtml(val)}</span></td>`;
                 }
                 return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
             }).join('');

@@ -622,7 +622,7 @@ const Investors = {
       '<div class="investor-dropdown-search">' +
         '<input type="text" id="investorDropdownSearch" class="form-input form-input-sm" placeholder="Search investors..." autocomplete="off" />' +
       '</div>' +
-      '<div class="investor-dropdown-items" id="investorDropdownItems">';
+      '<div class="investor-card-grid" id="investorDropdownItems">';
 
     sorted.forEach(([key, inv]) => {
       // Build mini pills for dropdown
@@ -642,15 +642,27 @@ const Investors = {
       ];
       const activePills = toggleDefs.filter(t => Number(t.val) === 1);
       if (activePills.length > 0) {
-        pillsHtml = '<span class="dropdown-pills">';
+        pillsHtml = '<div class="investor-card-pills">';
         activePills.forEach(t => {
           pillsHtml += '<span class="dropdown-pill">' + esc(t.label) + '</span>';
         });
-        pillsHtml += '</span>';
+        pillsHtml += '</div>';
       }
 
-      html += '<button type="button" class="dropdown-item investor-dropdown-btn" data-action="open-investor" data-investor="' + key + '">' +
-        '<span class="investor-dropdown-name"><i class="fas fa-building"></i> ' + esc(inv.name || key) + '</span>' +
+      // AE name if available
+      const aeName = inv.accountExecutive ? '<div class="investor-card-ae"><i class="fas fa-user-tie"></i> ' + esc(inv.accountExecutive) + '</div>' : '';
+
+      // Logo or initials
+      const logoHtml = inv.logoUrl
+        ? '<img src="' + esc(inv.logoUrl) + '" alt="" class="investor-card-logo" />'
+        : '<div class="investor-card-initials">' + esc((inv.name || key).charAt(0)) + '</div>';
+
+      html += '<button type="button" class="investor-card-item" data-action="open-investor" data-investor="' + key + '">' +
+        '<div class="investor-card-top">' +
+          logoHtml +
+          '<div class="investor-card-name">' + esc(inv.name || key) + '</div>' +
+        '</div>' +
+        aeName +
         pillsHtml +
       '</button>';
     });

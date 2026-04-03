@@ -428,7 +428,7 @@
       </div>
 
       <div class="section-body" id="sectionBody-preapprovals">
-        <div class="table-responsive">
+        <div class="table-responsive table-scroll">
           <table class="data-table" id="preApprovalsTable">
             <thead id="preApprovalsHead">
               <tr>
@@ -444,10 +444,7 @@
               </tr>
             </thead>
             <tbody id="preApprovalsBody">
-              <tr><td colspan="9" class="empty-state">
-                <i class="fas fa-database"></i>
-                <p>No pre-approval data yet. Sync from Monday.com to populate.</p>
-              </td></tr>
+              <tr><td colspan="9"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
             </tbody>
           </table>
         </div>
@@ -463,6 +460,9 @@
           <select class="filter-select" id="pipelineLO">
             <option value="">All Loan Officers</option>
           </select>
+          <button type="button" class="btn btn-secondary btn-sm" id="toggleColumnsBtn" onclick="API.togglePipelineColumns()" title="Show/hide columns">
+            <i class="fas fa-expand-alt"></i> All Columns
+          </button>
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" id="mondaySyncBtn" data-action="monday-sync" title="Sync from Monday.com">
             <i class="fas fa-sync-alt"></i> Sync
           </button>
@@ -490,12 +490,14 @@
           </div>
         </div>
 
-        <div class="table-responsive">
+        <div class="table-responsive table-scroll">
           <table class="data-table" id="pipelineTable">
             <thead id="pipelineHead">
-              <tr><th colspan="12"><i class="fas fa-spinner fa-spin"></i> Loading pipeline...</th></tr>
+              <tr><th colspan="12">&nbsp;</th></tr>
             </thead>
             <tbody id="pipelineBody">
+              <tr><td colspan="12"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
+            </tbody>
               <tr><td class="empty-state">
                 <i class="fas fa-database"></i>
                 <p>No pipeline data yet. Sync from Monday.com to populate.</p>
@@ -547,7 +549,7 @@
           </div>
         </div>
 
-        <div class="table-responsive">
+        <div class="table-responsive table-scroll">
           <table class="data-table" id="fundedLoansTable">
             <thead id="fundedLoansHead">
               <tr>
@@ -560,10 +562,7 @@
               </tr>
             </thead>
             <tbody id="fundedLoansBody">
-              <tr><td colspan="6" class="empty-state">
-                <i class="fas fa-spinner fa-spin"></i>
-                <p>Loading funded loans...</p>
-              </td></tr>
+              <tr><td colspan="6"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
             </tbody>
           </table>
         </div>

@@ -203,9 +203,20 @@ const FundedLoans = {
 
     if (this._data.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="' + cols.length + '" class="empty-state">' +
-        '<i class="fas fa-check-circle"></i>' +
-        '<p>No funded loans for this period.</p>' +
+        '<tr><td colspan="' + cols.length + '">' +
+        '<div class="empty-state-enhanced">' +
+          '<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<path d="M35 85 L60 40 L85 85 Z" stroke="currentColor" stroke-width="2" fill="none" opacity="0.2"/>' +
+            '<rect x="52" y="50" width="16" height="25" rx="2" stroke="currentColor" stroke-width="2" fill="none" opacity="0.25"/>' +
+            '<rect x="56" y="60" width="3" height="6" rx="1" fill="currentColor" opacity="0.15"/>' +
+            '<rect x="61" y="60" width="3" height="6" rx="1" fill="currentColor" opacity="0.15"/>' +
+            '<rect x="25" y="85" width="70" height="6" rx="3" fill="currentColor" opacity="0.1"/>' +
+            '<circle cx="90" cy="35" r="16" stroke="var(--green-bright)" stroke-width="2" fill="none" opacity="0.35"/>' +
+            '<text x="90" y="40" text-anchor="middle" fill="var(--green-bright)" font-size="16" font-weight="bold" opacity="0.5">$</text>' +
+          '</svg>' +
+          '<h4>No Funded Loans This Period</h4>' +
+          '<p>Funded loans will appear here as they close and sync.</p>' +
+        '</div>' +
         '</td></tr>';
       return;
     }
