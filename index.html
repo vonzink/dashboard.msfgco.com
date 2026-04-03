@@ -282,7 +282,106 @@
 
   <main class="main-content" id="mainContent" tabindex="-1">
 
-    <!-- News + Quick Links -->
+    <!-- Top Grid: Performance + News side-by-side -->
+    <div class="dashboard-top-grid">
+
+    <!-- My Performance (Goals) -->
+    <section class="section-card animate-in" id="goalsSection" data-collapsible>
+      <div class="section-header">
+        <h2 class="section-title"><i class="fas fa-trophy"></i> My Performance</h2>
+        <div class="section-actions">
+          <select class="filter-select" id="goalLOSelect" style="display:none;" title="View LO performance">
+            <option value="">All Loan Officers</option>
+          </select>
+          <select class="filter-select" id="goalPeriodSelect" title="Goal period">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="yearly">Yearly</option>
+            <option value="weekly">Weekly</option>
+          </select>
+          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-goals" title="Toggle section">
+            <i class="fas fa-chevron-up"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="section-body" id="sectionBody-goals">
+        <!-- Pace banner -->
+        <div class="goal-pace-banner" id="goalPaceBanner" style="display:none;">
+          <i class="fas fa-running"></i>
+          <span id="goalPaceText"></span>
+        </div>
+
+        <div class="goals-grid" id="goalsGrid">
+          <div class="goal-card goal-card-interactive" data-goal="loans-closed" title="Click to set target">
+            <div class="goal-icon"><i class="fas fa-file-signature"></i></div>
+            <div class="goal-label">Loans Closed</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="loansClosedValue">0</div>
+              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <div class="goal-target">of <span class="goal-target-value" id="loansClosedTarget">0</span> target</div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="loansClosedProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="loansClosedProgressText">Set a target to track progress</div>
+          </div>
+
+          <div class="goal-card goal-card-interactive" data-goal="volume-closed" title="Click to set target">
+            <div class="goal-icon"><i class="fas fa-dollar-sign"></i></div>
+            <div class="goal-label">Volume Closed</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="volumeClosedValue">$0</div>
+              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <div class="goal-target">of $<span class="goal-target-value" id="volumeClosedTarget">0</span>M target</div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="volumeClosedProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="volumeClosedProgressText">Set a target to track progress</div>
+          </div>
+
+          <div class="goal-card goal-card-interactive" data-goal="pipeline" title="Click to set target">
+            <div class="goal-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="goal-label">Pipeline</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="pipelineValue">$0</div>
+              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <div class="goal-unit-count" id="pipelineUnitCount">0 loans</div>
+            <div class="goal-target">of $<span class="goal-target-value" id="pipelineTarget">0</span>M target</div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="pipelineProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="pipelineProgressText">Set a target to track progress</div>
+          </div>
+
+          <div class="goal-card goal-card-interactive" data-goal="pre-approvals" title="Click to set target">
+            <div class="goal-icon"><i class="fas fa-clipboard-check"></i></div>
+            <div class="goal-label">Pre-Approvals</div>
+            <div class="goal-value-container">
+              <div class="goal-value" id="preApprovalsValue">0</div>
+              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
+            </div>
+            <div class="goal-target">of <span class="goal-target-value" id="preApprovalsTarget">0</span> target</div>
+            <div class="progress-bar"><div class="progress-fill on-track" id="preApprovalsProgress" data-progress="0"></div></div>
+            <div class="goal-progress-text" id="preApprovalsProgressText">Set a target to track progress</div>
+          </div>
+        </div>
+
+        <!-- YTD Summary -->
+        <div class="goal-ytd-bar" id="goalYTDBar">
+          <div class="goal-ytd-item">
+            <i class="fas fa-calendar-check"></i>
+            <span>YTD: <strong id="ytdUnits">0</strong> loans closed</span>
+          </div>
+          <div class="goal-ytd-item">
+            <i class="fas fa-money-bill-wave"></i>
+            <span>YTD Volume: <strong id="ytdVolume">$0</strong></span>
+          </div>
+          <div class="goal-ytd-item">
+            <i class="fas fa-percentage"></i>
+            <span>Pull-Through: <strong id="ytdPullThrough">0%</strong></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Daily News & Announcements -->
     <section class="section-card animate-in" id="newsSection" data-collapsible>
       <div class="section-header">
         <h2 class="section-title"><i class="fas fa-newspaper"></i> Daily News & Announcements</h2>
@@ -305,6 +404,8 @@
         </div>
       </div>
     </section>
+
+    </div><!-- /.dashboard-top-grid -->
 
     <!-- Pre-Approvals (Monday.com Sync) -->
     <section class="section-card animate-in" id="preApprovalsSection" data-collapsible>
@@ -465,102 +566,6 @@
               </td></tr>
             </tbody>
           </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Performance & Goals -->
-    <section class="section-card animate-in" id="goalsSection" data-collapsible>
-      <div class="section-header">
-        <h2 class="section-title"><i class="fas fa-trophy"></i> My Performance</h2>
-        <div class="section-actions">
-          <select class="filter-select" id="goalLOSelect" style="display:none;" title="View LO performance">
-            <option value="">All Loan Officers</option>
-          </select>
-          <select class="filter-select" id="goalPeriodSelect" title="Goal period">
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="yearly">Yearly</option>
-            <option value="weekly">Weekly</option>
-          </select>
-          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-goals" title="Toggle section">
-            <i class="fas fa-chevron-up"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="section-body" id="sectionBody-goals">
-        <!-- Pace banner -->
-        <div class="goal-pace-banner" id="goalPaceBanner" style="display:none;">
-          <i class="fas fa-running"></i>
-          <span id="goalPaceText"></span>
-        </div>
-
-        <div class="goals-grid" id="goalsGrid">
-          <div class="goal-card goal-card-interactive" data-goal="loans-closed" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-file-signature"></i></div>
-            <div class="goal-label">Loans Closed</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="loansClosedValue">0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-target">of <span class="goal-target-value" id="loansClosedTarget">0</span> target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="loansClosedProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="loansClosedProgressText">Set a target to track progress</div>
-          </div>
-
-          <div class="goal-card goal-card-interactive" data-goal="volume-closed" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-dollar-sign"></i></div>
-            <div class="goal-label">Volume Closed</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="volumeClosedValue">$0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-target">of $<span class="goal-target-value" id="volumeClosedTarget">0</span>M target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="volumeClosedProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="volumeClosedProgressText">Set a target to track progress</div>
-          </div>
-
-          <div class="goal-card goal-card-interactive" data-goal="pipeline" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-chart-line"></i></div>
-            <div class="goal-label">Pipeline</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="pipelineValue">$0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-unit-count" id="pipelineUnitCount">0 loans</div>
-            <div class="goal-target">of $<span class="goal-target-value" id="pipelineTarget">0</span>M target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="pipelineProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="pipelineProgressText">Set a target to track progress</div>
-          </div>
-
-          <div class="goal-card goal-card-interactive" data-goal="pre-approvals" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-clipboard-check"></i></div>
-            <div class="goal-label">Pre-Approvals</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="preApprovalsValue">0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-target">of <span class="goal-target-value" id="preApprovalsTarget">0</span> target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="preApprovalsProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="preApprovalsProgressText">Set a target to track progress</div>
-          </div>
-        </div>
-
-        <!-- YTD Summary -->
-        <div class="goal-ytd-bar" id="goalYTDBar">
-          <div class="goal-ytd-item">
-            <i class="fas fa-calendar-check"></i>
-            <span>YTD: <strong id="ytdUnits">0</strong> loans closed</span>
-          </div>
-          <div class="goal-ytd-item">
-            <i class="fas fa-money-bill-wave"></i>
-            <span>YTD Volume: <strong id="ytdVolume">$0</strong></span>
-          </div>
-          <div class="goal-ytd-item">
-            <i class="fas fa-percentage"></i>
-            <span>Pull-Through: <strong id="ytdPullThrough">0%</strong></span>
-          </div>
         </div>
       </div>
     </section>

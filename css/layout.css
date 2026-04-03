@@ -441,6 +441,48 @@
     gap: var(--spacing-lg);
 }
 
+/* Dashboard Top Grid — Performance + News side-by-side */
+.dashboard-top-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+    align-items: start;
+}
+
+/* Inside the top grid, goals use 2-col instead of 4-col */
+.dashboard-top-grid .goals-grid {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+/* Inside the top grid, news cards use 1-col to fit */
+.dashboard-top-grid .news-card-grid {
+    grid-template-columns: 1fr;
+}
+
+@media (max-width: 1024px) {
+    .dashboard-top-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-top-grid .goals-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .dashboard-top-grid .news-card-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-top-grid .goals-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dashboard-top-grid .news-card-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (min-width: 1800px) {
     .main-content {
         max-width: 1800px;
