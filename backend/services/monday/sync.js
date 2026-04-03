@@ -322,10 +322,9 @@ async function syncAllBoards(userId) {
       if (m.pipeline_field === 'assigned_lo_name') hasLOMapped = true;
     }
 
-    // Infer board-level LO from board name when no assigned_lo_name column is mapped
+    // Infer board-level LO from board name — used as fallback when items lack an LO value
     let boardLO = null;
-    if (!hasLOMapped && board.board_name) {
-      // Extract first word from board name (e.g. "Kray Pre-approvals" → "kray")
+    if (board.board_name) {
       const boardFirstWord = board.board_name.split(/[\s']/)[0].toLowerCase().trim();
       if (firstNameToUser[boardFirstWord]) {
         boardLO = firstNameToUser[boardFirstWord];
