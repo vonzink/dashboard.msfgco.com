@@ -675,9 +675,13 @@
           <span class="chat-tag-picker-label"><i class="fas fa-tags"></i> Attach tags:</span>
           <div class="chat-tag-picker" id="chatTagPicker"></div>
         </div>
+        <div class="chat-edit-bar" id="chatEditBar"></div>
+        <div class="chat-pending-files" id="chatPendingFiles"></div>
         <form class="chat-input-row" id="chatForm">
+          <button type="button" class="chat-attach-btn" id="chatAttachBtn" title="Attach file"><i class="fas fa-paperclip"></i></button>
+          <input type="file" id="chatFileInput" multiple style="display:none;" />
           <input type="text" id="chatInput" class="chat-input" placeholder="Type a message..." maxlength="1000" autocomplete="off" />
-          <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Send</button>
+          <button type="submit" class="btn btn-primary" id="chatSendBtn"><i class="fas fa-paper-plane"></i> Send</button>
         </form>
       </div>
     </div>

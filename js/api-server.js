@@ -518,12 +518,33 @@ const ServerAPI = {
         return this.post("/chat/messages", { message, tag_ids: tagIds || [] });
     },
 
+    editChatMessage(id, message) {
+        return this.put(`/chat/messages/${id}`, { message });
+    },
+
     updateMessageTags(messageId, tagIds) {
         return this.put(`/chat/messages/${messageId}/tags`, { tag_ids: tagIds });
     },
 
     deleteChatMessage(id) {
         return this.delete(`/chat/messages/${id}`);
+    },
+
+    // Chat attachments
+    getChatAttachmentUploadUrl(messageId, fileName, fileType, fileSize) {
+        return this.post(`/chat/messages/${messageId}/attachments/upload-url`, { fileName, fileType, fileSize });
+    },
+
+    saveChatAttachment(messageId, attachment) {
+        return this.post(`/chat/messages/${messageId}/attachments`, attachment);
+    },
+
+    getChatAttachmentDownloadUrl(attachmentId) {
+        return this.get(`/chat/attachments/${attachmentId}/download`);
+    },
+
+    deleteChatAttachment(attachmentId) {
+        return this.delete(`/chat/attachments/${attachmentId}`);
     },
 
     getChatTags() {

@@ -157,6 +157,11 @@ const taskUpdate = task.partial().refine(
   { message: 'At least one field is required' }
 );
 
+// ── Chat Message Edit ───────────────────────
+const chatMessageEdit = z.object({
+  message: trimmedString(2000),
+});
+
 // ── Chat Message Tags ────────────────────────
 const chatMessageTags = z.object({
   tag_ids: z.array(z.number().int().positive()).min(0).max(50),
@@ -365,6 +370,7 @@ function validateQuery(schema) {
 
 module.exports = {
   chatMessage,
+  chatMessageEdit,
   chatMessageTags,
   announcement,
   preApproval,

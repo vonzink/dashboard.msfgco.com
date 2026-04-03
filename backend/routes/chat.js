@@ -1,11 +1,14 @@
-// Chat API routes — messages + tag system
+// Chat API routes — messages + tag system + editing + file attachments
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { requireDbUser, getUserId } = require('../middleware/userContext');
-const { chatMessage, chatMessageTags, validate } = require('../validation/schemas');
+const { chatMessage, chatMessageEdit, chatMessageTags, validate } = require('../validation/schemas');
 const websocket = require('../lib/websocket');
 const { parseId } = require('../middleware/parseId');
+const s3 = require('../services/s3');
+const crypto = require('crypto');
+const logger = require('../lib/logger');
 
 router.use(requireDbUser);
 
@@ -58,29 +61,47 @@ router.delete('/tags/:id', parseId(), async (req, res, next) => {
 // MESSAGES
 // ──────────────────────────────────────────────
 
+// Shared subqueries
+const TAG_SUBQUERY = `(
+  SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ct.id, 'name', ct.name, 'color', ct.color))
+  FROM chat_message_tags mt
+  JOIN chat_tags ct ON mt.tag_id = ct.id
+  WHERE mt.message_id = m.id
+) AS tags`;
+
+const ATTACHMENT_SUBQUERY = `(
+  SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ca.id, 'file_name', ca.file_name, 'file_size', ca.file_size, 'file_type', ca.file_type, 's3_key', ca.s3_key))
+  FROM chat_attachments ca
+  WHERE ca.message_id = m.id
+) AS attachments`;
+
+function parseMessage(row) {
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    sender_name: row.sender_name,
+    sender_initials: row.sender_initials,
+    message: row.message,
+    created_at: row.created_at,
+    updated_at: row.updated_at || null,
+    is_edited: row.is_edited === 1,
+    tags: row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [],
+    attachments: row.attachments ? (typeof row.attachments === 'string' ? JSON.parse(row.attachments) : row.attachments) : [],
+  };
+}
+
 // GET /api/chat/messages — list messages (with optional tag filter)
-// Query params: ?limit=50&before=<id>&tag=<tagId>
 router.get('/messages', async (req, res, next) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
     const before = parseInt(req.query.before) || null;
     const tagId = parseInt(req.query.tag) || null;
 
-    // Tag subquery — returns a proper JSON array, avoids GROUP_CONCAT
-    // length limits and fragile comma-splitting.
-    const TAG_SUBQUERY = `(
-      SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ct.id, 'name', ct.name, 'color', ct.color))
-      FROM chat_message_tags mt
-      JOIN chat_tags ct ON mt.tag_id = ct.id
-      WHERE mt.message_id = m.id
-    ) AS tags`;
-
     let query, params;
 
     if (tagId) {
-      // Filter by tag — INNER JOIN to filter, subquery to fetch all tags
       query = `
-        SELECT m.*, ${TAG_SUBQUERY}
+        SELECT m.*, ${TAG_SUBQUERY}, ${ATTACHMENT_SUBQUERY}
         FROM chat_messages m
         INNER JOIN chat_message_tags mt_filter ON m.id = mt_filter.message_id
         WHERE mt_filter.tag_id = ?
@@ -90,9 +111,8 @@ router.get('/messages', async (req, res, next) => {
       `;
       params = before ? [tagId, before, limit] : [tagId, limit];
     } else {
-      // All messages
       query = `
-        SELECT m.*, ${TAG_SUBQUERY}
+        SELECT m.*, ${TAG_SUBQUERY}, ${ATTACHMENT_SUBQUERY}
         FROM chat_messages m
         ${before ? 'WHERE m.id < ?' : ''}
         ORDER BY m.created_at DESC
@@ -102,18 +122,7 @@ router.get('/messages', async (req, res, next) => {
     }
 
     const [rows] = await db.query(query, params);
-
-    // Reverse to chronological order; tags arrive as JSON (or null)
-    const messages = rows.reverse().map(row => ({
-      id: row.id,
-      user_id: row.user_id,
-      sender_name: row.sender_name,
-      sender_initials: row.sender_initials,
-      message: row.message,
-      created_at: row.created_at,
-      tags: row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [],
-    }));
-
+    const messages = rows.reverse().map(parseMessage);
     res.json(messages);
   } catch (err) { next(err); }
 });
@@ -144,33 +153,44 @@ router.post('/messages', validate(chatMessage), async (req, res, next) => {
       );
     }
 
-    // Fetch the complete message with tags
+    // Fetch the complete message
     const [rows] = await db.query(`
-      SELECT m.*,
-        (SELECT JSON_ARRAYAGG(JSON_OBJECT('id', ct.id, 'name', ct.name, 'color', ct.color))
-         FROM chat_message_tags mt
-         JOIN chat_tags ct ON mt.tag_id = ct.id
-         WHERE mt.message_id = m.id) AS tags
-      FROM chat_messages m
-      WHERE m.id = ?
+      SELECT m.*, ${TAG_SUBQUERY}, ${ATTACHMENT_SUBQUERY}
+      FROM chat_messages m WHERE m.id = ?
     `, [msgId]);
 
-    const row = rows[0];
-    const tags = row.tags ? (typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags) : [];
-    const msgPayload = {
-      id: row.id,
-      user_id: row.user_id,
-      sender_name: row.sender_name,
-      sender_initials: row.sender_initials,
-      message: row.message,
-      created_at: row.created_at,
-      tags,
-    };
-
-    // Broadcast to all connected WebSocket clients
+    const msgPayload = parseMessage(rows[0]);
     websocket.broadcast('chat:message', msgPayload);
-
     res.status(201).json(msgPayload);
+  } catch (err) { next(err); }
+});
+
+// PUT /api/chat/messages/:id — edit a message (owner only)
+router.put('/messages/:id', parseId(), validate(chatMessageEdit), async (req, res, next) => {
+  try {
+    const msgId = parseInt(req.params.id);
+    const userId = getUserId(req);
+
+    const [rows] = await db.query('SELECT user_id FROM chat_messages WHERE id = ?', [msgId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+    if (rows[0].user_id !== userId) {
+      return res.status(403).json({ error: 'You can only edit your own messages' });
+    }
+
+    await db.query(
+      'UPDATE chat_messages SET message = ?, updated_at = NOW(), is_edited = 1 WHERE id = ?',
+      [req.body.message.trim(), msgId]
+    );
+
+    // Fetch updated message
+    const [updated] = await db.query(`
+      SELECT m.*, ${TAG_SUBQUERY}, ${ATTACHMENT_SUBQUERY}
+      FROM chat_messages m WHERE m.id = ?
+    `, [msgId]);
+
+    const msgPayload = parseMessage(updated[0]);
+    websocket.broadcast('chat:edit', msgPayload);
+    res.json(msgPayload);
   } catch (err) { next(err); }
 });
 
@@ -180,7 +200,6 @@ router.put('/messages/:id/tags', parseId(), validate(chatMessageTags), async (re
     const msgId = parseInt(req.params.id);
     const { tag_ids } = req.body;
 
-    // Replace all tags
     await db.query('DELETE FROM chat_message_tags WHERE message_id = ?', [msgId]);
 
     if (tag_ids.length > 0) {
@@ -191,9 +210,7 @@ router.put('/messages/:id/tags', parseId(), validate(chatMessageTags), async (re
       );
     }
 
-    // Broadcast tag update
     websocket.broadcast('chat:tags', { id: msgId, tag_ids });
-
     res.json({ success: true, message_id: msgId, tag_ids });
   } catch (err) { next(err); }
 });
@@ -211,11 +228,127 @@ router.delete('/messages/:id', parseId(), async (req, res, next) => {
       return res.status(403).json({ error: 'You can only delete your own messages' });
     }
 
+    // Clean up S3 attachments before deleting message
+    const [attachments] = await db.query(
+      'SELECT s3_key, s3_bucket FROM chat_attachments WHERE message_id = ?',
+      [req.params.id]
+    );
+    for (const att of attachments) {
+      await s3.deleteObject(att.s3_bucket, att.s3_key);
+    }
+
     await db.query('DELETE FROM chat_messages WHERE id = ?', [req.params.id]);
-
-    // Broadcast deletion to all connected clients
     websocket.broadcast('chat:delete', { id: parseInt(req.params.id) });
+    res.json({ success: true });
+  } catch (err) { next(err); }
+});
 
+// ──────────────────────────────────────────────
+// ATTACHMENTS
+// ──────────────────────────────────────────────
+
+// POST /api/chat/messages/:id/attachments/upload-url — get presigned upload URL
+router.post('/messages/:id/attachments/upload-url', parseId(), async (req, res, next) => {
+  try {
+    const msgId = parseInt(req.params.id);
+    const userId = getUserId(req);
+
+    // Verify message exists and belongs to user
+    const [rows] = await db.query('SELECT user_id FROM chat_messages WHERE id = ?', [msgId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+    if (rows[0].user_id !== userId) {
+      return res.status(403).json({ error: 'You can only attach files to your own messages' });
+    }
+
+    const { fileName, fileType, fileSize } = req.body;
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+    if (fileSize && fileSize > 10 * 1024 * 1024) {
+      return res.status(400).json({ error: 'File size exceeds 10MB limit' });
+    }
+
+    const s3Key = `chat-attachments/${userId}/${crypto.randomUUID()}-${s3.sanitizeFileName(fileName)}`;
+    const bucket = s3.BUCKETS.media;
+
+    const { uploadUrl } = await s3.getUploadUrl(bucket, s3Key, fileType || 'application/octet-stream');
+
+    res.json({ uploadUrl, s3Key, bucket });
+  } catch (err) { next(err); }
+});
+
+// POST /api/chat/messages/:id/attachments — save attachment record after upload
+router.post('/messages/:id/attachments', parseId(), async (req, res, next) => {
+  try {
+    const msgId = parseInt(req.params.id);
+    const userId = getUserId(req);
+
+    const [rows] = await db.query('SELECT user_id FROM chat_messages WHERE id = ?', [msgId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Message not found' });
+    if (rows[0].user_id !== userId) {
+      return res.status(403).json({ error: 'You can only attach files to your own messages' });
+    }
+
+    const { file_name, file_size, file_type, s3_key, s3_bucket } = req.body;
+    if (!file_name || !s3_key) {
+      return res.status(400).json({ error: 'file_name and s3_key are required' });
+    }
+
+    const [result] = await db.query(
+      'INSERT INTO chat_attachments (message_id, user_id, file_name, file_size, file_type, s3_key, s3_bucket) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [msgId, userId, file_name, file_size || 0, file_type || 'application/octet-stream', s3_key, s3_bucket || s3.BUCKETS.media]
+    );
+
+    const attachment = {
+      id: result.insertId,
+      message_id: msgId,
+      file_name,
+      file_size: file_size || 0,
+      file_type: file_type || 'application/octet-stream',
+      s3_key,
+    };
+
+    // Broadcast attachment added
+    websocket.broadcast('chat:attachment', { message_id: msgId, attachment });
+
+    res.status(201).json(attachment);
+  } catch (err) { next(err); }
+});
+
+// GET /api/chat/attachments/:id/download — get presigned download URL
+router.get('/attachments/:id/download', parseId(), async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT s3_key, s3_bucket, file_name FROM chat_attachments WHERE id = ?',
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Attachment not found' });
+
+    const { s3_key, s3_bucket, file_name } = rows[0];
+    const downloadUrl = await s3.getDownloadUrl(s3_bucket, s3_key, 900);
+    res.json({ downloadUrl, fileName: file_name });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/chat/attachments/:id — delete an attachment (owner or admin)
+router.delete('/attachments/:id', parseId(), async (req, res, next) => {
+  try {
+    const userId = getUserId(req);
+    const isAdminUser = String(req.user?.db?.role || '').toLowerCase() === 'admin';
+
+    const [rows] = await db.query(
+      'SELECT ca.*, cm.user_id AS msg_user_id FROM chat_attachments ca JOIN chat_messages cm ON ca.message_id = cm.id WHERE ca.id = ?',
+      [req.params.id]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Attachment not found' });
+
+    if (rows[0].msg_user_id !== userId && !isAdminUser) {
+      return res.status(403).json({ error: 'You can only delete attachments on your own messages' });
+    }
+
+    const { s3_key, s3_bucket, message_id } = rows[0];
+    await s3.deleteObject(s3_bucket, s3_key);
+    await db.query('DELETE FROM chat_attachments WHERE id = ?', [req.params.id]);
+
+    websocket.broadcast('chat:attachment:delete', { message_id, attachment_id: parseInt(req.params.id) });
     res.json({ success: true });
   } catch (err) { next(err); }
 });
