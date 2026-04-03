@@ -159,15 +159,28 @@ const FundedLoans = {
   // Fields that should be formatted as dates
   DATE_FIELDS: ['funded_date', 'closing_date', 'first_payment_date', 'borrower_dob',
     'coborrower_dob', 'application_date'],
+  // Fields that should get status badges
+  STATUS_FIELDS: ['status', 'loan_status', 'stage'],
+
+  _statusBadgeClass(val) {
+    if (!val) return '';
+    const v = val.toLowerCase();
+    if (/complete|done|approved|cleared|received|ordered|signed|funded|ctc|clear/i.test(v)) return 'status-complete';
+    if (/pending|in progress|working|submitted|waiting|conditional|review|open/i.test(v)) return 'status-pending';
+    if (/not ready|missing|denied|rejected|expired|overdue|cancel|fail|stuck/i.test(v)) return 'status-danger';
+    if (/n\/a|waived|exempt/i.test(v)) return 'status-neutral';
+    return 'status-default';
+  },
 
   _renderCell(loan, field) {
     const val = loan[field];
     // Special rendering per field type
     if (field === 'client_name') {
-      return '<td>' + Utils.escapeHtml(loan.client_name || loan.borrower_name || loan.borrower || '--') + '</td>';
+      return '<td><strong>' + Utils.escapeHtml(loan.client_name || loan.borrower_name || loan.borrower || '--') + '</strong></td>';
     }
     if (field === 'assigned_lo_name') {
-      return '<td>' + Utils.escapeHtml(loan.lo_name || loan.assigned_lo_name || '--') + '</td>';
+      const name = loan.lo_name || loan.assigned_lo_name || '';
+      return '<td><div class="lo-cell"><span class="lo-avatar">' + Utils.getInitials(name) + '</span> ' + Utils.escapeHtml(name || 'Unassigned') + '</div></td>';
     }
     if (field === 'loan_type') {
       return '<td>' + Utils.escapeHtml(loan.loan_type || loan.product_type || '--') + '</td>';
@@ -175,8 +188,12 @@ const FundedLoans = {
     if (field === 'notes') {
       return '<td class="notes-cell" title="' + Utils.escapeHtml(loan.notes || '') + '">' + Utils.escapeHtml(loan.notes || '--') + '</td>';
     }
+    if (this.STATUS_FIELDS.includes(field) && val) {
+      var cls = this._statusBadgeClass(val);
+      return '<td><span class="pipeline-badge ' + cls + '">' + Utils.escapeHtml(val) + '</span></td>';
+    }
     if (this.CURRENCY_FIELDS.includes(field)) {
-      return '<td class="text-right">' + (val ? Utils.formatCurrency(val) : '--') + '</td>';
+      return '<td class="currency">' + (val ? Utils.formatCurrency(val) : '--') + '</td>';
     }
     if (this.DATE_FIELDS.includes(field)) {
       return '<td>' + (val ? Utils.formatDate(val, 'short') : '--') + '</td>';

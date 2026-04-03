@@ -241,7 +241,8 @@ const API = {
             return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
         }
         if (field === 'status') {
-            return `<td><span class="status-badge ${(val || '').toLowerCase().replace(/[^a-z]/g, '-')}">${Utils.escapeHtml(val || 'Unknown')}</span></td>`;
+            const cls = this._statusBadgeClass(val);
+            return `<td><span class="pipeline-badge ${cls}">${Utils.escapeHtml(val || 'Unknown')}</span></td>`;
         }
         if (field === 'assigned_lo_name') {
             return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
@@ -723,16 +724,7 @@ const API = {
         // Populate Loan Officer filter — only show active employees
         const loSelect = document.getElementById('pipelineLO');
         if (loSelect) {
-            let activeNames = null;
-            try {
-                const activeUsers = await ServerAPI.get('/users/directory');
-                if (Array.isArray(activeUsers)) {
-                    activeNames = new Set(activeUsers.map(u => u.name));
-                }
-            } catch { /* fall back to unfiltered list */ }
-
-            const allLOs = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
-            const los = activeNames ? allLOs.filter(name => activeNames.has(name)) : allLOs;
+            const los = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
 
             const currentVal = loSelect.value;
             loSelect.innerHTML = '<option value="">All Loan Officers</option>' +

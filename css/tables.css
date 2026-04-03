@@ -182,12 +182,19 @@
 #fundedLoansTable th {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: 2;
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--text-muted, #666);
     border-bottom: 2px solid var(--border-color, #ddd);
+}
+/* First column header must sit above both sticky header row and sticky first column */
+#pipelineTable thead th:first-child,
+#preApprovalsTable thead th:first-child,
+#fundedLoansTable thead th:first-child {
+    z-index: 5;
+    background: var(--bg-tertiary);
 }
 
 /* Currency alignment */
