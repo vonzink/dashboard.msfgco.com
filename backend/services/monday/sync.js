@@ -41,10 +41,16 @@ function getTableName(section) {
 async function upsertPipelineRow(mondayItemId, row) {
   const [existing] = await db.query('SELECT id FROM pipeline WHERE monday_item_id = ?', [mondayItemId]);
 
+  // Filter out internal fields (prefixed with _) that aren't DB columns
+  const dbRow = {};
+  for (const [k, v] of Object.entries(row)) {
+    if (!k.startsWith('_')) dbRow[k] = v;
+  }
+
   if (existing.length > 0) {
     const sets = [];
     const vals = [];
-    for (const [field, value] of Object.entries(row)) {
+    for (const [field, value] of Object.entries(dbRow)) {
       if (field === 'monday_item_id') continue;
       sets.push(`${field} = ?`);
       vals.push(value);
@@ -54,11 +60,11 @@ async function upsertPipelineRow(mondayItemId, row) {
     await db.query(`UPDATE pipeline SET ${sets.join(', ')} WHERE id = ?`, vals);
     return 'updated';
   } else {
-    row.source_system = 'monday';
-    row.last_synced_at = new Date();
-    const fields = Object.keys(row);
+    dbRow.source_system = 'monday';
+    dbRow.last_synced_at = new Date();
+    const fields = Object.keys(dbRow);
     const placeholders = fields.map(() => '?').join(', ');
-    await db.query(`INSERT INTO pipeline (${fields.join(', ')}) VALUES (${placeholders})`, fields.map(f => row[f]));
+    await db.query(`INSERT INTO pipeline (${fields.join(', ')}) VALUES (${placeholders})`, fields.map(f => dbRow[f]));
     return 'created';
   }
 }
