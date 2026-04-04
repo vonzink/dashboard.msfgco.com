@@ -734,75 +734,161 @@
     font-weight: 600;
 }
 
-/* Goal Edit Modal */
-.goal-edit-modal {
-    max-width: 400px;
+/* Goal Edit Popout */
+.goal-popout {
+    position: absolute;
+    z-index: 1000;
+    width: 280px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    padding: 0;
+    animation: popoutIn 0.15s ease-out;
 }
-.goal-edit-current {
+
+@keyframes popoutIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.goal-popout-arrow {
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 12px;
+    height: 12px;
+    background: var(--bg-secondary);
+    border-left: 1px solid var(--border-color);
+    border-top: 1px solid var(--border-color);
+    transform: translateX(-50%) rotate(45deg);
+}
+
+.goal-popout-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.75rem 1rem;
-    background: var(--bg-secondary);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--spacing-lg);
+    padding: 0.65rem 0.85rem;
+    border-bottom: 1px solid var(--border-color);
 }
-.goal-edit-current-label {
+
+.goal-popout-header h4 {
     font-size: 0.85rem;
-    color: var(--text-muted);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
 }
-.goal-edit-current-value {
-    font-size: 1.25rem;
+
+.goal-popout-close {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-fast);
+}
+
+.goal-popout-close:hover {
+    background: var(--bg-tertiary);
+    color: var(--status-danger);
+}
+
+.goal-popout-body {
+    padding: 0.75rem 0.85rem;
+}
+
+.goal-popout-current {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.5rem 0.65rem;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    margin-bottom: 0.65rem;
+}
+
+.goal-popout-current-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-weight: 600;
+}
+
+.goal-popout-current-value {
+    font-size: 1.1rem;
     font-weight: 700;
     color: var(--green-bright);
 }
-.goal-edit-input-group {
-    margin-bottom: var(--spacing-md);
-}
-.goal-edit-input-group label {
+
+.goal-popout-label {
     display: block;
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-secondary);
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
 }
-.goal-edit-input-wrapper {
+
+.goal-popout-input-row {
     display: flex;
     align-items: center;
     background: var(--bg-tertiary);
     border: 2px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0 0.75rem;
+    padding: 0 0.5rem;
     transition: border-color 0.2s;
 }
-.goal-edit-input-wrapper:focus-within {
+
+.goal-popout-input-row:focus-within {
     border-color: var(--green-bright);
+    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.15);
 }
-.goal-edit-prefix, .goal-edit-suffix {
-    font-size: 1rem;
+
+.goal-popout-prefix, .goal-popout-suffix {
+    font-size: 0.9rem;
     font-weight: 600;
     color: var(--text-muted);
 }
-.goal-edit-input {
+
+.goal-popout-input {
     flex: 1;
     border: none;
     background: transparent;
-    padding: 0.75rem 0.5rem;
-    font-size: 1.25rem;
+    padding: 0.5rem 0.35rem;
+    font-size: 1.1rem;
     font-weight: 600;
     color: var(--text-primary);
     outline: none;
     text-align: center;
     width: 100%;
 }
-.goal-edit-input::placeholder {
+
+.goal-popout-input::placeholder {
     color: var(--text-muted);
     font-weight: 400;
+    font-size: 0.9rem;
 }
-.goal-edit-hint {
-    font-size: 0.78rem;
+
+.goal-popout-hint {
+    font-size: 0.7rem;
     color: var(--text-muted);
-    margin-top: 0.4rem;
+    margin-top: 0.3rem;
+    margin-bottom: 0;
+}
+
+.goal-popout-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem 0.65rem;
+    border-top: 1px solid var(--border-color);
 }
 
 /* Goal celebration animation */

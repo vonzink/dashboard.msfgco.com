@@ -121,21 +121,20 @@ const GoalsManager = {
     _bindCardClicks() {
         document.querySelectorAll('.goal-card-interactive').forEach(card => {
             card.addEventListener('click', (e) => {
-                // Don't open if clicking inside the edit button itself (it does the same)
                 const goalId = card.dataset.goal;
-                if (goalId) this._openEditModal(goalId);
+                if (goalId) this._openEditModal(goalId, card);
             });
         });
     },
 
-    _openEditModal(goalId) {
+    _openEditModal(goalId, anchorEl) {
         const goal = this.goals[goalId];
         if (!goal) return;
 
-        const modal = document.getElementById('goalEditModal');
-        if (!modal) return;
+        const popout = document.getElementById('goalEditModal');
+        if (!popout) return;
 
-        // Populate modal
+        // Populate
         document.getElementById('goalEditTitle').textContent = `Set ${goal.label} Target`;
         document.getElementById('goalEditCurrentValue').textContent = goal.format(goal.current);
         document.getElementById('goalEditInputLabel').textContent = goal.inputLabel;
@@ -148,31 +147,49 @@ const GoalsManager = {
         input.step = goal.step;
         input.placeholder = goal.type === 'currency' ? '5.0' : '10';
 
-        // Store which goal we're editing
-        modal.dataset.goalId = goalId;
-        modal.style.display = 'flex';
+        popout.dataset.goalId = goalId;
+        popout.style.display = 'block';
 
-        // Focus the input after a tick
+        // Position below the tile
+        if (anchorEl) {
+            const rect = anchorEl.getBoundingClientRect();
+            const popoutW = 280;
+            let left = rect.left + rect.width / 2 - popoutW / 2;
+            // Keep on screen
+            if (left < 8) left = 8;
+            if (left + popoutW > window.innerWidth - 8) left = window.innerWidth - popoutW - 8;
+            popout.style.position = 'fixed';
+            popout.style.top = (rect.bottom + 8) + 'px';
+            popout.style.left = left + 'px';
+        }
+
         setTimeout(() => input.focus(), 100);
     },
 
     _bindModalEvents() {
-        const modal = document.getElementById('goalEditModal');
-        if (!modal) return;
+        const popout = document.getElementById('goalEditModal');
+        if (!popout) return;
 
-        const close = () => { modal.style.display = 'none'; };
+        const close = () => { popout.style.display = 'none'; };
 
         document.getElementById('goalEditClose')?.addEventListener('click', close);
         document.getElementById('goalEditCancel')?.addEventListener('click', close);
 
-        // Close on overlay click
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) close();
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (popout.style.display !== 'none' && !popout.contains(e.target) && !e.target.closest('.goal-card-interactive')) {
+                close();
+            }
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && popout.style.display !== 'none') close();
         });
 
         // Save
         document.getElementById('goalEditSave')?.addEventListener('click', () => {
-            const goalId = modal.dataset.goalId;
+            const goalId = popout.dataset.goalId;
             const input = document.getElementById('goalEditInput');
             const value = parseFloat(input.value) || 0;
             this._saveGoalTarget(goalId, value);

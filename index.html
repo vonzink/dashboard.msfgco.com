@@ -579,32 +579,29 @@
       </div>
     </section>
 
-    <!-- Goal Edit Modal -->
-    <div class="modal-overlay" id="goalEditModal" style="display:none;">
-      <div class="modal goal-edit-modal">
-        <div class="modal-header">
-          <h3 id="goalEditTitle">Set Your Target</h3>
-          <button class="modal-close" id="goalEditClose">&times;</button>
+    <!-- Goal Edit Popout -->
+    <div class="goal-popout" id="goalEditModal" style="display:none;">
+      <div class="goal-popout-arrow"></div>
+      <div class="goal-popout-header">
+        <h4 id="goalEditTitle">Set Your Target</h4>
+        <button class="goal-popout-close" id="goalEditClose"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="goal-popout-body">
+        <div class="goal-popout-current">
+          <span class="goal-popout-current-label">Current</span>
+          <span class="goal-popout-current-value" id="goalEditCurrentValue">0</span>
         </div>
-        <div class="modal-body">
-          <div class="goal-edit-current">
-            <span class="goal-edit-current-label">Current:</span>
-            <span class="goal-edit-current-value" id="goalEditCurrentValue">0</span>
-          </div>
-          <div class="goal-edit-input-group">
-            <label for="goalEditInput" id="goalEditInputLabel">Target</label>
-            <div class="goal-edit-input-wrapper">
-              <span class="goal-edit-prefix" id="goalEditPrefix"></span>
-              <input type="number" id="goalEditInput" class="goal-edit-input" min="0" step="1" placeholder="Enter target" />
-              <span class="goal-edit-suffix" id="goalEditSuffix"></span>
-            </div>
-            <p class="goal-edit-hint" id="goalEditHint"></p>
-          </div>
+        <label for="goalEditInput" id="goalEditInputLabel" class="goal-popout-label">Target</label>
+        <div class="goal-popout-input-row">
+          <span class="goal-popout-prefix" id="goalEditPrefix"></span>
+          <input type="number" id="goalEditInput" class="goal-popout-input" min="0" step="1" placeholder="Enter target" />
+          <span class="goal-popout-suffix" id="goalEditSuffix"></span>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" id="goalEditCancel">Cancel</button>
-          <button class="btn btn-primary" id="goalEditSave"><i class="fas fa-check"></i> Save Target</button>
-        </div>
+        <p class="goal-popout-hint" id="goalEditHint"></p>
+      </div>
+      <div class="goal-popout-footer">
+        <button class="btn btn-sm btn-secondary" id="goalEditCancel">Cancel</button>
+        <button class="btn btn-sm btn-primary" id="goalEditSave"><i class="fas fa-check"></i> Save</button>
       </div>
     </div>
 
