@@ -6,7 +6,7 @@
 
 const CollapsibleSections = {
   STORAGE_KEY: 'msfg_collapse_state',
-  DEFAULT_COLLAPSED: ['goalsSection'],
+  DEFAULT_COLLAPSED: ['goalsSection', 'preApprovalsSection', 'pipelineSection', 'fundedLoansSection'],
 
   init() {
     const savedState = this._loadState();
