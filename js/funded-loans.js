@@ -57,11 +57,16 @@ const FundedLoans = {
   },
 
   _bindEvents() {
-    // Period select
+    // Period select — restore saved preference
     const periodSelect = document.getElementById('fundedPeriodSelect');
     if (periodSelect) {
+      const savedPeriod = Utils.getStorage('funded_period', 'monthly');
+      periodSelect.value = savedPeriod;
+      this._period = savedPeriod;
+
       periodSelect.addEventListener('change', () => {
         this._period = periodSelect.value;
+        Utils.setStorage('funded_period', periodSelect.value);
         this.load();
       });
     }

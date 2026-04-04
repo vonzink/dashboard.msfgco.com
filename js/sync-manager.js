@@ -12,7 +12,16 @@
 const MondaySettings = {
     init() {
         // Pipeline filter handlers — both LO dropdown and search update summary
-        document.getElementById('pipelineLO')?.addEventListener('change', () => this.filterPipeline());
+        const loSelect = document.getElementById('pipelineLO');
+        if (loSelect) {
+            // Restore saved LO filter
+            const savedLO = Utils.getStorage('pipeline_lo', '');
+            if (savedLO) loSelect.value = savedLO;
+            loSelect.addEventListener('change', () => {
+                Utils.setStorage('pipeline_lo', loSelect.value);
+                this.filterPipeline();
+            });
+        }
         const searchInput = document.getElementById('pipelineSearch');
         if (searchInput) {
             const debounced = Utils.debounce(() => this.filterPipeline(), 200);

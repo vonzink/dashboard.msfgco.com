@@ -195,9 +195,10 @@ const GoalsManager = {
             const userId = this._getTargetUserId() || CONFIG.currentUser?.id;
             const periodValue = this.getPeriodValue();
 
+            const goalsPeriodType = this.currentPeriod === 'ytd' ? 'yearly' : this.currentPeriod;
             await ServerAPI.updateGoals({
                 user_id: userId,
-                period_type: this.currentPeriod,
+                period_type: goalsPeriodType,
                 period_value: periodValue,
                 goal_type: goalId,
                 target_value: targetValue,
@@ -281,11 +282,14 @@ const GoalsManager = {
             const periodValue = this.getPeriodValue();
             const loParams = targetUserId ? { lo_id: targetUserId } : {};
 
+            // YTD shares goal targets with yearly
+            const goalsPeriodType = this.currentPeriod === 'ytd' ? 'yearly' : this.currentPeriod;
+
             const [fundedResult, pipelineResult, preApprovalsResult, goalsResult] = await Promise.allSettled([
                 ServerAPI.getFundedLoansSummary({ period: this.currentPeriod, ...loParams }),
                 ServerAPI.getPipelineSummary(loParams),
                 ServerAPI.getPreApprovalsSummary(loParams),
-                ServerAPI.getGoals(targetUserId, this.currentPeriod, periodValue)
+                ServerAPI.getGoals(targetUserId, goalsPeriodType, periodValue)
             ]);
 
             // --- Funded Loans -> Loans Closed + Volume Closed ---
@@ -455,6 +459,7 @@ const GoalsManager = {
                 periodLabel = 'this quarter';
                 break;
             }
+            case 'ytd':
             case 'yearly':
                 daysElapsed = Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1;
                 totalDays = (now.getFullYear() % 4 === 0) ? 366 : 365;
@@ -696,6 +701,7 @@ const GoalsManager = {
                 const quarter = Math.ceil((now.getMonth() + 1) / 3);
                 return `${year}-Q${quarter}`;
             }
+            case 'ytd':
             case 'yearly':
                 return String(year);
             case 'all':

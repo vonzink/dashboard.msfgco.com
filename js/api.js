@@ -726,10 +726,14 @@ const API = {
         if (loSelect) {
             const los = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
 
-            const currentVal = loSelect.value;
+            const currentVal = loSelect.value || Utils.getStorage('pipeline_lo', '');
             loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
                 los.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');
             loSelect.value = currentVal;
+            // Apply restored filter
+            if (currentVal && typeof MondaySettings !== 'undefined') {
+                MondaySettings.filterPipeline();
+            }
         }
     },
 

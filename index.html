@@ -298,6 +298,7 @@
             <select class="ribbon-select" id="goalPeriodSelect" title="Goal period">
               <option value="monthly">Monthly</option>
               <option value="quarterly">Quarterly</option>
+              <option value="ytd">Year to Date</option>
               <option value="yearly">Yearly</option>
               <option value="weekly">Weekly</option>
             </select>
@@ -579,29 +580,30 @@
       </div>
     </section>
 
-    <!-- Goal Edit Popout -->
-    <div class="goal-popout" id="goalEditModal" style="display:none;">
-      <div class="goal-popout-arrow"></div>
-      <div class="goal-popout-header">
-        <h4 id="goalEditTitle">Set Your Target</h4>
-        <button class="goal-popout-close" id="goalEditClose"><i class="fas fa-times"></i></button>
-      </div>
-      <div class="goal-popout-body">
-        <div class="goal-popout-current">
-          <span class="goal-popout-current-label">Current</span>
-          <span class="goal-popout-current-value" id="goalEditCurrentValue">0</span>
+    <!-- Goal Edit Modal -->
+    <div class="goal-modal-overlay" id="goalEditModal" style="display:none;">
+      <div class="goal-modal">
+        <div class="goal-modal-header">
+          <h3 id="goalEditTitle">Set Your Target</h3>
+          <button class="goal-modal-close" id="goalEditClose"><i class="fas fa-times"></i></button>
         </div>
-        <label for="goalEditInput" id="goalEditInputLabel" class="goal-popout-label">Target</label>
-        <div class="goal-popout-input-row">
-          <span class="goal-popout-prefix" id="goalEditPrefix"></span>
-          <input type="number" id="goalEditInput" class="goal-popout-input" min="0" step="1" placeholder="Enter target" />
-          <span class="goal-popout-suffix" id="goalEditSuffix"></span>
+        <div class="goal-modal-body">
+          <div class="goal-modal-current">
+            <span class="goal-modal-current-label">Current</span>
+            <span class="goal-modal-current-value" id="goalEditCurrentValue">0</span>
+          </div>
+          <label for="goalEditInput" id="goalEditInputLabel" class="goal-modal-label">Target</label>
+          <div class="goal-modal-input-row">
+            <span class="goal-modal-prefix" id="goalEditPrefix"></span>
+            <input type="number" id="goalEditInput" class="goal-modal-input" min="0" step="1" placeholder="Enter target" />
+            <span class="goal-modal-suffix" id="goalEditSuffix"></span>
+          </div>
+          <p class="goal-modal-hint" id="goalEditHint"></p>
         </div>
-        <p class="goal-popout-hint" id="goalEditHint"></p>
-      </div>
-      <div class="goal-popout-footer">
-        <button class="btn btn-sm btn-secondary" id="goalEditCancel">Cancel</button>
-        <button class="btn btn-sm btn-primary" id="goalEditSave"><i class="fas fa-check"></i> Save</button>
+        <div class="goal-modal-footer">
+          <button class="btn btn-secondary" id="goalEditCancel">Cancel</button>
+          <button class="btn btn-primary" id="goalEditSave"><i class="fas fa-check"></i> Save Target</button>
+        </div>
       </div>
     </div>
 
