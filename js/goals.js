@@ -122,17 +122,17 @@ const GoalsManager = {
         document.querySelectorAll('.goal-card-interactive').forEach(card => {
             card.addEventListener('click', (e) => {
                 const goalId = card.dataset.goal;
-                if (goalId) this._openEditModal(goalId, card);
+                if (goalId) this._openEditModal(goalId);
             });
         });
     },
 
-    _openEditModal(goalId, anchorEl) {
+    _openEditModal(goalId) {
         const goal = this.goals[goalId];
         if (!goal) return;
 
-        const popout = document.getElementById('goalEditModal');
-        if (!popout) return;
+        const overlay = document.getElementById('goalEditModal');
+        if (!overlay) return;
 
         // Populate
         document.getElementById('goalEditTitle').textContent = `Set ${goal.label} Target`;
@@ -147,49 +147,34 @@ const GoalsManager = {
         input.step = goal.step;
         input.placeholder = goal.type === 'currency' ? '5.0' : '10';
 
-        popout.dataset.goalId = goalId;
-        popout.style.display = 'block';
-
-        // Position below the tile
-        if (anchorEl) {
-            const rect = anchorEl.getBoundingClientRect();
-            const popoutW = 280;
-            let left = rect.left + rect.width / 2 - popoutW / 2;
-            // Keep on screen
-            if (left < 8) left = 8;
-            if (left + popoutW > window.innerWidth - 8) left = window.innerWidth - popoutW - 8;
-            popout.style.position = 'fixed';
-            popout.style.top = (rect.bottom + 8) + 'px';
-            popout.style.left = left + 'px';
-        }
+        overlay.dataset.goalId = goalId;
+        overlay.style.display = 'flex';
 
         setTimeout(() => input.focus(), 100);
     },
 
     _bindModalEvents() {
-        const popout = document.getElementById('goalEditModal');
-        if (!popout) return;
+        const overlay = document.getElementById('goalEditModal');
+        if (!overlay) return;
 
-        const close = () => { popout.style.display = 'none'; };
+        const close = () => { overlay.style.display = 'none'; };
 
         document.getElementById('goalEditClose')?.addEventListener('click', close);
         document.getElementById('goalEditCancel')?.addEventListener('click', close);
 
-        // Close on outside click
-        document.addEventListener('click', (e) => {
-            if (popout.style.display !== 'none' && !popout.contains(e.target) && !e.target.closest('.goal-card-interactive')) {
-                close();
-            }
+        // Close on overlay background click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close();
         });
 
         // Close on Escape
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && popout.style.display !== 'none') close();
+            if (e.key === 'Escape' && overlay.style.display !== 'none') close();
         });
 
         // Save
         document.getElementById('goalEditSave')?.addEventListener('click', () => {
-            const goalId = popout.dataset.goalId;
+            const goalId = overlay.dataset.goalId;
             const input = document.getElementById('goalEditInput');
             const value = parseFloat(input.value) || 0;
             this._saveGoalTarget(goalId, value);
