@@ -120,7 +120,8 @@ const GoalsManager = {
     // ========================================
     _bindCardClicks() {
         document.querySelectorAll('.goal-card-interactive').forEach(card => {
-            card.addEventListener('click', (e) => {
+            card.querySelector('.goal-edit-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const goalId = card.dataset.goal;
                 if (goalId) this._openEditModal(goalId);
             });
