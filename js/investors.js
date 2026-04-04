@@ -46,6 +46,7 @@ const Investors = {
           epo:                     row.epo || null,
           inHouseServicing:        row.in_house_servicing || null,
           maxComp:                 row.max_comp != null ? Number(row.max_comp) : null,
+          underwritingFee:         row.underwriting_fee || null,
           // Toggle fields
           servicing:               row.servicing,
           manualUnderwriting:      row.manual_underwriting,
@@ -235,6 +236,7 @@ const Investors = {
         { label: 'EPO',                       value: investor.epo },
         { label: 'In House Servicing',        value: investor.inHouseServicing || investor.in_house_servicing },
         { label: 'Max Comp',                  value: (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : null },
+        { label: 'Underwriting Fee',         value: investor.underwritingFee || investor.underwriting_fee || null },
       ];
       details.forEach(d => {
         html += '<div class="detail-row">' +

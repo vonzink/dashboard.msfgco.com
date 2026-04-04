@@ -194,6 +194,7 @@ const investor = z.object({
   epo: optionalString(500),
   in_house_servicing: optionalString(255),
   max_comp: optionalString(200),
+  underwriting_fee: optionalString(200),
   servicing: z.union([z.boolean(), z.number()]).optional().nullable(),
   manual_underwriting: z.union([z.boolean(), z.number()]).optional().nullable(),
   non_qm: z.union([z.boolean(), z.number()]).optional().nullable(),
