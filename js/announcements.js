@@ -335,12 +335,27 @@ const Announcements = {
     `;
   },
 
+  _activeCategory: 'all',
+
+  // Detect category from icon or title keywords
+  _detectCategory(announcement) {
+    const title = (announcement.title || '').toLowerCase();
+    const icon = (announcement.icon || '').toLowerCase();
+
+    if (/rate|interest|pricing|lock|margin/i.test(title) || icon.includes('percent') || icon.includes('chart-line')) return 'rates';
+    if (/event|meeting|webinar|conference|happy hour|lunch/i.test(title) || icon.includes('calendar') || icon.includes('users')) return 'events';
+    if (/training|course|cert|learn|workshop|onboard/i.test(title) || icon.includes('graduation') || icon.includes('book')) return 'training';
+    if (/alert|urgent|warning|important|action|deadline|outage/i.test(title) || icon.includes('exclamation') || icon.includes('bell')) return 'alerts';
+    return 'general';
+  },
+
   buildCardPreview(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
     const relativeTime = Utils.getRelativeTime(announcement.createdAt);
+    const category = this._detectCategory(announcement);
 
     return `
-      <div class="news-card" data-announcement-id="${announcement.id}">
+      <div class="news-card" data-announcement-id="${announcement.id}" data-category="${category}">
         <div class="news-card-header">
           <div class="news-card-icon"><i class="fas ${iconClass}"></i></div>
           <h4 class="news-card-title">${Utils.escapeHtml(announcement.title)}</h4>
@@ -358,14 +373,18 @@ const Announcements = {
     const grid = document.getElementById('newsCardGrid');
     if (!grid) return;
 
-    const cards = this._carouselAnnouncements.slice(0, 3);
+    // Filter by active category
+    const filtered = this._activeCategory === 'all'
+      ? this._carouselAnnouncements
+      : this._carouselAnnouncements.filter(a => this._detectCategory(a) === this._activeCategory);
 
-    if (cards.length === 0) {
-      grid.innerHTML = '<div class="news-card-empty"><p>No announcements yet.</p></div>';
+    if (filtered.length === 0) {
+      const msg = this._activeCategory === 'all' ? 'No announcements yet.' : 'No ' + this._activeCategory + ' announcements.';
+      grid.innerHTML = '<div class="news-card-empty"><p>' + msg + '</p></div>';
       return;
     }
 
-    grid.innerHTML = cards.map(a => this.buildCardPreview(a)).join('');
+    grid.innerHTML = filtered.map(a => this.buildCardPreview(a)).join('');
   },
 
   bindCardGrid() {
@@ -378,6 +397,29 @@ const Announcements = {
       const id = Number(card.dataset.announcementId);
       if (Number.isFinite(id)) this.showAnnouncementDetail(id);
     });
+
+    // Category filter tabs
+    const tabs = document.getElementById('newsFilterTabs');
+    if (tabs) {
+      tabs.addEventListener('click', (e) => {
+        const tab = e.target.closest('.news-tab');
+        if (!tab) return;
+        tabs.querySelectorAll('.news-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        this._activeCategory = tab.dataset.category || 'all';
+        this.renderCardGrid();
+      });
+    }
+
+    // Carousel arrows
+    const prev = document.getElementById('newsCarouselPrev');
+    const next = document.getElementById('newsCarouselNext');
+    if (prev && grid) {
+      prev.addEventListener('click', () => { grid.scrollBy({ left: -320, behavior: 'smooth' }); });
+    }
+    if (next && grid) {
+      next.addEventListener('click', () => { grid.scrollBy({ left: 320, behavior: 'smooth' }); });
+    }
   },
 
   showAnnouncementDetail(id) {

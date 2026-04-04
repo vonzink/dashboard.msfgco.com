@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="css/variables.css?v=20260314b" />
   <link rel="stylesheet" href="css/base.css?v=20260314b" />
   <link rel="stylesheet" href="css/layout.css?v=20260314b" />
+  <link rel="stylesheet" href="css/briefing.css?v=20260403" />
   <link rel="stylesheet" href="css/components.css?v=20260314b" />
   <link rel="stylesheet" href="css/investors.css?v=20260314b" />
   <link rel="stylesheet" href="css/directory.css?v=20260314b" />
@@ -283,129 +284,138 @@
   <main class="main-content" id="mainContent" tabindex="-1">
 
     <!-- Top Grid: Performance + News side-by-side -->
-    <div class="dashboard-top-grid">
-
-    <!-- My Performance (Goals) -->
-    <section class="section-card animate-in" id="goalsSection" data-collapsible>
-      <div class="section-header">
-        <h2 class="section-title"><i class="fas fa-trophy"></i> My Performance</h2>
-        <div class="section-actions">
-          <select class="filter-select" id="goalLOSelect" style="display:none;" title="View LO performance">
-            <option value="">All Loan Officers</option>
-          </select>
-          <select class="filter-select" id="goalPeriodSelect" title="Goal period">
-            <option value="monthly">Monthly</option>
-            <option value="quarterly">Quarterly</option>
-            <option value="yearly">Yearly</option>
-            <option value="weekly">Weekly</option>
-          </select>
-          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-goals" title="Toggle section">
-            <i class="fas fa-chevron-up"></i>
-          </button>
+    <!-- ══════════════════════════════════════════
+         MORNING BRIEFING — Performance Ribbon
+    ═══════════════════════════════════════════ -->
+    <section class="briefing-ribbon animate-in" id="goalsSection">
+      <div class="ribbon-top-bar">
+        <div class="ribbon-greeting">
+          <h2 class="ribbon-title"><i class="fas fa-bolt"></i> Morning Briefing</h2>
+          <div class="ribbon-period-row">
+            <select class="ribbon-select" id="goalLOSelect" style="display:none;" title="View LO performance">
+              <option value="">All Loan Officers</option>
+            </select>
+            <select class="ribbon-select" id="goalPeriodSelect" title="Goal period">
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="yearly">Yearly</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
         </div>
-      </div>
-
-      <div class="section-body" id="sectionBody-goals">
-        <!-- Pace banner -->
-        <div class="goal-pace-banner" id="goalPaceBanner" style="display:none;">
+        <div class="ribbon-pace" id="goalPaceBanner" style="display:none;">
           <i class="fas fa-running"></i>
           <span id="goalPaceText"></span>
         </div>
+      </div>
 
-        <div class="goals-grid" id="goalsGrid">
-          <div class="goal-card goal-card-interactive" data-goal="loans-closed" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-file-signature"></i></div>
-            <div class="goal-label">Loans Closed</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="loansClosedValue">0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-target">of <span class="goal-target-value" id="loansClosedTarget">0</span> target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="loansClosedProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="loansClosedProgressText">Set a target to track progress</div>
+      <div class="ribbon-tiles" id="goalsGrid">
+        <!-- Tile 1: Loans Closed -->
+        <div class="ribbon-tile goal-card-interactive" data-goal="loans-closed" title="Click to set target">
+          <div class="ribbon-tile-top">
+            <div class="ribbon-tile-icon"><i class="fas fa-file-signature"></i></div>
+            <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
           </div>
-
-          <div class="goal-card goal-card-interactive" data-goal="volume-closed" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-dollar-sign"></i></div>
-            <div class="goal-label">Volume Closed</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="volumeClosedValue">$0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-target">of $<span class="goal-target-value" id="volumeClosedTarget">0</span>M target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="volumeClosedProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="volumeClosedProgressText">Set a target to track progress</div>
-          </div>
-
-          <div class="goal-card goal-card-interactive" data-goal="pipeline" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-chart-line"></i></div>
-            <div class="goal-label">Pipeline</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="pipelineValue">$0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-unit-count" id="pipelineUnitCount">0 loans</div>
-            <div class="goal-target">of $<span class="goal-target-value" id="pipelineTarget">0</span>M target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="pipelineProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="pipelineProgressText">Set a target to track progress</div>
-          </div>
-
-          <div class="goal-card goal-card-interactive" data-goal="pre-approvals" title="Click to set target">
-            <div class="goal-icon"><i class="fas fa-clipboard-check"></i></div>
-            <div class="goal-label">Pre-Approvals</div>
-            <div class="goal-value-container">
-              <div class="goal-value" id="preApprovalsValue">0</div>
-              <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
-            </div>
-            <div class="goal-target">of <span class="goal-target-value" id="preApprovalsTarget">0</span> target</div>
-            <div class="progress-bar"><div class="progress-fill on-track" id="preApprovalsProgress" data-progress="0"></div></div>
-            <div class="goal-progress-text" id="preApprovalsProgressText">Set a target to track progress</div>
-          </div>
+          <div class="ribbon-tile-value" id="loansClosedValue">0</div>
+          <div class="ribbon-tile-label">Loans Closed</div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="loansClosedProgress"></div></div>
+          <div class="ribbon-tile-target">of <span id="loansClosedTarget">0</span> target</div>
+          <div class="ribbon-tile-progress" id="loansClosedProgressText"></div>
         </div>
 
-        <!-- YTD Summary -->
-        <div class="goal-ytd-bar" id="goalYTDBar">
-          <div class="goal-ytd-item">
-            <i class="fas fa-calendar-check"></i>
-            <span>YTD: <strong id="ytdUnits">0</strong> loans closed</span>
+        <!-- Tile 2: Volume Closed -->
+        <div class="ribbon-tile goal-card-interactive" data-goal="volume-closed" title="Click to set target">
+          <div class="ribbon-tile-top">
+            <div class="ribbon-tile-icon"><i class="fas fa-dollar-sign"></i></div>
+            <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
           </div>
-          <div class="goal-ytd-item">
-            <i class="fas fa-money-bill-wave"></i>
-            <span>YTD Volume: <strong id="ytdVolume">$0</strong></span>
+          <div class="ribbon-tile-value" id="volumeClosedValue">$0</div>
+          <div class="ribbon-tile-label">Volume Closed</div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="volumeClosedProgress"></div></div>
+          <div class="ribbon-tile-target">of $<span id="volumeClosedTarget">0</span>M target</div>
+          <div class="ribbon-tile-progress" id="volumeClosedProgressText"></div>
+        </div>
+
+        <!-- Tile 3: Pipeline -->
+        <div class="ribbon-tile goal-card-interactive" data-goal="pipeline" title="Click to set target">
+          <div class="ribbon-tile-top">
+            <div class="ribbon-tile-icon"><i class="fas fa-chart-line"></i></div>
+            <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
           </div>
-          <div class="goal-ytd-item">
-            <i class="fas fa-percentage"></i>
-            <span>Pull-Through: <strong id="ytdPullThrough">0%</strong></span>
+          <div class="ribbon-tile-value" id="pipelineValue">$0</div>
+          <div class="ribbon-tile-label">Pipeline</div>
+          <div class="ribbon-tile-sub" id="pipelineUnitCount">0 loans</div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="pipelineProgress"></div></div>
+          <div class="ribbon-tile-target">of $<span id="pipelineTarget">0</span>M target</div>
+          <div class="ribbon-tile-progress" id="pipelineProgressText"></div>
+        </div>
+
+        <!-- Tile 4: Pre-Approvals -->
+        <div class="ribbon-tile goal-card-interactive" data-goal="pre-approvals" title="Click to set target">
+          <div class="ribbon-tile-top">
+            <div class="ribbon-tile-icon"><i class="fas fa-clipboard-check"></i></div>
+            <button class="goal-edit-btn" title="Set target"><i class="fas fa-pencil-alt"></i></button>
+          </div>
+          <div class="ribbon-tile-value" id="preApprovalsValue">0</div>
+          <div class="ribbon-tile-label">Pre-Approvals</div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="preApprovalsProgress"></div></div>
+          <div class="ribbon-tile-target">of <span id="preApprovalsTarget">0</span> target</div>
+          <div class="ribbon-tile-progress" id="preApprovalsProgressText"></div>
+        </div>
+
+        <!-- Tile 5: YTD Mini Chart -->
+        <div class="ribbon-tile ribbon-tile-chart">
+          <div class="ribbon-tile-top">
+            <div class="ribbon-tile-icon"><i class="fas fa-chart-bar"></i></div>
+          </div>
+          <div class="ribbon-chart-row" id="ribbonMiniChart">
+            <!-- Bars injected by JS -->
+          </div>
+          <div class="ribbon-tile-label">Recent Closings</div>
+          <div class="ribbon-ytd-stats">
+            <span>YTD: <strong id="ytdUnits">0</strong> loans</span>
+            <span>Vol: <strong id="ytdVolume">$0</strong></span>
+          </div>
+          <div class="ribbon-ytd-pt">
+            Pull-Through: <strong id="ytdPullThrough">0%</strong>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Daily News & Announcements -->
+    <!-- ══════════════════════════════════════════
+         NEWS & ANNOUNCEMENTS — Netflix Carousel
+    ═══════════════════════════════════════════ -->
     <section class="section-card animate-in" id="newsSection" data-collapsible>
       <div class="section-header">
-        <h2 class="section-title"><i class="fas fa-newspaper"></i> Daily News & Announcements</h2>
+        <h2 class="section-title"><i class="fas fa-newspaper"></i> News & Announcements</h2>
         <div class="section-actions">
           <button type="button" id="addAnnouncementBtn" class="btn btn-secondary" data-action="open-add-announcement" style="display:none;">
-            <i class="fas fa-plus"></i> Add Announcement
-          </button>
-          <button type="button" class="section-collapse-btn" aria-expanded="true" aria-controls="sectionBody-news" title="Toggle section">
-            <i class="fas fa-chevron-up"></i>
+            <i class="fas fa-plus"></i> Add
           </button>
         </div>
       </div>
 
       <div class="section-body" id="sectionBody-news">
-        <div class="news-card-grid" id="newsCardGrid"></div>
+        <div class="news-filter-tabs" id="newsFilterTabs">
+          <button class="news-tab active" data-category="all">All</button>
+          <button class="news-tab" data-category="rates">Rates</button>
+          <button class="news-tab" data-category="events">Events</button>
+          <button class="news-tab" data-category="training">Training</button>
+          <button class="news-tab" data-category="alerts">Alerts</button>
+        </div>
+        <div class="news-carousel-wrapper">
+          <button class="news-carousel-arrow news-carousel-prev" id="newsCarouselPrev" aria-label="Scroll left"><i class="fas fa-chevron-left"></i></button>
+          <div class="news-carousel" id="newsCardGrid"></div>
+          <button class="news-carousel-arrow news-carousel-next" id="newsCarouselNext" aria-label="Scroll right"><i class="fas fa-chevron-right"></i></button>
+        </div>
         <div class="news-history-link">
           <a href="/announcements-history.html" class="btn btn-sm btn-outline">
-            <i class="fas fa-archive"></i> View Announcement Archive
+            <i class="fas fa-archive"></i> View Archive
           </a>
         </div>
       </div>
     </section>
-
-    </div><!-- /.dashboard-top-grid -->
 
     <!-- Pre-Approvals (Monday.com Sync) -->
     <section class="section-card animate-in" id="preApprovalsSection" data-collapsible>

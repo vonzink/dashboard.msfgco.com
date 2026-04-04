@@ -1,0 +1,602 @@
+/* ============================================
+   MSFG Dashboard - Morning Briefing Ribbon
+   Cinematic performance tiles + news carousel
+   ============================================ */
+
+/* ========================================
+   PERFORMANCE RIBBON
+======================================== */
+.briefing-ribbon {
+    background: linear-gradient(135deg, #0a1628 0%, #0f2436 35%, #122a3a 65%, #0d1f2d 100%);
+    border-radius: var(--radius-xl);
+    padding: 0;
+    margin-bottom: var(--spacing-lg);
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* Subtle grid pattern overlay */
+.briefing-ribbon::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 20% 50%, rgba(140, 198, 62, 0.06) 0%, transparent 50%),
+                radial-gradient(circle at 80% 30%, rgba(0, 169, 157, 0.04) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ── Top bar (title + period + pace) ── */
+.ribbon-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.5rem 0.5rem;
+    position: relative;
+    z-index: 1;
+}
+
+.ribbon-greeting {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.ribbon-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.ribbon-title i {
+    color: var(--green-bright);
+    font-size: 0.95rem;
+}
+
+.ribbon-period-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.ribbon-select {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.ribbon-select:hover,
+.ribbon-select:focus {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: var(--green-bright);
+    outline: none;
+}
+
+.ribbon-select option {
+    background: #1a2a3a;
+    color: #fff;
+}
+
+/* Pace banner (inline in ribbon) */
+.ribbon-pace {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 0.3rem 0.75rem;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+
+.ribbon-pace.pace-ahead {
+    background: rgba(74, 222, 128, 0.15);
+    color: #4ade80;
+}
+
+.ribbon-pace.pace-on-track {
+    background: rgba(34, 211, 238, 0.15);
+    color: #22d3ee;
+}
+
+.ribbon-pace.pace-behind {
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbbf24;
+}
+
+/* ── Tiles row ── */
+.ribbon-tiles {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1px;
+    padding: 0.75rem 1.5rem 1.25rem;
+    position: relative;
+    z-index: 1;
+}
+
+.ribbon-tile {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    text-align: center;
+    position: relative;
+    transition: all var(--transition-fast);
+    cursor: default;
+}
+
+.ribbon-tile.goal-card-interactive {
+    cursor: pointer;
+}
+
+.ribbon-tile:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(140, 198, 62, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Tile top (icon + edit btn) */
+.ribbon-tile-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.ribbon-tile-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(140, 198, 62, 0.15), rgba(0, 169, 157, 0.1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    color: var(--green-bright);
+}
+
+.ribbon-tile .goal-edit-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    font-size: 0.65rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(0.8);
+    transition: all var(--transition-fast);
+}
+
+.ribbon-tile:hover .goal-edit-btn {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.ribbon-tile .goal-edit-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--green-bright);
+}
+
+/* Big number */
+.ribbon-tile-value {
+    font-size: 1.65rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+    margin-bottom: 0.15rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Label */
+.ribbon-tile-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+/* Sub label (like "12 loans") */
+.ribbon-tile-sub {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: -0.25rem;
+    margin-bottom: 0.35rem;
+}
+
+/* Thin progress bar */
+.ribbon-tile-bar {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 0.4rem;
+}
+
+.ribbon-tile-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 1s ease-out;
+}
+
+.ribbon-tile-fill.on-track {
+    background: linear-gradient(90deg, var(--green-bright), #00a99d);
+}
+
+.ribbon-tile-fill.behind {
+    background: linear-gradient(90deg, #f59e0b, #f97316);
+}
+
+.ribbon-tile-fill.exceeded {
+    background: linear-gradient(90deg, #00a99d, #06b6d4);
+}
+
+/* Target text */
+.ribbon-tile-target {
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.ribbon-tile-target span {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Progress text */
+.ribbon-tile-progress {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 0.15rem;
+}
+
+/* ── Tile 5: Mini bar chart ── */
+.ribbon-chart-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 3px;
+    height: 48px;
+    margin-bottom: 0.35rem;
+}
+
+.ribbon-chart-bar {
+    width: 14px;
+    min-height: 3px;
+    border-radius: 2px 2px 0 0;
+    background: linear-gradient(180deg, var(--green-bright), rgba(140, 198, 62, 0.4));
+    transition: height 0.6s ease-out;
+    position: relative;
+}
+
+.ribbon-chart-bar:hover {
+    background: linear-gradient(180deg, #4ade80, rgba(140, 198, 62, 0.6));
+}
+
+.ribbon-chart-bar::after {
+    content: attr(data-label);
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.5rem;
+    color: rgba(255, 255, 255, 0.25);
+    white-space: nowrap;
+}
+
+.ribbon-ytd-stats {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 0.68rem;
+    color: rgba(255, 255, 255, 0.4);
+    margin-top: 0.25rem;
+}
+
+.ribbon-ytd-stats strong {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.ribbon-ytd-pt {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.35);
+    margin-top: 0.15rem;
+}
+
+.ribbon-ytd-pt strong {
+    color: #22d3ee;
+}
+
+/* ========================================
+   RESPONSIVE RIBBON
+======================================== */
+@media (max-width: 1200px) {
+    .ribbon-tiles {
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.5rem;
+    }
+    .ribbon-tile-value {
+        font-size: 1.4rem;
+    }
+}
+
+@media (max-width: 900px) {
+    .ribbon-tiles {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .ribbon-top-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+    .ribbon-tiles {
+        grid-template-columns: repeat(2, 1fr);
+        padding: 0.75rem;
+    }
+    .ribbon-tile-value {
+        font-size: 1.3rem;
+    }
+}
+
+/* ========================================
+   NEWS CAROUSEL (Netflix-style)
+======================================== */
+
+/* Category filter tabs */
+.news-filter-tabs {
+    display: flex;
+    gap: 0.375rem;
+    padding: 0 0 var(--spacing-md);
+    overflow-x: auto;
+}
+
+.news-tab {
+    padding: 0.4rem 1rem;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--transition-fast);
+}
+
+.news-tab:hover {
+    border-color: var(--green-bright);
+    color: var(--green-bright);
+}
+
+.news-tab.active {
+    background: var(--green-bright);
+    color: white;
+    border-color: var(--green-bright);
+}
+
+/* Carousel wrapper */
+.news-carousel-wrapper {
+    position: relative;
+}
+
+.news-carousel {
+    display: flex;
+    gap: var(--spacing-md);
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
+    padding: 0.25rem 0 var(--spacing-md);
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.news-carousel::-webkit-scrollbar {
+    display: none;
+}
+
+/* Arrow buttons */
+.news-carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 3;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-fast);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.news-carousel-wrapper:hover .news-carousel-arrow {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.news-carousel-arrow:hover {
+    background: var(--green-bright);
+    color: white;
+    border-color: var(--green-bright);
+}
+
+.news-carousel-prev {
+    left: -12px;
+}
+
+.news-carousel-next {
+    right: -12px;
+}
+
+/* News cards in carousel */
+.news-carousel .news-card {
+    min-width: 280px;
+    max-width: 320px;
+    scroll-snap-align: start;
+    flex-shrink: 0;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+    border-left: 4px solid var(--green-bright);
+    border-top: none;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.news-carousel .news-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+    border-left-color: var(--green-teal);
+}
+
+.news-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.news-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(140, 198, 62, 0.15), rgba(0, 169, 157, 0.1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--green-bright);
+    font-size: 0.85rem;
+}
+
+.news-card-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.3;
+}
+
+.news-card-excerpt {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+}
+
+.news-card-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: auto;
+    padding-top: 0.375rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.news-card-meta span {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.news-card-meta i {
+    font-size: 0.6rem;
+}
+
+/* Category badge on card */
+.news-card-category {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-full);
+    background: rgba(140, 198, 62, 0.12);
+    color: var(--green-bright);
+}
+
+.news-card-category[data-cat="rates"] {
+    background: rgba(59, 130, 246, 0.12);
+    color: #3b82f6;
+}
+
+.news-card-category[data-cat="events"] {
+    background: rgba(168, 85, 247, 0.12);
+    color: #a855f7;
+}
+
+.news-card-category[data-cat="training"] {
+    background: rgba(34, 211, 238, 0.12);
+    color: #22d3ee;
+}
+
+.news-card-category[data-cat="alerts"] {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+}
+
+/* Empty state */
+.news-card-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    width: 100%;
+}
+
+/* ========================================
+   RESPONSIVE CAROUSEL
+======================================== */
+@media (max-width: 600px) {
+    .news-carousel .news-card {
+        min-width: 240px;
+    }
+}
+
+/* ========================================
+   DARK THEME — ribbon already dark, just
+   ensure carousel adapts
+======================================== */
+[data-theme="light"] .briefing-ribbon {
+    background: linear-gradient(135deg, #0f1f30 0%, #132d42 35%, #163548 65%, #0f2535 100%);
+}

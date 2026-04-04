@@ -363,8 +363,54 @@ const GoalsManager = {
                 const pt = pipelineUnits > 0 ? Math.round((ytdUnits / pipelineUnits) * 100) : 0;
                 ptEl.textContent = pt + '%';
             }
+
+            // Render mini bar chart from recent months
+            this._renderMiniChart();
         } catch (err) {
             console.warn('Failed to fetch YTD data:', err);
+        }
+    },
+
+    async _renderMiniChart() {
+        const container = document.getElementById('ribbonMiniChart');
+        if (!container) return;
+
+        try {
+            const targetUserId = this._getTargetUserId();
+            const loParams = targetUserId ? { lo_id: targetUserId } : {};
+
+            // Fetch YTD funded loans and bucket by month
+            const result = await ServerAPI.getFundedLoans({ period: 'yearly', limit: 500, ...loParams });
+            const loans = result?.data || (Array.isArray(result) ? result : []);
+
+            const now = new Date();
+            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const buckets = {};
+
+            // Last 8 months
+            for (let i = 7; i >= 0; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                buckets[key] = { label: monthNames[d.getMonth()], units: 0 };
+            }
+
+            for (const loan of loans) {
+                const fd = loan.funded_date || loan.closing_date;
+                if (!fd) continue;
+                const d = new Date(fd);
+                const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                if (buckets[key]) buckets[key].units++;
+            }
+
+            const data = Object.values(buckets);
+            const maxVal = Math.max(...data.map(d => d.units), 1);
+
+            container.innerHTML = data.map(d => {
+                const h = Math.max(3, (d.units / maxVal) * 44);
+                return '<div class="ribbon-chart-bar" style="height:' + h + 'px" data-label="' + d.label + '" title="' + d.label + ': ' + d.units + ' loans"></div>';
+            }).join('');
+        } catch (err) {
+            console.warn('Failed to render mini chart:', err);
         }
     },
 
@@ -441,7 +487,9 @@ const GoalsManager = {
         }
 
         textEl.textContent = message;
-        banner.className = 'goal-pace-banner ' + statusClass;
+        // Support both old (goal-pace-banner) and new ribbon (ribbon-pace) layouts
+        const bannerBase = banner.classList.contains('ribbon-pace') || banner.closest('.briefing-ribbon') ? 'ribbon-pace' : 'goal-pace-banner';
+        banner.className = bannerBase + ' ' + statusClass;
         banner.style.display = 'flex';
     },
 
@@ -539,7 +587,9 @@ const GoalsManager = {
         if (!progressBar) return;
 
         progressBar.style.width = `${progress}%`;
-        progressBar.className = 'progress-fill';
+        // Support both old (progress-fill) and new ribbon (ribbon-tile-fill) classes
+        const baseClass = progressBar.classList.contains('ribbon-tile-fill') ? 'ribbon-tile-fill' : 'progress-fill';
+        progressBar.className = baseClass;
         if (progress >= 100) {
             progressBar.classList.add('exceeded');
         } else if (progress >= 50) {
