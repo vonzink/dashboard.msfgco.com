@@ -6,6 +6,9 @@
 # ============================================
 set -euo pipefail
 
+# ── Ensure aws CLI is in PATH ──
+export PATH="/opt/homebrew/bin:$PATH"
+
 # ── Config ──
 S3_BUCKET="s3://dashboard.msfgco.com"
 CF_DISTRIBUTION="E3QTH6K640MMKK"
