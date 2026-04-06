@@ -446,6 +446,20 @@ const ServerAPI = {
         return this.put(`/investors/${investorId}/turn-times`, { turnTimes });
     },
 
+    /** Investor documents */
+    getInvestorDocuments(investorId) {
+        return this.get(`/investors/${investorId}/documents`);
+    },
+    getInvestorDocUploadUrl(investorId, fileName, fileType, fileSize) {
+        return this.post(`/investors/${investorId}/documents/upload-url`, { fileName, fileType, fileSize });
+    },
+    confirmInvestorDoc(investorId, data) {
+        return this.post(`/investors/${investorId}/documents/confirm`, data);
+    },
+    deleteInvestorDoc(investorId, docId) {
+        return this.delete(`/investors/${investorId}/documents/${docId}`);
+    },
+
     // ========================================
     // PROGRAMS
     // ========================================

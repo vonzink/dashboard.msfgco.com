@@ -198,6 +198,8 @@
     font-size: 0.85rem;
     line-height: 1.6;
     color: var(--text-secondary);
+    overflow: hidden;
+    word-break: break-word;
 }
 
 .team-member strong {
@@ -208,6 +210,12 @@
 .team-member a {
     color: var(--green-forest);
     text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+    display: inline-block;
+    vertical-align: bottom;
 }
 
 .team-member a:hover {
@@ -476,13 +484,30 @@ textarea.form-input {
 .u-grid-span-all { grid-column: 1 / -1; }
 
 /* ========================================
+   INVESTOR TOGGLE PILL CATEGORIES
+======================================== */
+.pill-category {
+    margin-bottom: var(--spacing-sm);
+}
+
+.pill-category-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+
+/* ========================================
    INVESTOR TOGGLE PILLS
 ======================================== */
 .investor-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: var(--spacing-md);
+    margin-bottom: 4px;
 }
 
 .investor-pill {
@@ -908,6 +933,45 @@ textarea.form-input {
     display: flex;
     flex-wrap: wrap;
     gap: 3px;
+}
+
+/* ========================================
+   INVESTOR DOCUMENTS
+======================================== */
+.investor-doc-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+}
+
+.investor-doc-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    transition: border-color var(--transition-fast);
+}
+
+.investor-doc-item:hover {
+    border-color: var(--green-bright);
+}
+
+.investor-doc-name {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.investor-doc-meta {
+    font-size: 0.7rem;
+    color: var(--text-muted);
 }
 
 /* Admin-only items */

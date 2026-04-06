@@ -59,6 +59,20 @@ const Investors = {
           vaLoans:                 row.va_loans,
           bridgeLoans:             row.bridge_loans,
           dscr:                    row.dscr,
+          conventional:            row.conventional,
+          fha:                     row.fha,
+          bankStatement:           row.bank_statement,
+          assetDepletion:          row.asset_depletion,
+          interestOnly:            row.interest_only,
+          itinForeignNational:     row.itin_foreign_national,
+          construction:            row.construction,
+          renovation:              row.renovation,
+          manufactured:            row.manufactured,
+          condoNonWarrantable:     row.condo_non_warrantable,
+          helocSecond:             row.heloc_second,
+          scenarioDesk:            row.scenario_desk,
+          condoReview:             row.condo_review,
+          exceptionDesk:           row.exception_desk,
           websiteUrl:              row.website_url || null,
           logoUrl:                 row.logo_url || null,
           notes:                   row.notes || ''
@@ -200,31 +214,59 @@ const Investors = {
     if (detailsSection) {
       let html = '<h4><i class="fas fa-info-circle"></i> Investor Details</h4>';
 
-      // Toggle pills
-      const toggles = [
-        { key: 'servicing',            label: 'Servicing',            val: investor.servicing ?? investor.servicing },
-        { key: 'manualUnderwriting',   label: 'Manual UW',            val: investor.manualUnderwriting ?? investor.manual_underwriting },
-        { key: 'nonQm',               label: 'Non-QM',               val: investor.nonQm ?? investor.non_qm },
-        { key: 'jumbo',               label: 'Jumbo',                 val: investor.jumbo ?? investor.jumbo },
-        { key: 'subordinateFinancing', label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
-        { key: 'reviewWireRelease',    label: 'Review for Wire Release', val: investor.reviewWireRelease ?? investor.review_wire_release },
-        { key: 'usda',                  label: 'USDA',                  val: investor.usda ?? investor.usda },
-        { key: 'landLoans',             label: 'Land Loans',            val: investor.landLoans ?? investor.land_loans },
-        { key: 'vaLoans',               label: 'VA Loans',              val: investor.vaLoans ?? investor.va_loans },
-        { key: 'bridgeLoans',           label: 'Bridge Loans',          val: investor.bridgeLoans ?? investor.bridge_loans },
-        { key: 'dscr',                  label: 'DSCR',                  val: investor.dscr ?? investor.dscr },
+      // Toggle pills — grouped by category
+      const toggleCategories = [
+        { name: 'Agency / Gov', toggles: [
+          { label: 'Conventional', val: investor.conventional ?? investor.conventional },
+          { label: 'FHA',          val: investor.fha ?? investor.fha },
+          { label: 'VA',           val: investor.vaLoans ?? investor.va_loans },
+          { label: 'USDA',         val: investor.usda ?? investor.usda },
+          { label: 'Jumbo',        val: investor.jumbo ?? investor.jumbo },
+        ]},
+        { name: 'Non-Agency', toggles: [
+          { label: 'Non-QM',              val: investor.nonQm ?? investor.non_qm },
+          { label: 'DSCR',                val: investor.dscr ?? investor.dscr },
+          { label: 'Bank Statement',       val: investor.bankStatement ?? investor.bank_statement },
+          { label: 'Asset Depletion',      val: investor.assetDepletion ?? investor.asset_depletion },
+          { label: 'Interest Only',        val: investor.interestOnly ?? investor.interest_only },
+          { label: 'ITIN / Foreign Nat\'l', val: investor.itinForeignNational ?? investor.itin_foreign_national },
+        ]},
+        { name: 'Specialty', toggles: [
+          { label: 'Bridge',              val: investor.bridgeLoans ?? investor.bridge_loans },
+          { label: 'Land',                val: investor.landLoans ?? investor.land_loans },
+          { label: 'Construction',         val: investor.construction ?? investor.construction },
+          { label: 'Renovation',           val: investor.renovation ?? investor.renovation },
+          { label: 'Manufactured',         val: investor.manufactured ?? investor.manufactured },
+          { label: 'Condo / Non-Warr.',    val: investor.condoNonWarrantable ?? investor.condo_non_warrantable },
+          { label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
+          { label: 'HELOC / 2nd',          val: investor.helocSecond ?? investor.heloc_second },
+        ]},
+        { name: 'Services', toggles: [
+          { label: 'Manual UW',            val: investor.manualUnderwriting ?? investor.manual_underwriting },
+          { label: 'Servicing',            val: investor.servicing ?? investor.servicing },
+          { label: 'Scenario Desk',        val: investor.scenarioDesk ?? investor.scenario_desk },
+          { label: 'Condo Review',         val: investor.condoReview ?? investor.condo_review },
+          { label: 'Exception Desk',       val: investor.exceptionDesk ?? investor.exception_desk },
+          { label: 'Wire / Funding Review', val: investor.reviewWireRelease ?? investor.review_wire_release },
+        ]},
       ];
-      const hasAnyToggle = toggles.some(t => t.val != null);
+      const allToggles = toggleCategories.flatMap(c => c.toggles);
+      const hasAnyToggle = allToggles.some(t => t.val != null);
       if (hasAnyToggle) {
-        html += '<div class="investor-pills">';
-        toggles.forEach(t => {
-          if (t.val == null) return;
-          const isYes = Number(t.val) === 1;
-          html += '<span class="investor-pill ' + (isYes ? 'pill-yes' : 'pill-no') + '">' +
-            '<i class="fas fa-' + (isYes ? 'check' : 'times') + '"></i> ' + esc(t.label) +
-          '</span>';
+        toggleCategories.forEach(cat => {
+          const catToggles = cat.toggles.filter(t => t.val != null);
+          if (catToggles.length === 0) return;
+          html += '<div class="pill-category">';
+          html += '<span class="pill-category-label">' + esc(cat.name) + '</span>';
+          html += '<div class="investor-pills">';
+          catToggles.forEach(t => {
+            const isYes = Number(t.val) === 1;
+            html += '<span class="investor-pill ' + (isYes ? 'pill-yes' : 'pill-no') + '">' +
+              '<i class="fas fa-' + (isYes ? 'check' : 'times') + '"></i> ' + esc(t.label) +
+            '</span>';
+          });
+          html += '</div></div>';
         });
-        html += '</div>';
       }
 
       html += '<div class="details-grid">';
@@ -234,7 +276,6 @@ const Investors = {
         { label: 'Minimum FICO',              value: investor.minimumFico || investor.min_fico },
         { label: 'In-house DPA',              value: investor.inHouseDpa || investor.in_house_dpa },
         { label: 'EPO',                       value: investor.epo },
-        { label: 'In House Servicing',        value: investor.inHouseServicing || investor.in_house_servicing },
         { label: 'Max Comp',                  value: (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : null },
         { label: 'Underwriting Fee',         value: investor.underwritingFee || investor.underwriting_fee || null },
       ];
@@ -377,6 +418,41 @@ const Investors = {
       linksSection.innerHTML = linksHtml;
     }
 
+    // Documents
+    const docsSection = modal.querySelector('.investor-documents');
+    if (docsSection) {
+      const docs = investor.documents || [];
+      if (docs.length > 0) {
+        let docsHtml = '<h4><i class="fas fa-folder-open"></i> Documents</h4><div class="investor-doc-list">';
+        const DOC_ICONS = {
+          'application/pdf': 'fas fa-file-pdf', 'text/plain': 'fas fa-file-alt', 'text/csv': 'fas fa-file-csv',
+          'application/msword': 'fas fa-file-word', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'fas fa-file-word',
+          'application/vnd.ms-excel': 'fas fa-file-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'fas fa-file-excel',
+          'image/png': 'fas fa-file-image', 'image/jpeg': 'fas fa-file-image',
+        };
+        docs.forEach(doc => {
+          const icon = DOC_ICONS[doc.file_type] || 'fas fa-file';
+          const sizeStr = doc.file_size ? this._formatFileSize(doc.file_size) : '';
+          docsHtml += '<div class="investor-doc-item">' +
+            '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+              '<i class="' + icon + '" style="color:var(--green-bright);flex-shrink:0;"></i>' +
+              '<div style="min-width:0;">' +
+                '<div class="investor-doc-name">' + esc(doc.file_name) + '</div>' +
+                (sizeStr ? '<div class="investor-doc-meta">' + sizeStr + '</div>' : '') +
+              '</div>' +
+            '</div>' +
+            (doc.download_url ? '<a href="' + doc.download_url + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="flex-shrink:0;"><i class="fas fa-download"></i></a>' : '') +
+          '</div>';
+        });
+        docsHtml += '</div>';
+        docsSection.innerHTML = docsHtml;
+      } else {
+        docsSection.innerHTML =
+          '<h4><i class="fas fa-folder-open"></i> Documents</h4>' +
+          '<p class="tbd">No documents on file</p>';
+      }
+    }
+
     // Notes (editable)
     const notesSection = modal.querySelector('.investor-notes .notes-content');
     if (notesSection) {
@@ -384,6 +460,13 @@ const Investors = {
       if (!investor.notes) notesSection.classList.add('empty');
       else notesSection.classList.remove('empty');
     }
+  },
+
+  _formatFileSize(bytes) {
+    if (!bytes) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   },
 
   /** Bind notes editing — save on blur */
@@ -630,17 +713,31 @@ const Investors = {
       // Build mini pills for dropdown
       let pillsHtml = '';
       const toggleDefs = [
-        { val: inv.servicing,            label: 'Servicing' },
-        { val: inv.manualUnderwriting,   label: 'Manual UW' },
-        { val: inv.nonQm,               label: 'Non-QM' },
-        { val: inv.jumbo,               label: 'Jumbo' },
-        { val: inv.subordinateFinancing, label: 'Sub. Fin.' },
-        { val: inv.reviewWireRelease,    label: 'Wire Review' },
+        { val: inv.conventional,         label: 'Conv' },
+        { val: inv.fha,                  label: 'FHA' },
+        { val: inv.vaLoans,              label: 'VA' },
         { val: inv.usda,                 label: 'USDA' },
-        { val: inv.landLoans,            label: 'Land Loans' },
-        { val: inv.vaLoans,              label: 'VA Loans' },
-        { val: inv.bridgeLoans,          label: 'Bridge Loans' },
+        { val: inv.jumbo,               label: 'Jumbo' },
+        { val: inv.nonQm,               label: 'Non-QM' },
         { val: inv.dscr,                 label: 'DSCR' },
+        { val: inv.bankStatement,        label: 'Bank Stmt' },
+        { val: inv.assetDepletion,       label: 'Asset Depl.' },
+        { val: inv.interestOnly,         label: 'IO' },
+        { val: inv.itinForeignNational,  label: 'ITIN/FN' },
+        { val: inv.bridgeLoans,          label: 'Bridge' },
+        { val: inv.landLoans,            label: 'Land' },
+        { val: inv.construction,         label: 'Construction' },
+        { val: inv.renovation,           label: 'Renovation' },
+        { val: inv.manufactured,         label: 'Manufactured' },
+        { val: inv.condoNonWarrantable,  label: 'Condo/NW' },
+        { val: inv.subordinateFinancing, label: 'Sub. Fin.' },
+        { val: inv.helocSecond,          label: 'HELOC/2nd' },
+        { val: inv.manualUnderwriting,   label: 'Manual UW' },
+        { val: inv.servicing,            label: 'Servicing' },
+        { val: inv.scenarioDesk,         label: 'Scenario' },
+        { val: inv.condoReview,          label: 'Condo Rev.' },
+        { val: inv.exceptionDesk,        label: 'Exception' },
+        { val: inv.reviewWireRelease,    label: 'Wire Review' },
       ];
       const activePills = toggleDefs.filter(t => Number(t.val) === 1);
       if (activePills.length > 0) {
@@ -677,10 +774,10 @@ const Investors = {
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         const q = e.target.value.toLowerCase().trim();
-        const items = document.querySelectorAll('#investorDropdownItems .dropdown-item');
+        const items = document.querySelectorAll('#investorDropdownItems .investor-card-item');
         items.forEach(btn => {
-          const name = (btn.textContent || '').toLowerCase();
-          btn.style.display = name.includes(q) ? '' : 'none';
+          const text = (btn.textContent || '').toLowerCase();
+          btn.style.display = (!q || text.includes(q)) ? '' : 'none';
         });
       });
       searchInput.addEventListener('click', (e) => e.stopPropagation());

@@ -49,6 +49,10 @@ router.get('/', async (req, res, next) => {
               servicing, manual_underwriting, non_qm, jumbo,
               subordinate_financing, review_wire_release,
               usda, land_loans, va_loans, bridge_loans, dscr,
+              conventional, fha, bank_statement, asset_depletion,
+              interest_only, itin_foreign_national, construction, renovation,
+              manufactured, condo_non_warrantable, heloc_second,
+              scenario_desk, condo_review, exception_desk,
               website_url, logo_url, notes, is_active
        FROM investors ${whereClause} ORDER BY name`
     );
@@ -81,12 +85,13 @@ router.get('/:key', async (req, res, next) => {
     const investor = investors[0];
 
     // Parallel queries — reduces 5 sequential DB round-trips to 1
-    const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult] = await Promise.all([
+    const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult, documentsResult] = await Promise.all([
       db.query('SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name', [investor.id]),
       db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [investor.id]),
       db.query('SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?', [investor.id]),
       db.query('SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type', [investor.id]),
       db.query('SELECT * FROM investor_turn_times WHERE investor_id = ? ORDER BY sort_order', [investor.id]),
+      db.query('SELECT * FROM investor_documents WHERE investor_id = ? ORDER BY created_at DESC', [investor.id]),
     ]);
 
     investor.team = teamResult[0];
@@ -94,6 +99,12 @@ router.get('/:key', async (req, res, next) => {
     investor.mortgageeClauses = clausesResult[0];
     investor.links = linksResult[0];
     investor.turnTimes = turnTimesResult[0];
+    investor.documents = documentsResult[0];
+
+    // Resolve document download URLs
+    await Promise.all(investor.documents.map(async (doc) => {
+      try { doc.download_url = await getDownloadUrl(BUCKETS.media, doc.file_key); } catch { doc.download_url = null; }
+    }));
 
     // Resolve S3 keys → presigned download URLs
     investor.logo_url = await resolveLogoUrl(investor.logo_url);
@@ -126,6 +137,10 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
       servicing, manual_underwriting, non_qm, jumbo,
       subordinate_financing, review_wire_release,
       usda, land_loans, va_loans, bridge_loans, dscr,
+      conventional, fha, bank_statement, asset_depletion,
+      interest_only, itin_foreign_national, construction, renovation,
+      manufactured, condo_non_warrantable, heloc_second,
+      scenario_desk, condo_review, exception_desk,
       website_url, logo_url, login_url, notes
     } = req.body;
 
@@ -141,8 +156,12 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          servicing, manual_underwriting, non_qm, jumbo,
          subordinate_financing, review_wire_release,
          usda, land_loans, va_loans, bridge_loans, dscr,
+         conventional, fha, bank_statement, asset_depletion,
+         interest_only, itin_foreign_national, construction, renovation,
+         manufactured, condo_non_warrantable, heloc_second,
+         scenario_desk, condo_review, exception_desk,
          website_url, logo_url, login_url, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES (${Array(43).fill('?').join(', ')})
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          account_executive_name = VALUES(account_executive_name),
@@ -168,6 +187,20 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          va_loans = VALUES(va_loans),
          bridge_loans = VALUES(bridge_loans),
          dscr = VALUES(dscr),
+         conventional = VALUES(conventional),
+         fha = VALUES(fha),
+         bank_statement = VALUES(bank_statement),
+         asset_depletion = VALUES(asset_depletion),
+         interest_only = VALUES(interest_only),
+         itin_foreign_national = VALUES(itin_foreign_national),
+         construction = VALUES(construction),
+         renovation = VALUES(renovation),
+         manufactured = VALUES(manufactured),
+         condo_non_warrantable = VALUES(condo_non_warrantable),
+         heloc_second = VALUES(heloc_second),
+         scenario_desk = VALUES(scenario_desk),
+         condo_review = VALUES(condo_review),
+         exception_desk = VALUES(exception_desk),
          website_url = VALUES(website_url),
          logo_url = VALUES(logo_url),
          login_url = VALUES(login_url),
@@ -182,6 +215,10 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         servicing ?? null, manual_underwriting ?? null, non_qm ?? null, jumbo ?? null,
         subordinate_financing ?? null, review_wire_release ?? null,
         usda ?? null, land_loans ?? null, va_loans ?? null, bridge_loans ?? null, dscr ?? null,
+        conventional ?? null, fha ?? null, bank_statement ?? null, asset_depletion ?? null,
+        interest_only ?? null, itin_foreign_national ?? null, construction ?? null, renovation ?? null,
+        manufactured ?? null, condo_non_warrantable ?? null, heloc_second ?? null,
+        scenario_desk ?? null, condo_review ?? null, exception_desk ?? null,
         website_url || null, logo_url || null, login_url || null, notes || null
       ]
     );
@@ -210,6 +247,10 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'servicing', 'manual_underwriting', 'non_qm', 'jumbo',
       'subordinate_financing', 'review_wire_release',
       'usda', 'land_loans', 'va_loans', 'bridge_loans', 'dscr',
+      'conventional', 'fha', 'bank_statement', 'asset_depletion',
+      'interest_only', 'itin_foreign_national', 'construction', 'renovation',
+      'manufactured', 'condo_non_warrantable', 'heloc_second',
+      'scenario_desk', 'condo_review', 'exception_desk',
       'website_url', 'logo_url', 'login_url', 'is_active',
     ];
     const allowedFields = admin ? ['notes', ...ADMIN_FIELDS] : ['notes'];
@@ -622,6 +663,113 @@ router.put('/:id/turn-times', requireAdmin, async (req, res, next) => {
 
     const [rows] = await db.query('SELECT * FROM investor_turn_times WHERE investor_id = ? ORDER BY sort_order', [investorId]);
     res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ──────────────────────────────────────────────
+// INVESTOR DOCUMENTS
+// ──────────────────────────────────────────────
+
+const ALLOWED_DOC_TYPES = {
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'text/plain': '.txt',
+  'text/csv': '.csv',
+};
+const MAX_DOC_BYTES = 25 * 1024 * 1024; // 25 MB
+
+// GET /api/investors/:id/documents — List documents
+router.get('/:id/documents', async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const [docs] = await db.query(
+      'SELECT * FROM investor_documents WHERE investor_id = ? ORDER BY created_at DESC',
+      [investorId]
+    );
+    // Generate download URLs
+    for (const doc of docs) {
+      try {
+        doc.download_url = await getDownloadUrl(BUCKETS.media, doc.file_key);
+      } catch { doc.download_url = null; }
+    }
+    res.json(docs);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/investors/:id/documents/upload-url — Presigned upload URL (admin)
+router.post('/:id/documents/upload-url', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fileName, fileType, fileSize } = req.body;
+
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+    if (fileSize && fileSize > MAX_DOC_BYTES) {
+      return res.status(400).json({ error: 'File must be under 25 MB' });
+    }
+
+    const [rows] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileKey = `investor-documents/${investorId}/${crypto.randomUUID()}-${safeName}`;
+
+    const result = await getUploadUrl(BUCKETS.media, fileKey, fileType || 'application/octet-stream');
+    res.json({ ...result, fileKey });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/investors/:id/documents/confirm — Save doc record after upload (admin)
+router.post('/:id/documents/confirm', requireAdmin, async (req, res, next) => {
+  try {
+    const investorId = req.params.id;
+    const { fileKey, fileName, fileType, fileSize } = req.body;
+
+    if (!fileKey || !fileName) {
+      return res.status(400).json({ error: 'fileKey and fileName are required' });
+    }
+
+    const [result] = await db.query(
+      `INSERT INTO investor_documents (investor_id, file_name, file_key, file_size, file_type, uploaded_by)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [investorId, fileName, fileKey, fileSize || null, fileType || null, req.dbUser?.id || null]
+    );
+
+    const docId = result.insertId;
+    let download_url = null;
+    try { download_url = await getDownloadUrl(BUCKETS.media, fileKey); } catch {}
+
+    res.status(201).json({ id: docId, investor_id: investorId, file_name: fileName, file_key: fileKey, file_size: fileSize, file_type: fileType, download_url });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/investors/:id/documents/:docId — Delete document (admin)
+router.delete('/:id/documents/:docId', requireAdmin, async (req, res, next) => {
+  try {
+    const { id: investorId, docId } = req.params;
+    const [rows] = await db.query(
+      'SELECT * FROM investor_documents WHERE id = ? AND investor_id = ?',
+      [docId, investorId]
+    );
+    if (rows.length === 0) return res.status(404).json({ error: 'Document not found' });
+
+    // Delete from S3
+    try { await deleteObject(BUCKETS.media, rows[0].file_key); } catch {}
+
+    await db.query('DELETE FROM investor_documents WHERE id = ?', [docId]);
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }

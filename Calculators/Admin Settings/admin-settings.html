@@ -610,46 +610,64 @@
                 <input type="number" id="invEditMaxComp" step="0.01" />
               </div>
               <div class="form-group">
+                <label>Underwriting Fee</label>
+                <input type="text" id="invEditUnderwritingFee" placeholder="e.g. $995, Varies" />
+              </div>
+              <div class="form-group">
                 <label>In House Servicing</label>
                 <input type="text" id="invEditInHouseServicing" placeholder="e.g. Yes, No, Partial" />
               </div>
-              <!-- Toggle fields -->
+              <!-- Toggle fields — organized by category -->
               <div class="form-group" style="grid-column: 1 / -1;">
-                <label style="margin-bottom:8px;">Product &amp; Service Toggles</label>
-                <div style="display:flex; flex-wrap:wrap; gap:16px;">
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleServicing" /> Servicing
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleManualUw" /> Manual Underwriting
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleNonQm" /> Non-QM
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleJumbo" /> Jumbo
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleSubFin" /> Subordinate Financing
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleWireReview" /> Review for Wire Release
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleUsda" /> USDA
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleLandLoans" /> Land Loans
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleVaLoans" /> VA Loans
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleBridgeLoans" /> Bridge Loans
-                  </label>
-                  <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;">
-                    <input type="checkbox" id="invToggleDscr" /> DSCR
-                  </label>
+                <label style="margin-bottom:4px;">Product &amp; Service Toggles</label>
+
+                <div style="margin-bottom:8px;">
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Agency / Gov</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:14px;">
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleConventional" /> Conventional</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleFha" /> FHA</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleVaLoans" /> VA</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleUsda" /> USDA</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleJumbo" /> Jumbo</label>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Non-Agency</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:14px;">
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleNonQm" /> Non-QM</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleDscr" /> DSCR</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleBankStatement" /> Bank Statement</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleAssetDepletion" /> Asset Depletion</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleInterestOnly" /> Interest Only</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleItinForeignNational" /> ITIN / Foreign National</label>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Specialty</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:14px;">
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleBridgeLoans" /> Bridge</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleLandLoans" /> Land</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleConstruction" /> Construction</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleRenovation" /> Renovation</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleManufactured" /> Manufactured</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleCondoNonWarrantable" /> Condo / Non-Warrantable</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleSubFin" /> Subordinate Financing</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleHelocSecond" /> HELOC / 2nd</label>
+                  </div>
+                </div>
+
+                <div style="margin-bottom:8px;">
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Services</div>
+                  <div style="display:flex; flex-wrap:wrap; gap:14px;">
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleManualUw" /> Manual UW</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleServicing" /> Servicing</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleScenarioDesk" /> Scenario Desk</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleCondoReview" /> Condo Review</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleExceptionDesk" /> Exception Desk</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleWireReview" /> Wire / Funding Review</label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2251,19 +2269,34 @@
       document.getElementById('invEditDpa').value = data.in_house_dpa || '';
       document.getElementById('invEditEpo').value = data.epo || '';
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
+      document.getElementById('invEditUnderwritingFee').value = data.underwriting_fee || '';
       document.getElementById('invEditInHouseServicing').value = data.in_house_servicing || '';
       // Toggle fields
-      document.getElementById('invToggleServicing').checked = !!data.servicing;
-      document.getElementById('invToggleManualUw').checked = !!data.manual_underwriting;
-      document.getElementById('invToggleNonQm').checked = !!data.non_qm;
-      document.getElementById('invToggleJumbo').checked = !!data.jumbo;
-      document.getElementById('invToggleSubFin').checked = !!data.subordinate_financing;
-      document.getElementById('invToggleWireReview').checked = !!data.review_wire_release;
-      document.getElementById('invToggleUsda').checked = !!data.usda;
-      document.getElementById('invToggleLandLoans').checked = !!data.land_loans;
+      document.getElementById('invToggleConventional').checked = !!data.conventional;
+      document.getElementById('invToggleFha').checked = !!data.fha;
       document.getElementById('invToggleVaLoans').checked = !!data.va_loans;
-      document.getElementById('invToggleBridgeLoans').checked = !!data.bridge_loans;
+      document.getElementById('invToggleUsda').checked = !!data.usda;
+      document.getElementById('invToggleJumbo').checked = !!data.jumbo;
+      document.getElementById('invToggleNonQm').checked = !!data.non_qm;
       document.getElementById('invToggleDscr').checked = !!data.dscr;
+      document.getElementById('invToggleBankStatement').checked = !!data.bank_statement;
+      document.getElementById('invToggleAssetDepletion').checked = !!data.asset_depletion;
+      document.getElementById('invToggleInterestOnly').checked = !!data.interest_only;
+      document.getElementById('invToggleItinForeignNational').checked = !!data.itin_foreign_national;
+      document.getElementById('invToggleBridgeLoans').checked = !!data.bridge_loans;
+      document.getElementById('invToggleLandLoans').checked = !!data.land_loans;
+      document.getElementById('invToggleConstruction').checked = !!data.construction;
+      document.getElementById('invToggleRenovation').checked = !!data.renovation;
+      document.getElementById('invToggleManufactured').checked = !!data.manufactured;
+      document.getElementById('invToggleCondoNonWarrantable').checked = !!data.condo_non_warrantable;
+      document.getElementById('invToggleSubFin').checked = !!data.subordinate_financing;
+      document.getElementById('invToggleHelocSecond').checked = !!data.heloc_second;
+      document.getElementById('invToggleManualUw').checked = !!data.manual_underwriting;
+      document.getElementById('invToggleServicing').checked = !!data.servicing;
+      document.getElementById('invToggleScenarioDesk').checked = !!data.scenario_desk;
+      document.getElementById('invToggleCondoReview').checked = !!data.condo_review;
+      document.getElementById('invToggleExceptionDesk').checked = !!data.exception_desk;
+      document.getElementById('invToggleWireReview').checked = !!data.review_wire_release;
       // AE Photo
       loadAePhoto(data);
     }
@@ -2344,18 +2377,37 @@
             in_house_dpa: document.getElementById('invEditDpa').value.trim() || null,
             epo: document.getElementById('invEditEpo').value.trim() || null,
             max_comp: document.getElementById('invEditMaxComp').value || null,
+            underwriting_fee: document.getElementById('invEditUnderwritingFee').value.trim() || null,
             in_house_servicing: document.getElementById('invEditInHouseServicing').value.trim() || null,
-            servicing: document.getElementById('invToggleServicing').checked ? 1 : 0,
-            manual_underwriting: document.getElementById('invToggleManualUw').checked ? 1 : 0,
-            non_qm: document.getElementById('invToggleNonQm').checked ? 1 : 0,
-            jumbo: document.getElementById('invToggleJumbo').checked ? 1 : 0,
-            subordinate_financing: document.getElementById('invToggleSubFin').checked ? 1 : 0,
-            review_wire_release: document.getElementById('invToggleWireReview').checked ? 1 : 0,
-            usda: document.getElementById('invToggleUsda').checked ? 1 : 0,
-            land_loans: document.getElementById('invToggleLandLoans').checked ? 1 : 0,
+            // Agency/Gov
+            conventional: document.getElementById('invToggleConventional').checked ? 1 : 0,
+            fha: document.getElementById('invToggleFha').checked ? 1 : 0,
             va_loans: document.getElementById('invToggleVaLoans').checked ? 1 : 0,
-            bridge_loans: document.getElementById('invToggleBridgeLoans').checked ? 1 : 0,
+            usda: document.getElementById('invToggleUsda').checked ? 1 : 0,
+            jumbo: document.getElementById('invToggleJumbo').checked ? 1 : 0,
+            // Non-Agency
+            non_qm: document.getElementById('invToggleNonQm').checked ? 1 : 0,
             dscr: document.getElementById('invToggleDscr').checked ? 1 : 0,
+            bank_statement: document.getElementById('invToggleBankStatement').checked ? 1 : 0,
+            asset_depletion: document.getElementById('invToggleAssetDepletion').checked ? 1 : 0,
+            interest_only: document.getElementById('invToggleInterestOnly').checked ? 1 : 0,
+            itin_foreign_national: document.getElementById('invToggleItinForeignNational').checked ? 1 : 0,
+            // Specialty
+            bridge_loans: document.getElementById('invToggleBridgeLoans').checked ? 1 : 0,
+            land_loans: document.getElementById('invToggleLandLoans').checked ? 1 : 0,
+            construction: document.getElementById('invToggleConstruction').checked ? 1 : 0,
+            renovation: document.getElementById('invToggleRenovation').checked ? 1 : 0,
+            manufactured: document.getElementById('invToggleManufactured').checked ? 1 : 0,
+            condo_non_warrantable: document.getElementById('invToggleCondoNonWarrantable').checked ? 1 : 0,
+            subordinate_financing: document.getElementById('invToggleSubFin').checked ? 1 : 0,
+            heloc_second: document.getElementById('invToggleHelocSecond').checked ? 1 : 0,
+            // Services
+            manual_underwriting: document.getElementById('invToggleManualUw').checked ? 1 : 0,
+            servicing: document.getElementById('invToggleServicing').checked ? 1 : 0,
+            scenario_desk: document.getElementById('invToggleScenarioDesk').checked ? 1 : 0,
+            condo_review: document.getElementById('invToggleCondoReview').checked ? 1 : 0,
+            exception_desk: document.getElementById('invToggleExceptionDesk').checked ? 1 : 0,
+            review_wire_release: document.getElementById('invToggleWireReview').checked ? 1 : 0,
           }),
         });
         document.getElementById('invProfileTitle').textContent = document.getElementById('invEditName').value.trim() + ' — Profile';

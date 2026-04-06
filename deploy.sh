@@ -9,7 +9,7 @@ set -euo pipefail
 # ── Config ──
 S3_BUCKET="s3://dashboard.msfgco.com"
 CF_DISTRIBUTION="E3QTH6K640MMKK"
-EC2_HOST="ubuntu@54.175.238.145"
+EC2_HOST="ubuntu@52.203.186.217"
 EC2_KEY="/Users/zacharyzink/MSFG/Security/msfg-mortgage-key.pem"
 EC2_PROJECT_DIR="/home/ubuntu/msfg-backend"
 
