@@ -526,6 +526,7 @@
         <button class="profile-tab" data-inv-tab="inv-lender"><i class="fas fa-id-card"></i> Lender IDs</button>
         <button class="profile-tab" data-inv-tab="inv-clauses"><i class="fas fa-file-contract"></i> Mortgagee Clauses</button>
         <button class="profile-tab" data-inv-tab="inv-links"><i class="fas fa-link"></i> Links</button>
+        <button class="profile-tab" data-inv-tab="inv-documents"><i class="fas fa-folder-open"></i> Documents</button>
       </div>
 
       <!-- ── SUB-TAB: Basic Info ── -->
@@ -735,6 +736,23 @@
         <div class="form-actions">
           <button class="btn btn-primary" id="invLinksSaveBtn"><i class="fas fa-save"></i> Save Links</button>
         </div>
+      </div>
+
+      <!-- ── SUB-TAB: Documents ── -->
+      <div class="inv-profile-section" id="inv-documents">
+        <p style="margin:0 0 12px; font-size:13px; color:#888;">
+          Upload investor-specific documents (rate sheets, guidelines, forms). Drag &amp; drop or click to browse.
+        </p>
+        <div id="invDocDropZone" style="border:2px dashed #ccc; border-radius:8px; padding:32px; text-align:center; cursor:pointer; transition:border-color 0.2s, background 0.2s; margin-bottom:16px;">
+          <i class="fas fa-cloud-upload-alt" style="font-size:28px; color:#aaa; margin-bottom:8px; display:block;"></i>
+          <p style="margin:0; font-size:14px; color:#888;">Drop files here or click to browse</p>
+          <span style="font-size:12px; color:#aaa;">PDF, DOC, XLSX, images — up to 25 MB each</span>
+        </div>
+        <input type="file" id="invDocFileInput" multiple style="display:none;" />
+        <div id="invDocUploadStatus" style="display:none; margin-bottom:12px; padding:8px 12px; background:#f0f9e8; border-radius:6px; font-size:13px; color:#104547;">
+          <i class="fas fa-spinner fa-spin"></i> <span id="invDocUploadText">Uploading...</span>
+        </div>
+        <div id="invDocList"></div>
       </div>
     </div>
   </div>
@@ -2200,6 +2218,9 @@
         populateInvestorClauses(data.mortgageeClauses || []);
         populateInvestorLinks(data.links || []);
 
+        // Documents
+        loadInvestorDocs();
+
         // Logo
         loadInvestorLogo(data);
 
@@ -2706,6 +2727,124 @@
         alert('Error: ' + err.message);
       }
     });
+
+    // --- Investor Documents Tab ---
+    const invDocDropZone = document.getElementById('invDocDropZone');
+    const invDocFileInput = document.getElementById('invDocFileInput');
+
+    invDocDropZone.addEventListener('click', () => invDocFileInput.click());
+    invDocDropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      invDocDropZone.style.borderColor = '#8cc63e';
+      invDocDropZone.style.background = 'rgba(140,198,62,0.05)';
+    });
+    invDocDropZone.addEventListener('dragleave', () => {
+      invDocDropZone.style.borderColor = '#ccc';
+      invDocDropZone.style.background = '';
+    });
+    invDocDropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      invDocDropZone.style.borderColor = '#ccc';
+      invDocDropZone.style.background = '';
+      if (e.dataTransfer.files.length) uploadInvestorDocs(e.dataTransfer.files);
+    });
+    invDocFileInput.addEventListener('change', () => {
+      if (invDocFileInput.files.length) uploadInvestorDocs(invDocFileInput.files);
+      invDocFileInput.value = '';
+    });
+
+    async function uploadInvestorDocs(files) {
+      if (!currentInvestorId) return alert('No investor selected');
+      const status = document.getElementById('invDocUploadStatus');
+      const statusText = document.getElementById('invDocUploadText');
+      status.style.display = 'block';
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        statusText.textContent = 'Uploading ' + (i + 1) + ' of ' + files.length + ': ' + file.name;
+        try {
+          // 1. Get presigned upload URL
+          const urlResult = await api('/investors/' + currentInvestorId + '/documents/upload-url', {
+            method: 'POST',
+            body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size }),
+          });
+
+          // 2. Upload to S3
+          await fetch(urlResult.uploadUrl, {
+            method: 'PUT',
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+            body: file,
+          });
+
+          // 3. Confirm upload
+          await api('/investors/' + currentInvestorId + '/documents/confirm', {
+            method: 'POST',
+            body: JSON.stringify({
+              fileKey: urlResult.fileKey,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: file.size,
+            }),
+          });
+        } catch (err) {
+          alert('Failed to upload ' + file.name + ': ' + err.message);
+        }
+      }
+
+      status.style.display = 'none';
+      loadInvestorDocs();
+    }
+
+    async function loadInvestorDocs() {
+      const list = document.getElementById('invDocList');
+      if (!currentInvestorId) { list.innerHTML = ''; return; }
+      try {
+        const docs = await api('/investors/' + currentInvestorId + '/documents');
+        if (!docs.length) {
+          list.innerHTML = '<p style="color:#aaa; font-size:13px; font-style:italic;">No documents uploaded yet.</p>';
+          return;
+        }
+        const DOC_ICONS = {
+          'application/pdf': 'fa-file-pdf',
+          'application/msword': 'fa-file-word',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'fa-file-word',
+          'application/vnd.ms-excel': 'fa-file-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'fa-file-excel',
+          'image/png': 'fa-file-image', 'image/jpeg': 'fa-file-image',
+          'text/plain': 'fa-file-alt', 'text/csv': 'fa-file-csv',
+        };
+        let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;">';
+        html += '<thead><tr style="border-bottom:2px solid #eee; text-align:left;"><th style="padding:6px 8px;">File</th><th style="padding:6px 8px; width:80px;">Size</th><th style="padding:6px 8px; width:120px;">Uploaded</th><th style="padding:6px 8px; width:80px;"></th></tr></thead><tbody>';
+        docs.forEach(doc => {
+          const icon = DOC_ICONS[doc.file_type] || 'fa-file';
+          const size = doc.file_size ? (doc.file_size < 1024 * 1024 ? (doc.file_size / 1024).toFixed(1) + ' KB' : (doc.file_size / (1024 * 1024)).toFixed(1) + ' MB') : '';
+          const date = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
+          html += '<tr style="border-bottom:1px solid #f0f0f0;">';
+          html += '<td style="padding:6px 8px;"><i class="fas ' + icon + '" style="color:#104547; margin-right:6px;"></i>' + escHtml(doc.file_name) + '</td>';
+          html += '<td style="padding:6px 8px; color:#888;">' + size + '</td>';
+          html += '<td style="padding:6px 8px; color:#888;">' + date + '</td>';
+          html += '<td style="padding:6px 8px; text-align:right;">';
+          if (doc.download_url) html += '<a href="' + doc.download_url + '" target="_blank" style="color:#104547; margin-right:8px;" title="Download"><i class="fas fa-download"></i></a>';
+          html += '<button onclick="deleteInvestorDoc(' + doc.id + ')" style="border:none; background:none; color:#c0392b; cursor:pointer;" title="Delete"><i class="fas fa-trash"></i></button>';
+          html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+        list.innerHTML = html;
+      } catch (err) {
+        list.innerHTML = '<p style="color:#c0392b; font-size:13px;">Failed to load documents: ' + err.message + '</p>';
+      }
+    }
+
+    window.deleteInvestorDoc = async function(docId) {
+      if (!currentInvestorId) return;
+      if (!confirm('Delete this document?')) return;
+      try {
+        await api('/investors/' + currentInvestorId + '/documents/' + docId, { method: 'DELETE' });
+        loadInvestorDocs();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    };
 
     // --- Hash routing for deep-link ---
     function checkInvestorHash() {
