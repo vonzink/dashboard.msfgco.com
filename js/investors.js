@@ -260,14 +260,22 @@ const Investors = {
       const allToggles = toggleCategories.flatMap(c => c.toggles);
       const hasAnyChecked = allToggles.some(t => Number(t.val) === 1);
       if (hasAnyChecked) {
+        const CAT_SLUG = {
+          'Agency / Gov': 'agency',
+          'Non-Agency': 'nonagency',
+          'Specialty': 'specialty',
+          'Services': 'services',
+          'Custom': 'custom',
+        };
         toggleCategories.forEach(cat => {
           const catToggles = cat.toggles.filter(t => Number(t.val) === 1);
           if (catToggles.length === 0) return;
-          html += '<div class="pill-category">';
+          const slug = CAT_SLUG[cat.name] || 'other';
+          html += '<div class="pill-category pill-cat-' + slug + '">';
           html += '<span class="pill-category-label">' + esc(cat.name) + '</span>';
           html += '<div class="investor-pills">';
           catToggles.forEach(t => {
-            html += '<span class="investor-pill pill-yes">' +
+            html += '<span class="investor-pill pill-yes pill-' + slug + '">' +
               '<i class="fas fa-check"></i> ' + esc(t.label) +
             '</span>';
           });

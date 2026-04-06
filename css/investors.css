@@ -548,6 +548,40 @@ textarea.form-input {
     color: #e74c3c;
 }
 
+/* Per-category pill colors */
+.investor-pill.pill-agency {
+    background: rgba(34, 139, 230, 0.12);
+    color: #1864ab;
+    border: 1px solid rgba(34, 139, 230, 0.3);
+}
+.investor-pill.pill-nonagency {
+    background: rgba(155, 89, 182, 0.12);
+    color: #6c2bb3;
+    border: 1px solid rgba(155, 89, 182, 0.3);
+}
+.investor-pill.pill-specialty {
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.investor-pill.pill-services {
+    background: rgba(20, 184, 166, 0.12);
+    color: #0f766e;
+    border: 1px solid rgba(20, 184, 166, 0.3);
+}
+.investor-pill.pill-custom {
+    background: rgba(236, 72, 153, 0.12);
+    color: #be185d;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+/* Dark theme variants */
+[data-theme="dark"] .investor-pill.pill-agency    { background: rgba(34, 139, 230, 0.22); color: #74c0fc; border-color: rgba(34, 139, 230, 0.4); }
+[data-theme="dark"] .investor-pill.pill-nonagency { background: rgba(155, 89, 182, 0.22); color: #d0bfff; border-color: rgba(155, 89, 182, 0.4); }
+[data-theme="dark"] .investor-pill.pill-specialty { background: rgba(245, 158, 11, 0.22); color: #fcd34d; border-color: rgba(245, 158, 11, 0.4); }
+[data-theme="dark"] .investor-pill.pill-services  { background: rgba(20, 184, 166, 0.22); color: #5eead4; border-color: rgba(20, 184, 166, 0.4); }
+[data-theme="dark"] .investor-pill.pill-custom    { background: rgba(236, 72, 153, 0.22); color: #f9a8d4; border-color: rgba(236, 72, 153, 0.4); }
+
 /* ========================================
    TURN TIMES
 ======================================== */
