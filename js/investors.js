@@ -748,7 +748,8 @@ const Investors = {
       }
 
       // AE name if available
-      const aeName = inv.accountExecutive ? '<div class="investor-card-ae"><i class="fas fa-user-tie"></i> ' + esc(inv.accountExecutive) + '</div>' : '';
+      const aeNameStr = inv.accountExecutive?.name;
+      const aeName = aeNameStr ? '<div class="investor-card-ae"><i class="fas fa-user-tie"></i> ' + esc(aeNameStr) + '</div>' : '';
 
       // Logo or initials
       const logoHtml = inv.logoUrl
