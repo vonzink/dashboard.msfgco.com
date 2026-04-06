@@ -68,7 +68,6 @@ if [ "$DEPLOY_FRONTEND" = true ]; then
     --exclude "deploy/*" \
     --exclude "docs/*" \
     --exclude "tools/*" \
-    --exclude "Calculators/*" \
     --delete \
     --size-only
 

@@ -1139,7 +1139,8 @@
             '</td>' +
             '<td>' +
               '<button class="btn btn-sm btn-primary view-profile-btn" data-id="' + u.id + '" title="View Profile"><i class="fas fa-id-card"></i></button> ' +
-              '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button>' +
+              '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
+              '<button class="btn btn-sm hard-delete-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Permanently Delete" style="background:#dc3545; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-trash-alt"></i></button>' +
             '</td>' +
             '</tr>'
           );
@@ -1158,6 +1159,11 @@
         // Bind active/inactive toggles
         tbody.querySelectorAll('.user-active-toggle').forEach(toggle => {
           toggle.addEventListener('change', () => toggleUserActive(toggle.dataset.id, toggle.checked));
+        });
+
+        // Bind hard delete buttons
+        tbody.querySelectorAll('.hard-delete-btn').forEach(btn => {
+          btn.addEventListener('click', () => hardDeleteUser(btn.dataset.id, btn.dataset.name));
         });
       } catch (err) {
         console.error('Load users error:', err);
@@ -1238,6 +1244,31 @@
       } catch (err) {
         alert('Error: ' + err.message);
         loadUsers(); // re-render to reset toggle state on failure
+      }
+    }
+
+    async function hardDeleteUser(userId, userName) {
+      const confirmed = confirm(
+        '⚠️ PERMANENTLY DELETE "' + userName + '"?\n\n' +
+        'This will remove the user and ALL associated data:\n' +
+        '• Profile & documents\n' +
+        '• Chat messages\n' +
+        '• Goals & content\n' +
+        '• Integration keys\n\n' +
+        'This action CANNOT be undone.'
+      );
+      if (!confirmed) return;
+
+      // Double confirm
+      const doubleConfirm = confirm('Are you absolutely sure? Type OK to confirm permanent deletion of "' + userName + '".');
+      if (!doubleConfirm) return;
+
+      try {
+        await api('/admin/users/' + userId + '/permanent', { method: 'DELETE' });
+        alert('User "' + userName + '" has been permanently deleted.');
+        loadUsers();
+      } catch (err) {
+        alert('Error deleting user: ' + err.message);
       }
     }
 

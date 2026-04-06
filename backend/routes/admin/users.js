@@ -107,6 +107,37 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
+// DELETE /users/:id/permanent — hard delete (removes all data)
+router.delete('/:id/permanent', async (req, res, next) => {
+  try {
+    const userId = req.params.id;
+    const currentUserId = req.user?.db?.id;
+
+    if (String(userId) === String(currentUserId)) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    // Verify user exists
+    const [users] = await db.query('SELECT id, name, email FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Clean up tables without FK CASCADE constraints
+    await db.query('DELETE FROM chat_messages WHERE user_id = ?', [userId]);
+    await db.query('DELETE FROM chat_attachments WHERE user_id = ?', [userId]);
+    await db.query('DELETE FROM user_preferences WHERE user_id = ?', [userId]);
+    await db.query('UPDATE processing_records SET user_id = NULL WHERE user_id = ?', [userId]);
+
+    // Delete the user — CASCADE handles the rest
+    await db.query('DELETE FROM users WHERE id = ?', [userId]);
+
+    res.json({ success: true, message: `User "${users[0].name}" permanently deleted` });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── AI API Key Management ───────────────────────
 
 // GET /users/:id/integrations
