@@ -75,7 +75,8 @@ const Investors = {
           exceptionDesk:           row.exception_desk,
           websiteUrl:              row.website_url || null,
           logoUrl:                 row.logo_url || null,
-          notes:                   row.notes || ''
+          notes:                   row.notes || '',
+          customToggles:           Array.isArray(row.customToggles) ? row.customToggles : []
         };
       });
 
