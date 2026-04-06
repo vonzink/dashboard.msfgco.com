@@ -251,18 +251,17 @@ const Investors = {
         ]},
       ];
       const allToggles = toggleCategories.flatMap(c => c.toggles);
-      const hasAnyToggle = allToggles.some(t => t.val != null);
-      if (hasAnyToggle) {
+      const hasAnyChecked = allToggles.some(t => Number(t.val) === 1);
+      if (hasAnyChecked) {
         toggleCategories.forEach(cat => {
-          const catToggles = cat.toggles.filter(t => t.val != null);
+          const catToggles = cat.toggles.filter(t => Number(t.val) === 1);
           if (catToggles.length === 0) return;
           html += '<div class="pill-category">';
           html += '<span class="pill-category-label">' + esc(cat.name) + '</span>';
           html += '<div class="investor-pills">';
           catToggles.forEach(t => {
-            const isYes = Number(t.val) === 1;
-            html += '<span class="investor-pill ' + (isYes ? 'pill-yes' : 'pill-no') + '">' +
-              '<i class="fas fa-' + (isYes ? 'check' : 'times') + '"></i> ' + esc(t.label) +
+            html += '<span class="investor-pill pill-yes">' +
+              '<i class="fas fa-check"></i> ' + esc(t.label) +
             '</span>';
           });
           html += '</div></div>';
