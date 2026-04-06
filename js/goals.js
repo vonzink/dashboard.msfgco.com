@@ -192,16 +192,17 @@ const GoalsManager = {
 
     async _saveGoalTarget(goalId, targetValue) {
         try {
-            const userId = this._getTargetUserId() || CONFIG.currentUser?.id;
+            const rawUserId = this._getTargetUserId() || CONFIG.currentUser?.id;
+            const userId = rawUserId != null && rawUserId !== '' ? Number(rawUserId) : null;
             const periodValue = this.getPeriodValue();
 
             const goalsPeriodType = this.currentPeriod === 'ytd' ? 'yearly' : this.currentPeriod;
             await ServerAPI.updateGoals({
-                user_id: userId,
+                user_id: Number.isFinite(userId) && userId > 0 ? userId : null,
                 period_type: goalsPeriodType,
                 period_value: periodValue,
                 goal_type: goalId,
-                target_value: targetValue,
+                target_value: Number(targetValue) || 0,
             });
 
             if (this.goals[goalId]) {

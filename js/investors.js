@@ -727,37 +727,42 @@ const Investors = {
       // Build mini pills for dropdown
       let pillsHtml = '';
       const toggleDefs = [
-        { val: inv.conventional,         label: 'Conv' },
-        { val: inv.fha,                  label: 'FHA' },
-        { val: inv.vaLoans,              label: 'VA' },
-        { val: inv.usda,                 label: 'USDA' },
-        { val: inv.jumbo,               label: 'Jumbo' },
-        { val: inv.nonQm,               label: 'Non-QM' },
-        { val: inv.dscr,                 label: 'DSCR' },
-        { val: inv.bankStatement,        label: 'Bank Stmt' },
-        { val: inv.assetDepletion,       label: 'Asset Depl.' },
-        { val: inv.interestOnly,         label: 'IO' },
-        { val: inv.itinForeignNational,  label: 'ITIN/FN' },
-        { val: inv.bridgeLoans,          label: 'Bridge' },
-        { val: inv.landLoans,            label: 'Land' },
-        { val: inv.construction,         label: 'Construction' },
-        { val: inv.renovation,           label: 'Renovation' },
-        { val: inv.manufactured,         label: 'Manufactured' },
-        { val: inv.condoNonWarrantable,  label: 'Condo/NW' },
-        { val: inv.subordinateFinancing, label: 'Sub. Fin.' },
-        { val: inv.helocSecond,          label: 'HELOC/2nd' },
-        { val: inv.manualUnderwriting,   label: 'Manual UW' },
-        { val: inv.servicing,            label: 'Servicing' },
-        { val: inv.scenarioDesk,         label: 'Scenario' },
-        { val: inv.condoReview,          label: 'Condo Rev.' },
-        { val: inv.exceptionDesk,        label: 'Exception' },
-        { val: inv.reviewWireRelease,    label: 'Wire Review' },
+        { val: inv.conventional,         label: 'Conv',         cat: 'agency' },
+        { val: inv.fha,                  label: 'FHA',          cat: 'agency' },
+        { val: inv.vaLoans,              label: 'VA',           cat: 'agency' },
+        { val: inv.usda,                 label: 'USDA',         cat: 'agency' },
+        { val: inv.jumbo,                label: 'Jumbo',        cat: 'nonagency' },
+        { val: inv.nonQm,                label: 'Non-QM',       cat: 'nonagency' },
+        { val: inv.dscr,                 label: 'DSCR',         cat: 'nonagency' },
+        { val: inv.bankStatement,        label: 'Bank Stmt',    cat: 'nonagency' },
+        { val: inv.assetDepletion,       label: 'Asset Depl.',  cat: 'nonagency' },
+        { val: inv.interestOnly,         label: 'IO',           cat: 'nonagency' },
+        { val: inv.itinForeignNational,  label: 'ITIN/FN',      cat: 'nonagency' },
+        { val: inv.bridgeLoans,          label: 'Bridge',       cat: 'specialty' },
+        { val: inv.landLoans,            label: 'Land',         cat: 'specialty' },
+        { val: inv.construction,         label: 'Construction', cat: 'specialty' },
+        { val: inv.renovation,           label: 'Renovation',   cat: 'specialty' },
+        { val: inv.manufactured,         label: 'Manufactured', cat: 'specialty' },
+        { val: inv.condoNonWarrantable,  label: 'Condo/NW',     cat: 'specialty' },
+        { val: inv.subordinateFinancing, label: 'Sub. Fin.',    cat: 'specialty' },
+        { val: inv.helocSecond,          label: 'HELOC/2nd',    cat: 'specialty' },
+        { val: inv.manualUnderwriting,   label: 'Manual UW',    cat: 'services' },
+        { val: inv.servicing,            label: 'Servicing',    cat: 'services' },
+        { val: inv.scenarioDesk,         label: 'Scenario',     cat: 'services' },
+        { val: inv.condoReview,          label: 'Condo Rev.',   cat: 'services' },
+        { val: inv.exceptionDesk,        label: 'Exception',    cat: 'services' },
+        { val: inv.reviewWireRelease,    label: 'Wire Review',  cat: 'services' },
       ];
+      (inv.customToggles || []).forEach(t => {
+        if (Number(t.enabled) === 1) {
+          toggleDefs.push({ val: 1, label: t.label, cat: 'custom' });
+        }
+      });
       const activePills = toggleDefs.filter(t => Number(t.val) === 1);
       if (activePills.length > 0) {
         pillsHtml = '<div class="investor-card-pills">';
         activePills.forEach(t => {
-          pillsHtml += '<span class="dropdown-pill">' + esc(t.label) + '</span>';
+          pillsHtml += '<span class="dropdown-pill dropdown-pill-' + t.cat + '">' + esc(t.label) + '</span>';
         });
         pillsHtml += '</div>';
       }

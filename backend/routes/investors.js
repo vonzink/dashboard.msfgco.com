@@ -62,6 +62,23 @@ router.get('/', async (req, res, next) => {
       inv.logo_url = await resolveLogoUrl(inv.logo_url);
     }));
 
+    // Attach custom toggles for each investor (single query)
+    if (investors.length > 0) {
+      const ids = investors.map(i => i.id);
+      const [toggles] = await db.query(
+        `SELECT investor_id, id, label, enabled, sort_order
+         FROM investor_custom_toggles
+         WHERE investor_id IN (?)
+         ORDER BY sort_order, id`,
+        [ids]
+      );
+      const byInv = {};
+      toggles.forEach(t => {
+        (byInv[t.investor_id] = byInv[t.investor_id] || []).push(t);
+      });
+      investors.forEach(inv => { inv.customToggles = byInv[inv.id] || []; });
+    }
+
     res.json(investors);
   } catch (error) {
     next(error);

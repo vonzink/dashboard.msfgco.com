@@ -651,6 +651,19 @@ textarea.form-input {
     color: #8cc63e;
 }
 
+/* Per-category dropdown pill colors */
+.dropdown-pill-agency    { background: rgba(34, 139, 230, 0.12); color: #1864ab; border-color: rgba(34, 139, 230, 0.3); }
+.dropdown-pill-nonagency { background: rgba(155, 89, 182, 0.12); color: #6c2bb3; border-color: rgba(155, 89, 182, 0.3); }
+.dropdown-pill-specialty { background: rgba(245, 158, 11, 0.14); color: #b45309; border-color: rgba(245, 158, 11, 0.35); }
+.dropdown-pill-services  { background: rgba(20, 184, 166, 0.12); color: #0f766e; border-color: rgba(20, 184, 166, 0.3); }
+.dropdown-pill-custom    { background: rgba(236, 72, 153, 0.12); color: #be185d; border-color: rgba(236, 72, 153, 0.3); }
+
+[data-theme="dark"] .dropdown-pill-agency    { background: rgba(34, 139, 230, 0.22); color: #74c0fc; border-color: rgba(34, 139, 230, 0.4); }
+[data-theme="dark"] .dropdown-pill-nonagency { background: rgba(155, 89, 182, 0.22); color: #d0bfff; border-color: rgba(155, 89, 182, 0.4); }
+[data-theme="dark"] .dropdown-pill-specialty { background: rgba(245, 158, 11, 0.22); color: #ffd43b; border-color: rgba(245, 158, 11, 0.45); }
+[data-theme="dark"] .dropdown-pill-services  { background: rgba(20, 184, 166, 0.22); color: #5eead4; border-color: rgba(20, 184, 166, 0.4); }
+[data-theme="dark"] .dropdown-pill-custom    { background: rgba(236, 72, 153, 0.22); color: #f9a8d4; border-color: rgba(236, 72, 153, 0.4); }
+
 /* ========================================
    INVESTOR DETAILS GRID
 ======================================== */
