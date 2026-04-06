@@ -47,7 +47,7 @@ router.get('/:category', async (req, res, next) => {
 // POST /api/programs/links — add a link (admin/manager only)
 router.post('/links', requireManagerOrAdmin, async (req, res, next) => {
   try {
-    const { category, url, label, description, sort_order } = req.body;
+    const { category, url, label, description, notes, sort_order } = req.body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
       return res.status(400).json({ error: 'Invalid category' });
@@ -57,8 +57,8 @@ router.post('/links', requireManagerOrAdmin, async (req, res, next) => {
     }
 
     const [result] = await db.query(
-      'INSERT INTO program_links (category, url, label, description, sort_order, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-      [category, url, label, description || null, sort_order || 0, getUserId(req)]
+      'INSERT INTO program_links (category, url, label, description, notes, sort_order, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [category, url, label, description || null, notes || null, sort_order || 0, getUserId(req)]
     );
 
     const [rows] = await db.query('SELECT * FROM program_links WHERE id = ?', [result.insertId]);
@@ -71,13 +71,14 @@ router.post('/links', requireManagerOrAdmin, async (req, res, next) => {
 // PUT /api/programs/links/:id — update a link (admin/manager only)
 router.put('/links/:id', requireManagerOrAdmin, async (req, res, next) => {
   try {
-    const { url, label, description, sort_order } = req.body;
+    const { url, label, description, notes, sort_order } = req.body;
     const sets = [];
     const vals = [];
 
     if (url !== undefined) { sets.push('url = ?'); vals.push(url); }
     if (label !== undefined) { sets.push('label = ?'); vals.push(label); }
     if (description !== undefined) { sets.push('description = ?'); vals.push(description || null); }
+    if (notes !== undefined) { sets.push('notes = ?'); vals.push(notes || null); }
     if (sort_order !== undefined) { sets.push('sort_order = ?'); vals.push(sort_order); }
 
     if (sets.length === 0) {

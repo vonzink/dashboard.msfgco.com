@@ -94,6 +94,24 @@
   color: var(--text-secondary);
 }
 
+.program-link-notes {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-primary);
+  border-left: 3px solid var(--green-bright);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.program-link-notes i {
+  color: var(--green-forest);
+  margin-right: 0.35rem;
+  font-size: 0.75rem;
+}
+
 .program-link-actions {
   position: absolute;
   top: 0.5rem;
