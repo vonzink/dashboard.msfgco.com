@@ -460,6 +460,20 @@ const ServerAPI = {
         return this.delete(`/investors/${investorId}/documents/${docId}`);
     },
 
+    /** Investor custom toggles */
+    getInvestorCustomToggles(investorId) {
+        return this.get(`/investors/${investorId}/custom-toggles`);
+    },
+    createInvestorCustomToggle(investorId, data) {
+        return this.post(`/investors/${investorId}/custom-toggles`, data);
+    },
+    updateInvestorCustomToggle(investorId, toggleId, data) {
+        return this.put(`/investors/${investorId}/custom-toggles/${toggleId}`, data);
+    },
+    deleteInvestorCustomToggle(investorId, toggleId) {
+        return this.delete(`/investors/${investorId}/custom-toggles/${toggleId}`);
+    },
+
     // ========================================
     // PROGRAMS
     // ========================================

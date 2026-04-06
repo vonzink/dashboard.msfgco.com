@@ -85,13 +85,14 @@ router.get('/:key', async (req, res, next) => {
     const investor = investors[0];
 
     // Parallel queries — reduces 5 sequential DB round-trips to 1
-    const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult, documentsResult] = await Promise.all([
+    const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult, documentsResult, customTogglesResult] = await Promise.all([
       db.query('SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name', [investor.id]),
       db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [investor.id]),
       db.query('SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?', [investor.id]),
       db.query('SELECT * FROM investor_links WHERE investor_id = ? ORDER BY link_type', [investor.id]),
       db.query('SELECT * FROM investor_turn_times WHERE investor_id = ? ORDER BY sort_order', [investor.id]),
       db.query('SELECT * FROM investor_documents WHERE investor_id = ? ORDER BY created_at DESC', [investor.id]),
+      db.query('SELECT * FROM investor_custom_toggles WHERE investor_id = ? ORDER BY sort_order, id', [investor.id]),
     ]);
 
     investor.team = teamResult[0];
@@ -100,6 +101,7 @@ router.get('/:key', async (req, res, next) => {
     investor.links = linksResult[0];
     investor.turnTimes = turnTimesResult[0];
     investor.documents = documentsResult[0];
+    investor.customToggles = customTogglesResult[0];
 
     // Resolve document download URLs
     await Promise.all(investor.documents.map(async (doc) => {
@@ -773,6 +775,68 @@ router.delete('/:id/documents/:docId', requireAdmin, async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+// ──────────────────────────────────────────────
+// CUSTOM TOGGLES — per-investor user-defined toggles
+// ──────────────────────────────────────────────
+
+// GET /api/investors/:id/custom-toggles
+router.get('/:id/custom-toggles', async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT * FROM investor_custom_toggles WHERE investor_id = ? ORDER BY sort_order, id',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (error) { next(error); }
+});
+
+// POST /api/investors/:id/custom-toggles — Add custom toggle (admin only)
+router.post('/:id/custom-toggles', requireAdmin, async (req, res, next) => {
+  try {
+    const { label, enabled, sort_order } = req.body;
+    if (!label || !label.trim()) {
+      return res.status(400).json({ error: 'label is required' });
+    }
+    const [result] = await db.query(
+      'INSERT INTO investor_custom_toggles (investor_id, label, enabled, sort_order) VALUES (?, ?, ?, ?)',
+      [req.params.id, label.trim().slice(0, 100), enabled ? 1 : 0, sort_order || 0]
+    );
+    const [rows] = await db.query('SELECT * FROM investor_custom_toggles WHERE id = ?', [result.insertId]);
+    res.status(201).json(rows[0]);
+  } catch (error) { next(error); }
+});
+
+// PUT /api/investors/:id/custom-toggles/:toggleId — Update (admin only)
+router.put('/:id/custom-toggles/:toggleId', requireAdmin, async (req, res, next) => {
+  try {
+    const { label, enabled, sort_order } = req.body;
+    const sets = [];
+    const vals = [];
+    if (label !== undefined) { sets.push('label = ?'); vals.push(String(label).trim().slice(0, 100)); }
+    if (enabled !== undefined) { sets.push('enabled = ?'); vals.push(enabled ? 1 : 0); }
+    if (sort_order !== undefined) { sets.push('sort_order = ?'); vals.push(sort_order); }
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+
+    vals.push(req.params.toggleId, req.params.id);
+    await db.query(`UPDATE investor_custom_toggles SET ${sets.join(', ')} WHERE id = ? AND investor_id = ?`, vals);
+
+    const [rows] = await db.query('SELECT * FROM investor_custom_toggles WHERE id = ?', [req.params.toggleId]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Toggle not found' });
+    res.json(rows[0]);
+  } catch (error) { next(error); }
+});
+
+// DELETE /api/investors/:id/custom-toggles/:toggleId (admin only)
+router.delete('/:id/custom-toggles/:toggleId', requireAdmin, async (req, res, next) => {
+  try {
+    await db.query(
+      'DELETE FROM investor_custom_toggles WHERE id = ? AND investor_id = ?',
+      [req.params.toggleId, req.params.id]
+    );
+    res.json({ success: true });
+  } catch (error) { next(error); }
 });
 
 module.exports = router;

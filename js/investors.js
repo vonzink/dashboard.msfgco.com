@@ -250,6 +250,13 @@ const Investors = {
           { label: 'Wire / Funding Review', val: investor.reviewWireRelease ?? investor.review_wire_release },
         ]},
       ];
+      const customToggles = (investor.customToggles || []).filter(t => Number(t.enabled) === 1);
+      if (customToggles.length) {
+        toggleCategories.push({
+          name: 'Custom',
+          toggles: customToggles.map(t => ({ label: t.label, val: 1 })),
+        });
+      }
       const allToggles = toggleCategories.flatMap(c => c.toggles);
       const hasAnyChecked = allToggles.some(t => Number(t.val) === 1);
       if (hasAnyChecked) {

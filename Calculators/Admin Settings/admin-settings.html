@@ -670,6 +670,14 @@
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleWireReview" /> Wire / Funding Review</label>
                   </div>
                 </div>
+
+                <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #ddd;">
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+                    <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;">Custom Toggles</div>
+                    <button type="button" class="btn btn-sm btn-secondary" id="invAddCustomToggleBtn"><i class="fas fa-plus"></i> Add Custom</button>
+                  </div>
+                  <div id="invCustomTogglesList" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+                </div>
               </div>
             </div>
             <div class="form-actions">
@@ -2323,6 +2331,8 @@
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
       document.getElementById('invEditUnderwritingFee').value = data.underwriting_fee || '';
       document.getElementById('invEditInHouseServicing').value = data.in_house_servicing || '';
+      // Custom toggles
+      loadCustomToggles();
       // Toggle fields
       document.getElementById('invToggleConventional').checked = !!data.conventional;
       document.getElementById('invToggleFha').checked = !!data.fha;
@@ -2825,6 +2835,71 @@
       status.style.display = 'none';
       loadInvestorDocs();
     }
+
+    // ========== Custom Toggles ==========
+    async function loadCustomToggles() {
+      if (!currentInvestorId) return;
+      const list = document.getElementById('invCustomTogglesList');
+      list.innerHTML = '<span style="color:#999;font-size:0.85rem;">Loading...</span>';
+      try {
+        const toggles = await api('/investors/' + currentInvestorId + '/custom-toggles');
+        renderCustomToggles(toggles || []);
+      } catch (err) {
+        list.innerHTML = '<span style="color:#e74c3c;font-size:0.85rem;">Failed to load</span>';
+      }
+    }
+
+    function renderCustomToggles(toggles) {
+      const list = document.getElementById('invCustomTogglesList');
+      if (!toggles.length) {
+        list.innerHTML = '<span style="color:#999;font-size:0.85rem;">No custom toggles. Click "Add Custom" to create one.</span>';
+        return;
+      }
+      list.innerHTML = toggles.map(t =>
+        '<label style="display:flex; align-items:center; gap:6px; padding:4px 10px; background:#f5f5f5; border-radius:6px; font-weight:400; cursor:pointer;">' +
+          '<input type="checkbox" class="custom-toggle-cb" data-id="' + t.id + '"' + (t.enabled ? ' checked' : '') + '>' +
+          '<span>' + escHtml(t.label) + '</span>' +
+          '<button type="button" class="custom-toggle-del" data-id="' + t.id + '" title="Delete" style="background:none;border:none;color:#dc3545;cursor:pointer;padding:0 2px;font-size:0.85rem;"><i class="fas fa-times"></i></button>' +
+        '</label>'
+      ).join('');
+
+      // Bind toggle change
+      list.querySelectorAll('.custom-toggle-cb').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          try {
+            await api('/investors/' + currentInvestorId + '/custom-toggles/' + cb.dataset.id, {
+              method: 'PUT',
+              body: JSON.stringify({ enabled: cb.checked }),
+            });
+          } catch (err) { alert('Failed to update toggle'); cb.checked = !cb.checked; }
+        });
+      });
+
+      // Bind delete
+      list.querySelectorAll('.custom-toggle-del').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          if (!confirm('Delete this custom toggle?')) return;
+          try {
+            await api('/investors/' + currentInvestorId + '/custom-toggles/' + btn.dataset.id, { method: 'DELETE' });
+            loadCustomToggles();
+          } catch (err) { alert('Failed to delete'); }
+        });
+      });
+    }
+
+    document.getElementById('invAddCustomToggleBtn')?.addEventListener('click', async () => {
+      if (!currentInvestorId) return alert('Save investor first');
+      const label = prompt('Custom toggle label (e.g. "Foreign Borrowers", "Reverse Mortgage"):');
+      if (!label || !label.trim()) return;
+      try {
+        await api('/investors/' + currentInvestorId + '/custom-toggles', {
+          method: 'POST',
+          body: JSON.stringify({ label: label.trim(), enabled: true }),
+        });
+        loadCustomToggles();
+      } catch (err) { alert('Failed to add toggle: ' + err.message); }
+    });
 
     async function loadInvestorDocs() {
       const list = document.getElementById('invDocList');
