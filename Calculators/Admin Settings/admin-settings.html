@@ -81,6 +81,10 @@
             <option value="external">External</option>
           </select>
         </div>
+        <div class="form-group" id="userPasswordGroup">
+          <label for="userPasswordInput">Initial Password <span style="color:#999; font-weight:normal;">(min 8 chars)</span></label>
+          <input type="text" id="userPasswordInput" placeholder="Temporary or permanent password" autocomplete="new-password" />
+        </div>
       </div>
       <div class="form-actions">
         <button class="btn btn-secondary" id="userFormCancelBtn">Cancel</button>
@@ -1148,6 +1152,8 @@
             '<td>' +
               '<button class="btn btn-sm btn-primary view-profile-btn" data-id="' + u.id + '" title="View Profile"><i class="fas fa-id-card"></i></button> ' +
               '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
+              '<button class="btn btn-sm set-password-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Set Password" style="background:#f59e0b; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-key"></i></button> ' +
+              '<button class="btn btn-sm reset-password-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Email Reset Code" style="background:#0ea5e9; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-envelope"></i></button> ' +
               '<button class="btn btn-sm hard-delete-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Permanently Delete" style="background:#dc3545; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-trash-alt"></i></button>' +
             '</td>' +
             '</tr>'
@@ -1173,6 +1179,16 @@
         tbody.querySelectorAll('.hard-delete-btn').forEach(btn => {
           btn.addEventListener('click', () => hardDeleteUser(btn.dataset.id, btn.dataset.name));
         });
+
+        // Bind set password buttons
+        tbody.querySelectorAll('.set-password-btn').forEach(btn => {
+          btn.addEventListener('click', () => setUserPassword(btn.dataset.id, btn.dataset.name));
+        });
+
+        // Bind reset password buttons
+        tbody.querySelectorAll('.reset-password-btn').forEach(btn => {
+          btn.addEventListener('click', () => resetUserPassword(btn.dataset.id, btn.dataset.name));
+        });
       } catch (err) {
         console.error('Load users error:', err);
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#e74c3c;">Failed to load users.</td></tr>';
@@ -1183,6 +1199,8 @@
       const form = document.getElementById('userForm');
       const title = document.getElementById('userFormTitle');
 
+      const pwdGroup = document.getElementById('userPasswordGroup');
+      const pwdInput = document.getElementById('userPasswordInput');
       if (user) {
         editingUserId = user.id;
         title.textContent = 'Edit Employee';
@@ -1191,6 +1209,8 @@
         document.getElementById('userEmailInput').disabled = true;
         document.getElementById('userInitialsInput').value = user.initials || '';
         document.getElementById('userRoleSelect').value = user.role || 'user';
+        if (pwdGroup) pwdGroup.style.display = 'none';
+        if (pwdInput) pwdInput.value = '';
       } else {
         editingUserId = null;
         title.textContent = 'Add Employee';
@@ -1199,6 +1219,8 @@
         document.getElementById('userEmailInput').disabled = false;
         document.getElementById('userInitialsInput').value = '';
         document.getElementById('userRoleSelect').value = 'user';
+        if (pwdGroup) pwdGroup.style.display = '';
+        if (pwdInput) pwdInput.value = '';
       }
 
       form.classList.add('active');
@@ -1218,9 +1240,13 @@
       const email = document.getElementById('userEmailInput').value.trim();
       const initials = document.getElementById('userInitialsInput').value.trim();
       const role = document.getElementById('userRoleSelect').value;
+      const password = document.getElementById('userPasswordInput').value;
 
       if (!name) return alert('Name is required');
       if (!editingUserId && !email) return alert('Email is required');
+      if (!editingUserId && (!password || password.length < 8)) {
+        return alert('Initial password is required and must be at least 8 characters');
+      }
 
       try {
         if (editingUserId) {
@@ -1231,7 +1257,7 @@
         } else {
           await api('/admin/users', {
             method: 'POST',
-            body: JSON.stringify({ email, name, initials, role }),
+            body: JSON.stringify({ email, name, initials, role, password }),
           });
         }
 
@@ -1239,6 +1265,32 @@
         loadUsers();
       } catch (err) {
         alert('Error saving user: ' + err.message);
+      }
+    }
+
+    async function setUserPassword(userId, userName) {
+      const pwd = prompt('Set a new permanent password for "' + userName + '"\n(min 8 characters):');
+      if (pwd == null) return;
+      if (pwd.length < 8) return alert('Password must be at least 8 characters');
+      try {
+        await api('/admin/users/' + userId + '/set-password', {
+          method: 'POST',
+          body: JSON.stringify({ password: pwd }),
+        });
+        alert('Password updated for "' + userName + '". They can log in with the new password immediately.');
+      } catch (err) {
+        alert('Error setting password: ' + err.message);
+      }
+    }
+
+    async function resetUserPassword(userId, userName) {
+      const ok = confirm('Email a password reset code to "' + userName + '"?\n\nThey will receive a code and be required to set a new password at next login.');
+      if (!ok) return;
+      try {
+        await api('/admin/users/' + userId + '/reset-password', { method: 'POST' });
+        alert('Reset code emailed to "' + userName + '".');
+      } catch (err) {
+        alert('Error sending reset: ' + err.message);
       }
     }
 
