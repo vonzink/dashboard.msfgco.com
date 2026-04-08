@@ -53,11 +53,7 @@ const ThemeManager = {
         this.currentTheme = theme;
         
         // Update DOM
-        if (theme === 'dark') {
-            document.body.setAttribute('data-theme', 'dark');
-        } else {
-            document.body.removeAttribute('data-theme');
-        }
+        document.body.setAttribute('data-theme', theme);
         
         // Update icon
         this.updateIcon();
