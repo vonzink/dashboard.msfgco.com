@@ -319,7 +319,7 @@
           </div>
           <div class="ribbon-tile-value" id="loansClosedValue">0</div>
           <div class="ribbon-tile-label">Loans Closed</div>
-          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="loansClosedProgress"></div></div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill" id="loansClosedProgress" style="width:0%"></div></div>
           <div class="ribbon-tile-target">of <span id="loansClosedTarget">0</span> target</div>
           <div class="ribbon-tile-progress" id="loansClosedProgressText"></div>
         </div>
@@ -332,7 +332,7 @@
           </div>
           <div class="ribbon-tile-value" id="volumeClosedValue">$0</div>
           <div class="ribbon-tile-label">Volume Closed</div>
-          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="volumeClosedProgress"></div></div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill" id="volumeClosedProgress" style="width:0%"></div></div>
           <div class="ribbon-tile-target">of $<span id="volumeClosedTarget">0</span>M target</div>
           <div class="ribbon-tile-progress" id="volumeClosedProgressText"></div>
         </div>
@@ -346,7 +346,7 @@
           <div class="ribbon-tile-value" id="pipelineValue">$0</div>
           <div class="ribbon-tile-label">Pipeline</div>
           <div class="ribbon-tile-sub" id="pipelineUnitCount">0 loans</div>
-          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="pipelineProgress"></div></div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill" id="pipelineProgress" style="width:0%"></div></div>
           <div class="ribbon-tile-target">of $<span id="pipelineTarget">0</span>M target</div>
           <div class="ribbon-tile-progress" id="pipelineProgressText"></div>
         </div>
@@ -359,7 +359,7 @@
           </div>
           <div class="ribbon-tile-value" id="preApprovalsValue">0</div>
           <div class="ribbon-tile-label">Pre-Approvals</div>
-          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill on-track" id="preApprovalsProgress"></div></div>
+          <div class="ribbon-tile-bar"><div class="ribbon-tile-fill" id="preApprovalsProgress" style="width:0%"></div></div>
           <div class="ribbon-tile-target">of <span id="preApprovalsTarget">0</span> target</div>
           <div class="ribbon-tile-progress" id="preApprovalsProgressText"></div>
         </div>
@@ -508,11 +508,6 @@
             </thead>
             <tbody id="pipelineBody">
               <tr><td colspan="12"><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div><div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell"></div></div></td></tr>
-            </tbody>
-              <tr><td class="empty-state">
-                <i class="fas fa-database"></i>
-                <p>No pipeline data yet. Sync from Monday.com to populate.</p>
-              </td></tr>
             </tbody>
           </table>
         </div>
@@ -1245,12 +1240,16 @@
 
   <footer class="footer">
     <p>
-      © 2025 Mountain State Financial Group. All rights reserved. |
-      <button type="button" class="link-item" data-action="open-privacy">Privacy Policy</button> |
-      <button type="button" class="link-item" data-action="open-terms">Terms of Service</button> |
+      &copy; <span id="footerYear">2026</span> Mountain State Financial Group. All rights reserved.
+      <span class="footer-sep">|</span>
+      <button type="button" class="link-item" data-action="open-privacy">Privacy Policy</button>
+      <span class="footer-sep">|</span>
+      <button type="button" class="link-item" data-action="open-terms">Terms of Service</button>
+      <span class="footer-sep">|</span>
       <button type="button" class="link-item" data-action="open-support">Support</button>
     </p>
   </footer>
+  <script>document.getElementById('footerYear').textContent = new Date().getFullYear();</script>
 
   <!-- Scripts (load order matters) -->
   <script src="js/config.js?v=20260314b"></script>

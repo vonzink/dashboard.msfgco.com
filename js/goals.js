@@ -240,7 +240,7 @@ const GoalsManager = {
             const users = await ServerAPI.get('/users/directory');
             if (Array.isArray(users)) {
                 this._loList = users.filter(u => u.name).sort((a, b) => a.name.localeCompare(b.name));
-                loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
+                loSelect.innerHTML = '<option value="">Company Total</option>' +
                     this._loList.map(u =>
                         `<option value="${u.id}">${Utils.escapeHtml(u.name)}</option>`
                     ).join('');

@@ -439,6 +439,7 @@
     max-width: 1600px;
     margin: 0 auto;
     padding: var(--spacing-xl);
+    padding-bottom: 6rem; /* leave clearance for the floating chat button */
     display: grid;
     gap: var(--spacing-lg);
 }
@@ -468,5 +469,32 @@
 }
 
 .footer a:hover {
+    text-decoration: underline;
+}
+
+.footer p {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0;
+}
+
+.footer .footer-sep {
+    color: var(--border-color);
+    user-select: none;
+}
+
+.footer .link-item {
+    background: none;
+    border: none;
+    color: var(--green-bright);
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+}
+
+.footer .link-item:hover {
     text-decoration: underline;
 }

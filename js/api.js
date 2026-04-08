@@ -227,8 +227,13 @@ const API = {
     },
 
     _getVisiblePreApprovalColumns() {
-        // Preferences are applied during loadPreApprovalConfig; just return columns
-        return this.PRE_APPROVAL_COLUMNS;
+        // Preferences are applied during loadPreApprovalConfig; dedupe by field
+        const seen = new Set();
+        return (this.PRE_APPROVAL_COLUMNS || []).filter(c => {
+            if (!c || !c.field || seen.has(c.field)) return false;
+            seen.add(c.field);
+            return true;
+        });
     },
 
     PA_DATE_FIELDS: ['pre_approval_date', 'expiration_date', 'contact_date', 'borrower_dob',
@@ -649,6 +654,21 @@ const API = {
         'hoi_status', 'title_status', 'loan_status', 'status', 'payoffs', 'wvoes', 'vvoes',
         'closing_details', 'closing_docs', 'cd_info', 'dpa', 'hoa', 'send_to_compliance'],
 
+    /**
+     * Insert a comma+space between a city name and a 2-letter US state when
+     * Monday.com data smushes them together (e.g. "FargoND 58102" → "Fargo, ND 58102").
+     */
+    _formatAddress(addr) {
+        if (!addr) return '';
+        // Match city followed by 2 uppercase letters then space+zip, no comma between
+        return String(addr).replace(/([A-Za-z.'\- ]+?)([A-Z]{2})(\s+\d{5}(?:-\d{4})?)/g, (m, city, state, zip) => {
+            const cityTrim = city.replace(/\s+$/, '');
+            // Avoid double comma if already present
+            if (/,\s*$/.test(cityTrim)) return `${cityTrim} ${state}${zip}`;
+            return `${cityTrim}, ${state}${zip}`;
+        });
+    },
+
     _statusBadgeClass(val) {
         if (!val) return '';
         const v = val.toLowerCase();
@@ -710,6 +730,9 @@ const API = {
                 if (this.STATUS_FIELDS.includes(col.field) && val) {
                     const cls = this._statusBadgeClass(val);
                     return `<td><span class="pipeline-badge ${cls}">${Utils.escapeHtml(val)}</span></td>`;
+                }
+                if (col.field === 'subject_property' && val) {
+                    return `<td>${Utils.escapeHtml(this._formatAddress(val))}</td>`;
                 }
                 return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
             }).join('');

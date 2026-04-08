@@ -124,7 +124,8 @@ const App = {
                 const roleEl = document.getElementById('userRole');
                 const avatarEl = document.getElementById('userAvatar');
                 if (nameEl && me.name) nameEl.textContent = me.name;
-                if (roleEl) roleEl.textContent = activeRole;
+                const ROLE_LABELS = { admin: 'Admin', manager: 'Manager', lo: 'Loan Officer', processor: 'Processor', external: 'External', user: 'Loan Officer' };
+                if (roleEl) roleEl.textContent = ROLE_LABELS[String(activeRole).toLowerCase()] || activeRole;
                 if (avatarEl && me.initials) avatarEl.textContent = me.initials;
 
                 // Build role switcher if user has multiple groups

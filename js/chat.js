@@ -487,7 +487,7 @@ const Chat = {
 
     const esc = Utils.escapeHtml.bind(Utils);
     if (this.tags.length === 0) {
-      container.innerHTML = '<span class="chat-tag-picker-empty">No tags yet — use "Manage Tags" to create some</span>';
+      container.innerHTML = '';
       return;
     }
 

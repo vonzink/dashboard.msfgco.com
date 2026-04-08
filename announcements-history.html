@@ -103,7 +103,7 @@
         const batch = allAnnouncements.slice(displayed, end);
 
         if (displayed === 0 && batch.length === 0) {
-          list.innerHTML = '<div class="history-empty"><i class="fas fa-archive" style="font-size:2rem;display:block;margin-bottom:0.5rem;"></i>No archived announcements yet.</div>';
+          list.innerHTML = '<div class="history-empty"><i class="fas fa-inbox" style="font-size:2rem;display:block;margin-bottom:0.5rem;opacity:0.5;"></i>No archived announcements yet.</div>';
           btn.style.display = 'none';
           return;
         }
