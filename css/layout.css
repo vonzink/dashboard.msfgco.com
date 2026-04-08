@@ -322,11 +322,84 @@
 ======================================== */
 .nav-container {
     padding: 0 var(--spacing-xl);
+    position: relative;
 }
 
 .main-nav {
     display: flex;
     gap: var(--spacing-xs);
+    flex-wrap: wrap;
+}
+
+.nav-hamburger {
+    display: none;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: #fff;
+    width: 42px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 1rem;
+    margin: 0.5rem 0;
+}
+
+.nav-hamburger:hover { background: rgba(255,255,255,0.22); }
+
+@media (max-width: 1300px) {
+    .nav-hamburger { display: inline-flex; align-items: center; justify-content: center; }
+    .main-nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+        flex-direction: column;
+        flex-wrap: nowrap;
+        gap: 0;
+        padding: 0.5rem 0;
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
+        z-index: 999;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+    .main-nav.open { display: flex; }
+    .main-nav .nav-item { width: 100%; }
+    .main-nav .nav-button {
+        width: 100%;
+        justify-content: flex-start;
+        color: var(--text-primary);
+        border-radius: 0;
+        padding: 0.85rem 1.25rem;
+    }
+    .main-nav .nav-button:hover { background: var(--bg-hover, rgba(0,0,0,0.05)); color: var(--text-primary); }
+    .main-nav .nav-button .fa-chevron-down { margin-left: auto; }
+    .main-nav .dropdown-menu {
+        position: static;
+        opacity: 1;
+        visibility: hidden;
+        transform: none;
+        max-height: 0;
+        overflow: hidden;
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+        transition: max-height 0.25s ease;
+        padding: 0;
+    }
+    .main-nav .nav-item.expanded .dropdown-menu {
+        visibility: visible;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 0.25rem 0 0.5rem 1.25rem;
+    }
+    .main-nav .nav-item:hover .dropdown-menu {
+        /* disable hover behavior on mobile — require click */
+        opacity: 1;
+    }
+    .main-nav .nav-item.expanded .nav-button .fa-chevron-down { transform: rotate(180deg); }
 }
 
 .nav-item {
