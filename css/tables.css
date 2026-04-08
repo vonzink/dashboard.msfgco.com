@@ -108,6 +108,30 @@
     border-bottom: none;
 }
 
+/* Sticky first column on Pre-Approvals / Pipeline / Funded Loans tables */
+#preApprovalsTable thead th:first-child,
+#pipelineTable thead th:first-child,
+#fundedLoansTable thead th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 3;
+    background: var(--bg-tertiary);
+}
+#preApprovalsTable tbody td:first-child,
+#pipelineTable tbody td:first-child,
+#fundedLoansTable tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--bg-primary);
+    box-shadow: 1px 0 0 var(--border-color);
+}
+#preApprovalsTable tbody tr:hover td:first-child,
+#pipelineTable tbody tr:hover td:first-child,
+#fundedLoansTable tbody tr:hover td:first-child {
+    background: var(--bg-tertiary);
+}
+
 /* Notes Cell (truncated with tooltip) */
 .notes-cell {
     max-width: 150px;
