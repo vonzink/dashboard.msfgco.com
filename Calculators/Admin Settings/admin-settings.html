@@ -1149,46 +1149,73 @@
                 (u.is_active ? 'Active' : 'Inactive') +
               '</span>' +
             '</td>' +
-            '<td>' +
-              '<button class="btn btn-sm btn-primary view-profile-btn" data-id="' + u.id + '" title="View Profile"><i class="fas fa-id-card"></i></button> ' +
-              '<button class="btn btn-sm btn-secondary edit-user-btn" data-id="' + u.id + '" title="Edit"><i class="fas fa-edit"></i></button> ' +
-              '<button class="btn btn-sm set-password-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Set Password" style="background:#f59e0b; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-key"></i></button> ' +
-              '<button class="btn btn-sm reset-password-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Email Reset Code" style="background:#0ea5e9; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-envelope"></i></button> ' +
-              '<button class="btn btn-sm hard-delete-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" title="Permanently Delete" style="background:#dc3545; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;"><i class="fas fa-trash-alt"></i></button>' +
+            '<td style="position:relative;">' +
+              '<div class="user-actions-dropdown" style="position:relative; display:inline-block;">' +
+                '<button class="btn btn-sm btn-secondary user-actions-btn" data-id="' + u.id + '" data-name="' + escHtml(u.name) + '" style="display:inline-flex; align-items:center; gap:6px;">Actions <i class="fas fa-caret-down"></i></button>' +
+                '<div class="user-actions-menu" data-id="' + u.id + '" style="display:none; position:absolute; right:0; top:100%; margin-top:4px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.12); min-width:180px; z-index:100; overflow:hidden;">' +
+                  '<button class="user-action-item" data-action="view" style="display:flex; align-items:center; gap:8px; width:100%; padding:8px 12px; border:none; background:none; text-align:left; cursor:pointer; font-size:13px; color:#333;"><i class="fas fa-id-card" style="width:14px; color:#3b82f6;"></i> View Profile</button>' +
+                  '<button class="user-action-item" data-action="edit" style="display:flex; align-items:center; gap:8px; width:100%; padding:8px 12px; border:none; background:none; text-align:left; cursor:pointer; font-size:13px; color:#333;"><i class="fas fa-edit" style="width:14px; color:#6b7280;"></i> Edit</button>' +
+                  '<button class="user-action-item" data-action="set-password" style="display:flex; align-items:center; gap:8px; width:100%; padding:8px 12px; border:none; background:none; text-align:left; cursor:pointer; font-size:13px; color:#333;"><i class="fas fa-key" style="width:14px; color:#f59e0b;"></i> Set Password</button>' +
+                  '<button class="user-action-item" data-action="reset-password" style="display:flex; align-items:center; gap:8px; width:100%; padding:8px 12px; border:none; background:none; text-align:left; cursor:pointer; font-size:13px; color:#333;"><i class="fas fa-envelope" style="width:14px; color:#0ea5e9;"></i> Email Reset Code</button>' +
+                  '<div style="height:1px; background:#eee; margin:4px 0;"></div>' +
+                  '<button class="user-action-item" data-action="delete" style="display:flex; align-items:center; gap:8px; width:100%; padding:8px 12px; border:none; background:none; text-align:left; cursor:pointer; font-size:13px; color:#dc3545;"><i class="fas fa-trash-alt" style="width:14px;"></i> Delete Permanently</button>' +
+                '</div>' +
+              '</div>' +
             '</td>' +
             '</tr>'
           );
         }).join('');
-
-        // Bind view profile buttons
-        tbody.querySelectorAll('.view-profile-btn').forEach(btn => {
-          btn.addEventListener('click', () => showProfile(btn.dataset.id, users));
-        });
-
-        // Bind edit buttons
-        tbody.querySelectorAll('.edit-user-btn').forEach(btn => {
-          btn.addEventListener('click', () => editUser(users.find(u => String(u.id) === btn.dataset.id)));
-        });
 
         // Bind active/inactive toggles
         tbody.querySelectorAll('.user-active-toggle').forEach(toggle => {
           toggle.addEventListener('change', () => toggleUserActive(toggle.dataset.id, toggle.checked));
         });
 
-        // Bind hard delete buttons
-        tbody.querySelectorAll('.hard-delete-btn').forEach(btn => {
-          btn.addEventListener('click', () => hardDeleteUser(btn.dataset.id, btn.dataset.name));
+        // Bind dropdown toggle buttons
+        tbody.querySelectorAll('.user-actions-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const menu = tbody.querySelector('.user-actions-menu[data-id="' + id + '"]');
+            // Close all other menus
+            tbody.querySelectorAll('.user-actions-menu').forEach(m => {
+              if (m !== menu) m.style.display = 'none';
+            });
+            if (menu) menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+          });
         });
 
-        // Bind set password buttons
-        tbody.querySelectorAll('.set-password-btn').forEach(btn => {
-          btn.addEventListener('click', () => setUserPassword(btn.dataset.id, btn.dataset.name));
+        // Bind dropdown menu items
+        tbody.querySelectorAll('.user-actions-menu').forEach(menu => {
+          const id = menu.dataset.id;
+          const user = users.find(u => String(u.id) === id);
+          if (!user) return;
+          menu.querySelectorAll('.user-action-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+              e.stopPropagation();
+              menu.style.display = 'none';
+              const action = item.dataset.action;
+              if (action === 'view') showProfile(id, users);
+              else if (action === 'edit') editUser(user);
+              else if (action === 'set-password') setUserPassword(id, user.name);
+              else if (action === 'reset-password') resetUserPassword(id, user.name);
+              else if (action === 'delete') hardDeleteUser(id, user.name);
+            });
+          });
+          // Hover styling
+          menu.querySelectorAll('.user-action-item').forEach(item => {
+            item.addEventListener('mouseenter', () => { item.style.background = '#f3f4f6'; });
+            item.addEventListener('mouseleave', () => { item.style.background = 'none'; });
+          });
         });
 
-        // Bind reset password buttons
-        tbody.querySelectorAll('.reset-password-btn').forEach(btn => {
-          btn.addEventListener('click', () => resetUserPassword(btn.dataset.id, btn.dataset.name));
-        });
+        // Close menus on outside click (bind once per render)
+        if (!window._userActionsCloseHandler) {
+          window._userActionsCloseHandler = () => {
+            document.querySelectorAll('.user-actions-menu').forEach(m => { m.style.display = 'none'; });
+          };
+          document.addEventListener('click', window._userActionsCloseHandler);
+        }
       } catch (err) {
         console.error('Load users error:', err);
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:#e74c3c;">Failed to load users.</td></tr>';
