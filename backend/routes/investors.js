@@ -269,7 +269,7 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'usda', 'land_loans', 'va_loans', 'bridge_loans', 'dscr',
       'conventional', 'fha', 'bank_statement', 'asset_depletion',
       'interest_only', 'itin_foreign_national', 'construction', 'renovation',
-      'manufactured', 'condo_non_warrantable', 'heloc_second',
+      'manufactured', 'doctor', 'condo_non_warrantable', 'heloc_second',
       'scenario_desk', 'condo_review', 'exception_desk',
       'website_url', 'logo_url', 'login_url', 'is_active',
     ];
