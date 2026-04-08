@@ -684,6 +684,14 @@
                 </div>
               </div>
             </div>
+
+            <div class="form-group" style="margin-top:16px;">
+              <label for="invEditNotes" style="display:flex; align-items:center; gap:6px;">
+                <i class="fas fa-sticky-note"></i> Notes
+              </label>
+              <p style="margin:4px 0 6px; font-size:12px; color:#888;">Same notes shown on the investor display. Useful for adding notes to non-active investors.</p>
+              <textarea id="invEditNotes" rows="5" style="width:100%;" placeholder="Notes about this investor..."></textarea>
+            </div>
             <div class="form-actions">
               <button class="btn btn-primary" id="invBasicSaveBtn"><i class="fas fa-save"></i> Save Basic Info</button>
             </div>
@@ -2410,6 +2418,7 @@
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
       document.getElementById('invEditUnderwritingFee').value = data.underwriting_fee || '';
       document.getElementById('invEditInHouseServicing').value = data.in_house_servicing || '';
+      document.getElementById('invEditNotes').value = data.notes || '';
       // Custom toggles
       loadCustomToggles();
       // Toggle fields
@@ -2520,6 +2529,7 @@
             max_comp: document.getElementById('invEditMaxComp').value || null,
             underwriting_fee: document.getElementById('invEditUnderwritingFee').value.trim() || null,
             in_house_servicing: document.getElementById('invEditInHouseServicing').value.trim() || null,
+            notes: document.getElementById('invEditNotes').value.trim() || null,
             // Agency/Gov
             conventional: document.getElementById('invToggleConventional').checked ? 1 : 0,
             fha: document.getElementById('invToggleFha').checked ? 1 : 0,
