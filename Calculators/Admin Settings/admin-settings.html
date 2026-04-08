@@ -245,6 +245,10 @@
               <label>Bond Expiration</label>
               <input type="date" id="profileBondExpiration" />
             </div>
+            <div class="form-group">
+              <label>Computer ID</label>
+              <input type="text" id="profileComputerId" placeholder="Computer ID" />
+            </div>
           </div>
 
           <div class="form-actions">
@@ -1475,6 +1479,7 @@
         document.getElementById('profileBondCompany').value = data.bond_company || '';
         document.getElementById('profileBondNumber').value = data.bond_number || '';
         document.getElementById('profileBondExpiration').value = data.bond_expiration || '';
+        document.getElementById('profileComputerId').value = data.computer_id || '';
 
         // Email signature
         document.getElementById('profileSignatureInput').value = data.email_signature || '';
@@ -1605,6 +1610,7 @@
             bond_company: document.getElementById('profileBondCompany').value.trim(),
             bond_number: document.getElementById('profileBondNumber').value.trim(),
             bond_expiration: document.getElementById('profileBondExpiration').value || null,
+            computer_id: document.getElementById('profileComputerId').value.trim() || null,
           }),
         });
         alert('Basic info saved!');

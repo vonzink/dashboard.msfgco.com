@@ -22,7 +22,7 @@ router.get('/:id/profile', async (req, res, next) => {
       qr_code_2_s3_key: null, qr_code_2_label: null,
       nmls_number: null,
       insurance_provider: null, insurance_policy_number: null, insurance_expiration: null,
-      bond_company: null, bond_number: null, bond_expiration: null,
+      bond_company: null, bond_number: null, bond_expiration: null, computer_id: null,
       email_signature: null,
     };
 
@@ -98,7 +98,7 @@ router.put('/:id/profile', async (req, res, next) => {
       'qr_code_1_label', 'qr_code_2_label',
       'nmls_number',
       'insurance_provider', 'insurance_policy_number', 'insurance_expiration',
-      'bond_company', 'bond_number', 'bond_expiration',
+      'bond_company', 'bond_number', 'bond_expiration', 'computer_id',
       'email_signature',
     ];
 
