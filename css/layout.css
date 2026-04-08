@@ -546,12 +546,13 @@
 }
 
 .footer p {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
     justify-content: center;
-    margin: 0;
+    text-align: center;
+    margin: 0 auto;
 }
 
 .footer .footer-sep {
