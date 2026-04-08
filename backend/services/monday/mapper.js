@@ -318,7 +318,6 @@ const DEFAULT_TITLE_MAP = {
   'mortgage insurance':   'mortgage_insurance',
   'escrow waiver':        'escrow_waiver',
   'occupancy type':       'occupancy_type',
-  'purchase':             'loan_purpose',
   'lender or broker pd':  'lender_or_broker_pd',
   'first name':           'borrower_first_name',
   'last name':            'borrower_last_name',

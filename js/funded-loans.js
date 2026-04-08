@@ -60,9 +60,16 @@ const FundedLoans = {
     // Period select — restore saved preference
     const periodSelect = document.getElementById('fundedPeriodSelect');
     if (periodSelect) {
-      const savedPeriod = Utils.getStorage('funded_period', 'monthly');
+      const validValues = Array.from(periodSelect.options).map(o => o.value);
+      let savedPeriod = Utils.getStorage('funded_period', 'monthly');
+      if (!validValues.includes(savedPeriod)) savedPeriod = 'monthly';
       periodSelect.value = savedPeriod;
-      this._period = savedPeriod;
+      // Verify the assignment took (some browsers ignore if option list changes)
+      if (periodSelect.value !== savedPeriod) {
+        const opt = Array.from(periodSelect.options).find(o => o.value === savedPeriod);
+        if (opt) opt.selected = true;
+      }
+      this._period = periodSelect.value;
 
       periodSelect.addEventListener('change', () => {
         this._period = periodSelect.value;
