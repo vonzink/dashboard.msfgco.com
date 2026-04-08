@@ -57,9 +57,21 @@ const App = {
                 e.stopPropagation();
                 // Close siblings
                 nav.querySelectorAll('.nav-item.expanded').forEach(other => {
-                    if (other !== item) other.classList.remove('expanded');
+                    if (other !== item) {
+                        other.classList.remove('expanded');
+                        const m = other.querySelector('.dropdown-menu');
+                        if (m) m.setAttribute('hidden', '');
+                        const b = other.querySelector('.nav-button');
+                        if (b) b.setAttribute('aria-expanded', 'false');
+                    }
                 });
-                item.classList.toggle('expanded');
+                const isExpanded = item.classList.toggle('expanded');
+                const menu = item.querySelector('.dropdown-menu');
+                if (menu) {
+                    if (isExpanded) menu.removeAttribute('hidden');
+                    else menu.setAttribute('hidden', '');
+                }
+                btn.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
             });
         });
 
@@ -70,7 +82,13 @@ const App = {
             if (item) {
                 nav.classList.remove('open');
                 hamburger.setAttribute('aria-expanded', 'false');
-                nav.querySelectorAll('.nav-item.expanded').forEach(n => n.classList.remove('expanded'));
+                nav.querySelectorAll('.nav-item.expanded').forEach(n => {
+                    n.classList.remove('expanded');
+                    const m = n.querySelector('.dropdown-menu');
+                    if (m) m.setAttribute('hidden', '');
+                    const b = n.querySelector('.nav-button');
+                    if (b) b.setAttribute('aria-expanded', 'false');
+                });
             }
         });
 
