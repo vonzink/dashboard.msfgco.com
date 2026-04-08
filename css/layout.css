@@ -561,6 +561,7 @@
 }
 
 .footer .link-item {
+    width: auto;
     background: none;
     border: none;
     color: var(--green-bright);
