@@ -215,6 +215,7 @@ const investor = z.object({
   construction: z.union([z.boolean(), z.number()]).optional().nullable(),
   renovation: z.union([z.boolean(), z.number()]).optional().nullable(),
   manufactured: z.union([z.boolean(), z.number()]).optional().nullable(),
+  doctor: z.union([z.boolean(), z.number()]).optional().nullable(),
   condo_non_warrantable: z.union([z.boolean(), z.number()]).optional().nullable(),
   heloc_second: z.union([z.boolean(), z.number()]).optional().nullable(),
   scenario_desk: z.union([z.boolean(), z.number()]).optional().nullable(),

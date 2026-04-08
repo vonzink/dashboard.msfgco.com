@@ -51,7 +51,7 @@ router.get('/', async (req, res, next) => {
               usda, land_loans, va_loans, bridge_loans, dscr,
               conventional, fha, bank_statement, asset_depletion,
               interest_only, itin_foreign_national, construction, renovation,
-              manufactured, condo_non_warrantable, heloc_second,
+              manufactured, doctor, condo_non_warrantable, heloc_second,
               scenario_desk, condo_review, exception_desk,
               website_url, logo_url, notes, is_active
        FROM investors ${whereClause} ORDER BY name`
@@ -158,7 +158,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
       usda, land_loans, va_loans, bridge_loans, dscr,
       conventional, fha, bank_statement, asset_depletion,
       interest_only, itin_foreign_national, construction, renovation,
-      manufactured, condo_non_warrantable, heloc_second,
+      manufactured, doctor, condo_non_warrantable, heloc_second,
       scenario_desk, condo_review, exception_desk,
       website_url, logo_url, login_url, notes
     } = req.body;
@@ -177,10 +177,10 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          usda, land_loans, va_loans, bridge_loans, dscr,
          conventional, fha, bank_statement, asset_depletion,
          interest_only, itin_foreign_national, construction, renovation,
-         manufactured, condo_non_warrantable, heloc_second,
+         manufactured, doctor, condo_non_warrantable, heloc_second,
          scenario_desk, condo_review, exception_desk,
          website_url, logo_url, login_url, notes)
-       VALUES (${Array(43).fill('?').join(', ')})
+       VALUES (${Array(44).fill('?').join(', ')})
        ON DUPLICATE KEY UPDATE
          name = VALUES(name),
          account_executive_name = VALUES(account_executive_name),
@@ -215,6 +215,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
          construction = VALUES(construction),
          renovation = VALUES(renovation),
          manufactured = VALUES(manufactured),
+         doctor = VALUES(doctor),
          condo_non_warrantable = VALUES(condo_non_warrantable),
          heloc_second = VALUES(heloc_second),
          scenario_desk = VALUES(scenario_desk),
@@ -236,7 +237,7 @@ router.post('/', requireAdmin, validate(investorSchema), async (req, res, next) 
         usda ?? null, land_loans ?? null, va_loans ?? null, bridge_loans ?? null, dscr ?? null,
         conventional ?? null, fha ?? null, bank_statement ?? null, asset_depletion ?? null,
         interest_only ?? null, itin_foreign_national ?? null, construction ?? null, renovation ?? null,
-        manufactured ?? null, condo_non_warrantable ?? null, heloc_second ?? null,
+        manufactured ?? null, doctor ?? null, condo_non_warrantable ?? null, heloc_second ?? null,
         scenario_desk ?? null, condo_review ?? null, exception_desk ?? null,
         website_url || null, logo_url || null, login_url || null, notes || null
       ]

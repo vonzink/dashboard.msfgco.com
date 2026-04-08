@@ -661,6 +661,7 @@
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleConstruction" /> Construction</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleRenovation" /> Renovation</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleManufactured" /> Manufactured</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleDoctor" /> Doctor</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleCondoNonWarrantable" /> Condo / Non-Warrantable</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleSubFin" /> Subordinate Financing</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleHelocSecond" /> HELOC / 2nd</label>
@@ -2444,6 +2445,7 @@
       document.getElementById('invToggleConstruction').checked = !!data.construction;
       document.getElementById('invToggleRenovation').checked = !!data.renovation;
       document.getElementById('invToggleManufactured').checked = !!data.manufactured;
+      document.getElementById('invToggleDoctor').checked = !!data.doctor;
       document.getElementById('invToggleCondoNonWarrantable').checked = !!data.condo_non_warrantable;
       document.getElementById('invToggleSubFin').checked = !!data.subordinate_financing;
       document.getElementById('invToggleHelocSecond').checked = !!data.heloc_second;
@@ -2555,6 +2557,7 @@
             construction: document.getElementById('invToggleConstruction').checked ? 1 : 0,
             renovation: document.getElementById('invToggleRenovation').checked ? 1 : 0,
             manufactured: document.getElementById('invToggleManufactured').checked ? 1 : 0,
+            doctor: document.getElementById('invToggleDoctor').checked ? 1 : 0,
             condo_non_warrantable: document.getElementById('invToggleCondoNonWarrantable').checked ? 1 : 0,
             subordinate_financing: document.getElementById('invToggleSubFin').checked ? 1 : 0,
             heloc_second: document.getElementById('invToggleHelocSecond').checked ? 1 : 0,
