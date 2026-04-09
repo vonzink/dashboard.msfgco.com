@@ -390,6 +390,10 @@ const ServerAPI = {
         return this.get("/investors");
     },
 
+    getAllInvestors() {
+        return this.get("/investors?directory=true");
+    },
+
     getInvestor(key) {
         return this.get(`/investors/${key}`);
     },

@@ -1060,3 +1060,70 @@ textarea.form-input {
         grid-template-columns: 1fr;
     }
 }
+
+/* ========================================
+   ALL INVESTORS DIRECTORY
+======================================== */
+.all-inv-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.all-inv-toolbar .form-input {
+    flex: 1;
+    max-width: 400px;
+}
+
+.all-inv-counts {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+#allInvestorsTable td {
+    vertical-align: top;
+}
+
+#allInvestorsTable .inv-dir-name {
+    font-weight: 600;
+    color: var(--text-link, var(--green-bright));
+    cursor: pointer;
+    transition: color var(--transition-fast);
+}
+
+#allInvestorsTable .inv-dir-name:hover {
+    text-decoration: underline;
+}
+
+#allInvestorsTable .inv-dir-inactive {
+    font-size: 11px;
+    color: #e74c3c;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+#allInvestorsTable .inv-dir-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    max-width: 280px;
+}
+
+#allInvestorsTable .inv-dir-notes {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    max-width: 320px;
+}
+
+@media (max-width: 768px) {
+    .all-inv-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .all-inv-toolbar .form-input {
+        max-width: 100%;
+    }
+}

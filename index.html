@@ -257,6 +257,9 @@
             </div>
 
             <div class="dropdown-divider"></div>
+            <button type="button" class="dropdown-item" data-action="show-all-investors">
+              <i class="fas fa-list"></i> Show All
+            </button>
             <button type="button" class="dropdown-item admin-only-item" data-action="manage-investors" style="display:none;">
               <i class="fas fa-cog"></i> Manage Investors
             </button>
@@ -302,7 +305,6 @@
               <option value="monthly">Monthly</option>
               <option value="quarterly">Quarterly</option>
               <option value="ytd">Year to Date</option>
-              <option value="yearly">Yearly</option>
               <option value="weekly">Weekly</option>
             </select>
           </div>
@@ -533,7 +535,6 @@
             <option value="monthly" selected>Monthly</option>
             <option value="quarterly">Quarterly</option>
             <option value="ytd">Year to Date</option>
-            <option value="yearly">Yearly</option>
             <option value="all">All Time</option>
           </select>
           <button type="button" class="btn btn-secondary btn-sm monday-sync-btn" data-action="monday-sync" title="Sync from Monday.com">
@@ -696,6 +697,41 @@
     <!-- =========================
          MODALS
     ========================== -->
+
+    <!-- All Investors Directory Modal -->
+    <div id="allInvestorsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content" style="max-width:1200px;">
+        <button type="button" class="modal-close" id="allInvestorsModalClose" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name"><i class="fas fa-handshake" style="color:var(--green-bright);margin-right:0.5rem;"></i> All Investors</h2>
+          </div>
+        </div>
+        <div class="modal-body" style="padding:var(--spacing-lg);">
+          <div class="all-inv-toolbar">
+            <input type="text" id="allInvestorsSearch" class="form-input" placeholder="Search by name, AE, state, program, notes..." autocomplete="off" />
+            <div class="all-inv-counts" id="allInvestorsCounts"></div>
+          </div>
+          <div class="table-responsive table-scroll" style="max-height:70vh;">
+            <table class="data-table" id="allInvestorsTable">
+              <thead>
+                <tr>
+                  <th class="sortable">Name</th>
+                  <th class="sortable">Account Executive</th>
+                  <th class="sortable">States</th>
+                  <th class="sortable">Best Programs</th>
+                  <th>Products &amp; Services</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody id="allInvestorsBody">
+                <tr><td colspan="6" style="text-align:center;padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Investor Modal (required by investors.js) -->
     <div id="investorModal" class="investor-modal" aria-hidden="true">
@@ -892,16 +928,16 @@
                 <input type="text" id="paClientName" required maxlength="200" placeholder="Borrower name" />
               </div>
               <div class="pa-form-field">
-                <label for="paLoanAmount">Loan Amount *</label>
-                <input type="number" id="paLoanAmount" required min="1" step="0.01" placeholder="250000" />
+                <label for="paLoanAmount">Loan Amount</label>
+                <input type="number" id="paLoanAmount" min="1" step="0.01" placeholder="250000" />
               </div>
               <div class="pa-form-field">
-                <label for="paPreApprovalDate">Pre-Approval Date *</label>
-                <input type="date" id="paPreApprovalDate" required />
+                <label for="paPreApprovalDate">Pre-Approval Date</label>
+                <input type="date" id="paPreApprovalDate" />
               </div>
               <div class="pa-form-field">
-                <label for="paExpirationDate">Expiration Date *</label>
-                <input type="date" id="paExpirationDate" required />
+                <label for="paExpirationDate">Expiration Date</label>
+                <input type="date" id="paExpirationDate" />
               </div>
               <div class="pa-form-field">
                 <label for="paStatus">Status</label>

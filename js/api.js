@@ -443,9 +443,9 @@ const API = {
 
             const data = {
                 client_name: document.getElementById('paClientName').value.trim(),
-                loan_amount: parseFloat(document.getElementById('paLoanAmount').value),
-                pre_approval_date: document.getElementById('paPreApprovalDate').value,
-                expiration_date: document.getElementById('paExpirationDate').value,
+                loan_amount: document.getElementById('paLoanAmount').value ? parseFloat(document.getElementById('paLoanAmount').value) : null,
+                pre_approval_date: document.getElementById('paPreApprovalDate').value || null,
+                expiration_date: document.getElementById('paExpirationDate').value || null,
                 status: document.getElementById('paStatus').value,
                 loan_type: document.getElementById('paLoanType').value.trim() || null,
                 loan_number: document.getElementById('paLoanNumber').value.trim() || null,

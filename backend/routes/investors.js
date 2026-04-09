@@ -36,9 +36,11 @@ async function resolveLogoUrl(logoUrl) {
 // ──────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
-    // ?all=true returns all investors (for admin manage screen)
+    // ?all=true returns all investors (for admin manage screen, requires admin/manager)
+    // ?directory=true returns all investors (for directory view, any authenticated user)
     // Default: only active investors (for dashboard dropdown)
-    const showAll = req.query.all === 'true' && hasRole(req, 'admin', 'manager');
+    const showAll = (req.query.all === 'true' && hasRole(req, 'admin', 'manager'))
+                 || req.query.directory === 'true';
     const whereClause = showAll ? '' : 'WHERE is_active = 1';
 
     const [investors] = await db.query(

@@ -27,9 +27,9 @@ const announcement = z.object({
 // ── Pre-Approvals ───────────────────────────────
 const preApproval = z.object({
   client_name: trimmedString(200),
-  loan_amount: z.number().positive(),
-  pre_approval_date: dateString,
-  expiration_date: dateString,
+  loan_amount: z.number().positive().optional().nullable(),
+  pre_approval_date: dateString.optional().nullable(),
+  expiration_date: dateString.optional().nullable(),
   status: z.enum(['active', 'expired', 'converted', 'cancelled']).optional().default('active'),
   assigned_lo_id: z.number().int().positive().optional().nullable(),
   assigned_lo_name: optionalString(200),

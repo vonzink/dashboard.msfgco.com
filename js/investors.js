@@ -110,12 +110,6 @@ const Investors = {
 
   /** Show investor modal — fetches full detail from API */
   async showModal(investorId) {
-    const basicInvestor = this.data[investorId];
-    if (!basicInvestor) {
-      console.warn('Investor not found:', investorId);
-      return;
-    }
-
     const modal = document.getElementById('investorModal');
     if (!modal) {
       console.error('Investor modal element not found (id="investorModal")');
@@ -124,8 +118,11 @@ const Investors = {
 
     this.currentInvestorId = investorId;
 
-    // Show modal with basic data first (fast)
-    this.populateModal(basicInvestor);
+    const basicInvestor = this.data[investorId];
+    if (basicInvestor) {
+      // Show modal with basic data first (fast)
+      this.populateModal(basicInvestor);
+    }
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
 
@@ -706,6 +703,132 @@ const Investors = {
       const errCloseBtn = content.querySelector('.contacts-modal-close');
       if (errCloseBtn) errCloseBtn.addEventListener('click', () => this.hideCompanyContactsModal());
     }
+  },
+
+  // =========================================================
+  // All Investors Directory
+  // =========================================================
+  async showAllInvestors() {
+    const modal = document.getElementById('allInvestorsModal');
+    if (!modal) return;
+
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Bind close
+    const closeBtn = document.getElementById('allInvestorsModalClose');
+    if (closeBtn) closeBtn.onclick = () => this._hideAllInvestors();
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this._hideAllInvestors();
+    });
+
+    const tbody = document.getElementById('allInvestorsBody');
+    const countsEl = document.getElementById('allInvestorsCounts');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+    try {
+      const investors = await ServerAPI.getAllInvestors();
+      if (!Array.isArray(investors) || investors.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;">No investors found.</td></tr>';
+        return;
+      }
+
+      const esc = Utils.escapeHtml;
+      const sorted = investors.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      const activeCount = sorted.filter(i => i.is_active === 1 || i.is_active === true).length;
+      const inactiveCount = sorted.length - activeCount;
+      if (countsEl) countsEl.textContent = sorted.length + ' investors (' + activeCount + ' active, ' + inactiveCount + ' inactive)';
+
+      const toggleDefs = [
+        { field: 'conventional',          label: 'Conv',         cat: 'agency' },
+        { field: 'fha',                   label: 'FHA',          cat: 'agency' },
+        { field: 'va_loans',              label: 'VA',           cat: 'agency' },
+        { field: 'usda',                  label: 'USDA',         cat: 'agency' },
+        { field: 'jumbo',                 label: 'Jumbo',        cat: 'nonagency' },
+        { field: 'non_qm',               label: 'Non-QM',       cat: 'nonagency' },
+        { field: 'dscr',                  label: 'DSCR',         cat: 'nonagency' },
+        { field: 'bank_statement',        label: 'Bank Stmt',    cat: 'nonagency' },
+        { field: 'asset_depletion',       label: 'Asset Depl.',  cat: 'nonagency' },
+        { field: 'interest_only',         label: 'IO',           cat: 'nonagency' },
+        { field: 'itin_foreign_national', label: 'ITIN/FN',      cat: 'nonagency' },
+        { field: 'bridge_loans',          label: 'Bridge',       cat: 'specialty' },
+        { field: 'land_loans',            label: 'Land',         cat: 'specialty' },
+        { field: 'construction',          label: 'Construction', cat: 'specialty' },
+        { field: 'renovation',            label: 'Renovation',   cat: 'specialty' },
+        { field: 'manufactured',          label: 'Manufactured', cat: 'specialty' },
+        { field: 'doctor',                label: 'Doctor',       cat: 'specialty' },
+        { field: 'condo_non_warrantable', label: 'Condo/NW',     cat: 'specialty' },
+        { field: 'subordinate_financing', label: 'Sub. Fin.',    cat: 'specialty' },
+        { field: 'heloc_second',          label: 'HELOC/2nd',    cat: 'specialty' },
+        { field: 'manual_underwriting',   label: 'Manual UW',    cat: 'services' },
+        { field: 'servicing',             label: 'Servicing',    cat: 'services' },
+        { field: 'scenario_desk',         label: 'Scenario',     cat: 'services' },
+        { field: 'condo_review',          label: 'Condo Rev.',   cat: 'services' },
+        { field: 'exception_desk',        label: 'Exception',    cat: 'services' },
+        { field: 'review_wire_release',   label: 'Wire Review',  cat: 'services' },
+      ];
+
+      tbody.innerHTML = sorted.map(inv => {
+        const active = inv.is_active === 1 || inv.is_active === true;
+
+        // Build pills
+        let pillsHtml = '';
+        const activePills = toggleDefs.filter(t => Number(inv[t.field]) === 1);
+        (inv.customToggles || []).forEach(t => {
+          if (Number(t.enabled) === 1) activePills.push({ label: t.label, cat: 'custom' });
+        });
+        if (activePills.length > 0) {
+          pillsHtml = '<div class="inv-dir-pills">' +
+            activePills.map(t => '<span class="dropdown-pill dropdown-pill-' + t.cat + '">' + esc(t.label) + '</span>').join('') +
+          '</div>';
+        }
+
+        return '<tr style="' + (active ? '' : 'opacity:0.55;') + '">' +
+          '<td><span class="inv-dir-name" data-investor-key="' + esc(inv.investor_key) + '">' + esc(inv.name) + '</span>' +
+            (active ? '' : '<span class="inv-dir-inactive">(Inactive)</span>') + '</td>' +
+          '<td>' + esc(inv.account_executive_name || '--') + '</td>' +
+          '<td>' + esc(inv.states || '--') + '</td>' +
+          '<td>' + esc(inv.best_programs || '--') + '</td>' +
+          '<td>' + (pillsHtml || '--') + '</td>' +
+          '<td><div class="inv-dir-notes">' + esc(inv.notes || '--') + '</div></td>' +
+        '</tr>';
+      }).join('');
+
+      // Click name → open investor detail
+      tbody.querySelectorAll('.inv-dir-name').forEach(el => {
+        el.addEventListener('click', () => {
+          const key = el.dataset.investorKey;
+          if (key) {
+            this._hideAllInvestors();
+            this.showModal(key);
+          }
+        });
+      });
+
+      // Bind search
+      const searchInput = document.getElementById('allInvestorsSearch');
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.addEventListener('input', () => {
+          const q = searchInput.value.toLowerCase().trim();
+          const rows = tbody.querySelectorAll('tr');
+          rows.forEach(row => {
+            const text = (row.textContent || '').toLowerCase();
+            row.style.display = (!q || text.includes(q)) ? '' : 'none';
+          });
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load all investors:', err);
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#e74c3c;">Failed to load investors.</td></tr>';
+    }
+  },
+
+  _hideAllInvestors() {
+    const modal = document.getElementById('allInvestorsModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
   },
 
   // =========================================================

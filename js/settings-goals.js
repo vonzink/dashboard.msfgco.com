@@ -22,6 +22,7 @@ const SettingsGoals = {
         return `${now.getFullYear()}-Q${q}`;
       }
       case 'yearly':
+      case 'ytd':
         return `${now.getFullYear()}`;
       default:
         return '';
@@ -108,7 +109,7 @@ const SettingsGoals = {
           <option value="weekly" ${period === 'weekly' ? 'selected' : ''}>Weekly</option>
           <option value="monthly" ${period === 'monthly' ? 'selected' : ''}>Monthly</option>
           <option value="quarterly" ${period === 'quarterly' ? 'selected' : ''}>Quarterly</option>
-          <option value="yearly" ${period === 'yearly' ? 'selected' : ''}>Yearly</option>
+          <option value="ytd" ${(period === 'yearly' || period === 'ytd') ? 'selected' : ''}>Year to Date</option>
         </select>
       </div>
       <p class="settings-hint" style="margin-top:-8px;margin-bottom:12px;">

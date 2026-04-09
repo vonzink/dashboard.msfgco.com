@@ -28,6 +28,9 @@
       if (id) window.Investors?.showModal?.(id);
     },
 
+    'show-all-investors': () =>
+      window.Investors?.showAllInvestors?.(),
+
     'manage-investors': () =>
       Utils.openPopup('Calculators/Admin Settings/admin-settings.html#investors', 'MSFGAdminSettings'),
 
