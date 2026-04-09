@@ -251,15 +251,17 @@
           </button>
 
           <div class="dropdown-menu dropdown-menu-investors">
+            <button type="button" class="dropdown-item" data-action="show-all-investors">
+              <i class="fas fa-list"></i> Show All
+            </button>
+            <div class="dropdown-divider"></div>
+
             <div id="investorDropdownList">
               <div class="dropdown-header">Wholesale Partners</div>
               <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
             </div>
 
             <div class="dropdown-divider"></div>
-            <button type="button" class="dropdown-item" data-action="show-all-investors">
-              <i class="fas fa-list"></i> Show All
-            </button>
             <button type="button" class="dropdown-item admin-only-item" data-action="manage-investors" style="display:none;">
               <i class="fas fa-cog"></i> Manage Investors
             </button>
