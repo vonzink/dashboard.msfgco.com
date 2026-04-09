@@ -1,0 +1,380 @@
+/* ============================================
+   MSFG Time Calculator - Styles
+============================================ */
+:root {
+  --msfg-green-light: #8cc63e;
+  --msfg-green-mid: #4b7b4d;
+  --msfg-green-dark: #104547;
+  --msfg-gray-dark: #404041;
+  --msfg-white: #ffffff;
+  --border-radius-lg: 16px;
+  --border-radius-md: 10px;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.08);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  background: #f4f6f7;
+  color: var(--msfg-gray-dark);
+  line-height: 1.5;
+}
+
+/* ── Shell ─────────────────────────────────── */
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: linear-gradient(135deg, var(--msfg-green-dark), var(--msfg-green-mid));
+  color: var(--msfg-white);
+  padding: 1.75rem clamp(1.5rem, 4vw, 3rem);
+}
+
+.app-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.5rem, 2.2vw, 2rem);
+}
+
+.app-header h1 i {
+  margin-right: 0.5rem;
+  opacity: 0.85;
+}
+
+.app-header p {
+  margin: 0;
+  opacity: 0.85;
+  font-size: 0.95rem;
+}
+
+.app-main {
+  padding: 1.5rem clamp(1.5rem, 4vw, 3rem);
+  flex: 1;
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.app-footer {
+  padding: 1rem 1.5rem;
+  text-align: center;
+  border-top: 1px solid #e0e4ea;
+  background: #f9fafb;
+  color: #888;
+}
+
+/* ── Mode Tabs ─────────────────────────────── */
+.mode-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 2px solid #d2d7dd;
+  border-radius: var(--border-radius-md);
+  background: var(--msfg-white);
+  color: var(--msfg-gray-dark);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-tab i { margin-right: 0.4rem; }
+
+.mode-tab:hover {
+  border-color: var(--msfg-green-mid);
+  color: var(--msfg-green-mid);
+}
+
+.mode-tab.active {
+  background: var(--msfg-green-dark);
+  border-color: var(--msfg-green-dark);
+  color: var(--msfg-white);
+}
+
+/* ── Cards ─────────────────────────────────── */
+.card {
+  background: var(--msfg-white);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-soft);
+  padding: 1.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.card-muted {
+  background: #f9fafb;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--msfg-green-dark);
+}
+
+.card-title i {
+  margin-right: 0.4rem;
+  opacity: 0.7;
+}
+
+.card-subtitle {
+  margin: 0 0 1.25rem;
+  font-size: 0.88rem;
+  color: #888;
+}
+
+/* ── Fields ────────────────────────────────── */
+.field-row {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.field {
+  flex: 1;
+  min-width: 180px;
+}
+
+.field label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.4rem;
+}
+
+.field input[type="date"] {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: 2px solid #d2d7dd;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  background: var(--msfg-white);
+  color: var(--msfg-gray-dark);
+  transition: border-color 0.2s;
+}
+
+.field input[type="date"]:focus {
+  outline: none;
+  border-color: var(--msfg-green-mid);
+  box-shadow: 0 0 0 3px rgba(75, 123, 77, 0.15);
+}
+
+.field-btn {
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+/* ── Buttons ───────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.5rem;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--msfg-green-mid), var(--msfg-green-dark));
+  color: var(--msfg-white);
+  box-shadow: 0 4px 12px rgba(16, 69, 71, 0.25);
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(16, 69, 71, 0.35);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+/* ── Results ───────────────────────────────── */
+.results-card {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #eef1f4;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.result-hero {
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.hero-dates {
+  font-size: 0.88rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+}
+
+.hero-dates i {
+  margin: 0 0.5rem;
+  color: var(--msfg-green-mid);
+}
+
+.hero-number {
+  display: block;
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
+  color: var(--msfg-green-dark);
+  letter-spacing: -0.02em;
+}
+
+/* Direction badge */
+.result-direction {
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.direction-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.direction-future {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.direction-past {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.direction-today {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Result grid */
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.result-item {
+  background: #f7f9fb;
+  border-radius: var(--border-radius-md);
+  padding: 1rem;
+  text-align: center;
+  border: 1px solid #eef1f4;
+  transition: transform 0.15s ease;
+}
+
+.result-item:hover {
+  transform: translateY(-2px);
+}
+
+.result-icon {
+  font-size: 1.1rem;
+  color: var(--msfg-green-mid);
+  margin-bottom: 0.35rem;
+}
+
+.result-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--msfg-green-dark);
+}
+
+.result-label {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 0.15rem;
+}
+
+/* ── Quick Dates ───────────────────────────── */
+.quick-dates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.quick-date-btn {
+  background: var(--msfg-white);
+  border: 2px solid #e5e8ed;
+  border-radius: var(--border-radius-md);
+  padding: 0.85rem 0.75rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.quick-date-btn:hover {
+  border-color: var(--msfg-green-mid);
+  background: #f0faf1;
+  transform: translateY(-1px);
+}
+
+.quick-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--msfg-gray-dark);
+  margin-bottom: 0.25rem;
+}
+
+.quick-value {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--msfg-green-dark);
+}
+
+/* ── Responsive ────────────────────────────── */
+@media (max-width: 600px) {
+  .mode-tabs {
+    flex-direction: column;
+  }
+  .field-row {
+    flex-direction: column;
+  }
+  .field {
+    min-width: 100%;
+  }
+  .field-btn {
+    min-width: 100%;
+  }
+  .field-btn .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .result-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
