@@ -210,12 +210,7 @@
 .team-member a {
     color: var(--green-forest);
     text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 200px;
-    display: inline-block;
-    vertical-align: bottom;
+    word-break: break-all;
 }
 
 .team-member a:hover {
