@@ -87,6 +87,43 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// ========================================
+// INVESTOR TAGS (managed, like chat tags)
+// Must be defined BEFORE /:key to avoid route conflict
+// ========================================
+
+// GET /api/investors/tags
+router.get('/tags', async (req, res, next) => {
+  try {
+    const [tags] = await db.query('SELECT * FROM investor_tags ORDER BY name');
+    res.json(tags);
+  } catch (error) { next(error); }
+});
+
+// POST /api/investors/tags
+router.post('/tags', async (req, res, next) => {
+  try {
+    const { name, color } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'Tag name is required' });
+    const userId = getUserId(req);
+    const tagColor = color || '#8cc63e';
+    await db.query(
+      'INSERT INTO investor_tags (name, color, created_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE id=id',
+      [name.trim(), tagColor, userId]
+    );
+    const [tags] = await db.query('SELECT * FROM investor_tags WHERE name = ?', [name.trim()]);
+    res.status(201).json(tags[0]);
+  } catch (error) { next(error); }
+});
+
+// DELETE /api/investors/tags/:tagId
+router.delete('/tags/:tagId', requireAdmin, async (req, res, next) => {
+  try {
+    await db.query('DELETE FROM investor_tags WHERE id = ?', [req.params.tagId]);
+    res.json({ success: true });
+  } catch (error) { next(error); }
+});
+
 // ──────────────────────────────────────────────
 // GET /api/investors/:key — Get specific investor by key
 // ──────────────────────────────────────────────
@@ -855,42 +892,6 @@ router.delete('/:id/custom-toggles/:toggleId', requireAdmin, async (req, res, ne
       'DELETE FROM investor_custom_toggles WHERE id = ? AND investor_id = ?',
       [req.params.toggleId, req.params.id]
     );
-    res.json({ success: true });
-  } catch (error) { next(error); }
-});
-
-// ========================================
-// INVESTOR TAGS (managed, like chat tags)
-// ========================================
-
-// GET /api/investors/tags
-router.get('/tags', async (req, res, next) => {
-  try {
-    const [tags] = await db.query('SELECT * FROM investor_tags ORDER BY name');
-    res.json(tags);
-  } catch (error) { next(error); }
-});
-
-// POST /api/investors/tags
-router.post('/tags', async (req, res, next) => {
-  try {
-    const { name, color } = req.body;
-    if (!name || !name.trim()) return res.status(400).json({ error: 'Tag name is required' });
-    const userId = getUserId(req);
-    const tagColor = color || '#8cc63e';
-    await db.query(
-      'INSERT INTO investor_tags (name, color, created_by) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE id=id',
-      [name.trim(), tagColor, userId]
-    );
-    const [tags] = await db.query('SELECT * FROM investor_tags WHERE name = ?', [name.trim()]);
-    res.status(201).json(tags[0]);
-  } catch (error) { next(error); }
-});
-
-// DELETE /api/investors/tags/:tagId
-router.delete('/tags/:tagId', requireAdmin, async (req, res, next) => {
-  try {
-    await db.query('DELETE FROM investor_tags WHERE id = ?', [req.params.tagId]);
     res.json({ success: true });
   } catch (error) { next(error); }
 });
