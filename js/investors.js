@@ -14,6 +14,7 @@ const Investors = {
   data: {},
   _loaded: false,
   _investorTags: [],  // managed tags from DB
+  _investorNoteTagsMap: {},  // { investor_id: [tag_name, ...] } for search
 
   init() {
     this.bindModalClose();
@@ -22,6 +23,7 @@ const Investors = {
     // Load investor data + tags from API, then build the dropdown
     this.loadFromAPI();
     this.loadInvestorTags();
+    this.loadInvestorNoteTags();
   },
 
   /** Fetch investors from API and populate this.data */
@@ -419,11 +421,9 @@ const Investors = {
       (investor.notes ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Investor Notes</h3><div class="pa-detail-monday-notes">' + esc(investor.notes) + '</div></div>' : '') +
       // Notes system
       '<div class="pa-detail-section full-width">' +
-        '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes' +
-          '<button type="button" class="btn btn-sm btn-outline" id="investorManageTagsBtn" style="margin-left:auto;font-size:0.7rem;padding:0.15rem 0.5rem;"><i class="fas fa-tags"></i> Manage Tags</button>' +
-        '</h3>' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>' +
         '<div class="pa-notes-add" style="flex-direction:column;">' +
-          '<textarea id="investorNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>' +
+          '<textarea id="investorNewNoteInput" rows="4" placeholder="Add a note..." class="form-input"></textarea>' +
           '<div class="inv-note-tag-bar">' +
             '<span class="inv-note-tag-label"><i class="fas fa-tags"></i> Tags:</span>' +
             '<div class="inv-note-tag-pills" id="investorNoteTagPills"></div>' +
@@ -443,8 +443,6 @@ const Investors = {
     document.getElementById('investorNewNoteInput')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addInvestorNote(investorId);
     });
-    document.getElementById('investorManageTagsBtn')?.addEventListener('click', () => this.openManageTagsModal());
-
     this._loadInvestorNotes(investorId);
   },
 
@@ -467,6 +465,18 @@ const Investors = {
     } catch (err) {
       console.warn('Failed to load investor tags:', err);
       this._investorTags = [];
+    }
+  },
+
+  async loadInvestorNoteTags() {
+    try {
+      const map = await ServerAPI.getInvestorNoteTags();
+      this._investorNoteTagsMap = (map && typeof map === 'object') ? map : {};
+      // Re-render dropdown if already loaded, so tag data is searchable
+      if (this._loaded) this._refreshDropdown();
+    } catch (err) {
+      console.warn('Failed to load investor note tags map:', err);
+      this._investorNoteTagsMap = {};
     }
   },
 
@@ -508,40 +518,56 @@ const Investors = {
     if (modal) { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); }
   },
 
+  /** Color ordering for tag categories */
+  _tagColorOrder: ['#4a90d9', '#9b59b6', '#e67e22', '#27ae60', '#e74c3c', '#3498db', '#f39c12', '#1abc9c'],
+  _tagColorLabels: {
+    '#4a90d9': 'Agency', '#9b59b6': 'Non-Agency', '#e67e22': 'Specialty', '#27ae60': 'Services',
+    '#e74c3c': 'Processing', '#3498db': 'News', '#f39c12': 'Pricing', '#1abc9c': 'Info'
+  },
+
+  /** Sort tags by color category order, then alphabetically */
+  _sortTagsByCategory(tags) {
+    const order = this._tagColorOrder;
+    return [...tags].sort((a, b) => {
+      const ai = order.indexOf(a.color);
+      const bi = order.indexOf(b.color);
+      const ao = ai === -1 ? 999 : ai;
+      const bo = bi === -1 ? 999 : bi;
+      if (ao !== bo) return ao - bo;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  },
+
+  /** Get only default (seeded) tags — created_by is null */
+  _getDefaultTags() {
+    return this._investorTags.filter(t => !t.created_by);
+  },
+
   renderManageTagsList() {
     const container = document.getElementById('investorManageTagsList');
     if (!container) return;
     const esc = Utils.escapeHtml;
+    const defaultTags = this._sortTagsByCategory(this._getDefaultTags());
 
-    if (this._investorTags.length === 0) {
-      container.innerHTML = '<div class="manage-tags-empty"><i class="fas fa-tags"></i><p>No tags yet. Create your first tag above!</p></div>';
+    if (defaultTags.length === 0) {
+      container.innerHTML = '<div class="manage-tags-empty"><i class="fas fa-tags"></i><p>No tags available.</p></div>';
       return;
     }
 
-    let html = '<table class="manage-tags-table"><tbody>';
-    this._investorTags.forEach(tag => {
-      html += '<tr class="manage-tags-row" data-tag-id="' + tag.id + '">' +
-        '<td><span class="chat-msg-tag" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' + esc(tag.name) + '</span></td>' +
-        '<td class="manage-tags-actions-cell">' +
-          '<button type="button" class="btn btn-sm btn-danger manage-tag-delete-btn" data-tag-id="' + tag.id + '" title="Delete"><i class="fas fa-trash"></i></button>' +
-        '</td></tr>';
+    let html = '';
+    let lastColor = null;
+    defaultTags.forEach(tag => {
+      if (tag.color !== lastColor) {
+        if (lastColor !== null) html += '</div>';
+        const label = this._tagColorLabels[tag.color] || '';
+        html += '<div class="manage-tags-group"><span class="manage-tags-group-label" style="color:' + esc(tag.color) + ';">' + esc(label) + '</span><div class="manage-tags-group-pills">';
+        lastColor = tag.color;
+      }
+      html += '<span class="chat-msg-tag" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' + esc(tag.name) + '</span>';
     });
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    if (lastColor !== null) html += '</div></div>';
 
-    container.querySelectorAll('.manage-tag-delete-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const tagId = parseInt(btn.dataset.tagId);
-        const tag = this._investorTags.find(t => t.id === tagId);
-        if (!tag || !confirm('Delete tag "' + tag.name + '"? It will be removed from all notes.')) return;
-        try {
-          await ServerAPI.deleteInvestorTag(tagId);
-          this._investorTags = this._investorTags.filter(t => t.id !== tagId);
-          this._selectedNoteTagIds = this._selectedNoteTagIds.filter(id => id !== tagId);
-          this.renderManageTagsList();
-        } catch (err) { alert('Failed to delete tag.'); }
-      });
-    });
+    container.innerHTML = html;
   },
 
   async createInvestorTag() {
@@ -560,27 +586,43 @@ const Investors = {
     } catch (err) { alert('Failed to create tag. It may already exist.'); }
   },
 
-  /** Render chat-style tag pills into a container */
+  /** Render chat-style tag pills organized by color category, plus custom tag input */
   _renderNoteTagPills(containerId, selectedIds) {
     const container = document.getElementById(containerId);
     if (!container) return;
     if (selectedIds) this._selectedNoteTagIds = [...selectedIds];
 
     const esc = Utils.escapeHtml;
-    if (this._investorTags.length === 0) {
+    const defaultTags = this._sortTagsByCategory(this._getDefaultTags());
+
+    if (defaultTags.length === 0) {
       container.innerHTML = '<span style="font-size:0.75rem;color:var(--text-muted);">No tags available</span>';
       return;
     }
 
     let html = '';
-    this._investorTags.forEach(tag => {
+    let lastColor = null;
+    defaultTags.forEach(tag => {
+      // Add a small gap/divider between color groups
+      if (tag.color !== lastColor) {
+        if (lastColor !== null) html += '<span class="inv-tag-group-divider"></span>';
+        lastColor = tag.color;
+      }
       const isSelected = this._selectedNoteTagIds.includes(tag.id);
       html += '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
         '" data-tag-pick="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
         esc(tag.name) + '</button>';
     });
+
+    // Custom tag inline input
+    html += '<span class="inv-tag-group-divider"></span>' +
+      '<span class="inv-custom-tag-wrap">' +
+        '<input type="text" class="inv-custom-tag-input" placeholder="+ Custom tag..." maxlength="100" />' +
+      '</span>';
+
     container.innerHTML = html;
 
+    // Bind default tag pill clicks
     container.querySelectorAll('[data-tag-pick]').forEach(btn => {
       btn.addEventListener('click', () => {
         const tid = parseInt(btn.dataset.tagPick);
@@ -593,6 +635,34 @@ const Investors = {
         }
       });
     });
+
+    // Bind custom tag input
+    const customInput = container.querySelector('.inv-custom-tag-input');
+    if (customInput) {
+      customInput.addEventListener('keydown', async (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const name = customInput.value.trim();
+        if (!name) return;
+        // Check if this tag name already exists
+        const existing = this._investorTags.find(t => t.name.toLowerCase() === name.toLowerCase());
+        if (existing) {
+          if (!this._selectedNoteTagIds.includes(existing.id)) {
+            this._selectedNoteTagIds.push(existing.id);
+          }
+          this._renderNoteTagPills(containerId);
+          return;
+        }
+        try {
+          const tag = await ServerAPI.createInvestorTag(name, '#FFD700');
+          if (tag && tag.id) {
+            this._investorTags.push(tag);
+            this._selectedNoteTagIds.push(tag.id);
+            this._renderNoteTagPills(containerId);
+          }
+        } catch (err) { alert('Failed to create custom tag.'); }
+      });
+    }
   },
 
   // ========================================
@@ -672,6 +742,8 @@ const Investors = {
       await ServerAPI.addInvestorNote(investorId, content, tagIds);
       input.value = '';
       this._selectedNoteTagIds = [];
+      // Refresh note-tags map so search picks up new tags
+      if (tagIds.length > 0) this.loadInvestorNoteTags();
       this._renderNoteTagPills('investorNoteTagPills');
       this._loadInvestorNotes(investorId);
     } catch (err) {
@@ -996,9 +1068,13 @@ const Investors = {
           '</div>';
         }
 
+        // Hidden note tags for search
+        const noteTagNames = (Investors._investorNoteTagsMap[inv.id] || []).join(' ');
+        const noteTagsHidden = noteTagNames ? '<span class="sr-only">' + esc(noteTagNames) + '</span>' : '';
+
         return '<tr style="' + (active ? '' : 'opacity:0.55;') + '">' +
           '<td><span class="inv-dir-name" data-investor-key="' + esc(inv.investor_key) + '">' + esc(inv.name) + '</span>' +
-            (active ? '' : '<span class="inv-dir-inactive">(Inactive)</span>') + '</td>' +
+            (active ? '' : '<span class="inv-dir-inactive">(Inactive)</span>') + noteTagsHidden + '</td>' +
           '<td>' + esc(inv.account_executive_name || '--') + '</td>' +
           '<td>' + esc(inv.states || '--') + '</td>' +
           '<td>' + esc(inv.best_programs || '--') + '</td>' +
@@ -1116,6 +1192,10 @@ const Investors = {
         ? '<img src="' + esc(inv.logoUrl) + '" alt="" class="investor-card-logo" />'
         : '<div class="investor-card-initials">' + esc((inv.name || key).charAt(0)) + '</div>';
 
+      // Note tags for search (hidden text)
+      const noteTagNames = (this._investorNoteTagsMap[inv.id] || []).join(' ');
+      const noteTagsHidden = noteTagNames ? '<span class="sr-only">' + esc(noteTagNames) + '</span>' : '';
+
       html += '<button type="button" class="investor-card-item" data-action="open-investor" data-investor="' + key + '">' +
         '<div class="investor-card-top">' +
           logoHtml +
@@ -1123,6 +1203,7 @@ const Investors = {
         '</div>' +
         aeName +
         pillsHtml +
+        noteTagsHidden +
       '</button>';
     });
 

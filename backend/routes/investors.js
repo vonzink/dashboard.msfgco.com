@@ -124,6 +124,27 @@ router.delete('/tags/:tagId', requireAdmin, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// GET /api/investors/note-tags — Returns tag names grouped by investor_id for search
+router.get('/note-tags', async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      `SELECT n.investor_id, t.name
+       FROM investor_note_tags nt
+       JOIN investor_notes n ON nt.note_id = n.id
+       JOIN investor_tags t ON nt.tag_id = t.id
+       GROUP BY n.investor_id, t.name
+       ORDER BY n.investor_id`
+    );
+    // Build a map: { investor_id: [tag_name, ...] }
+    const map = {};
+    rows.forEach(r => {
+      if (!map[r.investor_id]) map[r.investor_id] = [];
+      map[r.investor_id].push(r.name);
+    });
+    res.json(map);
+  } catch (error) { next(error); }
+});
+
 // ──────────────────────────────────────────────
 // GET /api/investors/:key — Get specific investor by key
 // ──────────────────────────────────────────────

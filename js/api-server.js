@@ -444,6 +444,10 @@ const ServerAPI = {
     getInvestorTags() {
         return this.get('/investors/tags');
     },
+    /** Returns { investor_id: [tag_name, ...] } map for search */
+    getInvestorNoteTags() {
+        return this.get('/investors/note-tags');
+    },
     createInvestorTag(name, color) {
         return this.post('/investors/tags', { name, color });
     },
