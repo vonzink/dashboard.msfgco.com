@@ -992,6 +992,14 @@
                 <input type="text" id="paReferringAgent" maxlength="200" placeholder="Agent name" />
               </div>
               <div class="pa-form-field">
+                <label for="paReferringAgentEmail">Referring Agent Email</label>
+                <input type="email" id="paReferringAgentEmail" maxlength="200" placeholder="agent@email.com" />
+              </div>
+              <div class="pa-form-field">
+                <label for="paReferringAgentPhone">Referring Agent Phone</label>
+                <input type="tel" id="paReferringAgentPhone" maxlength="50" placeholder="(555) 123-4567" />
+              </div>
+              <div class="pa-form-field">
                 <label for="paContactDate">Contact Date</label>
                 <input type="date" id="paContactDate" />
               </div>
@@ -1015,6 +1023,21 @@
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pre-Approval Detail Modal -->
+    <div id="paDetailModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content" style="max-width:900px;">
+        <button type="button" class="modal-close pa-detail-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
+        <div class="modal-header">
+          <div class="investor-header-content">
+            <h2 class="investor-name" id="paDetailTitle"><i class="fas fa-clipboard-check" style="color:var(--green-bright);margin-right:0.5rem;"></i> Pre-Approval Details</h2>
+          </div>
+        </div>
+        <div class="modal-body" id="paDetailBody">
+          <!-- Populated dynamically -->
         </div>
       </div>
     </div>

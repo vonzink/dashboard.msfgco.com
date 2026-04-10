@@ -376,6 +376,22 @@ const ServerAPI = {
         return this.delete(`/pre-approvals/${id}`);
     },
 
+    getPreApprovalNotes(paId) {
+        return this.get(`/pre-approvals/${paId}/notes`);
+    },
+
+    addPreApprovalNote(paId, content) {
+        return this.post(`/pre-approvals/${paId}/notes`, { content });
+    },
+
+    updatePreApprovalNote(paId, noteId, content) {
+        return this.put(`/pre-approvals/${paId}/notes/${noteId}`, { content });
+    },
+
+    deletePreApprovalNote(paId, noteId) {
+        return this.delete(`/pre-approvals/${paId}/notes/${noteId}`);
+    },
+
     // ========================================
     // CURRENT USER
     // ========================================

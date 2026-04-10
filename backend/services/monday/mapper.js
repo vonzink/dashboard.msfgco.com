@@ -27,7 +27,7 @@ const VALID_PRE_APPROVAL_FIELDS = [
   'status', 'assigned_lo_name', 'property_address', 'loan_type', 'notes',
   'loan_number', 'lender', 'subject_property', 'loan_purpose', 'occupancy',
   'rate', 'credit_score', 'income', 'property_type', 'referring_agent',
-  'contact_date',
+  'referring_agent_email', 'referring_agent_phone', 'contact_date',
   // Full Monday.com mirror fields
   'next_steps', 'special_request', 'stage', 'partners',
   'borrower_email', 'borrower_phone',
@@ -102,6 +102,8 @@ const FIELD_LABELS = {
   income: 'Income',
   property_type: 'Property Type',
   referring_agent: 'Referring Agent',
+  referring_agent_email: 'Agent Email',
+  referring_agent_phone: 'Agent Phone',
   contact_date: 'Contact Date',
   loan_status: 'Loan Status',
   purchase_price: 'Purchase Price',
@@ -256,6 +258,12 @@ const DEFAULT_TITLE_MAP = {
   'referral agent':       'referring_agent',
   'referral partner':     'referring_agent',
   'realtor':              'referring_agent',
+  'referring agent email': 'referring_agent_email',
+  'referral agent email':  'referring_agent_email',
+  'agent email':           'referring_agent_email',
+  'referring agent phone': 'referring_agent_phone',
+  'referral agent phone':  'referring_agent_phone',
+  'agent phone':           'referring_agent_phone',
   'purchase price':       'purchase_price',
   'sales price':          'purchase_price',
   'appraised value':      'appraised_value',
@@ -416,6 +424,23 @@ function mapItemToRow(item, columnMap, userNameMap) {
 
   if (row.loan_amount === undefined) row.loan_amount = 0;
   if (!row.stage) row.stage = 'Unknown';
+
+  // Build full client name from borrower first + last when the item name
+  // appears to be only a last name (single word) and we have the parts
+  if (row.borrower_first_name && row.borrower_last_name) {
+    const fullName = (row.borrower_first_name + ' ' + row.borrower_last_name).trim();
+    const itemName = (row.client_name || '').trim();
+    if (!itemName || itemName === 'Unnamed' || !itemName.includes(' ')
+        || itemName.toLowerCase() === row.borrower_last_name.toLowerCase()) {
+      row.client_name = fullName;
+    }
+  } else if (row.borrower_first_name && row.client_name) {
+    // If we only have first name and client_name is a single word (likely just last name), combine
+    const itemName = row.client_name.trim();
+    if (itemName && !itemName.includes(' ') && itemName.toLowerCase() !== row.borrower_first_name.toLowerCase()) {
+      row.client_name = row.borrower_first_name.trim() + ' ' + itemName;
+    }
+  }
 
   return row;
 }

@@ -79,6 +79,8 @@ const MondaySettings = {
             });
             if (completed) {
                 Utils.showToast('Monday.com sync completed successfully!', 'success');
+            } else {
+                Utils.showToast('Sync is still running in the background. Data will refresh shortly.', 'info');
             }
             setTimeout(() => {
                 allBtns.forEach(btn => {

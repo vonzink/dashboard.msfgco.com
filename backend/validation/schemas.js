@@ -46,6 +46,8 @@ const preApproval = z.object({
   income: z.number().positive().optional().nullable(),
   property_type: optionalString(100),
   referring_agent: optionalString(200),
+  referring_agent_email: optionalString(200),
+  referring_agent_phone: optionalString(50),
   contact_date: dateString.optional().nullable(),
 });
 

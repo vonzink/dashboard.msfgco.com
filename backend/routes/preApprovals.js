@@ -198,7 +198,7 @@ router.post('/', validate(preApproval), async (req, res, next) => {
     let mondayItemId = null;
     let sourceBoardId = null;
     try {
-      const token = await getMondayToken();
+      const token = await getMondayToken(currentUserId);
       if (token) {
         const mondayResult = await createPreApproval(token, finalAssignedLoId, {
           client_name,
@@ -252,7 +252,8 @@ router.put('/:id', validate(preApprovalUpdate), async (req, res, next) => {
       'client_name', 'loan_amount', 'pre_approval_date', 'expiration_date',
       'status', 'assigned_lo_name', 'property_address', 'loan_type', 'notes',
       'loan_number', 'lender', 'subject_property', 'loan_purpose', 'occupancy',
-      'rate', 'credit_score', 'income', 'property_type', 'referring_agent', 'contact_date'
+      'rate', 'credit_score', 'income', 'property_type', 'referring_agent',
+      'referring_agent_email', 'referring_agent_phone', 'contact_date'
     ];
 
     for (const field of updateableFields) {
@@ -281,7 +282,7 @@ router.put('/:id', validate(preApprovalUpdate), async (req, res, next) => {
 
     // Write-through to Monday.com (non-blocking)
     try {
-      const token = await getMondayToken();
+      const token = await getMondayToken(getUserId(req));
       if (token) {
         await updatePreApproval(token, existing[0], req.body);
       }
@@ -312,14 +313,17 @@ router.delete('/:id', async (req, res, next) => {
       }
     }
 
-    // Archive on Monday.com before deleting from DB (non-blocking)
+    // Archive on Monday.com before deleting from DB
+    let mondayArchived = false;
     try {
-      const token = await getMondayToken();
-      if (token) {
+      const token = await getMondayToken(getUserId(req));
+      if (token && existing[0].monday_item_id) {
         await archivePreApproval(token, existing[0]);
+        mondayArchived = true;
+        logger.info({ id: req.params.id, mondayItemId: existing[0].monday_item_id }, 'Pre-approval archived on Monday.com');
       }
     } catch (mondayErr) {
-      logger.warn({ err: mondayErr.message, id: req.params.id }, 'Monday.com archive failed on delete');
+      logger.warn({ err: mondayErr.message, id: req.params.id, mondayItemId: existing[0].monday_item_id }, 'Monday.com archive failed on delete');
     }
 
     const [result] = await db.query('DELETE FROM pre_approvals WHERE id = ?', [req.params.id]);
@@ -328,7 +332,85 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Pre-approval not found' });
     }
 
-    res.json({ message: 'Pre-approval deleted successfully' });
+    res.json({ message: 'Pre-approval deleted successfully', mondayArchived });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── GET /api/pre-approvals/:id/notes — Get notes for a pre-approval ──
+router.get('/:id/notes', async (req, res, next) => {
+  try {
+    const [notes] = await db.query(
+      'SELECT * FROM pre_approval_notes WHERE pre_approval_id = ? ORDER BY created_at DESC',
+      [req.params.id]
+    );
+    res.json(notes);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── POST /api/pre-approvals/:id/notes — Add a note ──
+router.post('/:id/notes', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    const userId = getUserId(req);
+    const dbUser = getDbUser(req);
+    const authorName = dbUser?.name || 'Unknown';
+
+    const [result] = await db.query(
+      'INSERT INTO pre_approval_notes (pre_approval_id, author_id, author_name, content) VALUES (?, ?, ?, ?)',
+      [req.params.id, userId, authorName, content.trim()]
+    );
+
+    const [note] = await db.query('SELECT * FROM pre_approval_notes WHERE id = ?', [result.insertId]);
+    res.status(201).json(note[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── PUT /api/pre-approvals/:id/notes/:noteId — Update a note ──
+router.put('/:id/notes/:noteId', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+
+    // Only author or admin can edit
+    const [existing] = await db.query('SELECT * FROM pre_approval_notes WHERE id = ? AND pre_approval_id = ?', [req.params.noteId, req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+    if (!isAdmin(req) && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'Only the author or admin can edit this note' });
+    }
+
+    await db.query('UPDATE pre_approval_notes SET content = ? WHERE id = ?', [content.trim(), req.params.noteId]);
+    const [updated] = await db.query('SELECT * FROM pre_approval_notes WHERE id = ?', [req.params.noteId]);
+    res.json(updated[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── DELETE /api/pre-approvals/:id/notes/:noteId — Delete a note ──
+router.delete('/:id/notes/:noteId', async (req, res, next) => {
+  try {
+    const [existing] = await db.query('SELECT * FROM pre_approval_notes WHERE id = ? AND pre_approval_id = ?', [req.params.noteId, req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+    if (!isAdmin(req) && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'Only the author or admin can delete this note' });
+    }
+
+    await db.query('DELETE FROM pre_approval_notes WHERE id = ?', [req.params.noteId]);
+    res.json({ message: 'Note deleted' });
   } catch (error) {
     next(error);
   }

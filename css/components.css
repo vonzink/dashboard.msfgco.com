@@ -479,8 +479,205 @@
     color: var(--red);
 }
 
+/* Clickable rows */
+.pa-clickable-row {
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+.pa-clickable-row:hover {
+    background-color: var(--bg-hover, rgba(140, 198, 62, 0.06));
+}
+
+/* ── Pre-Approval Detail View ────────────── */
+.pa-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg, 1.5rem);
+    margin-bottom: var(--spacing-lg, 1.5rem);
+}
+
+.pa-detail-section {
+    background: var(--bg-tertiary, #1a2332);
+    border-radius: var(--radius-lg, 12px);
+    padding: var(--spacing-md, 1rem) var(--spacing-lg, 1.5rem);
+}
+
+.pa-detail-section.full-width {
+    grid-column: 1 / -1;
+}
+
+.pa-detail-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--green-bright, #8cc63e);
+    margin: 0 0 var(--spacing-sm, 0.5rem);
+    padding-bottom: var(--spacing-xs, 0.25rem);
+    border-bottom: 1px solid var(--border-color, #2a3a4a);
+}
+
+.pa-detail-section-title i {
+    margin-right: 0.4rem;
+    opacity: 0.7;
+}
+
+.pa-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 0.35rem 0;
+    gap: var(--spacing-sm, 0.5rem);
+}
+
+.pa-detail-row + .pa-detail-row {
+    border-top: 1px solid var(--border-color, rgba(255,255,255,0.05));
+}
+
+.pa-detail-label {
+    font-size: 0.82rem;
+    color: var(--text-secondary, #8899aa);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.pa-detail-value {
+    font-size: 0.88rem;
+    color: var(--text-primary, #e4e8ee);
+    font-weight: 600;
+    text-align: right;
+}
+
+.pa-detail-value a {
+    color: var(--green-bright, #8cc63e);
+    text-decoration: none;
+}
+.pa-detail-value a:hover {
+    text-decoration: underline;
+}
+
+.pa-detail-monday-notes {
+    font-size: 0.88rem;
+    color: var(--text-secondary, #8899aa);
+    white-space: pre-wrap;
+    padding: var(--spacing-sm, 0.5rem) 0;
+}
+
+.pa-detail-actions {
+    display: flex;
+    gap: var(--spacing-sm, 0.5rem);
+    justify-content: flex-end;
+    padding-top: var(--spacing-md, 1rem);
+    border-top: 1px solid var(--border-color, #2a3a4a);
+    margin-top: var(--spacing-md, 1rem);
+}
+
+/* ── Pre-Approval Notes ─────────────────── */
+.pa-notes-add {
+    display: flex;
+    gap: var(--spacing-sm, 0.5rem);
+    align-items: flex-start;
+    margin-bottom: var(--spacing-md, 1rem);
+}
+
+.pa-notes-add textarea {
+    flex: 1;
+    resize: vertical;
+    min-height: 50px;
+}
+
+.pa-notes-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pa-notes-empty {
+    text-align: center;
+    padding: 1rem;
+    color: var(--text-secondary, #8899aa);
+    font-size: 0.88rem;
+}
+
+.pa-note {
+    background: var(--bg-secondary, #151f2e);
+    border: 1px solid var(--border-color, #2a3a4a);
+    border-radius: var(--radius-md, 8px);
+    padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+    margin-bottom: var(--spacing-sm, 0.5rem);
+}
+
+.pa-note-header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm, 0.5rem);
+    margin-bottom: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.pa-note-author {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-primary, #e4e8ee);
+}
+
+.pa-note-author i {
+    color: var(--green-bright, #8cc63e);
+    margin-right: 0.2rem;
+}
+
+.pa-note-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #8899aa);
+    flex: 1;
+}
+
+.pa-note-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.pa-note-actions button {
+    background: none;
+    border: none;
+    color: var(--text-secondary, #8899aa);
+    cursor: pointer;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.75rem;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.pa-note-actions button:hover {
+    color: var(--text-primary, #e4e8ee);
+    background: var(--bg-tertiary, #1a2332);
+}
+
+.pa-note-actions .pa-note-delete-btn:hover {
+    color: var(--red, #ef4444);
+}
+
+.pa-note-content {
+    font-size: 0.88rem;
+    color: var(--text-primary, #e4e8ee);
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+.pa-note-edit-input {
+    width: 100%;
+    margin-bottom: 0.35rem;
+}
+
+.pa-note-edit-actions {
+    display: flex;
+    gap: 0.35rem;
+}
+
 @media (max-width: 600px) {
     .pa-form-grid {
+        grid-template-columns: 1fr;
+    }
+    .pa-detail-grid {
         grid-template-columns: 1fr;
     }
 }

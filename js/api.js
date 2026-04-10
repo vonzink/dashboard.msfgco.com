@@ -136,18 +136,28 @@ const API = {
     _populatePreApprovalFilters() {
         const boardSelect = document.getElementById('preApprovalBoardSelect');
         const groupSelect = document.getElementById('preApprovalGroupSelect');
+        const isLO = (CONFIG.currentUser?.activeRole || '').toLowerCase() === 'lo';
 
         if (boardSelect && this.preApprovalBoards.length > 0) {
             const currentVal = boardSelect.value;
-            boardSelect.innerHTML = '<option value="">All Boards</option>' +
-                this.preApprovalBoards.map(b =>
+
+            // LOs with only their assigned boards — hide "All Boards" if only 1 board
+            if (isLO && this.preApprovalBoards.length === 1) {
+                boardSelect.innerHTML = this.preApprovalBoards.map(b =>
                     `<option value="${Utils.escapeHtml(b.board_id)}">${Utils.escapeHtml(b.board_name || b.board_id)}</option>`
                 ).join('');
-            boardSelect.value = currentVal;
-            boardSelect.style.display = '';
+                boardSelect.value = this.preApprovalBoards[0].board_id;
+                boardSelect.style.display = '';
+            } else {
+                boardSelect.innerHTML = '<option value="">All Boards</option>' +
+                    this.preApprovalBoards.map(b =>
+                        `<option value="${Utils.escapeHtml(b.board_id)}">${Utils.escapeHtml(b.board_name || b.board_id)}</option>`
+                    ).join('');
+                boardSelect.value = currentVal;
+                boardSelect.style.display = '';
+            }
             if (!this._paFiltersInitialized) {
                 boardSelect.addEventListener('change', () => {
-                    // Reset group filter when board changes — groups are board-specific
                     const gs = document.getElementById('preApprovalGroupSelect');
                     if (gs) gs.value = '';
                     this.loadPreApprovals();
@@ -190,6 +200,8 @@ const API = {
         { field: 'income', label: 'Income' },
         { field: 'property_type', label: 'Property Type' },
         { field: 'referring_agent', label: 'Referring Agent' },
+        { field: 'referring_agent_email', label: 'Agent Email' },
+        { field: 'referring_agent_phone', label: 'Agent Phone' },
         { field: 'contact_date', label: 'Contact Date' },
         { field: 'notes', label: 'Notes' },
     ],
@@ -303,7 +315,7 @@ const API = {
         }
 
         tbody.innerHTML = data.map(item =>
-            `<tr data-id="${item.id}">
+            `<tr data-id="${item.id}" class="pa-clickable-row">
                 ${cols.map(c => this._renderPreApprovalCell(item, c.field)).join('')}
                 <td class="pa-row-actions">
                     <button type="button" class="pa-edit-btn" data-id="${item.id}" title="Edit"><i class="fas fa-pencil-alt"></i></button>
@@ -312,12 +324,27 @@ const API = {
             </tr>`
         ).join('');
 
+        // Bind row click → open detail view
+        tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Don't open detail if clicking an action button
+                if (e.target.closest('.pa-edit-btn') || e.target.closest('.pa-delete-btn')) return;
+                const id = parseInt(row.dataset.id);
+                this._openPreApprovalDetail(id);
+            });
+        });
         // Bind row action buttons
         tbody.querySelectorAll('.pa-edit-btn').forEach(btn => {
-            btn.addEventListener('click', () => this._openPreApprovalEdit(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._openPreApprovalEdit(parseInt(btn.dataset.id));
+            });
         });
         tbody.querySelectorAll('.pa-delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => this._deletePreApproval(parseInt(btn.dataset.id)));
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._deletePreApproval(parseInt(btn.dataset.id));
+            });
         });
     },
 
@@ -349,6 +376,17 @@ const API = {
             form.addEventListener('submit', (e) => {
                 e.preventDefault();
                 this._submitPreApproval();
+            });
+        }
+
+        // Detail modal close
+        const detailModal = document.getElementById('paDetailModal');
+        if (detailModal) {
+            detailModal.querySelectorAll('.pa-detail-close').forEach(btn => {
+                btn.addEventListener('click', () => this._closePreApprovalDetail());
+            });
+            detailModal.addEventListener('click', (e) => {
+                if (e.target === detailModal) this._closePreApprovalDetail();
             });
         }
     },
@@ -411,6 +449,8 @@ const API = {
         document.getElementById('paCreditScore').value = item.credit_score || '';
         document.getElementById('paIncome').value = item.income || '';
         document.getElementById('paReferringAgent').value = item.referring_agent || '';
+        document.getElementById('paReferringAgentEmail').value = item.referring_agent_email || '';
+        document.getElementById('paReferringAgentPhone').value = item.referring_agent_phone || '';
         document.getElementById('paContactDate').value = toDateStr(item.contact_date);
         document.getElementById('paSubjectProperty').value = item.subject_property || '';
         document.getElementById('paPropertyAddress').value = item.property_address || '';
@@ -457,6 +497,8 @@ const API = {
                 credit_score: creditScoreVal ? parseInt(creditScoreVal, 10) : null,
                 income: incomeVal ? parseFloat(incomeVal) : null,
                 referring_agent: document.getElementById('paReferringAgent').value.trim() || null,
+                referring_agent_email: document.getElementById('paReferringAgentEmail').value.trim() || null,
+                referring_agent_phone: document.getElementById('paReferringAgentPhone').value.trim() || null,
                 contact_date: document.getElementById('paContactDate').value || null,
                 subject_property: document.getElementById('paSubjectProperty').value.trim() || null,
                 property_address: document.getElementById('paPropertyAddress').value.trim() || null,
@@ -492,6 +534,212 @@ const API = {
         } catch (err) {
             console.error('Pre-approval delete error:', err);
             alert('Failed to delete: ' + (err.message || 'Unknown error'));
+        }
+    },
+
+    // ========================================
+    // PRE-APPROVAL DETAIL VIEW
+    // ========================================
+    async _openPreApprovalDetail(id) {
+        const item = this.preApprovalData?.find(pa => pa.id === id);
+        if (!item) return;
+
+        const modal = document.getElementById('paDetailModal');
+        if (!modal) return;
+
+        const esc = Utils.escapeHtml;
+        const fmtDate = (v) => v ? Utils.formatDate(v) : '--';
+        const fmtCur = (v) => v != null ? Utils.formatCurrency(v) : '--';
+        const statusCls = this._statusBadgeClass(item.status);
+
+        const title = document.getElementById('paDetailTitle');
+        if (title) title.innerHTML = '<i class="fas fa-clipboard-check" style="color:var(--green-bright);margin-right:0.5rem;"></i> ' + esc(item.client_name || 'Pre-Approval');
+
+        const body = document.getElementById('paDetailBody');
+
+        const detailRow = (label, value) => value && value !== '--'
+            ? `<div class="pa-detail-row"><span class="pa-detail-label">${esc(label)}</span><span class="pa-detail-value">${value}</span></div>`
+            : '';
+
+        body.innerHTML = `
+            <div class="pa-detail-grid">
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-user"></i> Client Info</h3>
+                    ${detailRow('Client Name', esc(item.client_name || '--'))}
+                    ${detailRow('Status', `<span class="pipeline-badge ${statusCls}">${esc(item.status || 'Unknown')}</span>`)}
+                    ${detailRow('Loan Officer', esc(item.assigned_lo_name || '--'))}
+                    ${detailRow('Contact Date', fmtDate(item.contact_date))}
+                    ${detailRow('Borrower Email', esc(item.borrower_email || ''))}
+                    ${detailRow('Borrower Phone', esc(item.borrower_phone || ''))}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-dollar-sign"></i> Loan Details</h3>
+                    ${detailRow('Loan Amount', fmtCur(item.loan_amount))}
+                    ${detailRow('Pre-Approval Date', fmtDate(item.pre_approval_date))}
+                    ${detailRow('Expiration Date', fmtDate(item.expiration_date))}
+                    ${detailRow('Loan Type', esc(item.loan_type || ''))}
+                    ${detailRow('Loan Number', esc(item.loan_number || ''))}
+                    ${detailRow('Lender', esc(item.lender || ''))}
+                    ${detailRow('Loan Purpose', esc(item.loan_purpose || ''))}
+                    ${detailRow('Occupancy', esc(item.occupancy || ''))}
+                    ${detailRow('Rate', esc(item.rate || ''))}
+                    ${detailRow('Credit Score', item.credit_score ? String(item.credit_score) : '')}
+                    ${detailRow('Income', fmtCur(item.income))}
+                    ${detailRow('Property Type', esc(item.property_type || ''))}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-user-tie"></i> Referring Agent</h3>
+                    ${detailRow('Agent Name', esc(item.referring_agent || '--'))}
+                    ${detailRow('Agent Email', item.referring_agent_email ? `<a href="mailto:${esc(item.referring_agent_email)}">${esc(item.referring_agent_email)}</a>` : '')}
+                    ${detailRow('Agent Phone', item.referring_agent_phone ? `<a href="tel:${esc(item.referring_agent_phone)}">${esc(item.referring_agent_phone)}</a>` : '')}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-map-marker-alt"></i> Property</h3>
+                    ${detailRow('Subject Property', esc(item.subject_property || ''))}
+                    ${detailRow('Property Address', esc(item.property_address || ''))}
+                </div>
+            </div>
+            ${item.notes ? `<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Monday Notes</h3><div class="pa-detail-monday-notes">${esc(item.notes)}</div></div>` : ''}
+            <div class="pa-detail-section full-width">
+                <h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>
+                <div class="pa-notes-add">
+                    <textarea id="paNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>
+                    <button type="button" class="btn btn-primary btn-sm" id="paAddNoteBtn"><i class="fas fa-plus"></i> Add Note</button>
+                </div>
+                <div id="paNotesContainer" class="pa-notes-list">
+                    <div style="text-align:center;padding:1rem;color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading notes...</div>
+                </div>
+            </div>
+            <div class="pa-detail-actions">
+                <button type="button" class="btn btn-secondary" onclick="API._closePreApprovalDetail(); API._openPreApprovalEdit(${item.id});"><i class="fas fa-pencil-alt"></i> Edit</button>
+                <button type="button" class="btn btn-danger" onclick="API._closePreApprovalDetail(); API._deletePreApproval(${item.id});"><i class="fas fa-trash-alt"></i> Delete</button>
+            </div>
+        `;
+
+        modal.classList.add('active');
+
+        // Bind add note
+        document.getElementById('paAddNoteBtn')?.addEventListener('click', () => this._addPreApprovalNote(id));
+        document.getElementById('paNewNoteInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addPreApprovalNote(id);
+        });
+
+        // Load notes
+        this._loadPreApprovalNotes(id);
+    },
+
+    _closePreApprovalDetail() {
+        const modal = document.getElementById('paDetailModal');
+        if (modal) modal.classList.remove('active');
+    },
+
+    async _loadPreApprovalNotes(paId) {
+        const container = document.getElementById('paNotesContainer');
+        if (!container) return;
+
+        try {
+            const notes = await ServerAPI.getPreApprovalNotes(paId);
+            if (!notes || notes.length === 0) {
+                container.innerHTML = '<div class="pa-notes-empty">No notes yet.</div>';
+                return;
+            }
+
+            const esc = Utils.escapeHtml;
+            const currentUserId = CONFIG.currentUser?.id;
+            const isAdminUser = ['admin', 'manager'].includes((CONFIG.currentUser?.activeRole || '').toLowerCase());
+
+            container.innerHTML = notes.map(note => {
+                const canEdit = isAdminUser || note.author_id === currentUserId;
+                const ts = new Date(note.created_at);
+                const edited = note.updated_at && note.updated_at !== note.created_at;
+                const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+
+                return `<div class="pa-note" data-note-id="${note.id}" data-pa-id="${paId}">
+                    <div class="pa-note-header">
+                        <span class="pa-note-author"><i class="fas fa-user-circle"></i> ${esc(note.author_name || 'Unknown')}</span>
+                        <span class="pa-note-time">${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
+                        ${canEdit ? `<div class="pa-note-actions">
+                            <button type="button" class="pa-note-edit-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                            <button type="button" class="pa-note-delete-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                        </div>` : ''}
+                    </div>
+                    <div class="pa-note-content">${esc(note.content)}</div>
+                </div>`;
+            }).join('');
+
+            // Bind edit/delete on notes
+            container.querySelectorAll('.pa-note-edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const noteEl = btn.closest('.pa-note');
+                    this._editPreApprovalNote(parseInt(noteEl.dataset.paId), parseInt(noteEl.dataset.noteId));
+                });
+            });
+            container.querySelectorAll('.pa-note-delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const noteEl = btn.closest('.pa-note');
+                    this._deletePreApprovalNote(parseInt(noteEl.dataset.paId), parseInt(noteEl.dataset.noteId));
+                });
+            });
+        } catch (err) {
+            console.error('Failed to load notes:', err);
+            container.innerHTML = '<div class="pa-notes-empty" style="color:#e74c3c;">Failed to load notes.</div>';
+        }
+    },
+
+    async _addPreApprovalNote(paId) {
+        const input = document.getElementById('paNewNoteInput');
+        if (!input) return;
+        const content = input.value.trim();
+        if (!content) return;
+
+        try {
+            await ServerAPI.addPreApprovalNote(paId, content);
+            input.value = '';
+            this._loadPreApprovalNotes(paId);
+        } catch (err) {
+            alert('Failed to add note: ' + (err.message || 'Unknown error'));
+        }
+    },
+
+    async _editPreApprovalNote(paId, noteId) {
+        const noteEl = document.querySelector(`.pa-note[data-note-id="${noteId}"]`);
+        if (!noteEl) return;
+        const contentEl = noteEl.querySelector('.pa-note-content');
+        const currentContent = contentEl.textContent;
+
+        // Replace content with editable textarea
+        contentEl.innerHTML = `<textarea class="form-input pa-note-edit-input" rows="2">${Utils.escapeHtml(currentContent)}</textarea>
+            <div class="pa-note-edit-actions">
+                <button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>
+                <button type="button" class="btn btn-secondary btn-sm pa-note-cancel-btn">Cancel</button>
+            </div>`;
+
+        const textarea = contentEl.querySelector('textarea');
+        textarea.focus();
+
+        contentEl.querySelector('.pa-note-save-btn').addEventListener('click', async () => {
+            const newContent = textarea.value.trim();
+            if (!newContent) return;
+            try {
+                await ServerAPI.updatePreApprovalNote(paId, noteId, newContent);
+                this._loadPreApprovalNotes(paId);
+            } catch (err) {
+                alert('Failed to update note: ' + (err.message || 'Unknown error'));
+            }
+        });
+
+        contentEl.querySelector('.pa-note-cancel-btn').addEventListener('click', () => {
+            this._loadPreApprovalNotes(paId);
+        });
+    },
+
+    async _deletePreApprovalNote(paId, noteId) {
+        if (!confirm('Delete this note?')) return;
+        try {
+            await ServerAPI.deletePreApprovalNote(paId, noteId);
+            this._loadPreApprovalNotes(paId);
+        } catch (err) {
+            alert('Failed to delete note: ' + (err.message || 'Unknown error'));
         }
     },
 

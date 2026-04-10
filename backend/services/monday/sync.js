@@ -106,6 +106,8 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
     income: row.income || null,
     property_type: row.property_type || null,
     referring_agent: row.referring_agent || null,
+    referring_agent_email: row.referring_agent_email || null,
+    referring_agent_phone: row.referring_agent_phone || null,
     contact_date: row.contact_date || null,
     // Full Monday.com mirror fields
     next_steps: row.next_steps || null,
