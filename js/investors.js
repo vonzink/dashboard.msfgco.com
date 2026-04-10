@@ -417,9 +417,11 @@ const Investors = {
       // Notes system
       '<div class="pa-detail-section full-width">' +
         '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>' +
-        '<div class="pa-notes-add">' +
+        '<div class="pa-notes-add" style="flex-direction:column;">' +
           '<textarea id="investorNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>' +
-          '<button type="button" class="btn btn-primary btn-sm" id="investorAddNoteBtn"><i class="fas fa-plus"></i> Add Note</button>' +
+          '<div id="investorNoteTagPicker" class="note-tag-picker"></div>' +
+          '<div id="investorNoteSelectedTags" class="note-selected-tags"></div>' +
+          '<button type="button" class="btn btn-primary btn-sm" id="investorAddNoteBtn" style="align-self:flex-end;"><i class="fas fa-plus"></i> Add Note</button>' +
         '</div>' +
         '<div id="investorNotesContainer" class="pa-notes-list">' +
           '<div style="text-align:center;padding:1rem;color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading notes...</div>' +
@@ -428,6 +430,8 @@ const Investors = {
 
     // Bind add note
     const investorId = investor.id || this.currentInvestorId;
+    this._selectedNoteTags = [];
+    this._buildTagPicker('investorNoteTagPicker', 'investorNoteSelectedTags', investor);
     document.getElementById('investorAddNoteBtn')?.addEventListener('click', () => this._addInvestorNote(investorId));
     document.getElementById('investorNewNoteInput')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addInvestorNote(investorId);
@@ -444,8 +448,138 @@ const Investors = {
   },
 
   // ========================================
-  // INVESTOR NOTES SYSTEM
+  // INVESTOR NOTES SYSTEM (with tags)
   // ========================================
+  _selectedNoteTags: [],
+
+  /** Standard product/service tag list — matches investor toggle labels */
+  _standardTags: [
+    { label: 'Conventional', cat: 'agency' }, { label: 'FHA', cat: 'agency' },
+    { label: 'VA', cat: 'agency' }, { label: 'USDA', cat: 'agency' },
+    { label: 'Jumbo', cat: 'nonagency' }, { label: 'Non-QM', cat: 'nonagency' },
+    { label: 'DSCR', cat: 'nonagency' }, { label: 'Bank Statement', cat: 'nonagency' },
+    { label: 'Asset Depletion', cat: 'nonagency' }, { label: 'Interest Only', cat: 'nonagency' },
+    { label: 'ITIN/FN', cat: 'nonagency' },
+    { label: 'Bridge', cat: 'specialty' }, { label: 'Land', cat: 'specialty' },
+    { label: 'Construction', cat: 'specialty' }, { label: 'Renovation', cat: 'specialty' },
+    { label: 'Manufactured', cat: 'specialty' }, { label: 'Doctor', cat: 'specialty' },
+    { label: 'Condo/NW', cat: 'specialty' }, { label: 'Sub. Financing', cat: 'specialty' },
+    { label: 'HELOC/2nd', cat: 'specialty' },
+    { label: 'Manual UW', cat: 'services' }, { label: 'Servicing', cat: 'services' },
+    { label: 'Scenario Desk', cat: 'services' }, { label: 'Condo Review', cat: 'services' },
+    { label: 'Exception Desk', cat: 'services' }, { label: 'Wire Review', cat: 'services' },
+  ],
+
+  /** Build a clickable tag picker into a container */
+  _buildTagPicker(pickerId, selectedId, investor, existingTags) {
+    const picker = document.getElementById(pickerId);
+    const selectedContainer = document.getElementById(selectedId);
+    if (!picker) return;
+
+    const esc = Utils.escapeHtml;
+    this._selectedNoteTags = existingTags ? [...existingTags] : [];
+
+    // Gather custom toggles from investor
+    const customLabels = (investor && investor.customToggles || [])
+      .filter(t => Number(t.enabled) === 1)
+      .map(t => t.label);
+
+    let html = '<span class="note-tag-picker-label"><i class="fas fa-tags"></i> Tags:</span>';
+
+    // Standard tags
+    this._standardTags.forEach(tag => {
+      const isActive = this._selectedNoteTags.includes(tag.label);
+      html += '<button type="button" class="note-tag-btn' + (isActive ? ' active' : '') + '" data-tag="' + esc(tag.label) + '">' + esc(tag.label) + '</button>';
+    });
+
+    // Custom toggles from this investor
+    customLabels.forEach(label => {
+      const isActive = this._selectedNoteTags.includes(label);
+      html += '<button type="button" class="note-tag-btn custom-tag-btn' + (isActive ? ' active' : '') + '" data-tag="' + esc(label) + '">' + esc(label) + '</button>';
+    });
+
+    // Custom tag input
+    html += '<input type="text" class="note-custom-tag-input" id="noteCustomTagInput" placeholder="+ Custom tag" maxlength="50" />';
+
+    picker.innerHTML = html;
+    this._renderSelectedTags(selectedContainer);
+
+    // Bind tag button clicks
+    picker.querySelectorAll('.note-tag-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tag = btn.dataset.tag;
+        if (this._selectedNoteTags.includes(tag)) {
+          this._selectedNoteTags = this._selectedNoteTags.filter(t => t !== tag);
+          btn.classList.remove('active');
+        } else {
+          this._selectedNoteTags.push(tag);
+          btn.classList.add('active');
+        }
+        this._renderSelectedTags(selectedContainer);
+      });
+    });
+
+    // Bind custom tag input
+    const customInput = picker.querySelector('#noteCustomTagInput');
+    if (customInput) {
+      customInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const val = customInput.value.trim();
+          if (val && !this._selectedNoteTags.includes(val)) {
+            this._selectedNoteTags.push(val);
+            // Add a button for it
+            const newBtn = document.createElement('button');
+            newBtn.type = 'button';
+            newBtn.className = 'note-tag-btn custom-tag-btn active';
+            newBtn.dataset.tag = val;
+            newBtn.textContent = val;
+            newBtn.addEventListener('click', () => {
+              if (this._selectedNoteTags.includes(val)) {
+                this._selectedNoteTags = this._selectedNoteTags.filter(t => t !== val);
+                newBtn.classList.remove('active');
+              } else {
+                this._selectedNoteTags.push(val);
+                newBtn.classList.add('active');
+              }
+              this._renderSelectedTags(selectedContainer);
+            });
+            picker.insertBefore(newBtn, customInput);
+            this._renderSelectedTags(selectedContainer);
+          }
+          customInput.value = '';
+        }
+      });
+    }
+  },
+
+  /** Render the selected tags display */
+  _renderSelectedTags(container) {
+    if (!container) return;
+    if (!this._selectedNoteTags.length) {
+      container.innerHTML = '';
+      return;
+    }
+    const esc = Utils.escapeHtml;
+    const standardLabels = this._standardTags.map(t => t.label);
+    container.innerHTML = this._selectedNoteTags.map(tag => {
+      const isCustom = !standardLabels.includes(tag);
+      return '<span class="note-selected-tag' + (isCustom ? ' custom' : '') + '">' + esc(tag) +
+        ' <span class="remove-tag" data-tag="' + esc(tag) + '">&times;</span></span>';
+    }).join('');
+
+    container.querySelectorAll('.remove-tag').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tag = btn.dataset.tag;
+        this._selectedNoteTags = this._selectedNoteTags.filter(t => t !== tag);
+        // Deactivate matching picker button
+        const pickerBtn = container.parentElement?.querySelector('.note-tag-btn[data-tag="' + CSS.escape(tag) + '"]');
+        if (pickerBtn) pickerBtn.classList.remove('active');
+        this._renderSelectedTags(container);
+      });
+    });
+  },
+
   async _loadInvestorNotes(investorId) {
     const container = document.getElementById('investorNotesContainer');
     if (!container) return;
@@ -460,6 +594,7 @@ const Investors = {
       const esc = Utils.escapeHtml;
       const currentUserId = CONFIG.currentUser?.id;
       const isAdminUser = ['admin', 'manager'].includes((CONFIG.currentUser?.activeRole || '').toLowerCase());
+      const standardLabels = this._standardTags.map(t => t.label);
 
       container.innerHTML = notes.map(note => {
         const canEdit = isAdminUser || note.author_id === currentUserId;
@@ -467,7 +602,14 @@ const Investors = {
         const edited = note.updated_at && note.updated_at !== note.created_at;
         const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 
-        return `<div class="pa-note" data-note-id="${note.id}" data-parent-id="${investorId}">
+        const tagsHtml = (note.tags && note.tags.length > 0)
+          ? '<div class="pa-note-tags">' + note.tags.map(tag => {
+              const isCustom = !standardLabels.includes(tag);
+              return '<span class="pa-note-tag' + (isCustom ? ' custom-tag' : '') + '">' + esc(tag) + '</span>';
+            }).join('') + '</div>'
+          : '';
+
+        return `<div class="pa-note" data-note-id="${note.id}" data-parent-id="${investorId}" data-tags="${esc((note.tags || []).join(','))}">
           <div class="pa-note-header">
             <span class="pa-note-author"><i class="fas fa-user-circle"></i> ${esc(note.author_name || 'Unknown')}</span>
             <span class="pa-note-time">${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
@@ -477,13 +619,15 @@ const Investors = {
             </div>` : ''}
           </div>
           <div class="pa-note-content">${esc(note.content)}</div>
+          ${tagsHtml}
         </div>`;
       }).join('');
 
       container.querySelectorAll('.pa-note-edit-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const noteEl = btn.closest('.pa-note');
-          this._editInvestorNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+          const noteTags = (noteEl.dataset.tags || '').split(',').filter(Boolean);
+          this._editInvestorNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId), noteTags);
         });
       });
       container.querySelectorAll('.pa-note-delete-btn').forEach(btn => {
@@ -505,34 +649,54 @@ const Investors = {
     if (!content) return;
 
     try {
-      await ServerAPI.addInvestorNote(investorId, content);
+      const tags = [...this._selectedNoteTags];
+      await ServerAPI.addInvestorNote(investorId, content, tags);
       input.value = '';
+      this._selectedNoteTags = [];
+      // Reset tag picker
+      const picker = document.getElementById('investorNoteTagPicker');
+      if (picker) picker.querySelectorAll('.note-tag-btn.active').forEach(b => b.classList.remove('active'));
+      const selected = document.getElementById('investorNoteSelectedTags');
+      if (selected) selected.innerHTML = '';
       this._loadInvestorNotes(investorId);
     } catch (err) {
       alert('Failed to add note: ' + (err.message || 'Unknown error'));
     }
   },
 
-  async _editInvestorNote(investorId, noteId) {
+  async _editInvestorNote(investorId, noteId, currentTags) {
     const noteEl = document.querySelector(`.pa-note[data-note-id="${noteId}"][data-parent-id="${investorId}"]`);
     if (!noteEl) return;
     const contentEl = noteEl.querySelector('.pa-note-content');
+    const tagsEl = noteEl.querySelector('.pa-note-tags');
     const currentContent = contentEl.textContent;
 
+    // Get the investor data for custom toggles
+    const invData = Object.values(this.data).find(d => d.id === investorId) || {};
+
+    const editPickerId = 'editTagPicker_' + noteId;
+    const editSelectedId = 'editTagSelected_' + noteId;
+
     contentEl.innerHTML = `<textarea class="form-input pa-note-edit-input" rows="2">${Utils.escapeHtml(currentContent)}</textarea>
+      <div id="${editPickerId}" class="note-tag-picker"></div>
+      <div id="${editSelectedId}" class="note-selected-tags"></div>
       <div class="pa-note-edit-actions">
         <button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>
         <button type="button" class="btn btn-secondary btn-sm pa-note-cancel-btn">Cancel</button>
       </div>`;
 
+    if (tagsEl) tagsEl.style.display = 'none';
+
     const textarea = contentEl.querySelector('textarea');
     textarea.focus();
+
+    this._buildTagPicker(editPickerId, editSelectedId, invData, currentTags);
 
     contentEl.querySelector('.pa-note-save-btn').addEventListener('click', async () => {
       const newContent = textarea.value.trim();
       if (!newContent) return;
       try {
-        await ServerAPI.updateInvestorNote(investorId, noteId, newContent);
+        await ServerAPI.updateInvestorNote(investorId, noteId, newContent, [...this._selectedNoteTags]);
         this._loadInvestorNotes(investorId);
       } catch (err) {
         alert('Failed to update note: ' + (err.message || 'Unknown error'));
@@ -819,7 +983,9 @@ const Investors = {
           '</div>';
         }
 
-        return '<tr style="' + (active ? '' : 'opacity:0.55;') + '">' +
+        const pillLabels = activePills.map(t => t.label).join('|');
+
+        return '<tr style="' + (active ? '' : 'opacity:0.55;') + '" data-pills="' + esc(pillLabels) + '">' +
           '<td><span class="inv-dir-name" data-investor-key="' + esc(inv.investor_key) + '">' + esc(inv.name) + '</span>' +
             (active ? '' : '<span class="inv-dir-inactive">(Inactive)</span>') + '</td>' +
           '<td>' + esc(inv.account_executive_name || '--') + '</td>' +
@@ -829,6 +995,25 @@ const Investors = {
           '<td><div class="inv-dir-notes">' + esc(inv.notes || '--') + '</div></td>' +
         '</tr>';
       }).join('');
+
+      // Build tag filter row for directory
+      const allDirPills = new Set();
+      sorted.forEach(inv => {
+        toggleDefs.forEach(t => { if (Number(inv[t.field]) === 1) allDirPills.add(t.label); });
+        (inv.customToggles || []).forEach(t => { if (Number(t.enabled) === 1) allDirPills.add(t.label); });
+      });
+      const toolbarEl = document.querySelector('.all-inv-toolbar');
+      let existingFilter = document.getElementById('allInvestorsTagFilter');
+      if (existingFilter) existingFilter.remove();
+      if (allDirPills.size > 0 && toolbarEl) {
+        const filterRow = document.createElement('div');
+        filterRow.id = 'allInvestorsTagFilter';
+        filterRow.className = 'inv-tag-filter-row';
+        filterRow.style.marginTop = '0.5rem';
+        filterRow.innerHTML = '<span class="note-tag-picker-label"><i class="fas fa-filter"></i></span>' +
+          Array.from(allDirPills).sort().map(label => '<button type="button" class="note-tag-btn" data-filter-tag="' + esc(label) + '">' + esc(label) + '</button>').join('');
+        toolbarEl.appendChild(filterRow);
+      }
 
       // Click name → open investor detail
       tbody.querySelectorAll('.inv-dir-name').forEach(el => {
@@ -841,19 +1026,40 @@ const Investors = {
         });
       });
 
-      // Bind search
+      // Bind search + tag filter
       const searchInput = document.getElementById('allInvestorsSearch');
+      const dirFilterTags = new Set();
+
+      const applyDirFilters = () => {
+        const q = (searchInput?.value || '').toLowerCase().trim();
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach(row => {
+          const text = (row.textContent || '').toLowerCase();
+          const pills = (row.dataset.pills || '').split('|');
+          const matchesText = !q || text.includes(q);
+          const matchesTags = dirFilterTags.size === 0 || Array.from(dirFilterTags).every(tag => pills.includes(tag));
+          row.style.display = (matchesText && matchesTags) ? '' : 'none';
+        });
+      };
+
       if (searchInput) {
         searchInput.value = '';
-        searchInput.addEventListener('input', () => {
-          const q = searchInput.value.toLowerCase().trim();
-          const rows = tbody.querySelectorAll('tr');
-          rows.forEach(row => {
-            const text = (row.textContent || '').toLowerCase();
-            row.style.display = (!q || text.includes(q)) ? '' : 'none';
-          });
-        });
+        searchInput.addEventListener('input', applyDirFilters);
       }
+
+      document.querySelectorAll('#allInvestorsTagFilter .note-tag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tag = btn.dataset.filterTag;
+          if (dirFilterTags.has(tag)) {
+            dirFilterTags.delete(tag);
+            btn.classList.remove('active');
+          } else {
+            dirFilterTags.add(tag);
+            btn.classList.add('active');
+          }
+          applyDirFilters();
+        });
+      });
     } catch (err) {
       console.error('Failed to load all investors:', err);
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#e74c3c;">Failed to load investors.</td></tr>';
@@ -879,10 +1085,40 @@ const Investors = {
     const sorted = Object.entries(this.data)
       .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
 
+    // Collect all unique tags across all investors for the filter row
+    const allPillLabels = new Set();
+    sorted.forEach(([, inv]) => {
+      const defs = [
+        { val: inv.conventional, label: 'Conv' }, { val: inv.fha, label: 'FHA' },
+        { val: inv.vaLoans, label: 'VA' }, { val: inv.usda, label: 'USDA' },
+        { val: inv.jumbo, label: 'Jumbo' }, { val: inv.nonQm, label: 'Non-QM' },
+        { val: inv.dscr, label: 'DSCR' }, { val: inv.bankStatement, label: 'Bank Stmt' },
+        { val: inv.assetDepletion, label: 'Asset Depl.' }, { val: inv.interestOnly, label: 'IO' },
+        { val: inv.itinForeignNational, label: 'ITIN/FN' }, { val: inv.bridgeLoans, label: 'Bridge' },
+        { val: inv.landLoans, label: 'Land' }, { val: inv.construction, label: 'Construction' },
+        { val: inv.renovation, label: 'Renovation' }, { val: inv.manufactured, label: 'Manufactured' },
+        { val: inv.doctor, label: 'Doctor' }, { val: inv.condoNonWarrantable, label: 'Condo/NW' },
+        { val: inv.subordinateFinancing, label: 'Sub. Fin.' }, { val: inv.helocSecond, label: 'HELOC/2nd' },
+        { val: inv.manualUnderwriting, label: 'Manual UW' }, { val: inv.servicing, label: 'Servicing' },
+        { val: inv.scenarioDesk, label: 'Scenario' }, { val: inv.condoReview, label: 'Condo Rev.' },
+        { val: inv.exceptionDesk, label: 'Exception' }, { val: inv.reviewWireRelease, label: 'Wire Review' },
+      ];
+      defs.forEach(d => { if (Number(d.val) === 1) allPillLabels.add(d.label); });
+      (inv.customToggles || []).forEach(t => { if (Number(t.enabled) === 1) allPillLabels.add(t.label); });
+    });
+
+    let tagFilterHtml = '<div class="inv-tag-filter-row" id="investorTagFilterRow">' +
+      '<span class="note-tag-picker-label"><i class="fas fa-filter"></i></span>';
+    Array.from(allPillLabels).sort().forEach(label => {
+      tagFilterHtml += '<button type="button" class="note-tag-btn" data-filter-tag="' + esc(label) + '">' + esc(label) + '</button>';
+    });
+    tagFilterHtml += '</div>';
+
     let html = '<div class="dropdown-header">Wholesale Partners (' + sorted.length + ')</div>' +
       '<div class="investor-dropdown-search">' +
         '<input type="text" id="investorDropdownSearch" class="form-input form-input-sm" placeholder="Search investors..." autocomplete="off" />' +
       '</div>' +
+      tagFilterHtml +
       '<div class="investor-card-grid" id="investorDropdownItems">';
 
     sorted.forEach(([key, inv]) => {
@@ -939,7 +1175,10 @@ const Investors = {
         ? '<img src="' + esc(inv.logoUrl) + '" alt="" class="investor-card-logo" />'
         : '<div class="investor-card-initials">' + esc((inv.name || key).charAt(0)) + '</div>';
 
-      html += '<button type="button" class="investor-card-item" data-action="open-investor" data-investor="' + key + '">' +
+      // Build a pipe-separated list of pill labels for tag filtering
+      const pillLabels = activePills.map(t => t.label).join('|');
+
+      html += '<button type="button" class="investor-card-item" data-action="open-investor" data-investor="' + key + '" data-pills="' + esc(pillLabels) + '">' +
         '<div class="investor-card-top">' +
           logoHtml +
           '<div class="investor-card-name">' + esc(inv.name || key) + '</div>' +
@@ -952,19 +1191,42 @@ const Investors = {
     html += '</div>';
     container.innerHTML = html;
 
-    // Bind search
+    // ── Search + Tag filter logic ──
     const searchInput = document.getElementById('investorDropdownSearch');
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        const q = e.target.value.toLowerCase().trim();
-        const items = document.querySelectorAll('#investorDropdownItems .investor-card-item');
-        items.forEach(btn => {
-          const text = (btn.textContent || '').toLowerCase();
-          btn.style.display = (!q || text.includes(q)) ? '' : 'none';
-        });
+    const activeFilterTags = new Set();
+
+    const applyFilters = () => {
+      const q = (searchInput?.value || '').toLowerCase().trim();
+      const items = document.querySelectorAll('#investorDropdownItems .investor-card-item');
+      items.forEach(btn => {
+        const text = (btn.textContent || '').toLowerCase();
+        const pills = (btn.dataset.pills || '').split('|');
+        const matchesText = !q || text.includes(q);
+        const matchesTags = activeFilterTags.size === 0 || Array.from(activeFilterTags).every(tag => pills.includes(tag));
+        btn.style.display = (matchesText && matchesTags) ? '' : 'none';
       });
+    };
+
+    if (searchInput) {
+      searchInput.addEventListener('input', applyFilters);
       searchInput.addEventListener('click', (e) => e.stopPropagation());
     }
+
+    // Tag filter buttons
+    document.querySelectorAll('#investorTagFilterRow .note-tag-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tag = btn.dataset.filterTag;
+        if (activeFilterTags.has(tag)) {
+          activeFilterTags.delete(tag);
+          btn.classList.remove('active');
+        } else {
+          activeFilterTags.add(tag);
+          btn.classList.add('active');
+        }
+        applyFilters();
+      });
+    });
   }
 };
 

@@ -492,8 +492,9 @@
 .pa-detail-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-lg, 1.5rem);
-    margin-bottom: var(--spacing-lg, 1.5rem);
+    gap: var(--spacing-sm, 0.5rem);
+    margin-bottom: var(--spacing-sm, 0.5rem);
+    align-items: start;
 }
 
 .pa-detail-section {
@@ -504,6 +505,7 @@
 
 .pa-detail-section.full-width {
     grid-column: 1 / -1;
+    margin-bottom: var(--spacing-sm, 0.5rem);
 }
 
 .pa-detail-section-title {
@@ -661,6 +663,150 @@
     color: var(--text-primary, #e4e8ee);
     white-space: pre-wrap;
     line-height: 1.5;
+}
+
+.pa-note-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+}
+
+.pa-note-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--green-dark, #0d3b3d);
+    color: var(--green-bright, #8cc63e);
+    border: 1px solid rgba(140, 198, 62, 0.25);
+}
+
+.pa-note-tag.custom-tag {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border-color: rgba(168, 85, 247, 0.25);
+}
+
+/* ── Tag Picker ────────────────────── */
+.note-tag-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    margin-top: 0.35rem;
+}
+
+.note-tag-picker-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary, #8899aa);
+    font-weight: 500;
+    margin-right: 0.15rem;
+}
+
+.note-tag-btn {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-color, #2a3a4a);
+    background: var(--bg-secondary, #151f2e);
+    color: var(--text-secondary, #8899aa);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.note-tag-btn:hover {
+    border-color: var(--green-bright, #8cc63e);
+    color: var(--text-primary, #e4e8ee);
+}
+
+.note-tag-btn.active {
+    background: var(--green-dark, #0d3b3d);
+    color: var(--green-bright, #8cc63e);
+    border-color: var(--green-bright, #8cc63e);
+}
+
+.note-tag-btn.custom-tag-btn.active {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border-color: #c084fc;
+}
+
+.note-custom-tag-input {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px dashed var(--border-color, #2a3a4a);
+    background: var(--bg-secondary, #151f2e);
+    color: var(--text-primary, #e4e8ee);
+    width: 100px;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.note-custom-tag-input::placeholder {
+    color: var(--text-muted, #556677);
+}
+
+.note-custom-tag-input:focus {
+    border-color: #c084fc;
+}
+
+.note-selected-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+}
+
+.note-selected-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--green-dark, #0d3b3d);
+    color: var(--green-bright, #8cc63e);
+    border: 1px solid rgba(140, 198, 62, 0.25);
+}
+
+.note-selected-tag.custom {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border-color: rgba(168, 85, 247, 0.25);
+}
+
+.note-selected-tag .remove-tag {
+    cursor: pointer;
+    opacity: 0.6;
+    margin-left: 0.1rem;
+    font-size: 0.65rem;
+}
+
+.note-selected-tag .remove-tag:hover {
+    opacity: 1;
+}
+
+/* ── Tag Search in Dropdown ────────── */
+.inv-tag-filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border-color, #2a3a4a);
+}
+
+.inv-tag-filter-row .note-tag-btn {
+    font-size: 0.65rem;
+    padding: 0.12rem 0.45rem;
 }
 
 .pa-note-edit-input {

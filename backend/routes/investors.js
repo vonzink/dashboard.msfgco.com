@@ -863,6 +863,76 @@ router.delete('/:id/custom-toggles/:toggleId', requireAdmin, async (req, res, ne
 // INVESTOR NOTES
 // ========================================
 
+/** Helper: attach tags to an array of notes */
+async function attachNoteTags(notes) {
+  if (!notes.length) return notes;
+  const noteIds = notes.map(n => n.id);
+  const [tags] = await db.query(
+    'SELECT note_id, tag FROM investor_note_tags WHERE note_id IN (?)',
+    [noteIds]
+  );
+  const byNote = {};
+  tags.forEach(t => { (byNote[t.note_id] = byNote[t.note_id] || []).push(t.tag); });
+  notes.forEach(n => { n.tags = byNote[n.id] || []; });
+  return notes;
+}
+
+/** Helper: sync tags for a note */
+async function syncNoteTags(noteId, tags) {
+  await db.query('DELETE FROM investor_note_tags WHERE note_id = ?', [noteId]);
+  if (tags && tags.length > 0) {
+    const values = tags.map(t => [noteId, t.trim().substring(0, 100)]).filter(v => v[1]);
+    if (values.length > 0) {
+      await db.query('INSERT INTO investor_note_tags (note_id, tag) VALUES ?', [values]);
+    }
+  }
+}
+
+// GET /api/investors/notes/search-by-tag?tag=Conv&tag=FHA
+router.get('/notes/search-by-tag', async (req, res, next) => {
+  try {
+    let tags = req.query.tag;
+    if (!tags) return res.json([]);
+    if (!Array.isArray(tags)) tags = [tags];
+    tags = tags.map(t => t.trim()).filter(Boolean);
+    if (tags.length === 0) return res.json([]);
+
+    // Find investor IDs that have notes with ALL of the requested tags
+    const [rows] = await db.query(
+      `SELECT DISTINCT i.id, i.investor_key, i.name, i.logo_url
+       FROM investors i
+       INNER JOIN investor_notes n ON n.investor_id = i.id
+       INNER JOIN investor_note_tags t ON t.note_id = n.id
+       WHERE t.tag IN (?)
+       GROUP BY i.id
+       HAVING COUNT(DISTINCT t.tag) = ?
+       ORDER BY i.name`,
+      [tags, tags.length]
+    );
+
+    // Resolve logos
+    await Promise.all(rows.map(async (inv) => {
+      inv.logo_url = await resolveLogoUrl(inv.logo_url);
+    }));
+
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/investors/notes/all-tags — distinct tags for autocomplete
+router.get('/notes/all-tags', async (req, res, next) => {
+  try {
+    const [rows] = await db.query(
+      'SELECT DISTINCT tag FROM investor_note_tags ORDER BY tag'
+    );
+    res.json(rows.map(r => r.tag));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/investors/:id/notes
 router.get('/:id/notes', async (req, res, next) => {
   try {
@@ -870,6 +940,7 @@ router.get('/:id/notes', async (req, res, next) => {
       'SELECT * FROM investor_notes WHERE investor_id = ? ORDER BY created_at DESC',
       [req.params.id]
     );
+    await attachNoteTags(notes);
     res.json(notes);
   } catch (error) {
     next(error);
@@ -879,7 +950,7 @@ router.get('/:id/notes', async (req, res, next) => {
 // POST /api/investors/:id/notes
 router.post('/:id/notes', async (req, res, next) => {
   try {
-    const { content } = req.body;
+    const { content, tags } = req.body;
     if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Note content is required' });
     }
@@ -891,7 +962,13 @@ router.post('/:id/notes', async (req, res, next) => {
       'INSERT INTO investor_notes (investor_id, author_id, author_name, content) VALUES (?, ?, ?, ?)',
       [req.params.id, userId, authorName, content.trim()]
     );
+
+    if (tags && Array.isArray(tags) && tags.length > 0) {
+      await syncNoteTags(result.insertId, tags);
+    }
+
     const [note] = await db.query('SELECT * FROM investor_notes WHERE id = ?', [result.insertId]);
+    await attachNoteTags(note);
     res.status(201).json(note[0]);
   } catch (error) {
     next(error);
@@ -901,7 +978,7 @@ router.post('/:id/notes', async (req, res, next) => {
 // PUT /api/investors/:id/notes/:noteId
 router.put('/:id/notes/:noteId', async (req, res, next) => {
   try {
-    const { content } = req.body;
+    const { content, tags } = req.body;
     if (!content || !content.trim()) {
       return res.status(400).json({ error: 'Note content is required' });
     }
@@ -913,7 +990,13 @@ router.put('/:id/notes/:noteId', async (req, res, next) => {
     }
 
     await db.query('UPDATE investor_notes SET content = ? WHERE id = ?', [content.trim(), req.params.noteId]);
+
+    if (tags && Array.isArray(tags)) {
+      await syncNoteTags(parseInt(req.params.noteId), tags);
+    }
+
     const [updated] = await db.query('SELECT * FROM investor_notes WHERE id = ?', [req.params.noteId]);
+    await attachNoteTags(updated);
     res.json(updated[0]);
   } catch (error) {
     next(error);
