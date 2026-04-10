@@ -440,6 +440,20 @@ const ServerAPI = {
         return this.delete(`/investors/${idOrKey}`);
     },
 
+    // Investor notes
+    getInvestorNotes(investorId) {
+        return this.get(`/investors/${investorId}/notes`);
+    },
+    addInvestorNote(investorId, content) {
+        return this.post(`/investors/${investorId}/notes`, { content });
+    },
+    updateInvestorNote(investorId, noteId, content) {
+        return this.put(`/investors/${investorId}/notes/${noteId}`, { content });
+    },
+    deleteInvestorNote(investorId, noteId) {
+        return this.delete(`/investors/${investorId}/notes/${noteId}`);
+    },
+
     /** Get presigned upload URL for an investor logo */
     getInvestorLogoUploadUrl(investorId, fileName, fileType, fileSize) {
         return this.post(`/investors/${investorId}/logo/upload-url`, { fileName, fileType, fileSize });

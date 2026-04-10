@@ -136,7 +136,6 @@ const Investors = {
       const full = await ServerAPI.getInvestor(investorId);
       if (full) {
         this.populateModal(full);
-        this.bindNotesEditing();
       }
     } catch (err) {
       console.warn('Could not load full investor detail:', err);
@@ -161,12 +160,15 @@ const Investors = {
     if (!modal) return;
 
     const esc = Utils.escapeHtml;
+    const detailRow = (label, value) => value
+      ? '<div class="pa-detail-row"><span class="pa-detail-label">' + esc(label) + '</span><span class="pa-detail-value">' + value + '</span></div>'
+      : '';
 
     // Name
     const nameEl = modal.querySelector('.investor-name');
     if (nameEl) nameEl.textContent = investor.name || 'Investor';
 
-    // Logo — show investor logo or fallback to MSFG logo
+    // Logo
     const logoEl = modal.querySelector('.investor-logo');
     if (logoEl) {
       const logoSrc = investor.logoUrl || investor.logo_url || '';
@@ -177,303 +179,260 @@ const Investors = {
       logoEl.onerror = function() { this.onerror = null; this.src = fallback; };
     }
 
-    // Account Executive (read-only)
-    const aeSection = modal.querySelector('.account-executive');
-    if (aeSection) {
-      const ae = investor.accountExecutive || {};
-      // Also check flat API response fields
-      const aeName = ae.name || investor.account_executive_name;
-      const aeEmail = ae.email || investor.account_executive_email;
-      const aePhone = ae.mobile || investor.account_executive_mobile;
-      const aePhoto = investor.account_executive_photo_url;
+    const body = document.getElementById('investorDetailBody');
+    if (!body) return;
 
-      if (aeName && aeName !== 'TBD') {
-        const photoHtml = aePhoto
-          ? '<img src="' + aePhoto + '" alt="' + esc(aeName) + '" class="ae-photo" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid var(--green-bright);margin-right:12px;flex-shrink:0;" />'
-          : '';
-        aeSection.innerHTML =
-          '<h4><i class="fas fa-user-tie"></i> Account Executive</h4>' +
-          '<div class="contact-info" style="flex-direction:row;align-items:center;flex-wrap:wrap;">' +
-            photoHtml +
-            '<div style="display:flex;flex-direction:column;gap:var(--spacing-xs);">' +
-              (aeName ? '<div><strong>' + esc(aeName) + '</strong></div>' : '') +
-              (aePhone ? '<div><i class="fas fa-phone"></i> <a href="tel:' + aePhone.replace(/\D/g, '') + '">' + esc(aePhone) + '</a></div>' : '') +
-              (aeEmail ? '<div><i class="fas fa-envelope"></i> <a href="mailto:' + aeEmail + '">' + esc(aeEmail) + '</a></div>' : '') +
-            '</div>' +
-          '</div>';
-      } else {
-        aeSection.innerHTML =
-          '<h4><i class="fas fa-user-tie"></i> Account Executive</h4>' +
-          '<p class="tbd">Information coming soon</p>';
-      }
+    // --- Build AE section ---
+    const ae = investor.accountExecutive || {};
+    const aeName = ae.name || investor.account_executive_name;
+    const aeEmail = ae.email || investor.account_executive_email;
+    const aePhone = ae.mobile || investor.account_executive_mobile;
+    const aePhoto = investor.account_executive_photo_url;
+
+    let aeHtml = '';
+    if (aeName && aeName !== 'TBD') {
+      const photoHtml = aePhoto
+        ? '<img src="' + aePhoto + '" alt="' + esc(aeName) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--green-bright);flex-shrink:0;" />'
+        : '';
+      aeHtml = (photoHtml ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;">' + photoHtml + '<strong style="color:var(--text-primary);">' + esc(aeName) + '</strong></div>' : detailRow('Name', esc(aeName))) +
+        detailRow('Phone', aePhone ? '<a href="tel:' + aePhone.replace(/\D/g, '') + '">' + esc(aePhone) + '</a>' : '') +
+        detailRow('Email', aeEmail ? '<a href="mailto:' + aeEmail + '">' + esc(aeEmail) + '</a>' : '');
     }
 
-    // Investor details grid (read-only)
-    const detailsSection = modal.querySelector('.investor-details');
-    if (detailsSection) {
-      let html = '<h4><i class="fas fa-info-circle"></i> Investor Details</h4>';
+    // --- Build products & services pills ---
+    const toggleCategories = [
+      { name: 'Agency / Gov', toggles: [
+        { label: 'Conventional', val: investor.conventional ?? investor.conventional },
+        { label: 'FHA',          val: investor.fha ?? investor.fha },
+        { label: 'VA',           val: investor.vaLoans ?? investor.va_loans },
+        { label: 'USDA',         val: investor.usda ?? investor.usda },
+        { label: 'Jumbo',        val: investor.jumbo ?? investor.jumbo },
+      ]},
+      { name: 'Non-Agency', toggles: [
+        { label: 'Non-QM',              val: investor.nonQm ?? investor.non_qm },
+        { label: 'DSCR',                val: investor.dscr ?? investor.dscr },
+        { label: 'Bank Statement',       val: investor.bankStatement ?? investor.bank_statement },
+        { label: 'Asset Depletion',      val: investor.assetDepletion ?? investor.asset_depletion },
+        { label: 'Interest Only',        val: investor.interestOnly ?? investor.interest_only },
+        { label: 'ITIN / Foreign Nat\'l', val: investor.itinForeignNational ?? investor.itin_foreign_national },
+      ]},
+      { name: 'Specialty', toggles: [
+        { label: 'Bridge',              val: investor.bridgeLoans ?? investor.bridge_loans },
+        { label: 'Land',                val: investor.landLoans ?? investor.land_loans },
+        { label: 'Construction',         val: investor.construction ?? investor.construction },
+        { label: 'Renovation',           val: investor.renovation ?? investor.renovation },
+        { label: 'Manufactured',         val: investor.manufactured ?? investor.manufactured },
+        { label: 'Doctor',               val: investor.doctor ?? investor.doctor },
+        { label: 'Condo / Non-Warr.',    val: investor.condoNonWarrantable ?? investor.condo_non_warrantable },
+        { label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
+        { label: 'HELOC / 2nd',          val: investor.helocSecond ?? investor.heloc_second },
+      ]},
+      { name: 'Services', toggles: [
+        { label: 'Manual UW',            val: investor.manualUnderwriting ?? investor.manual_underwriting },
+        { label: 'Servicing',            val: investor.servicing ?? investor.servicing },
+        { label: 'Scenario Desk',        val: investor.scenarioDesk ?? investor.scenario_desk },
+        { label: 'Condo Review',         val: investor.condoReview ?? investor.condo_review },
+        { label: 'Exception Desk',       val: investor.exceptionDesk ?? investor.exception_desk },
+        { label: 'Wire / Funding Review', val: investor.reviewWireRelease ?? investor.review_wire_release },
+      ]},
+    ];
+    const customToggles = (investor.customToggles || []).filter(t => Number(t.enabled) === 1);
+    if (customToggles.length) {
+      toggleCategories.push({ name: 'Custom', toggles: customToggles.map(t => ({ label: t.label, val: 1 })) });
+    }
 
-      // Toggle pills — grouped by category
-      const toggleCategories = [
-        { name: 'Agency / Gov', toggles: [
-          { label: 'Conventional', val: investor.conventional ?? investor.conventional },
-          { label: 'FHA',          val: investor.fha ?? investor.fha },
-          { label: 'VA',           val: investor.vaLoans ?? investor.va_loans },
-          { label: 'USDA',         val: investor.usda ?? investor.usda },
-          { label: 'Jumbo',        val: investor.jumbo ?? investor.jumbo },
-        ]},
-        { name: 'Non-Agency', toggles: [
-          { label: 'Non-QM',              val: investor.nonQm ?? investor.non_qm },
-          { label: 'DSCR',                val: investor.dscr ?? investor.dscr },
-          { label: 'Bank Statement',       val: investor.bankStatement ?? investor.bank_statement },
-          { label: 'Asset Depletion',      val: investor.assetDepletion ?? investor.asset_depletion },
-          { label: 'Interest Only',        val: investor.interestOnly ?? investor.interest_only },
-          { label: 'ITIN / Foreign Nat\'l', val: investor.itinForeignNational ?? investor.itin_foreign_national },
-        ]},
-        { name: 'Specialty', toggles: [
-          { label: 'Bridge',              val: investor.bridgeLoans ?? investor.bridge_loans },
-          { label: 'Land',                val: investor.landLoans ?? investor.land_loans },
-          { label: 'Construction',         val: investor.construction ?? investor.construction },
-          { label: 'Renovation',           val: investor.renovation ?? investor.renovation },
-          { label: 'Manufactured',         val: investor.manufactured ?? investor.manufactured },
-          { label: 'Doctor',               val: investor.doctor ?? investor.doctor },
-          { label: 'Condo / Non-Warr.',    val: investor.condoNonWarrantable ?? investor.condo_non_warrantable },
-          { label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
-          { label: 'HELOC / 2nd',          val: investor.helocSecond ?? investor.heloc_second },
-        ]},
-        { name: 'Services', toggles: [
-          { label: 'Manual UW',            val: investor.manualUnderwriting ?? investor.manual_underwriting },
-          { label: 'Servicing',            val: investor.servicing ?? investor.servicing },
-          { label: 'Scenario Desk',        val: investor.scenarioDesk ?? investor.scenario_desk },
-          { label: 'Condo Review',         val: investor.condoReview ?? investor.condo_review },
-          { label: 'Exception Desk',       val: investor.exceptionDesk ?? investor.exception_desk },
-          { label: 'Wire / Funding Review', val: investor.reviewWireRelease ?? investor.review_wire_release },
-        ]},
-      ];
-      const customToggles = (investor.customToggles || []).filter(t => Number(t.enabled) === 1);
-      if (customToggles.length) {
-        toggleCategories.push({
-          name: 'Custom',
-          toggles: customToggles.map(t => ({ label: t.label, val: 1 })),
-        });
-      }
-      const allToggles = toggleCategories.flatMap(c => c.toggles);
-      const hasAnyChecked = allToggles.some(t => Number(t.val) === 1);
-      if (hasAnyChecked) {
-        const CAT_SLUG = {
-          'Agency / Gov': 'agency',
-          'Non-Agency': 'nonagency',
-          'Specialty': 'specialty',
-          'Services': 'services',
-          'Custom': 'custom',
-        };
-        toggleCategories.forEach(cat => {
-          const catToggles = cat.toggles.filter(t => Number(t.val) === 1);
-          if (catToggles.length === 0) return;
-          const slug = CAT_SLUG[cat.name] || 'other';
-          html += '<div class="pill-category pill-cat-' + slug + '">';
-          html += '<span class="pill-category-label">' + esc(cat.name) + '</span>';
-          html += '<div class="investor-pills">';
-          catToggles.forEach(t => {
-            html += '<span class="investor-pill pill-yes pill-' + slug + '">' +
-              '<i class="fas fa-check"></i> ' + esc(t.label) +
-            '</span>';
-          });
-          html += '</div></div>';
-        });
-      }
+    const CAT_SLUG = { 'Agency / Gov': 'agency', 'Non-Agency': 'nonagency', 'Specialty': 'specialty', 'Services': 'services', 'Custom': 'custom' };
+    let pillsHtml = '';
+    toggleCategories.forEach(cat => {
+      const catToggles = cat.toggles.filter(t => Number(t.val) === 1);
+      if (catToggles.length === 0) return;
+      const slug = CAT_SLUG[cat.name] || 'other';
+      pillsHtml += '<div class="pill-category pill-cat-' + slug + '" style="margin-bottom:0.5rem;">' +
+        '<span class="pill-category-label">' + esc(cat.name) + '</span>' +
+        '<div class="investor-pills">' +
+        catToggles.map(t => '<span class="investor-pill pill-yes pill-' + slug + '"><i class="fas fa-check"></i> ' + esc(t.label) + '</span>').join('') +
+        '</div></div>';
+    });
 
-      html += '<div class="details-grid">';
-      const details = [
-        { label: 'States',                    value: investor.states },
-        { label: 'Best Programs',             value: investor.bestPrograms || investor.best_programs },
-        { label: 'Minimum FICO',              value: investor.minimumFico || investor.min_fico },
-        { label: 'In-house DPA',              value: investor.inHouseDpa || investor.in_house_dpa },
-        { label: 'EPO',                       value: investor.epo },
-        { label: 'Max Comp',                  value: (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : null },
-        { label: 'Underwriting Fee',         value: investor.underwritingFee || investor.underwriting_fee || null },
-      ];
-      details.forEach(d => {
-        html += '<div class="detail-row">' +
-          '<span class="detail-label">' + esc(d.label) + '</span>' +
-          '<span class="detail-value">' + (d.value ? esc(String(d.value)) : '<em class="tbd">\u2014</em>') + '</span>' +
+    // --- Investor details ---
+    const maxComp = (investor.maxComp || investor.max_comp) ? '$' + Number(investor.maxComp || investor.max_comp).toLocaleString() : '';
+    const uwFee = investor.underwritingFee || investor.underwriting_fee || '';
+
+    // --- Team ---
+    const team = investor.team || [];
+    let teamHtml = '';
+    if (team.length > 0) {
+      teamHtml = '<div class="team-list">';
+      team.forEach(member => {
+        const photoHtml = member.photo_url
+          ? '<img src="' + member.photo_url + '" alt="' + esc(member.name || '') + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color);flex-shrink:0;" />'
+          : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid var(--border-color);"><i class="fas fa-user" style="font-size:12px;color:var(--text-muted);"></i></div>';
+        teamHtml += '<div class="team-member" style="display:flex;align-items:center;gap:10px;">' + photoHtml + '<div>';
+        if (member.role) teamHtml += '<strong>' + esc(member.role) + '</strong><br/>';
+        if (member.name) teamHtml += esc(member.name);
+        if (member.phone) teamHtml += '<br/><a href="tel:' + member.phone.replace(/\D/g, '') + '">' + esc(member.phone) + '</a>';
+        if (member.email) teamHtml += '<br/><a href="mailto:' + member.email + '">' + esc(member.email) + '</a>';
+        teamHtml += '</div></div>';
+      });
+      teamHtml += '</div>';
+    } else {
+      teamHtml = '<p style="color:var(--text-secondary);font-size:0.88rem;">No team members listed</p>';
+    }
+
+    // --- Lender IDs ---
+    const ids = investor.lenderIds || {};
+    let lenderHtml = '';
+    if (ids.fha_id || ids.va_id || ids.rd_id || ids.fha || ids.va || ids.rd) {
+      lenderHtml = detailRow('FHA', esc(ids.fha_id || ids.fha || '')) +
+        detailRow('VA', esc(ids.va_id || ids.va || '')) +
+        detailRow('RD', esc(ids.rd_id || ids.rd || ''));
+    } else {
+      lenderHtml = '<p style="color:var(--text-secondary);font-size:0.88rem;">No lender IDs on file</p>';
+    }
+
+    // --- Mortgagee Clauses ---
+    const clauses = investor.mortgageeClauses || [];
+    const mc = investor.mortgageeClause || {};
+    let clauseHtml = '';
+    if (clauses.length > 0) {
+      clauses.forEach(c => {
+        clauseHtml += '<div style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border-color,rgba(255,255,255,0.05));">';
+        if (c.label) clauseHtml += '<span style="display:inline-block;background:var(--green-dark,#0d3b3d);color:var(--green-bright,#8cc63e);font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:4px;margin-bottom:4px;text-transform:uppercase;">' + esc(c.label) + '</span>';
+        clauseHtml += '<div style="font-weight:600;color:var(--text-primary);">' + esc(c.name) + '</div>';
+        if (c.isaoa) clauseHtml += '<div style="font-size:0.85rem;color:var(--text-secondary);">' + esc(c.isaoa) + '</div>';
+        if (c.address) clauseHtml += '<div style="font-size:0.85rem;color:var(--text-muted);">' + esc(c.address) + '</div>';
+        clauseHtml += '</div>';
+      });
+    } else if (mc.name) {
+      clauseHtml = '<div style="font-weight:600;color:var(--text-primary);">' + esc(mc.name) + '</div>' +
+        (mc.isaoa ? '<div style="font-size:0.85rem;color:var(--text-secondary);">' + esc(mc.isaoa) + '</div>' : '') +
+        (mc.address ? '<div style="font-size:0.85rem;color:var(--text-muted);">' + esc(mc.address) + '</div>' : '');
+    } else {
+      clauseHtml = '<p style="color:var(--text-secondary);font-size:0.88rem;">No mortgagee clauses on file</p>';
+    }
+
+    // --- Links ---
+    const links = investor.links || [];
+    const websiteUrl = investor.websiteUrl || investor.website_url;
+    let linksHtml = '<div class="links-list">';
+    if (websiteUrl && websiteUrl !== '#') {
+      linksHtml += '<a href="' + websiteUrl + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Website</a>';
+    }
+    if (Array.isArray(links)) {
+      const LINK_ICONS = { website: 'fas fa-globe', login: 'fas fa-sign-in-alt', flex_site: 'fas fa-laptop', faq: 'fas fa-question-circle', appraisal_video: 'fas fa-video', new_scenarios: 'fas fa-envelope' };
+      const LINK_LABELS = { website: 'Website', login: 'Login Portal', flex_site: 'Flex Site', faq: 'FAQs', appraisal_video: 'Ordering Appraisals', new_scenarios: 'New Scenarios' };
+      links.forEach(link => {
+        if (!link.url) return;
+        const icon = LINK_ICONS[link.link_type] || 'fas fa-external-link-alt';
+        const label = link.label || LINK_LABELS[link.link_type] || link.link_type;
+        const isEmail = link.url.startsWith('mailto:');
+        linksHtml += '<a href="' + link.url + '"' + (isEmail ? '' : ' target="_blank" rel="noopener noreferrer"') + ' class="link-item"><i class="' + icon + '"></i> ' + esc(label) + '</a>';
+      });
+    } else if (typeof links === 'object') {
+      if (links.website) linksHtml += '<a href="' + links.website + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Main Website</a>';
+      if (links.flexSite) linksHtml += '<a href="' + links.flexSite + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-laptop"></i> Flex Site</a>';
+      if (links.faq) linksHtml += '<a href="' + links.faq + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-question-circle"></i> FAQs</a>';
+      if (links.appraisalVideo) linksHtml += '<a href="' + links.appraisalVideo + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-video"></i> Ordering Appraisals</a>';
+      if (links.newScenarios) linksHtml += '<a href="' + links.newScenarios + '" class="link-item"><i class="fas fa-envelope"></i> New Scenarios</a>';
+      if (links.login) linksHtml += '<a href="' + links.login + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-sign-in-alt"></i> Login Portal</a>';
+    }
+    linksHtml += '</div>';
+
+    // --- Documents ---
+    const docs = investor.documents || [];
+    let docsHtml = '';
+    if (docs.length > 0) {
+      const DOC_ICONS = {
+        'application/pdf': 'fas fa-file-pdf', 'text/plain': 'fas fa-file-alt', 'text/csv': 'fas fa-file-csv',
+        'application/msword': 'fas fa-file-word', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'fas fa-file-word',
+        'application/vnd.ms-excel': 'fas fa-file-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'fas fa-file-excel',
+        'image/png': 'fas fa-file-image', 'image/jpeg': 'fas fa-file-image',
+      };
+      docsHtml = '<div class="investor-doc-list">';
+      docs.forEach(doc => {
+        const icon = DOC_ICONS[doc.file_type] || 'fas fa-file';
+        const sizeStr = doc.file_size ? this._formatFileSize(doc.file_size) : '';
+        docsHtml += '<div class="investor-doc-item">' +
+          '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
+            '<i class="' + icon + '" style="color:var(--green-bright);flex-shrink:0;"></i>' +
+            '<div style="min-width:0;"><div class="investor-doc-name">' + esc(doc.file_name) + '</div>' +
+              (sizeStr ? '<div class="investor-doc-meta">' + sizeStr + '</div>' : '') +
+            '</div></div>' +
+          (doc.download_url ? '<a href="' + doc.download_url + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="flex-shrink:0;"><i class="fas fa-download"></i></a>' : '') +
         '</div>';
       });
-      html += '</div>';
-      detailsSection.innerHTML = html;
+      docsHtml += '</div>';
+    } else {
+      docsHtml = '<p style="color:var(--text-secondary);font-size:0.88rem;">No documents on file</p>';
     }
 
-    // Turn Times — hidden (too volatile to track)
-    const turnTimesSection = modal.querySelector('.investor-turn-times');
-    if (turnTimesSection) {
-      turnTimesSection.style.display = 'none';
-    }
+    // --- Build full body ---
+    body.innerHTML =
+      '<div class="pa-detail-grid">' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-user-tie"></i> Account Executive</h3>' +
+          aeHtml +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-info-circle"></i> Investor Details</h3>' +
+          detailRow('States', esc(investor.states || '')) +
+          detailRow('Best Programs', esc(investor.bestPrograms || investor.best_programs || '')) +
+          detailRow('Minimum FICO', esc(investor.minimumFico || investor.min_fico || '')) +
+          detailRow('In-house DPA', esc(investor.inHouseDpa || investor.in_house_dpa || '')) +
+          detailRow('EPO', esc(investor.epo || '')) +
+          detailRow('Max Comp', esc(maxComp)) +
+          detailRow('Underwriting Fee', esc(uwFee)) +
+        '</div>' +
+      '</div>' +
+      // Products & services pills (full width)
+      (pillsHtml ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-tags"></i> Products &amp; Services</h3>' + pillsHtml + '</div>' : '') +
+      '<div class="pa-detail-grid">' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-users"></i> Team</h3>' +
+          teamHtml +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-id-card"></i> Lender IDs</h3>' +
+          lenderHtml +
+        '</div>' +
+      '</div>' +
+      '<div class="pa-detail-grid">' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-file-contract"></i> Mortgagee Clauses</h3>' +
+          clauseHtml +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-link"></i> Resources</h3>' +
+          linksHtml +
+        '</div>' +
+      '</div>' +
+      // Documents (full width)
+      '<div class="pa-detail-section full-width">' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-folder-open"></i> Documents</h3>' +
+        docsHtml +
+      '</div>' +
+      // Legacy notes from investor record
+      (investor.notes ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Investor Notes</h3><div class="pa-detail-monday-notes">' + esc(investor.notes) + '</div></div>' : '') +
+      // Notes system
+      '<div class="pa-detail-section full-width">' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>' +
+        '<div class="pa-notes-add">' +
+          '<textarea id="investorNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>' +
+          '<button type="button" class="btn btn-primary btn-sm" id="investorAddNoteBtn"><i class="fas fa-plus"></i> Add Note</button>' +
+        '</div>' +
+        '<div id="investorNotesContainer" class="pa-notes-list">' +
+          '<div style="text-align:center;padding:1rem;color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading notes...</div>' +
+        '</div>' +
+      '</div>';
 
-    // Team (read-only)
-    const teamSection = modal.querySelector('.investor-team');
-    if (teamSection) {
-      const team = investor.team || [];
-      if (team.length > 0) {
-        let teamHtml = '<h4><i class="fas fa-users"></i> Team</h4><div class="team-list">';
-        team.forEach(member => {
-          const photoHtml = member.photo_url
-            ? '<img src="' + member.photo_url + '" alt="' + esc(member.name || '') + '" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:1px solid var(--border-color);flex-shrink:0;" />'
-            : '<div style="width:32px;height:32px;border-radius:50%;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;flex-shrink:0;border:1px solid var(--border-color);"><i class="fas fa-user" style="font-size:12px;color:var(--text-muted);"></i></div>';
-          teamHtml += '<div class="team-member" style="display:flex;align-items:center;gap:10px;">';
-          teamHtml += photoHtml;
-          teamHtml += '<div>';
-          if (member.role) teamHtml += '<strong>' + esc(member.role) + '</strong> / ';
-          if (member.name) teamHtml += esc(member.name);
-          if (member.phone) teamHtml += ' / <a href="tel:' + member.phone.replace(/\D/g, '') + '">' + esc(member.phone) + '</a>';
-          if (member.email) teamHtml += ' / <a href="mailto:' + member.email + '">' + esc(member.email) + '</a>';
-          teamHtml += '</div></div>';
-        });
-        teamHtml += '</div>';
-        teamSection.innerHTML = teamHtml;
-      } else {
-        teamSection.innerHTML =
-          '<h4><i class="fas fa-users"></i> Team</h4>' +
-          '<p class="tbd">No team members listed</p>';
-      }
-    }
+    // Bind add note
+    const investorId = investor.id || this.currentInvestorId;
+    document.getElementById('investorAddNoteBtn')?.addEventListener('click', () => this._addInvestorNote(investorId));
+    document.getElementById('investorNewNoteInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addInvestorNote(investorId);
+    });
 
-    // Lender IDs (read-only)
-    const lenderSection = modal.querySelector('.lender-ids');
-    if (lenderSection) {
-      const ids = investor.lenderIds || {};
-      if (ids.fha_id || ids.va_id || ids.rd_id || ids.fha || ids.va || ids.rd) {
-        lenderSection.innerHTML =
-          '<h4><i class="fas fa-id-card"></i> Lender IDs</h4>' +
-          '<div class="lender-ids-list">' +
-            ((ids.fha_id || ids.fha) ? '<div><strong>FHA:</strong> ' + esc(ids.fha_id || ids.fha) + '</div>' : '') +
-            ((ids.va_id || ids.va) ? '<div><strong>VA:</strong> ' + esc(ids.va_id || ids.va) + '</div>' : '') +
-            ((ids.rd_id || ids.rd) ? '<div><strong>RD:</strong> ' + esc(ids.rd_id || ids.rd) + '</div>' : '') +
-          '</div>';
-      } else {
-        lenderSection.innerHTML =
-          '<h4><i class="fas fa-id-card"></i> Lender IDs</h4>' +
-          '<p class="tbd">No lender IDs on file</p>';
-      }
-    }
-
-    // Mortgagee Clauses (read-only — now supports array)
-    const clauseSection = modal.querySelector('.mortgagee-clause');
-    if (clauseSection) {
-      const clauses = investor.mortgageeClauses || [];
-      // Legacy single-object format fallback
-      const mc = investor.mortgageeClause || {};
-      if (clauses.length > 0) {
-        let html = '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4><div class="clause-info">';
-        clauses.forEach(c => {
-          html += '<div class="clause-item" style="margin-bottom:8px; padding-bottom:8px; border-bottom:1px solid var(--border-color);">';
-          if (c.label) html += '<span style="display:inline-block;background:var(--green-dark,#0d3b3d);color:var(--green-bright,#8cc63e);font-size:0.7rem;font-weight:600;padding:2px 8px;border-radius:4px;margin-bottom:4px;text-transform:uppercase;">' + esc(c.label) + '</span>';
-          html += '<div><strong>' + esc(c.name) + '</strong></div>';
-          if (c.isaoa) html += '<div>' + esc(c.isaoa) + '</div>';
-          if (c.address) html += '<div style="color:var(--text-muted,#666);">' + esc(c.address) + '</div>';
-          html += '</div>';
-        });
-        html += '</div>';
-        clauseSection.innerHTML = html;
-      } else if (mc.name) {
-        clauseSection.innerHTML =
-          '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4>' +
-          '<div class="clause-info">' +
-            '<div><strong>' + esc(mc.name) + '</strong></div>' +
-            (mc.isaoa ? '<div>' + esc(mc.isaoa) + '</div>' : '') +
-            (mc.address ? '<div style="color:#666;">' + esc(mc.address) + '</div>' : '') +
-          '</div>';
-      } else {
-        clauseSection.innerHTML =
-          '<h4><i class="fas fa-file-contract"></i> Mortgagee Clauses</h4>' +
-          '<p class="tbd">No mortgagee clauses on file</p>';
-      }
-    }
-
-    // Links (read-only)
-    const linksSection = modal.querySelector('.investor-links');
-    if (linksSection) {
-      const links = investor.links || [];
-      const websiteUrl = investor.websiteUrl || investor.website_url;
-      let linksHtml = '<h4><i class="fas fa-link"></i> Resources</h4><div class="links-list">';
-
-      // Legacy top-level websiteUrl
-      if (websiteUrl && websiteUrl !== '#') {
-        linksHtml += '<a href="' + websiteUrl + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Website</a>';
-      }
-
-      // Links from sub-table (array format from full detail)
-      if (Array.isArray(links)) {
-        const LINK_ICONS = {
-          website: 'fas fa-globe', login: 'fas fa-sign-in-alt', flex_site: 'fas fa-laptop',
-          faq: 'fas fa-question-circle', appraisal_video: 'fas fa-video', new_scenarios: 'fas fa-envelope'
-        };
-        const LINK_LABELS = {
-          website: 'Website', login: 'Login Portal', flex_site: 'Flex Site',
-          faq: 'FAQs', appraisal_video: 'Ordering Appraisals', new_scenarios: 'New Scenarios'
-        };
-        links.forEach(link => {
-          if (!link.url) return;
-          const icon = LINK_ICONS[link.link_type] || 'fas fa-external-link-alt';
-          const label = link.label || LINK_LABELS[link.link_type] || link.link_type;
-          const isEmail = link.url.startsWith('mailto:');
-          linksHtml += '<a href="' + link.url + '"' + (isEmail ? '' : ' target="_blank" rel="noopener noreferrer"') + ' class="link-item"><i class="' + icon + '"></i> ' + esc(label) + '</a>';
-        });
-      } else if (typeof links === 'object') {
-        // Legacy object format fallback
-        if (links.website) linksHtml += '<a href="' + links.website + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-globe"></i> Main Website</a>';
-        if (links.flexSite) linksHtml += '<a href="' + links.flexSite + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-laptop"></i> Flex Site</a>';
-        if (links.faq) linksHtml += '<a href="' + links.faq + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-question-circle"></i> FAQs</a>';
-        if (links.appraisalVideo) linksHtml += '<a href="' + links.appraisalVideo + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-video"></i> Ordering Appraisals</a>';
-        if (links.newScenarios) linksHtml += '<a href="' + links.newScenarios + '" class="link-item"><i class="fas fa-envelope"></i> New Scenarios</a>';
-        if (links.login) linksHtml += '<a href="' + links.login + '" target="_blank" rel="noopener noreferrer" class="link-item"><i class="fas fa-sign-in-alt"></i> Login Portal</a>';
-      }
-
-      linksHtml += '</div>';
-      linksSection.innerHTML = linksHtml;
-    }
-
-    // Documents
-    const docsSection = modal.querySelector('.investor-documents');
-    if (docsSection) {
-      const docs = investor.documents || [];
-      if (docs.length > 0) {
-        let docsHtml = '<h4><i class="fas fa-folder-open"></i> Documents</h4><div class="investor-doc-list">';
-        const DOC_ICONS = {
-          'application/pdf': 'fas fa-file-pdf', 'text/plain': 'fas fa-file-alt', 'text/csv': 'fas fa-file-csv',
-          'application/msword': 'fas fa-file-word', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'fas fa-file-word',
-          'application/vnd.ms-excel': 'fas fa-file-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'fas fa-file-excel',
-          'image/png': 'fas fa-file-image', 'image/jpeg': 'fas fa-file-image',
-        };
-        docs.forEach(doc => {
-          const icon = DOC_ICONS[doc.file_type] || 'fas fa-file';
-          const sizeStr = doc.file_size ? this._formatFileSize(doc.file_size) : '';
-          docsHtml += '<div class="investor-doc-item">' +
-            '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
-              '<i class="' + icon + '" style="color:var(--green-bright);flex-shrink:0;"></i>' +
-              '<div style="min-width:0;">' +
-                '<div class="investor-doc-name">' + esc(doc.file_name) + '</div>' +
-                (sizeStr ? '<div class="investor-doc-meta">' + sizeStr + '</div>' : '') +
-              '</div>' +
-            '</div>' +
-            (doc.download_url ? '<a href="' + doc.download_url + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="flex-shrink:0;"><i class="fas fa-download"></i></a>' : '') +
-          '</div>';
-        });
-        docsHtml += '</div>';
-        docsSection.innerHTML = docsHtml;
-      } else {
-        docsSection.innerHTML =
-          '<h4><i class="fas fa-folder-open"></i> Documents</h4>' +
-          '<p class="tbd">No documents on file</p>';
-      }
-    }
-
-    // Notes (editable)
-    const notesSection = modal.querySelector('.investor-notes .notes-content');
-    if (notesSection) {
-      notesSection.textContent = investor.notes || '';
-      if (!investor.notes) notesSection.classList.add('empty');
-      else notesSection.classList.remove('empty');
-    }
+    this._loadInvestorNotes(investorId);
   },
 
   _formatFileSize(bytes) {
@@ -483,38 +442,114 @@ const Investors = {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   },
 
-  /** Bind notes editing — save on blur */
-  bindNotesEditing() {
-    const notesContent = document.querySelector('#investorModal .notes-content');
-    if (!notesContent || notesContent._notesBound) return;
-    notesContent._notesBound = true;
+  // ========================================
+  // INVESTOR NOTES SYSTEM
+  // ========================================
+  async _loadInvestorNotes(investorId) {
+    const container = document.getElementById('investorNotesContainer');
+    if (!container) return;
 
-    notesContent.addEventListener('blur', () => this.saveNotes());
-    notesContent.addEventListener('input', () => notesContent.classList.remove('empty'));
-    notesContent.addEventListener('focus', (e) => {
-      if (e.target.classList.contains('empty')) {
-        e.target.textContent = '';
-        e.target.classList.remove('empty');
+    try {
+      const notes = await ServerAPI.getInvestorNotes(investorId);
+      if (!notes || notes.length === 0) {
+        container.innerHTML = '<div class="pa-notes-empty">No notes yet.</div>';
+        return;
       }
+
+      const esc = Utils.escapeHtml;
+      const currentUserId = CONFIG.currentUser?.id;
+      const isAdminUser = ['admin', 'manager'].includes((CONFIG.currentUser?.activeRole || '').toLowerCase());
+
+      container.innerHTML = notes.map(note => {
+        const canEdit = isAdminUser || note.author_id === currentUserId;
+        const ts = new Date(note.created_at);
+        const edited = note.updated_at && note.updated_at !== note.created_at;
+        const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+
+        return `<div class="pa-note" data-note-id="${note.id}" data-parent-id="${investorId}">
+          <div class="pa-note-header">
+            <span class="pa-note-author"><i class="fas fa-user-circle"></i> ${esc(note.author_name || 'Unknown')}</span>
+            <span class="pa-note-time">${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
+            ${canEdit ? `<div class="pa-note-actions">
+              <button type="button" class="pa-note-edit-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+              <button type="button" class="pa-note-delete-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>
+            </div>` : ''}
+          </div>
+          <div class="pa-note-content">${esc(note.content)}</div>
+        </div>`;
+      }).join('');
+
+      container.querySelectorAll('.pa-note-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const noteEl = btn.closest('.pa-note');
+          this._editInvestorNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+        });
+      });
+      container.querySelectorAll('.pa-note-delete-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const noteEl = btn.closest('.pa-note');
+          this._deleteInvestorNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+        });
+      });
+    } catch (err) {
+      console.error('Failed to load investor notes:', err);
+      container.innerHTML = '<div class="pa-notes-empty" style="color:#e74c3c;">Failed to load notes.</div>';
+    }
+  },
+
+  async _addInvestorNote(investorId) {
+    const input = document.getElementById('investorNewNoteInput');
+    if (!input) return;
+    const content = input.value.trim();
+    if (!content) return;
+
+    try {
+      await ServerAPI.addInvestorNote(investorId, content);
+      input.value = '';
+      this._loadInvestorNotes(investorId);
+    } catch (err) {
+      alert('Failed to add note: ' + (err.message || 'Unknown error'));
+    }
+  },
+
+  async _editInvestorNote(investorId, noteId) {
+    const noteEl = document.querySelector(`.pa-note[data-note-id="${noteId}"][data-parent-id="${investorId}"]`);
+    if (!noteEl) return;
+    const contentEl = noteEl.querySelector('.pa-note-content');
+    const currentContent = contentEl.textContent;
+
+    contentEl.innerHTML = `<textarea class="form-input pa-note-edit-input" rows="2">${Utils.escapeHtml(currentContent)}</textarea>
+      <div class="pa-note-edit-actions">
+        <button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>
+        <button type="button" class="btn btn-secondary btn-sm pa-note-cancel-btn">Cancel</button>
+      </div>`;
+
+    const textarea = contentEl.querySelector('textarea');
+    textarea.focus();
+
+    contentEl.querySelector('.pa-note-save-btn').addEventListener('click', async () => {
+      const newContent = textarea.value.trim();
+      if (!newContent) return;
+      try {
+        await ServerAPI.updateInvestorNote(investorId, noteId, newContent);
+        this._loadInvestorNotes(investorId);
+      } catch (err) {
+        alert('Failed to update note: ' + (err.message || 'Unknown error'));
+      }
+    });
+
+    contentEl.querySelector('.pa-note-cancel-btn').addEventListener('click', () => {
+      this._loadInvestorNotes(investorId);
     });
   },
 
-  async saveNotes() {
-    if (!this.currentInvestorId) return;
-
-    const notesContent = document.querySelector('#investorModal .notes-content');
-    if (!notesContent) return;
-
-    const notes = notesContent.textContent.trim();
-
+  async _deleteInvestorNote(investorId, noteId) {
+    if (!confirm('Delete this note?')) return;
     try {
-      await ServerAPI.updateInvestor(this.currentInvestorId, { notes });
-
-      if (this.data[this.currentInvestorId]) {
-        this.data[this.currentInvestorId].notes = notes;
-      }
-    } catch (error) {
-      console.error('Failed to save notes:', error);
+      await ServerAPI.deleteInvestorNote(investorId, noteId);
+      this._loadInvestorNotes(investorId);
+    } catch (err) {
+      alert('Failed to delete note: ' + (err.message || 'Unknown error'));
     }
   },
 

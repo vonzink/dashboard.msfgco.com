@@ -738,32 +738,16 @@
 
     <!-- Investor Modal (required by investors.js) -->
     <div id="investorModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content">
-        <button type="button" class="modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
-
+      <div class="modal-content" style="max-width:900px;">
+        <button type="button" class="modal-close investor-detail-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
             <img class="investor-logo" alt="Investor Logo" onerror="this.onerror=null;this.src='/assets/msfg-logo-fallback.svg';" />
             <h2 class="investor-name">Investor</h2>
           </div>
         </div>
-
-        <div class="modal-body">
-          <div class="investor-info-grid">
-            <div class="info-section account-executive"></div>
-            <div class="info-section investor-details"></div>
-            <div class="info-section investor-turn-times"></div>
-            <div class="info-section investor-team"></div>
-            <div class="info-section lender-ids"></div>
-            <div class="info-section mortgagee-clause"></div>
-            <div class="info-section investor-links"></div>
-            <div class="info-section investor-documents u-grid-span-all"></div>
-
-            <div class="info-section investor-notes u-grid-span-all">
-              <h4><i class="fas fa-note-sticky"></i> Notes</h4>
-              <div class="notes-content empty" contenteditable="true"></div>
-            </div>
-          </div>
+        <div class="modal-body" id="investorDetailBody">
+          <!-- Populated dynamically by populateModal() -->
         </div>
       </div>
     </div>
