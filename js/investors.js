@@ -470,6 +470,8 @@ const Investors = {
     }
   },
 
+  _selectedTagColor: '#4a90d9',
+
   bindManageTagsModal() {
     const closeBtn = document.getElementById('closeInvestorManageTagsModal');
     if (closeBtn) closeBtn.addEventListener('click', () => this.closeManageTagsModal());
@@ -479,6 +481,15 @@ const Investors = {
     if (createBtn) createBtn.addEventListener('click', () => this.createInvestorTag());
     const nameInput = document.getElementById('investorNewTagNameInput');
     if (nameInput) nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.createInvestorTag(); });
+
+    // Color preset buttons
+    document.querySelectorAll('#investorTagColorPresets .tag-color-preset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#investorTagColorPresets .tag-color-preset').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        this._selectedTagColor = btn.dataset.color;
+      });
+    });
   },
 
   openManageTagsModal() {
@@ -535,10 +546,9 @@ const Investors = {
 
   async createInvestorTag() {
     const nameInput = document.getElementById('investorNewTagNameInput');
-    const colorInput = document.getElementById('investorNewTagColorInput');
     const name = nameInput?.value.trim();
     if (!name) { nameInput?.focus(); return; }
-    const color = colorInput?.value || '#8cc63e';
+    const color = this._selectedTagColor || '#4a90d9';
 
     try {
       const tag = await ServerAPI.createInvestorTag(name, color);
