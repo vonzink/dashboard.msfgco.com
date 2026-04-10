@@ -4,7 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getUserId, getUserRole, hasRole, requireDbUser } = require('../middleware/userContext');
+const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
 
 router.use(requireDbUser);
@@ -464,6 +464,84 @@ router.delete('/:id', async (req, res, next) => {
       data: loans[0]
     });
 
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ========================================
+// FUNDED LOAN NOTES
+// ========================================
+
+// GET /api/funded-loans/:id/notes
+router.get('/:id/notes', async (req, res, next) => {
+  try {
+    const [notes] = await db.query(
+      'SELECT * FROM funded_loan_notes WHERE funded_loan_id = ? ORDER BY created_at DESC',
+      [req.params.id]
+    );
+    res.json(notes);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/funded-loans/:id/notes
+router.post('/:id/notes', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+    const userId = getUserId(req);
+    const dbUser = getDbUser(req);
+    const authorName = dbUser?.name || 'Unknown';
+
+    const [result] = await db.query(
+      'INSERT INTO funded_loan_notes (funded_loan_id, author_id, author_name, content) VALUES (?, ?, ?, ?)',
+      [req.params.id, userId, authorName, content.trim()]
+    );
+    const [note] = await db.query('SELECT * FROM funded_loan_notes WHERE id = ?', [result.insertId]);
+    res.status(201).json(note[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/funded-loans/:id/notes/:noteId
+router.put('/:id/notes/:noteId', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+    const [existing] = await db.query('SELECT * FROM funded_loan_notes WHERE id = ? AND funded_loan_id = ?', [req.params.noteId, req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+    if (!isAdmin(req) && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'Only the author or admin can edit this note' });
+    }
+
+    await db.query('UPDATE funded_loan_notes SET content = ? WHERE id = ?', [content.trim(), req.params.noteId]);
+    const [updated] = await db.query('SELECT * FROM funded_loan_notes WHERE id = ?', [req.params.noteId]);
+    res.json(updated[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/funded-loans/:id/notes/:noteId
+router.delete('/:id/notes/:noteId', async (req, res, next) => {
+  try {
+    const [existing] = await db.query('SELECT * FROM funded_loan_notes WHERE id = ? AND funded_loan_id = ?', [req.params.noteId, req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+    if (!isAdmin(req) && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'Only the author or admin can delete this note' });
+    }
+
+    await db.query('DELETE FROM funded_loan_notes WHERE id = ?', [req.params.noteId]);
+    res.json({ message: 'Note deleted' });
   } catch (error) {
     next(error);
   }

@@ -251,8 +251,16 @@ const FundedLoans = {
     }
 
     tbody.innerHTML = this._data.map(loan =>
-      '<tr>' + cols.map(c => this._renderCell(loan, c.field)).join('') + '</tr>'
+      '<tr data-id="' + loan.id + '" class="pa-clickable-row">' + cols.map(c => this._renderCell(loan, c.field)).join('') + '</tr>'
     ).join('');
+
+    // Bind row click → open detail view
+    tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
+      row.addEventListener('click', () => {
+        var id = parseInt(row.dataset.id);
+        this._openDetail(id);
+      });
+    });
   },
 
   _renderSummary() {
@@ -325,6 +333,242 @@ const FundedLoans = {
 
   getPeriod() {
     return this._period;
+  },
+
+  // ========================================
+  // FUNDED LOAN DETAIL VIEW
+  // ========================================
+  _detailInit: false,
+
+  _initDetail() {
+    if (this._detailInit) return;
+    this._detailInit = true;
+
+    var modal = document.getElementById('fundedDetailModal');
+    if (modal) {
+      var self = this;
+      modal.querySelectorAll('.funded-detail-close').forEach(function(btn) {
+        btn.addEventListener('click', function() { self._closeDetail(); });
+      });
+      modal.addEventListener('click', function(e) {
+        if (e.target === modal) self._closeDetail();
+      });
+    }
+  },
+
+  _openDetail(id) {
+    this._initDetail();
+    var item = this._data.find(function(l) { return l.id === id; });
+    if (!item) return;
+
+    var modal = document.getElementById('fundedDetailModal');
+    if (!modal) return;
+
+    var esc = Utils.escapeHtml;
+    var fmtDate = function(v) { return v ? Utils.formatDate(v) : '--'; };
+    var fmtCur = function(v) { return v != null && v !== '' ? Utils.formatCurrency(v) : '--'; };
+    var statusCls = this._statusBadgeClass;
+
+    var title = document.getElementById('fundedDetailTitle');
+    if (title) title.innerHTML = '<i class="fas fa-hand-holding-usd" style="color:var(--green-bright);margin-right:0.5rem;"></i> ' + esc(item.client_name || item.borrower_name || 'Funded Loan');
+
+    var body = document.getElementById('fundedDetailBody');
+    var detailRow = function(label, value) {
+      return value && value !== '--'
+        ? '<div class="pa-detail-row"><span class="pa-detail-label">' + esc(label) + '</span><span class="pa-detail-value">' + value + '</span></div>'
+        : '';
+    };
+
+    var loName = item.lo_name || item.assigned_lo_name || '';
+
+    body.innerHTML =
+      '<div class="pa-detail-grid">' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-user"></i> Borrower Info</h3>' +
+          detailRow('Borrower', esc(item.client_name || item.borrower_name || '--')) +
+          detailRow('Loan Officer', esc(loName || '--')) +
+          detailRow('Group', esc(item.group_name || '')) +
+          detailRow('Board', esc(item.source_board_name || '')) +
+          detailRow('Borrower Email', esc(item.borrower_email || '')) +
+          detailRow('Borrower Phone', esc(item.borrower_phone || '')) +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-dollar-sign"></i> Loan Details</h3>' +
+          detailRow('Loan Amount', fmtCur(item.loan_amount)) +
+          detailRow('Loan Type', esc(item.loan_type || item.product_type || '')) +
+          detailRow('Loan Number', esc(item.loan_number || '')) +
+          detailRow('Lender', esc(item.lender || '')) +
+          detailRow('Rate', esc(item.rate || '')) +
+          detailRow('Occupancy', esc(item.occupancy || '')) +
+          detailRow('Loan Purpose', esc(item.loan_purpose || '')) +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-map-marker-alt"></i> Property</h3>' +
+          detailRow('Subject Property', esc(item.subject_property || '')) +
+          detailRow('Property Type', esc(item.property_type || '')) +
+          detailRow('Purchase Price', fmtCur(item.purchase_price)) +
+          detailRow('Appraised Value', fmtCur(item.appraised_value)) +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-calendar-alt"></i> Timeline</h3>' +
+          detailRow('Application Date', fmtDate(item.application_date)) +
+          detailRow('Closing Date', fmtDate(item.closing_date)) +
+          detailRow('Funded Date', fmtDate(item.funded_date)) +
+          detailRow('First Payment', fmtDate(item.first_payment_date)) +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-file-invoice-dollar"></i> Mortgage Details</h3>' +
+          detailRow('Mortgage Payment', fmtCur(item.mortgage_payment)) +
+          detailRow('Mortgage Insurance', fmtCur(item.mortgage_insurance)) +
+          detailRow('Hazard Insurance', fmtCur(item.hazard_insurance_amount)) +
+          detailRow('Seller Comp', fmtCur(item.seller_comp)) +
+          detailRow('Broker Fee', fmtCur(item.broker_fee)) +
+        '</div>' +
+        '<div class="pa-detail-section">' +
+          '<h3 class="pa-detail-section-title"><i class="fas fa-user-tie"></i> Referring Agent</h3>' +
+          detailRow('Agent Name', esc(item.referring_agent || '')) +
+          detailRow('Agent Email', item.referring_agent_email ? '<a href="mailto:' + esc(item.referring_agent_email) + '">' + esc(item.referring_agent_email) + '</a>' : '') +
+          detailRow('Agent Phone', item.referring_agent_phone ? '<a href="tel:' + esc(item.referring_agent_phone) + '">' + esc(item.referring_agent_phone) + '</a>' : '') +
+        '</div>' +
+      '</div>' +
+      (item.notes ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Monday Notes</h3><div class="pa-detail-monday-notes">' + esc(item.notes) + '</div></div>' : '') +
+      '<div class="pa-detail-section full-width">' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>' +
+        '<div class="pa-notes-add">' +
+          '<textarea id="fundedNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>' +
+          '<button type="button" class="btn btn-primary btn-sm" id="fundedAddNoteBtn"><i class="fas fa-plus"></i> Add Note</button>' +
+        '</div>' +
+        '<div id="fundedNotesContainer" class="pa-notes-list">' +
+          '<div style="text-align:center;padding:1rem;color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading notes...</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="pa-detail-actions">' +
+        '<button type="button" class="btn btn-secondary" onclick="FundedLoans._closeDetail();"><i class="fas fa-times"></i> Close</button>' +
+      '</div>';
+
+    modal.classList.add('active');
+
+    // Bind add note
+    var self = this;
+    document.getElementById('fundedAddNoteBtn')?.addEventListener('click', function() { self._addNote(id); });
+    document.getElementById('fundedNewNoteInput')?.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) self._addNote(id);
+    });
+
+    this._loadNotes(id);
+  },
+
+  _closeDetail() {
+    var modal = document.getElementById('fundedDetailModal');
+    if (modal) modal.classList.remove('active');
+  },
+
+  _loadNotes(loanId) {
+    var container = document.getElementById('fundedNotesContainer');
+    if (!container) return;
+    var self = this;
+
+    ServerAPI.getFundedLoanNotes(loanId).then(function(notes) {
+      if (!notes || notes.length === 0) {
+        container.innerHTML = '<div class="pa-notes-empty">No notes yet.</div>';
+        return;
+      }
+
+      var esc = Utils.escapeHtml;
+      var currentUserId = CONFIG.currentUser?.id;
+      var isAdminUser = ['admin', 'manager'].includes((CONFIG.currentUser?.activeRole || '').toLowerCase());
+
+      container.innerHTML = notes.map(function(note) {
+        var canEdit = isAdminUser || note.author_id === currentUserId;
+        var ts = new Date(note.created_at);
+        var edited = note.updated_at && note.updated_at !== note.created_at;
+        var timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+
+        return '<div class="pa-note" data-note-id="' + note.id + '" data-parent-id="' + loanId + '">' +
+          '<div class="pa-note-header">' +
+            '<span class="pa-note-author"><i class="fas fa-user-circle"></i> ' + esc(note.author_name || 'Unknown') + '</span>' +
+            '<span class="pa-note-time">' + esc(timeStr) + (edited ? ' (edited)' : '') + '</span>' +
+            (canEdit ? '<div class="pa-note-actions">' +
+              '<button type="button" class="pa-note-edit-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>' +
+              '<button type="button" class="pa-note-delete-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>' +
+            '</div>' : '') +
+          '</div>' +
+          '<div class="pa-note-content">' + esc(note.content) + '</div>' +
+        '</div>';
+      }).join('');
+
+      container.querySelectorAll('.pa-note-edit-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var noteEl = btn.closest('.pa-note');
+          self._editNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+        });
+      });
+      container.querySelectorAll('.pa-note-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var noteEl = btn.closest('.pa-note');
+          self._deleteNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+        });
+      });
+    }).catch(function(err) {
+      console.error('Failed to load funded loan notes:', err);
+      container.innerHTML = '<div class="pa-notes-empty" style="color:#e74c3c;">Failed to load notes.</div>';
+    });
+  },
+
+  _addNote(loanId) {
+    var input = document.getElementById('fundedNewNoteInput');
+    if (!input) return;
+    var content = input.value.trim();
+    if (!content) return;
+    var self = this;
+
+    ServerAPI.addFundedLoanNote(loanId, content).then(function() {
+      input.value = '';
+      self._loadNotes(loanId);
+    }).catch(function(err) {
+      alert('Failed to add note: ' + (err.message || 'Unknown error'));
+    });
+  },
+
+  _editNote(loanId, noteId) {
+    var noteEl = document.querySelector('.pa-note[data-note-id="' + noteId + '"][data-parent-id="' + loanId + '"]');
+    if (!noteEl) return;
+    var contentEl = noteEl.querySelector('.pa-note-content');
+    var currentContent = contentEl.textContent;
+    var self = this;
+
+    contentEl.innerHTML = '<textarea class="form-input pa-note-edit-input" rows="2">' + Utils.escapeHtml(currentContent) + '</textarea>' +
+      '<div class="pa-note-edit-actions">' +
+        '<button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>' +
+        '<button type="button" class="btn btn-secondary btn-sm pa-note-cancel-btn">Cancel</button>' +
+      '</div>';
+
+    var textarea = contentEl.querySelector('textarea');
+    textarea.focus();
+
+    contentEl.querySelector('.pa-note-save-btn').addEventListener('click', function() {
+      var newContent = textarea.value.trim();
+      if (!newContent) return;
+      ServerAPI.updateFundedLoanNote(loanId, noteId, newContent).then(function() {
+        self._loadNotes(loanId);
+      }).catch(function(err) {
+        alert('Failed to update note: ' + (err.message || 'Unknown error'));
+      });
+    });
+
+    contentEl.querySelector('.pa-note-cancel-btn').addEventListener('click', function() {
+      self._loadNotes(loanId);
+    });
+  },
+
+  _deleteNote(loanId, noteId) {
+    if (!confirm('Delete this note?')) return;
+    var self = this;
+    ServerAPI.deleteFundedLoanNote(loanId, noteId).then(function() {
+      self._loadNotes(loanId);
+    }).catch(function(err) {
+      alert('Failed to delete note: ' + (err.message || 'Unknown error'));
+    });
   },
 };
 

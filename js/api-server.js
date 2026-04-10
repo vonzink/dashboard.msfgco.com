@@ -359,6 +359,20 @@ const ServerAPI = {
         return this.get(`/pipeline/summary${qs}`);
     },
 
+    // Pipeline notes
+    getPipelineNotes(pipelineId) {
+        return this.get(`/pipeline/${pipelineId}/notes`);
+    },
+    addPipelineNote(pipelineId, content) {
+        return this.post(`/pipeline/${pipelineId}/notes`, { content });
+    },
+    updatePipelineNote(pipelineId, noteId, content) {
+        return this.put(`/pipeline/${pipelineId}/notes/${noteId}`, { content });
+    },
+    deletePipelineNote(pipelineId, noteId) {
+        return this.delete(`/pipeline/${pipelineId}/notes/${noteId}`);
+    },
+
     getPreApprovalsSummary(params = {}) {
         const qs = this.buildQuery(params);
         return this.get(`/pre-approvals/summary${qs}`);
@@ -529,6 +543,20 @@ const ServerAPI = {
     getFundedLoansSummary(params = {}) {
         const qs = this.buildQuery(params);
         return this.get(`/funded-loans/summary${qs}`);
+    },
+
+    // Funded loan notes
+    getFundedLoanNotes(loanId) {
+        return this.get(`/funded-loans/${loanId}/notes`);
+    },
+    addFundedLoanNote(loanId, content) {
+        return this.post(`/funded-loans/${loanId}/notes`, { content });
+    },
+    updateFundedLoanNote(loanId, noteId, content) {
+        return this.put(`/funded-loans/${loanId}/notes/${noteId}`, { content });
+    },
+    deleteFundedLoanNote(loanId, noteId) {
+        return this.delete(`/funded-loans/${loanId}/notes/${noteId}`);
     },
 
     getFundedLoansByLO(params = {}) {

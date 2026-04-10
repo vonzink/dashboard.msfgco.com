@@ -965,8 +965,16 @@ const API = {
                 return `<td>${Utils.escapeHtml(val != null ? String(val) : '')}</td>`;
             }).join('');
 
-            return `<tr data-id="${item.id}" data-lo="${Utils.escapeHtml(item.assigned_lo_name || '')}">${cells}</tr>`;
+            return `<tr data-id="${item.id}" data-lo="${Utils.escapeHtml(item.assigned_lo_name || '')}" class="pa-clickable-row">${cells}</tr>`;
         }).join('');
+
+        // Bind row click → open detail view
+        tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
+            row.addEventListener('click', () => {
+                const id = parseInt(row.dataset.id);
+                this._openPipelineDetail(id);
+            });
+        });
     },
 
     async populatePipelineFilters(data) {
@@ -993,6 +1001,234 @@ const API = {
                     MondaySettings.filterPipeline();
                 }
             }
+        }
+    },
+
+    // ========================================
+    // PIPELINE DETAIL VIEW
+    // ========================================
+    _pipelineDetailInit: false,
+
+    _initPipelineDetail() {
+        if (this._pipelineDetailInit) return;
+        this._pipelineDetailInit = true;
+
+        const modal = document.getElementById('pipelineDetailModal');
+        if (modal) {
+            modal.querySelectorAll('.pipeline-detail-close').forEach(btn => {
+                btn.addEventListener('click', () => this._closePipelineDetail());
+            });
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) this._closePipelineDetail();
+            });
+        }
+    },
+
+    _openPipelineDetail(id) {
+        this._initPipelineDetail();
+        const item = this.pipelineData?.find(p => p.id === id);
+        if (!item) return;
+
+        const modal = document.getElementById('pipelineDetailModal');
+        if (!modal) return;
+
+        const esc = Utils.escapeHtml;
+        const fmtDate = (v) => v ? Utils.formatDate(v) : '--';
+        const fmtCur = (v) => v != null && v !== '' ? Utils.formatCurrency(v) : '--';
+        const statusCls = this._statusBadgeClass;
+
+        const title = document.getElementById('pipelineDetailTitle');
+        if (title) title.innerHTML = '<i class="fas fa-chart-line" style="color:var(--green-bright);margin-right:0.5rem;"></i> ' + esc(item.client_name || 'Pipeline Item');
+
+        const body = document.getElementById('pipelineDetailBody');
+        const detailRow = (label, value) => value && value !== '--'
+            ? `<div class="pa-detail-row"><span class="pa-detail-label">${esc(label)}</span><span class="pa-detail-value">${value}</span></div>`
+            : '';
+
+        body.innerHTML = `
+            <div class="pa-detail-grid">
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-user"></i> Borrower Info</h3>
+                    ${detailRow('Client Name', esc(item.client_name || '--'))}
+                    ${detailRow('Loan Officer', esc(item.assigned_lo_name || '--'))}
+                    ${item.stage ? detailRow('Stage', `<span class="pipeline-badge ${statusCls(item.stage)}">${esc(item.stage)}</span>`) : ''}
+                    ${item.loan_status ? detailRow('Loan Status', `<span class="pipeline-badge ${statusCls(item.loan_status)}">${esc(item.loan_status)}</span>`) : ''}
+                    ${detailRow('Loan Number', esc(item.loan_number || ''))}
+                    ${detailRow('Lender', esc(item.lender || ''))}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-dollar-sign"></i> Loan Details</h3>
+                    ${detailRow('Loan Amount', fmtCur(item.loan_amount))}
+                    ${detailRow('Loan Type', esc(item.loan_type || ''))}
+                    ${detailRow('Rate', esc(item.rate || ''))}
+                    ${detailRow('Occupancy', esc(item.occupancy || ''))}
+                    ${detailRow('Purchase Price', fmtCur(item.purchase_price))}
+                    ${detailRow('Appraised Value', fmtCur(item.appraised_value))}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-map-marker-alt"></i> Property</h3>
+                    ${detailRow('Subject Property', esc(item.subject_property || ''))}
+                    ${detailRow('Property Type', esc(item.property_type || ''))}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-calendar-alt"></i> Timeline</h3>
+                    ${detailRow('Application Date', fmtDate(item.application_date))}
+                    ${detailRow('Target Close', fmtDate(item.target_close_date))}
+                    ${detailRow('Closing Date', fmtDate(item.closing_date))}
+                    ${detailRow('Funding Date', fmtDate(item.funding_date))}
+                    ${detailRow('Lock Expiration', fmtDate(item.lock_expiration_date))}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-tasks"></i> Status Tracking</h3>
+                    ${item.appraisal_status ? detailRow('Appraisal', `<span class="pipeline-badge ${statusCls(item.appraisal_status)}">${esc(item.appraisal_status)}</span>`) : ''}
+                    ${item.prelims_status ? detailRow('Prelims', `<span class="pipeline-badge ${statusCls(item.prelims_status)}">${esc(item.prelims_status)}</span>`) : ''}
+                    ${item.mini_set_status ? detailRow('Mini Set', `<span class="pipeline-badge ${statusCls(item.mini_set_status)}">${esc(item.mini_set_status)}</span>`) : ''}
+                    ${item.cd_status ? detailRow('CD', `<span class="pipeline-badge ${statusCls(item.cd_status)}">${esc(item.cd_status)}</span>`) : ''}
+                </div>
+                <div class="pa-detail-section">
+                    <h3 class="pa-detail-section-title"><i class="fas fa-user-tie"></i> Referring Agent</h3>
+                    ${detailRow('Agent Name', esc(item.referring_agent || ''))}
+                    ${detailRow('Agent Email', item.referring_agent_email ? `<a href="mailto:${esc(item.referring_agent_email)}">${esc(item.referring_agent_email)}</a>` : '')}
+                    ${detailRow('Agent Phone', item.referring_agent_phone ? `<a href="tel:${esc(item.referring_agent_phone)}">${esc(item.referring_agent_phone)}</a>` : '')}
+                </div>
+            </div>
+            ${item.notes ? `<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Monday Notes</h3><div class="pa-detail-monday-notes">${esc(item.notes)}</div></div>` : ''}
+            <div class="pa-detail-section full-width">
+                <h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>
+                <div class="pa-notes-add">
+                    <textarea id="pipelineNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>
+                    <button type="button" class="btn btn-primary btn-sm" id="pipelineAddNoteBtn"><i class="fas fa-plus"></i> Add Note</button>
+                </div>
+                <div id="pipelineNotesContainer" class="pa-notes-list">
+                    <div style="text-align:center;padding:1rem;color:var(--text-secondary);"><i class="fas fa-spinner fa-spin"></i> Loading notes...</div>
+                </div>
+            </div>
+            <div class="pa-detail-actions">
+                <button type="button" class="btn btn-secondary" onclick="API._closePipelineDetail();"><i class="fas fa-times"></i> Close</button>
+            </div>
+        `;
+
+        modal.classList.add('active');
+
+        // Bind add note
+        document.getElementById('pipelineAddNoteBtn')?.addEventListener('click', () => this._addPipelineNote(id));
+        document.getElementById('pipelineNewNoteInput')?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addPipelineNote(id);
+        });
+
+        this._loadPipelineNotes(id);
+    },
+
+    _closePipelineDetail() {
+        const modal = document.getElementById('pipelineDetailModal');
+        if (modal) modal.classList.remove('active');
+    },
+
+    async _loadPipelineNotes(pipelineId) {
+        const container = document.getElementById('pipelineNotesContainer');
+        if (!container) return;
+
+        try {
+            const notes = await ServerAPI.getPipelineNotes(pipelineId);
+            if (!notes || notes.length === 0) {
+                container.innerHTML = '<div class="pa-notes-empty">No notes yet.</div>';
+                return;
+            }
+
+            const esc = Utils.escapeHtml;
+            const currentUserId = CONFIG.currentUser?.id;
+            const isAdminUser = ['admin', 'manager'].includes((CONFIG.currentUser?.activeRole || '').toLowerCase());
+
+            container.innerHTML = notes.map(note => {
+                const canEdit = isAdminUser || note.author_id === currentUserId;
+                const ts = new Date(note.created_at);
+                const edited = note.updated_at && note.updated_at !== note.created_at;
+                const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+
+                return `<div class="pa-note" data-note-id="${note.id}" data-parent-id="${pipelineId}">
+                    <div class="pa-note-header">
+                        <span class="pa-note-author"><i class="fas fa-user-circle"></i> ${esc(note.author_name || 'Unknown')}</span>
+                        <span class="pa-note-time">${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
+                        ${canEdit ? `<div class="pa-note-actions">
+                            <button type="button" class="pa-note-edit-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
+                            <button type="button" class="pa-note-delete-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>
+                        </div>` : ''}
+                    </div>
+                    <div class="pa-note-content">${esc(note.content)}</div>
+                </div>`;
+            }).join('');
+
+            container.querySelectorAll('.pa-note-edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const noteEl = btn.closest('.pa-note');
+                    this._editPipelineNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+                });
+            });
+            container.querySelectorAll('.pa-note-delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const noteEl = btn.closest('.pa-note');
+                    this._deletePipelineNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
+                });
+            });
+        } catch (err) {
+            console.error('Failed to load pipeline notes:', err);
+            container.innerHTML = '<div class="pa-notes-empty" style="color:#e74c3c;">Failed to load notes.</div>';
+        }
+    },
+
+    async _addPipelineNote(pipelineId) {
+        const input = document.getElementById('pipelineNewNoteInput');
+        if (!input) return;
+        const content = input.value.trim();
+        if (!content) return;
+
+        try {
+            await ServerAPI.addPipelineNote(pipelineId, content);
+            input.value = '';
+            this._loadPipelineNotes(pipelineId);
+        } catch (err) {
+            alert('Failed to add note: ' + (err.message || 'Unknown error'));
+        }
+    },
+
+    async _editPipelineNote(pipelineId, noteId) {
+        const noteEl = document.querySelector(`.pa-note[data-note-id="${noteId}"][data-parent-id="${pipelineId}"]`);
+        if (!noteEl) return;
+        const contentEl = noteEl.querySelector('.pa-note-content');
+        const currentContent = contentEl.textContent;
+
+        contentEl.innerHTML = `<textarea class="form-input pa-note-edit-input" rows="2">${Utils.escapeHtml(currentContent)}</textarea>
+            <div class="pa-note-edit-actions">
+                <button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>
+                <button type="button" class="btn btn-secondary btn-sm pa-note-cancel-btn">Cancel</button>
+            </div>`;
+
+        const textarea = contentEl.querySelector('textarea');
+        textarea.focus();
+
+        contentEl.querySelector('.pa-note-save-btn').addEventListener('click', async () => {
+            const newContent = textarea.value.trim();
+            if (!newContent) return;
+            try {
+                await ServerAPI.updatePipelineNote(pipelineId, noteId, newContent);
+                this._loadPipelineNotes(pipelineId);
+            } catch (err) {
+                alert('Failed to update note: ' + (err.message || 'Unknown error'));
+            }
+        });
+
+        contentEl.querySelector('.pa-note-cancel-btn').addEventListener('click', () => {
+            this._loadPipelineNotes(pipelineId);
+        });
+    },
+
+    async _deletePipelineNote(pipelineId, noteId) {
+        if (!confirm('Delete this note?')) return;
+        try {
+            await ServerAPI.deletePipelineNote(pipelineId, noteId);
+            this._loadPipelineNotes(pipelineId);
+        } catch (err) {
+            alert('Failed to delete note: ' + (err.message || 'Unknown error'));
         }
     },
 

@@ -242,5 +242,83 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
+// ========================================
+// PIPELINE NOTES
+// ========================================
+
+// GET /api/pipeline/:id/notes
+router.get('/:id/notes', async (req, res, next) => {
+  try {
+    const [notes] = await db.query(
+      'SELECT * FROM pipeline_notes WHERE pipeline_id = ? ORDER BY created_at DESC',
+      [req.params.id]
+    );
+    res.json(notes);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/pipeline/:id/notes
+router.post('/:id/notes', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+    const userId = getUserId(req);
+    const dbUser = getDbUser(req);
+    const authorName = dbUser?.name || 'Unknown';
+
+    const [result] = await db.query(
+      'INSERT INTO pipeline_notes (pipeline_id, author_id, author_name, content) VALUES (?, ?, ?, ?)',
+      [req.params.id, userId, authorName, content.trim()]
+    );
+    const [note] = await db.query('SELECT * FROM pipeline_notes WHERE id = ?', [result.insertId]);
+    res.status(201).json(note[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// PUT /api/pipeline/:id/notes/:noteId
+router.put('/:id/notes/:noteId', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: 'Note content is required' });
+    }
+    const [existing] = await db.query('SELECT * FROM pipeline_notes WHERE id = ? AND pipeline_id = ?', [req.params.noteId, req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+    if (!isAdmin(req) && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'Only the author or admin can edit this note' });
+    }
+
+    await db.query('UPDATE pipeline_notes SET content = ? WHERE id = ?', [content.trim(), req.params.noteId]);
+    const [updated] = await db.query('SELECT * FROM pipeline_notes WHERE id = ?', [req.params.noteId]);
+    res.json(updated[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/pipeline/:id/notes/:noteId
+router.delete('/:id/notes/:noteId', async (req, res, next) => {
+  try {
+    const [existing] = await db.query('SELECT * FROM pipeline_notes WHERE id = ? AND pipeline_id = ?', [req.params.noteId, req.params.id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+
+    if (!isAdmin(req) && existing[0].author_id !== getUserId(req)) {
+      return res.status(403).json({ error: 'Only the author or admin can delete this note' });
+    }
+
+    await db.query('DELETE FROM pipeline_notes WHERE id = ?', [req.params.noteId]);
+    res.json({ message: 'Note deleted' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;
 
