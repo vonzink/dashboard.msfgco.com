@@ -3,7 +3,7 @@ const db = require('../../db/connection');
 const logger = require('../../lib/logger');
 const { getCredential } = require('../../routes/integrations');
 const { fetchBoardItems } = require('./client');
-const { mapItemToRow, autoMapColumns } = require('./mapper');
+const { mapItemToRow, autoMapColumns, resolveLoId } = require('./mapper');
 
 // ── DB Helpers ──────────────────────────────────
 
@@ -136,9 +136,8 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
 
   if (row.assigned_lo_name) {
     paRow.assigned_lo_name = row.assigned_lo_name;
-    // Use pre-resolved ID, or look up by name, or look up by email
-    const name = row.assigned_lo_name.toLowerCase().trim();
-    const loId = row.assigned_lo_id || userNameMap[name] || userNameMap['email:' + name];
+    // Use pre-resolved ID, or fuzzy match
+    const loId = row.assigned_lo_id || resolveLoId(row.assigned_lo_name, userNameMap);
     if (loId) paRow.assigned_lo_id = loId;
   }
 
@@ -240,8 +239,7 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
 
   if (row.assigned_lo_name) {
     flRow.assigned_lo_name = row.assigned_lo_name;
-    const name = row.assigned_lo_name.toLowerCase().trim();
-    const loId = row.assigned_lo_id || userNameMap[name] || userNameMap['email:' + name];
+    const loId = row.assigned_lo_id || resolveLoId(row.assigned_lo_name, userNameMap);
     if (loId) flRow.assigned_lo_id = loId;
   }
 
@@ -274,10 +272,37 @@ async function syncAllBoards(userId) {
 
   const [users] = await db.query('SELECT id, name, email FROM users');
   const userNameMap = {};
+  // Track first/last name collisions — only use for matching if unique
+  const firstNameCounts = {};
+  const lastNameCounts = {};
+
   for (const u of users) {
-    if (u.name) userNameMap[u.name.toLowerCase().trim()] = u.id;
+    if (u.name) {
+      const fullLower = u.name.toLowerCase().trim();
+      userNameMap[fullLower] = u.id;
+
+      const parts = fullLower.split(/\s+/);
+      const first = parts[0];
+      const last = parts.length > 1 ? parts[parts.length - 1] : null;
+
+      // Count first/last names to detect collisions
+      firstNameCounts[first] = (firstNameCounts[first] || 0) + 1;
+      if (last) lastNameCounts[last] = (lastNameCounts[last] || 0) + 1;
+    }
     if (u.email) userNameMap['email:' + u.email.toLowerCase().trim()] = u.id;
   }
+
+  // Only add first/last name keys when they are unique (no ambiguity)
+  for (const u of users) {
+    if (!u.name) continue;
+    const parts = u.name.toLowerCase().trim().split(/\s+/);
+    const first = parts[0];
+    const last = parts.length > 1 ? parts[parts.length - 1] : null;
+    if (firstNameCounts[first] === 1) userNameMap['first:' + first] = u.id;
+    if (last && lastNameCounts[last] === 1) userNameMap['last:' + last] = u.id;
+  }
+
+  logger.info({ userCount: users.length, mapKeys: Object.keys(userNameMap).length }, 'Monday sync: built user name map');
 
   const activeBoards = await getActiveBoards();
 
@@ -358,6 +383,8 @@ async function syncAllBoards(userId) {
       boardItems = await fetchBoardItems(token, boardId);
       totalFetched += boardItems.length;
 
+      let unresolvedLOs = new Set();
+
       for (const item of boardItems) {
         const row = mapItemToRow(item, columnMap, userNameMap);
         if (!row.client_name && section === 'pipeline') continue;
@@ -366,6 +393,11 @@ async function syncAllBoards(userId) {
         if (boardLO && !row.assigned_lo_name) {
           row.assigned_lo_name = boardLO.name;
           row.assigned_lo_id = boardLO.id;
+        }
+
+        // Debug: track unresolved LO assignments
+        if (row.assigned_lo_name && !row.assigned_lo_id) {
+          unresolvedLOs.add(row.assigned_lo_name);
         }
 
         syncedIdsBySection[section]?.add(String(item.id));
@@ -385,6 +417,26 @@ async function syncAllBoards(userId) {
           logger.error({ err: rowErr, itemId: item.id, boardId, section }, 'Monday sync: failed to upsert item');
         }
       }
+
+      // Log unresolved LO names for debugging
+      if (unresolvedLOs.size > 0) {
+        logger.warn({
+          boardId,
+          boardName: board.board_name,
+          section,
+          unresolvedLONames: [...unresolvedLOs],
+          count: unresolvedLOs.size,
+        }, 'Monday sync: items have assigned_lo_name but no matching assigned_lo_id — LO filtering will rely on name fallback');
+      }
+
+      logger.info({
+        boardId,
+        boardName: board.board_name,
+        section,
+        fetched: boardItems.length,
+        created,
+        updated,
+      }, 'Monday sync: board completed');
 
       await db.query(
         `UPDATE monday_sync_log

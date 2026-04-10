@@ -16,6 +16,7 @@ router.get('/', async (req, res, next) => {
     const { stage, status, investor_id, investor } = req.query;
     const role = getUserRole(req);
     const userId = getUserId(req);
+    const dbUser = getDbUser(req);
 
     let query = 'SELECT p.* FROM pipeline p WHERE 1=1';
     const params = [];
@@ -40,9 +41,9 @@ router.get('/', async (req, res, next) => {
       }
       query += ` AND (${conditions.join(' OR ')})`;
     } else {
-      // LO: see only own loans
-      query += ' AND p.assigned_lo_id = ?';
-      params.push(userId);
+      // LO: see own loans (by ID or by name fallback for unresolved assignments)
+      query += ' AND (p.assigned_lo_id = ? OR (p.assigned_lo_id IS NULL AND p.assigned_lo_name = ?))';
+      params.push(userId, dbUser?.name || '');
     }
 
     if (stage) {
@@ -103,8 +104,9 @@ router.get('/summary', async (req, res, next) => {
       }
       whereClause += ` AND (${conditions.join(' OR ')})`;
     } else {
-      whereClause += ' AND assigned_lo_id = ?';
-      params.push(userId);
+      const dbUser = getDbUser(req);
+      whereClause += ' AND (assigned_lo_id = ? OR (assigned_lo_id IS NULL AND assigned_lo_name = ?))';
+      params.push(userId, dbUser?.name || '');
     }
 
     const [summary] = await db.query(

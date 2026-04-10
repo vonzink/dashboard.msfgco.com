@@ -369,6 +369,78 @@ const DATE_FIELDS = [
   'credit_report_date',
 ];
 
+// Common nickname → full name mappings for fuzzy LO matching
+const NICKNAMES = {
+  josh: 'joshua', mike: 'michael', jess: 'jessica', rob: 'robert',
+  zach: 'zachary', matt: 'matthew', dan: 'daniel', chris: 'christopher',
+  nick: 'nicholas', will: 'william', tom: 'thomas', ben: 'benjamin',
+  dave: 'david', sam: 'samuel', jon: 'jonathan', steve: 'steven',
+  alex: 'alexander', andy: 'andrew', tony: 'anthony', joe: 'joseph',
+  jim: 'james', ted: 'theodore', rick: 'richard', pat: 'patrick',
+};
+// Also build reverse: joshua → josh
+const REVERSE_NICKNAMES = {};
+for (const [nick, full] of Object.entries(NICKNAMES)) {
+  REVERSE_NICKNAMES[full] = nick;
+}
+
+/**
+ * Fuzzy LO name matching — tries multiple strategies to resolve a
+ * Monday.com display name to a user ID in our DB.
+ *
+ * Strategies (in order):
+ *   1. Exact full name match (lowercase)
+ *   2. Email match (if the text looks like an email)
+ *   3. First-name-only match (when Monday just shows "Josh")
+ *   4. Nickname expansion (Josh → Joshua, etc.)
+ *   5. First + last name substring match (Josh Smith → Joshua Smith)
+ *   6. Last name match as fallback (rare but handles Monday edge cases)
+ */
+function resolveLoId(name, userNameMap) {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+
+  // Strategy 1: exact full name
+  if (userNameMap[key]) return userNameMap[key];
+
+  // Strategy 2: email
+  if (key.includes('@') && userNameMap['email:' + key]) return userNameMap['email:' + key];
+
+  // Strategy 3 & 4: first-name or nickname match (for single-word names like "Josh")
+  const parts = key.split(/\s+/);
+  const firstName = parts[0];
+  const lastName = parts.length > 1 ? parts[parts.length - 1] : null;
+
+  // Try first name direct lookup (only works if unique)
+  if (userNameMap['first:' + firstName]) return userNameMap['first:' + firstName];
+
+  // Try nickname expansion: Josh → Joshua
+  const expanded = NICKNAMES[firstName];
+  if (expanded && userNameMap['first:' + expanded]) return userNameMap['first:' + expanded];
+
+  // Try reverse nickname: Joshua → Josh
+  const contracted = REVERSE_NICKNAMES[firstName];
+  if (contracted && userNameMap['first:' + contracted]) return userNameMap['first:' + contracted];
+
+  // Strategy 5: first + last with nickname expansion
+  if (lastName) {
+    // Try "Joshua Smith" if Monday has "Josh Smith"
+    if (expanded) {
+      const expandedFull = expanded + ' ' + lastName;
+      if (userNameMap[expandedFull]) return userNameMap[expandedFull];
+    }
+    // Try "Josh Smith" if DB has "Joshua Smith"
+    if (contracted) {
+      const contractedFull = contracted + ' ' + lastName;
+      if (userNameMap[contractedFull]) return userNameMap[contractedFull];
+    }
+    // Strategy 6: last name match (only if unique)
+    if (userNameMap['last:' + lastName]) return userNameMap['last:' + lastName];
+  }
+
+  return null;
+}
+
 function mapItemToRow(item, columnMap, userNameMap) {
   const row = {
     client_name: item.name || 'Unnamed',
@@ -399,9 +471,8 @@ function mapItemToRow(item, columnMap, userNameMap) {
       // e.g. "Laura Schloer, Seth Angell" — take the first as the primary LO
       const primaryName = text.includes(',') ? text.split(',')[0].trim() : text;
       row.assigned_lo_name = primaryName;
-      // Try name match first, then email match
-      const loId = userNameMap[primaryName.toLowerCase().trim()]
-        || userNameMap['email:' + primaryName.toLowerCase().trim()];
+      // Fuzzy name resolution: exact → email → first name → nickname → last name
+      const loId = resolveLoId(primaryName, userNameMap);
       if (loId) row.assigned_lo_id = loId;
     } else if (DATE_FIELDS.includes(field)) {
       let dateVal = null;
@@ -526,4 +597,5 @@ module.exports = {
   DATE_FIELDS,
   mapItemToRow,
   autoMapColumns,
+  resolveLoId,
 };

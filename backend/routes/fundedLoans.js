@@ -125,15 +125,22 @@ router.get('/', async (req, res, next) => {
         params.push(board_id);
       }
     } else if (userGroup === 'lo') {
-      // LO: See only their own loans on boards they have access to
+      // LO: See own loans (by ID or name fallback) + optionally scoped to boards
+      const dbUser = getDbUser(req);
       const boardIds = await getAccessibleBoardIds(userId);
-      if (boardIds.length === 0) {
-        return res.json({ data: [], summary: { count: 0, total_amount: 0 }, groups: [], boards: [] });
-      }
-      whereClause += ` AND fl.source_board_id IN (${boardIds.map(() => '?').join(',')})`;
-      params.push(...boardIds);
-      whereClause += ' AND fl.assigned_lo_id = ?';
+      const loConditions = [];
+
+      // Always match by assigned_lo_id
+      loConditions.push('fl.assigned_lo_id = ?');
       params.push(userId);
+
+      // Name fallback for unresolved LO assignments
+      if (dbUser?.name) {
+        loConditions.push('(fl.assigned_lo_id IS NULL AND fl.assigned_lo_name = ?)');
+        params.push(dbUser.name);
+      }
+
+      whereClause += ` AND (${loConditions.join(' OR ')})`;
 
       if (board_id) {
         whereClause += ' AND fl.source_board_id = ?';
@@ -306,14 +313,9 @@ router.get('/summary', async (req, res, next) => {
       }
       whereClause += ` AND (${conditions.join(' OR ')})`;
     } else if (userGroup === 'lo') {
-      const boardIds = await getAccessibleBoardIds(userId);
-      if (boardIds.length === 0) {
-        return res.json({ units: 0, total_amount: 0 });
-      }
-      whereClause += ` AND source_board_id IN (${boardIds.map(() => '?').join(',')})`;
-      params.push(...boardIds);
-      whereClause += ' AND assigned_lo_id = ?';
-      params.push(userId);
+      const dbUser = getDbUser(req);
+      whereClause += ' AND (assigned_lo_id = ? OR (assigned_lo_id IS NULL AND assigned_lo_name = ?))';
+      params.push(userId, dbUser?.name || '');
     } else {
       return res.status(403).json({ error: 'Access denied' });
     }
