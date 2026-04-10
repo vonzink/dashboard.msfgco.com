@@ -752,6 +752,28 @@
       </div>
     </div>
 
+    <!-- Investor Manage Tags Modal -->
+    <div id="investorManageTagsModal" class="investor-modal" aria-hidden="true">
+      <div class="modal-content" style="max-width: 520px;">
+        <div class="modal-header">
+          <h3 class="modal-title"><i class="fas fa-tags"></i> Manage Tags</h3>
+          <button type="button" class="modal-close" id="closeInvestorManageTagsModal" aria-label="Close modal">&times;</button>
+        </div>
+        <div class="modal-body" style="padding: var(--spacing-md);">
+          <div class="manage-tags-create">
+            <div class="manage-tags-create-row">
+              <input type="text" id="investorNewTagNameInput" class="form-input" placeholder="New tag name..." maxlength="100" />
+              <input type="color" id="investorNewTagColorInput" class="form-input manage-tags-color-input" value="#8cc63e" title="Pick a color" />
+              <button type="button" class="btn btn-primary btn-sm" id="investorCreateTagBtn"><i class="fas fa-plus"></i> Add</button>
+            </div>
+          </div>
+          <div class="manage-tags-list" id="investorManageTagsList">
+            <p class="text-muted" style="text-align:center; padding: 2rem 0;">Loading tags...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Programs Modal (populated dynamically by Programs module) -->
     <div id="programsModal" class="investor-modal" aria-hidden="true">
       <div class="modal-content programs-modal-content">

@@ -440,25 +440,29 @@ const ServerAPI = {
         return this.delete(`/investors/${idOrKey}`);
     },
 
+    // Investor tags (managed)
+    getInvestorTags() {
+        return this.get('/investors/tags');
+    },
+    createInvestorTag(name, color) {
+        return this.post('/investors/tags', { name, color });
+    },
+    deleteInvestorTag(tagId) {
+        return this.delete(`/investors/tags/${tagId}`);
+    },
+
     // Investor notes
     getInvestorNotes(investorId) {
         return this.get(`/investors/${investorId}/notes`);
     },
-    addInvestorNote(investorId, content, tags) {
-        return this.post(`/investors/${investorId}/notes`, { content, tags });
+    addInvestorNote(investorId, content, tagIds) {
+        return this.post(`/investors/${investorId}/notes`, { content, tag_ids: tagIds || [] });
     },
-    updateInvestorNote(investorId, noteId, content, tags) {
-        return this.put(`/investors/${investorId}/notes/${noteId}`, { content, tags });
+    updateInvestorNote(investorId, noteId, content, tagIds) {
+        return this.put(`/investors/${investorId}/notes/${noteId}`, { content, tag_ids: tagIds || [] });
     },
     deleteInvestorNote(investorId, noteId) {
         return this.delete(`/investors/${investorId}/notes/${noteId}`);
-    },
-    getInvestorNoteTags() {
-        return this.get('/investors/notes/all-tags');
-    },
-    searchInvestorsByTag(tags) {
-        const params = tags.map(t => 'tag=' + encodeURIComponent(t)).join('&');
-        return this.get('/investors/notes/search-by-tag?' + params);
     },
 
     /** Get presigned upload URL for an investor logo */
