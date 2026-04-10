@@ -1,7 +1,10 @@
 -- Migration 051: Add notes table for investors
 -- Date: 2026-04-10
+-- Note: DROP first because an older incompatible investor_notes table may exist
 
-CREATE TABLE IF NOT EXISTS investor_notes (
+DROP TABLE IF EXISTS investor_notes;
+
+CREATE TABLE investor_notes (
     id INT AUTO_INCREMENT PRIMARY KEY,
     investor_id INT NOT NULL,
     author_id INT NULL,

@@ -384,13 +384,14 @@ const Investors = {
           detailRow('Underwriting Fee', esc(uwFee)) +
         '</div>' +
       '</div>' +
-      // Products & services pills (full width)
-      (pillsHtml ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-tags"></i> Products &amp; Services</h3>' + pillsHtml + '</div>' : '') +
+      // Team (full width, under AE)
+      '<div class="pa-detail-section full-width">' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-users"></i> Team</h3>' +
+        teamHtml +
+      '</div>' +
+      // Products & Services + Lender IDs side by side
       '<div class="pa-detail-grid">' +
-        '<div class="pa-detail-section">' +
-          '<h3 class="pa-detail-section-title"><i class="fas fa-users"></i> Team</h3>' +
-          teamHtml +
-        '</div>' +
+        (pillsHtml ? '<div class="pa-detail-section"><h3 class="pa-detail-section-title"><i class="fas fa-tags"></i> Products &amp; Services</h3>' + pillsHtml + '</div>' : '') +
         '<div class="pa-detail-section">' +
           '<h3 class="pa-detail-section-title"><i class="fas fa-id-card"></i> Lender IDs</h3>' +
           lenderHtml +
