@@ -16,11 +16,12 @@ CREATE TABLE IF NOT EXISTS pre_approval_notes (
     INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Referring agent contact fields
-ALTER TABLE pre_approvals
-  ADD COLUMN IF NOT EXISTS referring_agent_email VARCHAR(200) NULL AFTER referring_agent,
-  ADD COLUMN IF NOT EXISTS referring_agent_phone VARCHAR(50) NULL AFTER referring_agent_email;
+-- Referring agent contact fields on pre_approvals
+-- Use ALTER IGNORE + separate statements for MySQL 5.7 compatibility
+ALTER TABLE pre_approvals ADD COLUMN referring_agent_email VARCHAR(200) NULL AFTER referring_agent;
 
-ALTER TABLE funded_loans
-  ADD COLUMN IF NOT EXISTS referring_agent_email VARCHAR(200) NULL AFTER referring_agent,
-  ADD COLUMN IF NOT EXISTS referring_agent_phone VARCHAR(50) NULL AFTER referring_agent_email;
+ALTER TABLE pre_approvals ADD COLUMN referring_agent_phone VARCHAR(50) NULL AFTER referring_agent_email;
+
+ALTER TABLE funded_loans ADD COLUMN referring_agent_email VARCHAR(200) NULL AFTER referring_agent;
+
+ALTER TABLE funded_loans ADD COLUMN referring_agent_phone VARCHAR(50) NULL AFTER referring_agent_email;
