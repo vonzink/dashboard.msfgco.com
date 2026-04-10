@@ -282,12 +282,11 @@ const API = {
 
         const cols = this._getVisiblePreApprovalColumns();
 
-        // Update thead — add Actions column
+        // Update thead
         const thead = document.getElementById('preApprovalsHead');
         if (thead) {
             thead.innerHTML = '<tr>' +
                 cols.map(c => `<th class="sortable">${Utils.escapeHtml(c.label)}</th>`).join('') +
-                '<th style="width:70px;text-align:center;">Actions</th>' +
                 '</tr>';
             thead.querySelectorAll('.sortable').forEach(header => {
                 header.addEventListener('click', (e) => TableManager.handleSort(e));
@@ -295,7 +294,7 @@ const API = {
         }
 
         if (!data?.length) {
-            tbody.innerHTML = `<tr><td colspan="${cols.length + 1}">
+            tbody.innerHTML = `<tr><td colspan="${cols.length}">
                 <div class="empty-state-enhanced">
                     <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <rect x="20" y="25" width="55" height="70" rx="4" stroke="currentColor" stroke-width="2" opacity="0.3"/>
@@ -317,33 +316,14 @@ const API = {
         tbody.innerHTML = data.map(item =>
             `<tr data-id="${item.id}" class="pa-clickable-row">
                 ${cols.map(c => this._renderPreApprovalCell(item, c.field)).join('')}
-                <td class="pa-row-actions">
-                    <button type="button" class="pa-edit-btn" data-id="${item.id}" title="Edit"><i class="fas fa-pencil-alt"></i></button>
-                    <button type="button" class="pa-delete-btn" data-id="${item.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
-                </td>
             </tr>`
         ).join('');
 
-        // Bind row click → open detail view
+        // Bind row click → open detail view (edit/delete available inside detail modal)
         tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
-            row.addEventListener('click', (e) => {
-                // Don't open detail if clicking an action button
-                if (e.target.closest('.pa-edit-btn') || e.target.closest('.pa-delete-btn')) return;
+            row.addEventListener('click', () => {
                 const id = parseInt(row.dataset.id);
                 this._openPreApprovalDetail(id);
-            });
-        });
-        // Bind row action buttons
-        tbody.querySelectorAll('.pa-edit-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._openPreApprovalEdit(parseInt(btn.dataset.id));
-            });
-        });
-        tbody.querySelectorAll('.pa-delete-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this._deletePreApproval(parseInt(btn.dataset.id));
             });
         });
     },
