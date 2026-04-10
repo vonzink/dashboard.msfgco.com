@@ -992,18 +992,26 @@ const API = {
     async populatePipelineFilters(data) {
         if (!data?.length) return;
 
-        // Populate Loan Officer filter — only show active employees
+        const role = (CONFIG.currentUser?.activeRole || '').toLowerCase();
+        const isLO = role === 'lo';
+
+        // Populate Loan Officer filter — hide for LOs (they only see their own loans)
         const loSelect = document.getElementById('pipelineLO');
         if (loSelect) {
-            const los = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
+            if (isLO) {
+                loSelect.style.display = 'none';
+            } else {
+                loSelect.style.display = '';
+                const los = [...new Set(data.map(d => d.assigned_lo_name).filter(Boolean))].sort();
 
-            const currentVal = loSelect.value || Utils.getStorage('pipeline_lo', '');
-            loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
-                los.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');
-            loSelect.value = currentVal;
-            // Apply restored filter
-            if (currentVal && typeof MondaySettings !== 'undefined') {
-                MondaySettings.filterPipeline();
+                const currentVal = loSelect.value || Utils.getStorage('pipeline_lo', '');
+                loSelect.innerHTML = '<option value="">All Loan Officers</option>' +
+                    los.map(s => `<option value="${Utils.escapeHtml(s)}">${Utils.escapeHtml(s)}</option>`).join('');
+                loSelect.value = currentVal;
+                // Apply restored filter
+                if (currentVal && typeof MondaySettings !== 'undefined') {
+                    MondaySettings.filterPipeline();
+                }
             }
         }
     },

@@ -290,7 +290,18 @@ const FundedLoans = {
     const boardSelect = document.getElementById('fundedBoardSelect');
     if (!boardSelect) return;
 
-    if (this._availableBoards.length > 0) {
+    const role = (CONFIG.currentUser?.activeRole || '').toLowerCase();
+    const isLO = role === 'lo';
+
+    // Show board filter only if there are boards to choose from
+    // For LOs with a single board, hide the dropdown (they only have one board)
+    if (this._availableBoards.length > 1) {
+      boardSelect.style.display = '';
+    } else if (isLO && this._availableBoards.length === 1) {
+      // Auto-select the single board and hide dropdown
+      this._boardFilter = this._availableBoards[0].board_id;
+      boardSelect.style.display = 'none';
+    } else if (this._availableBoards.length > 0) {
       boardSelect.style.display = '';
     }
 
