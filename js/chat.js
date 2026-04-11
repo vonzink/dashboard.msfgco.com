@@ -76,7 +76,7 @@ const Chat = {
         this.isConnected = true;
         this._wsRetryCount = 0;
         if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
-        console.log('Chat WebSocket connected');
+        // WebSocket connected — real-time updates active
       };
 
       this.websocket.onmessage = (event) => {

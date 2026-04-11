@@ -143,41 +143,6 @@ const API = {
     // ========================================
     async loadGoals() {
         // TODO: Implement when /api/goals endpoint is live
-    },
-
-    // ========================================
-    // CRUD OPERATIONS (delegate to ServerAPI)
-    // ========================================
-
-    // Pre-Approvals
-    createPreApproval(data) {
-        return ServerAPI.post('/pre-approvals', data);
-    },
-
-    updatePreApproval(id, data) {
-        return ServerAPI.put(`/pre-approvals/${id}`, data);
-    },
-
-    deletePreApproval(id) {
-        return ServerAPI.delete(`/pre-approvals/${id}`);
-    },
-
-    // Tasks
-    createTask(data) {
-        return ServerAPI.post('/tasks', data);
-    },
-
-    updateTask(id, data) {
-        return ServerAPI.put(`/tasks/${id}`, data);
-    },
-
-    deleteTask(id) {
-        return ServerAPI.delete(`/tasks/${id}`);
-    },
-
-    // News
-    createAnnouncement(data) {
-        return ServerAPI.post('/news', data);
     }
 };
 

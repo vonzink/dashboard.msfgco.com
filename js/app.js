@@ -9,26 +9,31 @@
      4. event-bus.js          — Lightweight pub/sub for decoupled module communication
      5. action-dispatcher.js  — Global [data-action] click handler
      6. api-server.js         — ServerAPI (HTTP client, token refresh, response cache)
-     7. utils.js              — Utils (formatting, DOM, toast, openPopup)
+     7. utils.js              — Utils (formatting, DOM, toast, shared helpers)
      8. theme.js              — ThemeManager (dark/light)
      9. tables.js             — TableManager (sorting, search, pagination)
-    10. chat.js               — Chat (messages, tags, polling)
-    11. api.js                — API (data loading, pipeline/PA rendering)
-    12. sync-manager.js       — SyncManager (data sync orchestration)
-    13. investor-notes.js     — InvestorNotes (tags, notes CRUD, Manage Tags modal)
-    14. investor-dropdown.js  — InvestorDropdown (nav dropdown, All Investors directory)
-    15. investors.js          — Investors (data, modal, contact cards — delegates to InvestorNotes/Dropdown)
-    14. funded-loans.js       — FundedLoans — depends on API._displayPrefs, ServerAPI
-    15. goals.js              — GoalsManager — depends on API (pipeline/funded data)
-    16. announcements.js      — Announcements carousel
-    17. modals.js             — ModalsManager (support ticket, notifications, announcements)
-    18. settings-goals.js     — Goal settings panel
-    19. user-settings.js      — UserSettings
-    20. collapsible.js        — CollapsibleSections (toggle sections with persistence)
-    21. a11y.js               — Accessibility helpers
-    23. progress-init.js      — Progress bar animation
-    24. announcement-editor.js — Announcement editor modal
-    25. app.js                — THIS FILE — orchestrates init of all modules above
+    10. chat.js               — Chat (messages, tags, WebSocket, polling)
+    11. pre-approvals.js      — PreApprovals (data, filters, CRUD modal, detail, notes)
+    12. pipeline.js           — Pipeline (columns, data, filters, detail, notes)
+    13. api.js                — API (orchestrator — delegates to PreApprovals/Pipeline)
+    14. sync-manager.js       — SyncManager (data sync orchestration)
+    15. investor-notes.js     — InvestorNotes (tags, notes CRUD, Manage Tags modal)
+    16. investor-dropdown.js  — InvestorDropdown (nav dropdown, All Investors directory)
+    17. investors.js          — Investors (data, modal, contact cards — delegates to InvestorNotes/Dropdown)
+    18. funded-loans.js       — FundedLoans — depends on API._displayPrefs, ServerAPI
+    19. goals.js              — GoalsManager — depends on API (pipeline/funded data)
+    20. announcements.js      — Announcements carousel
+    21. modals.js             — ModalsManager (support ticket, notifications, announcements)
+    22. settings-goals.js     — Goal settings panel
+    23. user-settings.js      — UserSettings (profile, display prefs, documents)
+    24. programs.js           — Programs directory
+    25. hr-resources.js       — HR Resources
+    26. content-studio.js     — Content Studio (AI social media generation)
+    27. collapsible.js        — CollapsibleSections (toggle sections with persistence)
+    28. a11y.js               — Accessibility helpers
+    29. progress-init.js      — Progress bar animation
+    30. announcement-editor.js — Announcement editor modal
+    31. app.js                — THIS FILE — orchestrates init of all modules above
    ============================================ */
 
 const App = {
