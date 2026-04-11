@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../../db/connection');
 const { decrypt, mask } = require('../../utils/encryption');
-const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject, buildMediaKey } = require('../../services/s3');
+const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject, buildMediaKey, resolveUrl } = require('../../services/s3');
 const logger = require('../../lib/logger');
 
 // GET /users/:id/profile
@@ -26,30 +26,13 @@ router.get('/:id/profile', async (req, res, next) => {
       email_signature: null,
     };
 
-    // Generate presigned URLs for images
-    let avatar_url = null;
-    if (profile.avatar_s3_key) {
-      try { avatar_url = await getDownloadUrl(BUCKETS.media, profile.avatar_s3_key); }
-      catch (e) { logger.warn({ err: e }, 'Avatar URL generation failed'); }
-    }
-
-    let business_card_url = null;
-    if (profile.business_card_s3_key) {
-      try { business_card_url = await getDownloadUrl(BUCKETS.media, profile.business_card_s3_key); }
-      catch (e) { logger.warn({ err: e }, 'Business card URL generation failed'); }
-    }
-
-    let qr_code_1_url = null;
-    if (profile.qr_code_1_s3_key) {
-      try { qr_code_1_url = await getDownloadUrl(BUCKETS.media, profile.qr_code_1_s3_key); }
-      catch (e) { logger.warn({ err: e }, 'QR code 1 URL generation failed'); }
-    }
-
-    let qr_code_2_url = null;
-    if (profile.qr_code_2_s3_key) {
-      try { qr_code_2_url = await getDownloadUrl(BUCKETS.media, profile.qr_code_2_s3_key); }
-      catch (e) { logger.warn({ err: e }, 'QR code 2 URL generation failed'); }
-    }
+    // Generate presigned URLs for images (parallel)
+    const [avatar_url, business_card_url, qr_code_1_url, qr_code_2_url] = await Promise.all([
+      resolveUrl(BUCKETS.media, profile.avatar_s3_key),
+      resolveUrl(BUCKETS.media, profile.business_card_s3_key),
+      resolveUrl(BUCKETS.media, profile.qr_code_1_s3_key),
+      resolveUrl(BUCKETS.media, profile.qr_code_2_s3_key),
+    ]);
 
     // Get AI integration status
     const [integrations] = await db.query(

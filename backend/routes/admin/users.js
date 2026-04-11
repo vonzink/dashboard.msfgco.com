@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../../db/connection');
+const logger = require('../../lib/logger');
 const { encrypt, decrypt, mask } = require('../../utils/encryption');
 const { userUpdate, validate } = require('../../validation/schemas');
 const cognito = require('../../services/cognito');
@@ -123,7 +124,7 @@ router.put('/:id', validate(userUpdate), async (req, res, next) => {
         }
       }
     } catch (e) {
-      console.warn('Cognito sync failed for user', userId, e.message);
+      logger.warn('Cognito sync failed for user', userId, e.message);
     }
 
     const [users] = await db.query('SELECT * FROM users WHERE id = ?', [userId]);
@@ -156,7 +157,7 @@ router.delete('/:id', async (req, res, next) => {
       });
       if (username) await cognito.adminDisableUser(username);
     } catch (e) {
-      console.warn('Cognito disable failed for user', userId, e.message);
+      logger.warn('Cognito disable failed for user', userId, e.message);
     }
 
     res.json({ success: true, message: 'User deactivated' });
@@ -197,7 +198,7 @@ router.delete('/:id/permanent', async (req, res, next) => {
       });
       if (username) await cognito.adminDeleteUser(username);
     } catch (e) {
-      console.warn('Cognito delete failed for user', userId, e.message);
+      logger.warn('Cognito delete failed for user', userId, e.message);
     }
 
     res.json({ success: true, message: `User "${users[0].name}" permanently deleted` });

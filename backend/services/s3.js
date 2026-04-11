@@ -128,12 +128,52 @@ function buildFormsKey(fileName, folder) {
   return safeFolder + fileName;
 }
 
+/**
+ * Resolve a stored value (S3 key or external URL) to a usable URL.
+ * - If it's already an http(s) URL, return as-is.
+ * - If it's an S3 key, generate a presigned download URL.
+ * - Returns null on any error (never throws).
+ *
+ * @param {string} bucket
+ * @param {string|null} value  S3 key or external URL
+ * @returns {Promise<string|null>}
+ */
+async function resolveUrl(bucket, value) {
+  if (!value) return null;
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  try {
+    return await getDownloadUrl(bucket, value);
+  } catch (err) {
+    logger.warn({ err, bucket, key: value }, 'S3 resolveUrl failed');
+    return null;
+  }
+}
+
+/**
+ * Batch-resolve multiple S3 fields on an object.
+ * Mutates the object in place, replacing S3 keys with presigned URLs.
+ *
+ * @param {string} bucket
+ * @param {Object} obj
+ * @param {string[]} fields  field names to resolve
+ */
+async function resolveUrls(bucket, obj, fields) {
+  if (!obj) return;
+  await Promise.all(fields.map(async (field) => {
+    if (obj[field]) {
+      obj[field] = await resolveUrl(bucket, obj[field]);
+    }
+  }));
+}
+
 module.exports = {
   BUCKETS,
   getUploadUrl,
   getDownloadUrl,
   getObject,
   deleteObject,
+  resolveUrl,
+  resolveUrls,
   sanitizeFileName,
   buildMediaKey,
   buildFormsKey,

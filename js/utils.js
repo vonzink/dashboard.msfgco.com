@@ -338,6 +338,68 @@ const Utils = {
     /**
      * Show a brief toast notification
      */
+    // ========================================
+    // SHARED HELPERS (formerly duplicated across modules)
+    // ========================================
+
+    /**
+     * Status badge CSS class from a status string.
+     * Used by Pipeline, PreApprovals, FundedLoans.
+     */
+    statusBadgeClass(val) {
+        if (!val) return '';
+        const v = val.toLowerCase();
+        if (/complete|done|approved|cleared|received|ordered|signed|funded|ctc|clear/i.test(v)) return 'status-complete';
+        if (/pending|in progress|working|submitted|waiting|conditional|review|open/i.test(v)) return 'status-pending';
+        if (/not ready|missing|denied|rejected|expired|overdue|cancel|fail|stuck/i.test(v)) return 'status-danger';
+        if (/n\/a|waived|exempt/i.test(v)) return 'status-neutral';
+        return 'status-default';
+    },
+
+    /**
+     * Human-readable file size string from byte count.
+     */
+    formatFileSize(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let i = 0;
+        let size = bytes;
+        while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+        return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+    },
+
+    /**
+     * Font Awesome icon class for a MIME type.
+     */
+    fileIconForMime(mimeType) {
+        if (!mimeType) return 'fa-file';
+        if (mimeType.startsWith('image/')) return 'fa-file-image';
+        if (mimeType.startsWith('video/')) return 'fa-file-video';
+        if (mimeType.startsWith('audio/')) return 'fa-file-audio';
+        if (mimeType.includes('pdf')) return 'fa-file-pdf';
+        if (mimeType.includes('word') || mimeType.includes('document')) return 'fa-file-word';
+        if (mimeType.includes('sheet') || mimeType.includes('excel')) return 'fa-file-excel';
+        if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return 'fa-file-powerpoint';
+        if (mimeType.includes('zip') || mimeType.includes('compressed') || mimeType.includes('archive')) return 'fa-file-archive';
+        return 'fa-file';
+    },
+
+    /**
+     * Font Awesome icon class from a file extension (fileName-based).
+     */
+    fileIconForName(fileName) {
+        if (!fileName) return 'fa-file';
+        const ext = fileName.split('.').pop().toLowerCase();
+        const map = {
+            pdf: 'fa-file-pdf', doc: 'fa-file-word', docx: 'fa-file-word',
+            xls: 'fa-file-excel', xlsx: 'fa-file-excel', csv: 'fa-file-csv',
+            png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image', gif: 'fa-file-image',
+            zip: 'fa-file-archive', rar: 'fa-file-archive',
+            txt: 'fa-file-alt',
+        };
+        return map[ext] || 'fa-file';
+    },
+
     showToast(message, type = 'info') {
         const colors = { info: '#104547', error: '#c0392b', success: '#27ae60' };
         const bg = colors[type] || colors.info;

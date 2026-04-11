@@ -3,26 +3,8 @@ const express = require('express');
 const router = express.Router();
 const { isAdmin, hasRole, requireAdmin, requireManagerOrAdmin } = require('../../middleware/userContext');
 const { investor: investorSchema, investorUpdate, validate } = require('../../validation/schemas');
-const { BUCKETS, getDownloadUrl } = require('../../services/s3');
+const { BUCKETS, resolveUrl } = require('../../services/s3');
 const Investor = require('../../models/Investor');
-
-/**
- * Detect whether logo_url is an S3 key (needs presigned URL) or an external URL.
- */
-function isS3Key(val) {
-  return val && !val.startsWith('http://') && !val.startsWith('https://');
-}
-
-/** Resolve logo_url → presigned download URL if it's an S3 key. */
-async function resolveLogoUrl(logoUrl) {
-  if (!logoUrl) return null;
-  if (!isS3Key(logoUrl)) return logoUrl;
-  try {
-    return await getDownloadUrl(BUCKETS.media, logoUrl);
-  } catch {
-    return null;
-  }
-}
 
 // GET /api/investors — lightweight list
 router.get('/', async (req, res, next) => {
@@ -33,7 +15,7 @@ router.get('/', async (req, res, next) => {
     const investors = await Investor.findAll({ showAll });
 
     await Promise.all(investors.map(async (inv) => {
-      inv.logo_url = await resolveLogoUrl(inv.logo_url);
+      inv.logo_url = await resolveUrl(BUCKETS.media,inv.logo_url);
     }));
 
     res.json(investors);
@@ -49,16 +31,16 @@ router.get('/:key', async (req, res, next) => {
     }
 
     await Promise.all(investor.documents.map(async (doc) => {
-      try { doc.download_url = await getDownloadUrl(BUCKETS.media, doc.file_key); } catch { doc.download_url = null; }
+      doc.download_url = await resolveUrl(BUCKETS.media, doc.file_key);
     }));
 
-    investor.logo_url = await resolveLogoUrl(investor.logo_url);
-    investor.account_executive_photo_url = await resolveLogoUrl(investor.account_executive_photo_url);
+    investor.logo_url = await resolveUrl(BUCKETS.media, investor.logo_url);
+    investor.account_executive_photo_url = await resolveUrl(BUCKETS.media, investor.account_executive_photo_url);
 
     await Promise.all(investor.team.map(async (m) => {
       if (m.photo_url) {
         m.photo_key = m.photo_url;
-        m.photo_url = await resolveLogoUrl(m.photo_url);
+        m.photo_url = await resolveUrl(BUCKETS.media, m.photo_url);
       }
     }));
 

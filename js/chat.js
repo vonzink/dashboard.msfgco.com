@@ -819,27 +819,8 @@ const Chat = {
     }
   },
 
-  _fileIcon(mimeType) {
-    if (!mimeType) return 'fa-file';
-    if (mimeType.startsWith('image/')) return 'fa-file-image';
-    if (mimeType.startsWith('video/')) return 'fa-file-video';
-    if (mimeType.startsWith('audio/')) return 'fa-file-audio';
-    if (mimeType.includes('pdf')) return 'fa-file-pdf';
-    if (mimeType.includes('word') || mimeType.includes('document')) return 'fa-file-word';
-    if (mimeType.includes('sheet') || mimeType.includes('excel')) return 'fa-file-excel';
-    if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) return 'fa-file-powerpoint';
-    if (mimeType.includes('zip') || mimeType.includes('compressed') || mimeType.includes('archive')) return 'fa-file-archive';
-    return 'fa-file';
-  },
-
-  _formatFileSize(bytes) {
-    if (!bytes || bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    let size = bytes;
-    while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
-    return size.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
-  },
+  _fileIcon(mimeType) { return Utils.fileIconForMime(mimeType); },
+  _formatFileSize(bytes) { return Utils.formatFileSize(bytes); },
 
   // ========================================
   // TAG EDITOR POPOVER

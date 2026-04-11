@@ -162,15 +162,7 @@ const PreApprovals = {
   // ========================================
   // RENDERING
   // ========================================
-  _statusBadgeClass(val) {
-    if (!val) return '';
-    const v = val.toLowerCase();
-    if (/complete|done|approved|cleared|received|ordered|signed|funded|ctc|clear/i.test(v)) return 'status-complete';
-    if (/pending|in progress|working|submitted|waiting|conditional|review|open/i.test(v)) return 'status-pending';
-    if (/not ready|missing|denied|rejected|expired|overdue|cancel|fail|stuck/i.test(v)) return 'status-danger';
-    if (/n\/a|waived|exempt/i.test(v)) return 'status-neutral';
-    return 'status-default';
-  },
+  _statusBadgeClass(val) { return Utils.statusBadgeClass(val); },
 
   _renderCell(item, field) {
     const val = item[field];

@@ -121,7 +121,7 @@ const API = {
     populatePipelineFilters(d)  { return Pipeline.populateFilters(d); },
     loadSyncStatus()            { return Pipeline.loadSyncStatus(); },
     _closePipelineDetail()      { return Pipeline._closeDetail(); },
-    _statusBadgeClass(val)      { return Pipeline._statusBadgeClass(val); },
+    _statusBadgeClass(val)      { return Utils.statusBadgeClass(val); },
 
     // ========================================
     // SHARED: Display Preferences (used by PreApprovals, Pipeline, FundedLoans)

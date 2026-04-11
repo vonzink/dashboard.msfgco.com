@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { requireDbUser } = require('../middleware/userContext');
-const { BUCKETS, getDownloadUrl } = require('../services/s3');
+const { BUCKETS, resolveUrl } = require('../services/s3');
 
 router.use(requireDbUser);
 
@@ -51,23 +51,13 @@ router.get('/:id/contact-card', async (req, res, next) => {
 
     const user = users[0];
 
-    // Generate presigned URLs for images
-    let avatar_url = null;
-    if (user.avatar_s3_key) {
-      try { avatar_url = await getDownloadUrl(BUCKETS.media, user.avatar_s3_key); } catch { /* ignore */ }
-    }
-    let business_card_url = null;
-    if (user.business_card_s3_key) {
-      try { business_card_url = await getDownloadUrl(BUCKETS.media, user.business_card_s3_key); } catch { /* ignore */ }
-    }
-    let qr_code_1_url = null;
-    if (user.qr_code_1_s3_key) {
-      try { qr_code_1_url = await getDownloadUrl(BUCKETS.media, user.qr_code_1_s3_key); } catch { /* ignore */ }
-    }
-    let qr_code_2_url = null;
-    if (user.qr_code_2_s3_key) {
-      try { qr_code_2_url = await getDownloadUrl(BUCKETS.media, user.qr_code_2_s3_key); } catch { /* ignore */ }
-    }
+    // Generate presigned URLs for images (parallel)
+    const [avatar_url, business_card_url, qr_code_1_url, qr_code_2_url] = await Promise.all([
+      resolveUrl(BUCKETS.media, user.avatar_s3_key),
+      resolveUrl(BUCKETS.media, user.business_card_s3_key),
+      resolveUrl(BUCKETS.media, user.qr_code_1_s3_key),
+      resolveUrl(BUCKETS.media, user.qr_code_2_s3_key),
+    ]);
 
     // Get custom links
     const [customLinks] = await db.query(

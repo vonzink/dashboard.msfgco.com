@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { requireAdmin } = require('../../middleware/userContext');
-const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../../services/s3');
+const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject, resolveUrl } = require('../../services/s3');
 const Investor = require('../../models/Investor');
 
 const ALLOWED_DOC_TYPES = {
@@ -23,10 +23,9 @@ const MAX_DOC_BYTES = 25 * 1024 * 1024; // 25 MB
 router.get('/:id/documents', async (req, res, next) => {
   try {
     const docs = await Investor.getDocuments(req.params.id);
-    for (const doc of docs) {
-      try { doc.download_url = await getDownloadUrl(BUCKETS.media, doc.file_key); }
-      catch { doc.download_url = null; }
-    }
+    await Promise.all(docs.map(async (doc) => {
+      doc.download_url = await resolveUrl(BUCKETS.media, doc.file_key);
+    }));
     res.json(docs);
   } catch (error) { next(error); }
 });

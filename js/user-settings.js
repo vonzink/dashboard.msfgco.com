@@ -677,18 +677,7 @@ const UserSettings = {
     });
   },
 
-  _getFileIcon(fileName) {
-    if (!fileName) return 'fa-file';
-    const ext = fileName.split('.').pop().toLowerCase();
-    const iconMap = {
-      pdf: 'fa-file-pdf', doc: 'fa-file-word', docx: 'fa-file-word',
-      xls: 'fa-file-excel', xlsx: 'fa-file-excel', csv: 'fa-file-csv',
-      png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image', gif: 'fa-file-image',
-      zip: 'fa-file-archive', rar: 'fa-file-archive',
-      txt: 'fa-file-alt',
-    };
-    return iconMap[ext] || 'fa-file';
-  },
+  _getFileIcon(fileName) { return Utils.fileIconForName(fileName); },
 
   async _downloadDocument(docId) {
     try {
