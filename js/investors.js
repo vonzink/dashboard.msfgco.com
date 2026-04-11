@@ -421,12 +421,14 @@ const Investors = {
       (investor.notes ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Investor Notes</h3><div class="pa-detail-monday-notes">' + esc(investor.notes) + '</div></div>' : '') +
       // Notes system
       '<div class="pa-detail-section full-width">' +
-        '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes' +
+          '<button type="button" class="btn btn-sm btn-outline" id="investorManageTagsBtn" style="margin-left:auto;font-size:0.7rem;padding:0.15rem 0.5rem;"><i class="fas fa-tags"></i> Manage Tags</button>' +
+        '</h3>' +
         '<div class="pa-notes-add" style="flex-direction:column;">' +
           '<textarea id="investorNewNoteInput" rows="4" placeholder="Add a note..." class="form-input"></textarea>' +
           '<div class="inv-note-tag-bar">' +
             '<span class="inv-note-tag-label"><i class="fas fa-tags"></i> Tags:</span>' +
-            '<div class="inv-note-tag-pills" id="investorNoteTagPills"></div>' +
+            '<div class="inv-note-tag-pills" id="investorNoteTagPills"><span style="font-size:0.72rem;color:var(--text-muted);">None — click Manage Tags to select</span></div>' +
           '</div>' +
           '<button type="button" class="btn btn-primary btn-sm" id="investorAddNoteBtn" style="align-self:flex-end;"><i class="fas fa-plus"></i> Add Note</button>' +
         '</div>' +
@@ -443,6 +445,8 @@ const Investors = {
     document.getElementById('investorNewNoteInput')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addInvestorNote(investorId);
     });
+    // Bind Manage Tags button
+    document.getElementById('investorManageTagsBtn')?.addEventListener('click', () => this.openManageTagsModal('investorNoteTagPills'));
     this._loadInvestorNotes(investorId);
   },
 
@@ -457,6 +461,7 @@ const Investors = {
   // INVESTOR TAGS (managed, like chat tags)
   // ========================================
   _selectedNoteTagIds: [],
+  _activeTagPillsId: 'investorNoteTagPills', // tracks which pills container the modal should update
 
   async loadInvestorTags() {
     try {
@@ -492,17 +497,10 @@ const Investors = {
     const nameInput = document.getElementById('investorNewTagNameInput');
     if (nameInput) nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.createInvestorTag(); });
 
-    // Color preset buttons
-    document.querySelectorAll('#investorTagColorPresets .tag-color-preset').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('#investorTagColorPresets .tag-color-preset').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        this._selectedTagColor = btn.dataset.color;
-      });
-    });
   },
 
-  openManageTagsModal() {
+  openManageTagsModal(pillsContainerId) {
+    if (pillsContainerId) this._activeTagPillsId = pillsContainerId;
     const modal = document.getElementById('investorManageTagsModal');
     if (modal) {
       modal.classList.add('active');
@@ -516,6 +514,8 @@ const Investors = {
   closeManageTagsModal() {
     const modal = document.getElementById('investorManageTagsModal');
     if (modal) { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); }
+    // Refresh the tag summary for whichever context opened the modal
+    this._renderNoteTagPills(this._activeTagPillsId);
   },
 
   /** Color ordering for tag categories */
@@ -548,8 +548,10 @@ const Investors = {
     if (!container) return;
     const esc = Utils.escapeHtml;
     const defaultTags = this._sortTagsByCategory(this._getDefaultTags());
+    const defaultIds = new Set(defaultTags.map(t => t.id));
+    const customTags = this._investorTags.filter(t => !defaultIds.has(t.id));
 
-    if (defaultTags.length === 0) {
+    if (defaultTags.length === 0 && customTags.length === 0) {
       container.innerHTML = '<div class="manage-tags-empty"><i class="fas fa-tags"></i><p>No tags available.</p></div>';
       return;
     }
@@ -558,74 +560,40 @@ const Investors = {
     let lastColor = null;
     defaultTags.forEach(tag => {
       if (tag.color !== lastColor) {
-        if (lastColor !== null) html += '</div>';
+        if (lastColor !== null) html += '</div></div>';
         const label = this._tagColorLabels[tag.color] || '';
         html += '<div class="manage-tags-group"><span class="manage-tags-group-label" style="color:' + esc(tag.color) + ';">' + esc(label) + '</span><div class="manage-tags-group-pills">';
         lastColor = tag.color;
       }
-      html += '<span class="chat-msg-tag" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' + esc(tag.name) + '</span>';
+      const isSelected = this._selectedNoteTagIds.includes(tag.id);
+      html += '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
+        '" data-modal-tag="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
+        esc(tag.name) + '</button>';
     });
     if (lastColor !== null) html += '</div></div>';
 
-    container.innerHTML = html;
-  },
-
-  async createInvestorTag() {
-    const nameInput = document.getElementById('investorNewTagNameInput');
-    const name = nameInput?.value.trim();
-    if (!name) { nameInput?.focus(); return; }
-    const color = this._selectedTagColor || '#4a90d9';
-
-    try {
-      const tag = await ServerAPI.createInvestorTag(name, color);
-      if (tag && tag.id && !this._investorTags.find(t => t.id === tag.id)) {
-        this._investorTags.push(tag);
-      }
-      this.renderManageTagsList();
-      if (nameInput) nameInput.value = '';
-    } catch (err) { alert('Failed to create tag. It may already exist.'); }
-  },
-
-  /** Render chat-style tag pills organized by color category, plus custom tag input */
-  _renderNoteTagPills(containerId, selectedIds) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    if (selectedIds) this._selectedNoteTagIds = [...selectedIds];
-
-    const esc = Utils.escapeHtml;
-    const defaultTags = this._sortTagsByCategory(this._getDefaultTags());
-
-    if (defaultTags.length === 0) {
-      container.innerHTML = '<span style="font-size:0.75rem;color:var(--text-muted);">No tags available</span>';
-      return;
+    // Custom tags section
+    if (customTags.length > 0) {
+      html += '<div class="manage-tags-group"><span class="manage-tags-group-label" style="color:#FFD700;">Custom</span><div class="manage-tags-group-pills">';
+      customTags.forEach(tag => {
+        const isSelected = this._selectedNoteTagIds.includes(tag.id);
+        const inUse = tag.usage_count > 0;
+        html += '<span class="custom-tag-wrap">' +
+          '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
+          '" data-modal-tag="' + tag.id + '" style="--tag-color: #FFD700;">' +
+          esc(tag.name) + '</button>' +
+          (inUse ? '' : '<button type="button" class="custom-tag-remove" data-remove-tag="' + tag.id + '" title="Delete tag"><i class="fas fa-times"></i></button>') +
+          '</span>';
+      });
+      html += '</div></div>';
     }
 
-    let html = '';
-    let lastColor = null;
-    defaultTags.forEach(tag => {
-      // Add a small gap/divider between color groups
-      if (tag.color !== lastColor) {
-        if (lastColor !== null) html += '<span class="inv-tag-group-divider"></span>';
-        lastColor = tag.color;
-      }
-      const isSelected = this._selectedNoteTagIds.includes(tag.id);
-      html += '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
-        '" data-tag-pick="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
-        esc(tag.name) + '</button>';
-    });
-
-    // Custom tag inline input
-    html += '<span class="inv-tag-group-divider"></span>' +
-      '<span class="inv-custom-tag-wrap">' +
-        '<input type="text" class="inv-custom-tag-input" placeholder="+ Custom tag..." maxlength="100" />' +
-      '</span>';
-
     container.innerHTML = html;
 
-    // Bind default tag pill clicks
-    container.querySelectorAll('[data-tag-pick]').forEach(btn => {
+    // Bind pill clicks to toggle selection
+    container.querySelectorAll('[data-modal-tag]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const tid = parseInt(btn.dataset.tagPick);
+        const tid = parseInt(btn.dataset.modalTag);
         if (this._selectedNoteTagIds.includes(tid)) {
           this._selectedNoteTagIds = this._selectedNoteTagIds.filter(x => x !== tid);
           btn.classList.remove('selected');
@@ -636,33 +604,98 @@ const Investors = {
       });
     });
 
-    // Bind custom tag input
-    const customInput = container.querySelector('.inv-custom-tag-input');
-    if (customInput) {
-      customInput.addEventListener('keydown', async (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        const name = customInput.value.trim();
-        if (!name) return;
-        // Check if this tag name already exists
-        const existing = this._investorTags.find(t => t.name.toLowerCase() === name.toLowerCase());
-        if (existing) {
-          if (!this._selectedNoteTagIds.includes(existing.id)) {
-            this._selectedNoteTagIds.push(existing.id);
-          }
-          this._renderNoteTagPills(containerId);
-          return;
-        }
+    // Bind custom tag delete buttons
+    container.querySelectorAll('[data-remove-tag]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const tid = parseInt(btn.dataset.removeTag);
+        const tag = this._investorTags.find(t => t.id === tid);
+        if (!confirm('Delete custom tag "' + (tag?.name || '') + '"?')) return;
         try {
-          const tag = await ServerAPI.createInvestorTag(name, '#FFD700');
-          if (tag && tag.id) {
-            this._investorTags.push(tag);
-            this._selectedNoteTagIds.push(tag.id);
-            this._renderNoteTagPills(containerId);
-          }
-        } catch (err) { alert('Failed to create custom tag.'); }
+          await ServerAPI.deleteInvestorTag(tid);
+          this._investorTags = this._investorTags.filter(t => t.id !== tid);
+          this._selectedNoteTagIds = this._selectedNoteTagIds.filter(x => x !== tid);
+          this.renderManageTagsList();
+        } catch (err) {
+          alert(err?.message || 'Failed to delete tag.');
+        }
       });
+    });
+  },
+
+  async createInvestorTag() {
+    const nameInput = document.getElementById('investorNewTagNameInput');
+    const name = nameInput?.value.trim();
+    if (!name) { nameInput?.focus(); return; }
+    const color = '#FFD700';
+
+    try {
+      const tag = await ServerAPI.createInvestorTag(name, color);
+      if (tag && tag.id && !this._investorTags.find(t => t.id === tag.id)) {
+        this._investorTags.push(tag);
+      }
+      // Auto-select the new tag
+      if (tag && tag.id && !this._selectedNoteTagIds.includes(tag.id)) {
+        this._selectedNoteTagIds.push(tag.id);
+      }
+      this.renderManageTagsList();
+      if (nameInput) nameInput.value = '';
+    } catch (err) { alert('Failed to create tag. It may already exist.'); }
+  },
+
+  /** Render read-only summary of selected tag pills in the notes area */
+  _renderNoteTagPills(containerId, selectedIds) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (selectedIds) this._selectedNoteTagIds = [...selectedIds];
+
+    const esc = Utils.escapeHtml;
+    const selectedTags = this._investorTags.filter(t => this._selectedNoteTagIds.includes(t.id));
+
+    if (selectedTags.length === 0) {
+      container.innerHTML = '<span style="font-size:0.72rem;color:var(--text-muted);">None \u2014 click Manage Tags to select</span>';
+      return;
     }
+
+    const sorted = this._sortTagsByCategory(selectedTags);
+    let html = '';
+    sorted.forEach(tag => {
+      const color = tag.created_by ? '#FFD700' : (tag.color || '#8cc63e');
+      html += '<span class="chat-msg-tag" style="--tag-color: ' + esc(color) + ';">' + esc(tag.name) + '</span>';
+    });
+
+    container.innerHTML = html;
+  },
+
+  /** Bind a custom tag input — creates a one-off tag, auto-selects it, re-renders pills */
+  _bindCustomTagInput(inputId, pillsContainerId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const name = input.value.trim();
+      if (!name) return;
+      // Check if this tag name already exists
+      const existing = this._investorTags.find(t => t.name.toLowerCase() === name.toLowerCase());
+      if (existing) {
+        if (!this._selectedNoteTagIds.includes(existing.id)) {
+          this._selectedNoteTagIds.push(existing.id);
+        }
+        input.value = '';
+        this._renderNoteTagPills(pillsContainerId);
+        return;
+      }
+      try {
+        const tag = await ServerAPI.createInvestorTag(name, '#FFD700');
+        if (tag && tag.id) {
+          this._investorTags.push(tag);
+          this._selectedNoteTagIds.push(tag.id);
+          input.value = '';
+          this._renderNoteTagPills(pillsContainerId);
+        }
+      } catch (err) { alert('Failed to create custom tag.'); }
+    });
   },
 
   // ========================================
@@ -764,6 +797,7 @@ const Investors = {
       <div class="inv-note-tag-bar">
         <span class="inv-note-tag-label"><i class="fas fa-tags"></i> Tags:</span>
         <div class="inv-note-tag-pills" id="${editPickerId}"></div>
+        <button type="button" class="btn btn-sm btn-outline edit-manage-tags-btn" style="font-size:0.65rem;padding:0.1rem 0.4rem;margin-left:0.5rem;"><i class="fas fa-tags"></i> Manage Tags</button>
       </div>
       <div class="pa-note-edit-actions">
         <button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>
@@ -775,13 +809,24 @@ const Investors = {
     const textarea = contentEl.querySelector('textarea');
     textarea.focus();
 
-    this._renderNoteTagPills(editPickerId, currentTagIds);
+    // Save the new-note tag selections, switch to this note's tags
+    const savedNewNoteTags = [...this._selectedNoteTagIds];
+    this._selectedNoteTagIds = [...currentTagIds];
+    this._activeTagPillsId = editPickerId;
+    this._renderNoteTagPills(editPickerId);
+
+    // Manage Tags button opens the modal for this edit context
+    contentEl.querySelector('.edit-manage-tags-btn')?.addEventListener('click', () => this.openManageTagsModal(editPickerId));
 
     contentEl.querySelector('.pa-note-save-btn').addEventListener('click', async () => {
       const newContent = textarea.value.trim();
       if (!newContent) return;
       try {
         await ServerAPI.updateInvestorNote(investorId, noteId, newContent, [...this._selectedNoteTagIds]);
+        // Restore new-note tag state and refresh
+        this._selectedNoteTagIds = savedNewNoteTags;
+        this._activeTagPillsId = 'investorNoteTagPills';
+        this.loadInvestorNoteTags();
         this._loadInvestorNotes(investorId);
       } catch (err) {
         alert('Failed to update note: ' + (err.message || 'Unknown error'));
@@ -789,6 +834,9 @@ const Investors = {
     });
 
     contentEl.querySelector('.pa-note-cancel-btn').addEventListener('click', () => {
+      // Restore new-note tag state
+      this._selectedNoteTagIds = savedNewNoteTags;
+      this._activeTagPillsId = 'investorNoteTagPills';
       this._loadInvestorNotes(investorId);
     });
   },

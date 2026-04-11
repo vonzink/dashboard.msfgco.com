@@ -752,6 +752,13 @@
     width: 150px;
 }
 
+/* Custom tag input in notes header */
+.inv-custom-tag-header {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+}
+
 /* ── Manage Tags Group Layout ── */
 .manage-tags-group {
     margin-bottom: 0.75rem;
@@ -771,6 +778,35 @@
     display: flex;
     flex-wrap: wrap;
     gap: 0.3rem;
+}
+
+/* Custom tag pill with delete button */
+.custom-tag-wrap {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+}
+
+.custom-tag-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--text-secondary, #aaa);
+    font-size: 0.5rem;
+    cursor: pointer;
+    padding: 0;
+    margin-left: -4px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.custom-tag-remove:hover {
+    background: #e74c3c;
+    color: #fff;
 }
 
 /* ── Tag Color Presets (Manage Tags) ── */

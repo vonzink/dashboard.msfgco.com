@@ -241,7 +241,7 @@ async function startServer() {
     });
 
     // Attach WebSocket server for real-time chat
-    const { verifyCognitoJwt } = require('./auth/middleware');
+    const { verifyCognitoJwt } = require('./auth/cognito');
     websocket.attach(server, async (token) => {
       const claims = await verifyCognitoJwt(token);
       const email = claims.email;

@@ -22,7 +22,7 @@
  */
 
 const db = require('../db/connection');
-const { requireAuth } = require('../auth/middleware');
+const { requireAuth } = require('../auth/cognito');
 const logger = require('../lib/logger');
 
 // Cognito JWT verification middleware (handles 401 on failure)

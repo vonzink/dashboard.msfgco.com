@@ -23,8 +23,7 @@
     18. settings-goals.js     — Goal settings panel
     19. user-settings.js      — UserSettings
     20. collapsible.js        — CollapsibleSections (toggle sections with persistence)
-    21. gauges.js             — DashboardGauges
-    22. a11y.js               — Accessibility helpers
+    21. a11y.js               — Accessibility helpers
     23. progress-init.js      — Progress bar animation
     24. announcement-editor.js — Announcement editor modal
     25. app.js                — THIS FILE — orchestrates init of all modules above
@@ -120,7 +119,6 @@ const App = {
             ['Chat',           () => Chat.init()],
             ['Investors',      () => Investors.init()],
             ['Funded Loans',   () => typeof FundedLoans !== 'undefined' && FundedLoans.init()],
-            ['Gauges',         () => typeof DashboardGauges !== 'undefined' && DashboardGauges.init()],
             ['Modals',         () => ModalsManager.init()],
             ['User Settings',  () => typeof UserSettings !== 'undefined' && UserSettings.init()],
             ['Programs',       () => typeof Programs !== 'undefined' && Programs.init()],

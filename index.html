@@ -762,20 +762,11 @@
         <div class="modal-body" style="padding: var(--spacing-md);">
           <div class="manage-tags-create">
             <div class="manage-tags-create-row">
-              <input type="text" id="investorNewTagNameInput" class="form-input" placeholder="New tag name..." maxlength="100" />
-              <div class="tag-color-presets" id="investorTagColorPresets">
-                <button type="button" class="tag-color-preset selected" data-color="#4a90d9" style="background:#4a90d9;" title="Agency"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#9b59b6" style="background:#9b59b6;" title="Non-Agency"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#e67e22" style="background:#e67e22;" title="Specialty"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#27ae60" style="background:#27ae60;" title="Services"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#e74c3c" style="background:#e74c3c;" title="Processing"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#3498db" style="background:#3498db;" title="News"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#f39c12" style="background:#f39c12;" title="Pricing"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-                <button type="button" class="tag-color-preset" data-color="#1abc9c" style="background:#1abc9c;" title="Info"><span class="preset-check"><i class="fas fa-check"></i></span></button>
-              </div>
+              <input type="text" id="investorNewTagNameInput" class="form-input" placeholder="New custom tag..." maxlength="100" />
               <button type="button" class="btn btn-primary btn-sm" id="investorCreateTagBtn"><i class="fas fa-plus"></i> Add</button>
             </div>
           </div>
+          <p style="font-size:0.72rem;color:var(--text-secondary);margin:0.5rem 0 0.25rem;"><i class="fas fa-hand-pointer"></i> Click tags to select them for your note</p>
           <div class="manage-tags-list" id="investorManageTagsList">
             <p class="text-muted" style="text-align:center; padding: 2rem 0;">Loading tags...</p>
           </div>
