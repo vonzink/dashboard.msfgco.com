@@ -2,9 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const db = require('../../db/connection');
 const { requireAdmin } = require('../../middleware/userContext');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../../services/s3');
+const Investor = require('../../models/Investor');
 
 const ALLOWED_LOGO_TYPES = {
   'image/png':      '.png',
@@ -30,9 +30,9 @@ router.post('/:id/logo/upload-url', requireAdmin, async (req, res, next) => {
     if (fileSize && fileSize > MAX_LOGO_BYTES) {
       return res.status(400).json({ error: 'Logo must be under 5 MB' });
     }
-
-    const [rows] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+    if (!await Investor.exists(investorId)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
 
     const ext = ALLOWED_LOGO_TYPES[fileType];
     const fileKey = `vendor/${investorId}/${crypto.randomUUID()}${ext}`;
@@ -49,11 +49,12 @@ router.put('/:id/logo/confirm', requireAdmin, async (req, res, next) => {
     const { fileKey } = req.body;
     if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
 
-    const [old] = await db.query('SELECT logo_url FROM investors WHERE id = ?', [investorId]);
-    if (old.length === 0) return res.status(404).json({ error: 'Investor not found' });
-    const oldKey = old[0].logo_url;
+    const oldKey = await Investor.getLogoUrl(investorId);
+    if (oldKey === null && !await Investor.exists(investorId)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
 
-    await db.query('UPDATE investors SET logo_url = ?, updated_at = NOW() WHERE id = ?', [fileKey, investorId]);
+    await Investor.setLogoUrl(investorId, fileKey);
 
     if (oldKey && isS3Key(oldKey) && oldKey !== fileKey) {
       await deleteObject(BUCKETS.media, oldKey);
@@ -69,14 +70,15 @@ router.put('/:id/logo/confirm', requireAdmin, async (req, res, next) => {
 router.delete('/:id/logo', requireAdmin, async (req, res, next) => {
   try {
     const investorId = req.params.id;
-    const [rows] = await db.query('SELECT logo_url FROM investors WHERE id = ?', [investorId]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+    const key = await Investor.getLogoUrl(investorId);
+    if (key === null && !await Investor.exists(investorId)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
 
-    const key = rows[0].logo_url;
     if (key && isS3Key(key)) {
       await deleteObject(BUCKETS.media, key);
     }
-    await db.query('UPDATE investors SET logo_url = NULL, updated_at = NOW() WHERE id = ?', [investorId]);
+    await Investor.clearLogoUrl(investorId);
     res.json({ success: true });
   } catch (error) { next(error); }
 });
@@ -94,9 +96,9 @@ router.post('/:id/photo/upload-url', requireAdmin, async (req, res, next) => {
     if (fileSize && fileSize > MAX_LOGO_BYTES) {
       return res.status(400).json({ error: 'Photo must be under 5 MB' });
     }
-
-    const [rows] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+    if (!await Investor.exists(investorId)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
 
     const ext = ALLOWED_LOGO_TYPES[fileType];
     const prefix = purpose === 'ae' ? 'ae' : 'team';
@@ -115,11 +117,12 @@ router.put('/:id/photo/confirm', requireAdmin, async (req, res, next) => {
     if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
 
     if (purpose === 'ae') {
-      const [old] = await db.query('SELECT account_executive_photo_url FROM investors WHERE id = ?', [investorId]);
-      if (old.length === 0) return res.status(404).json({ error: 'Investor not found' });
+      const oldKey = await Investor.getAePhotoUrl(investorId);
+      if (oldKey === null && !await Investor.exists(investorId)) {
+        return res.status(404).json({ error: 'Investor not found' });
+      }
 
-      const oldKey = old[0].account_executive_photo_url;
-      await db.query('UPDATE investors SET account_executive_photo_url = ?, updated_at = NOW() WHERE id = ?', [fileKey, investorId]);
+      await Investor.setAePhotoUrl(investorId, fileKey);
 
       if (oldKey && isS3Key(oldKey) && oldKey !== fileKey) {
         await deleteObject(BUCKETS.media, oldKey).catch(() => {});
@@ -136,14 +139,15 @@ router.put('/:id/photo/confirm', requireAdmin, async (req, res, next) => {
 router.delete('/:id/ae-photo', requireAdmin, async (req, res, next) => {
   try {
     const investorId = req.params.id;
-    const [rows] = await db.query('SELECT account_executive_photo_url FROM investors WHERE id = ?', [investorId]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+    const key = await Investor.getAePhotoUrl(investorId);
+    if (key === null && !await Investor.exists(investorId)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
 
-    const key = rows[0].account_executive_photo_url;
     if (key && isS3Key(key)) {
       await deleteObject(BUCKETS.media, key).catch(() => {});
     }
-    await db.query('UPDATE investors SET account_executive_photo_url = NULL, updated_at = NOW() WHERE id = ?', [investorId]);
+    await Investor.clearAePhotoUrl(investorId);
     res.json({ success: true });
   } catch (error) { next(error); }
 });

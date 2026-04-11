@@ -1,7 +1,8 @@
 /* ============================================
    MSFG Dashboard - Investors Module
-   Investor information, modal (read-only except notes),
-   and dropdown management
+   Investor data, modal (read-only except notes),
+   contact cards. Tags/notes delegated to InvestorNotes,
+   dropdown/directory delegated to InvestorDropdown.
 ============================================ */
 
 const Investors = {
@@ -13,17 +14,17 @@ const Investors = {
   // =========================================================
   data: {},
   _loaded: false,
-  _investorTags: [],  // managed tags from DB
-  _investorNoteTagsMap: {},  // { investor_id: [tag_name, ...] } for search
+  _investorTags: [],  // managed tags from DB (shared with InvestorNotes)
+  _investorNoteTagsMap: {},  // { investor_id: [tag_name, ...] } for search (shared with InvestorNotes/Dropdown)
 
   init() {
     this.bindModalClose();
     this.bindCompanyContactsModalClose();
-    this.bindManageTagsModal();
+    InvestorNotes.init();
     // Load investor data + tags from API, then build the dropdown
     this.loadFromAPI();
-    this.loadInvestorTags();
-    this.loadInvestorNoteTags();
+    InvestorNotes.loadTags();
+    InvestorNotes.loadNoteTags();
   },
 
   /** Fetch investors from API and populate this.data */
@@ -96,6 +97,11 @@ const Investors = {
           '<span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Failed to load investors</span>';
       }
     }
+  },
+
+  /** Delegate dropdown rendering to InvestorDropdown */
+  _refreshDropdown() {
+    InvestorDropdown.refresh();
   },
 
   // =========================================================
@@ -371,6 +377,19 @@ const Investors = {
       docsHtml = '<p style="color:var(--text-secondary);font-size:0.88rem;">No documents on file</p>';
     }
 
+    // --- Turn Times ---
+    const turnTimes = investor.turnTimes || [];
+    let turnTimesHtml = '';
+    if (turnTimes.length > 0) {
+      turnTimesHtml = '<div class="pa-detail-section full-width">' +
+        '<h3 class="pa-detail-section-title"><i class="fas fa-clock"></i> Turn Times</h3>' +
+        '<div class="turn-times-list">';
+      turnTimes.forEach(t => {
+        turnTimesHtml += '<div class="pa-detail-row"><span class="pa-detail-label">' + esc(t.label) + '</span><span class="pa-detail-value">' + esc(String(t.value)) + ' ' + esc(t.unit || 'days') + '</span></div>';
+      });
+      turnTimesHtml += '</div></div>';
+    }
+
     // --- Build full body ---
     body.innerHTML =
       '<div class="pa-detail-grid">' +
@@ -417,6 +436,8 @@ const Investors = {
         '<h3 class="pa-detail-section-title"><i class="fas fa-folder-open"></i> Documents</h3>' +
         docsHtml +
       '</div>' +
+      // Turn Times
+      turnTimesHtml +
       // Legacy notes from investor record
       (investor.notes ? '<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Investor Notes</h3><div class="pa-detail-monday-notes">' + esc(investor.notes) + '</div></div>' : '') +
       // Notes system
@@ -437,17 +458,9 @@ const Investors = {
         '</div>' +
       '</div>';
 
-    // Bind add note
+    // Delegate note binding to InvestorNotes
     const investorId = investor.id || this.currentInvestorId;
-    this._selectedNoteTagIds = [];
-    this._renderNoteTagPills('investorNoteTagPills');
-    document.getElementById('investorAddNoteBtn')?.addEventListener('click', () => this._addInvestorNote(investorId));
-    document.getElementById('investorNewNoteInput')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addInvestorNote(investorId);
-    });
-    // Bind Manage Tags button
-    document.getElementById('investorManageTagsBtn')?.addEventListener('click', () => this.openManageTagsModal('investorNoteTagPills'));
-    this._loadInvestorNotes(investorId);
+    InvestorNotes.bindNoteControls(investorId);
   },
 
   _formatFileSize(bytes) {
@@ -457,398 +470,15 @@ const Investors = {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   },
 
-  // ========================================
-  // INVESTOR TAGS (managed, like chat tags)
-  // ========================================
-  _selectedNoteTagIds: [],
-  _activeTagPillsId: 'investorNoteTagPills', // tracks which pills container the modal should update
-
-  async loadInvestorTags() {
-    try {
-      this._investorTags = await ServerAPI.getInvestorTags();
-      if (!Array.isArray(this._investorTags)) this._investorTags = [];
-    } catch (err) {
-      console.warn('Failed to load investor tags:', err);
-      this._investorTags = [];
-    }
+  // =========================================================
+  // All Investors Directory — delegate to InvestorDropdown
+  // =========================================================
+  showAllInvestors() {
+    InvestorDropdown.showAll();
   },
 
-  async loadInvestorNoteTags() {
-    try {
-      const map = await ServerAPI.getInvestorNoteTags();
-      this._investorNoteTagsMap = (map && typeof map === 'object') ? map : {};
-      // Re-render dropdown if already loaded, so tag data is searchable
-      if (this._loaded) this._refreshDropdown();
-    } catch (err) {
-      console.warn('Failed to load investor note tags map:', err);
-      this._investorNoteTagsMap = {};
-    }
-  },
-
-  _selectedTagColor: '#4a90d9',
-
-  bindManageTagsModal() {
-    const closeBtn = document.getElementById('closeInvestorManageTagsModal');
-    if (closeBtn) closeBtn.addEventListener('click', () => this.closeManageTagsModal());
-    const modal = document.getElementById('investorManageTagsModal');
-    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) this.closeManageTagsModal(); });
-    const createBtn = document.getElementById('investorCreateTagBtn');
-    if (createBtn) createBtn.addEventListener('click', () => this.createInvestorTag());
-    const nameInput = document.getElementById('investorNewTagNameInput');
-    if (nameInput) nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') this.createInvestorTag(); });
-
-  },
-
-  openManageTagsModal(pillsContainerId) {
-    if (pillsContainerId) this._activeTagPillsId = pillsContainerId;
-    const modal = document.getElementById('investorManageTagsModal');
-    if (modal) {
-      modal.classList.add('active');
-      modal.setAttribute('aria-hidden', 'false');
-      this.renderManageTagsList();
-      const inp = document.getElementById('investorNewTagNameInput');
-      if (inp) setTimeout(() => inp.focus(), 100);
-    }
-  },
-
-  closeManageTagsModal() {
-    const modal = document.getElementById('investorManageTagsModal');
-    if (modal) { modal.classList.remove('active'); modal.setAttribute('aria-hidden', 'true'); }
-    // Refresh the tag summary for whichever context opened the modal
-    this._renderNoteTagPills(this._activeTagPillsId);
-  },
-
-  /** Color ordering for tag categories */
-  _tagColorOrder: ['#4a90d9', '#9b59b6', '#e67e22', '#27ae60', '#e74c3c', '#3498db', '#f39c12', '#1abc9c'],
-  _tagColorLabels: {
-    '#4a90d9': 'Agency', '#9b59b6': 'Non-Agency', '#e67e22': 'Specialty', '#27ae60': 'Services',
-    '#e74c3c': 'Processing', '#3498db': 'News', '#f39c12': 'Pricing', '#1abc9c': 'Info'
-  },
-
-  /** Sort tags by color category order, then alphabetically */
-  _sortTagsByCategory(tags) {
-    const order = this._tagColorOrder;
-    return [...tags].sort((a, b) => {
-      const ai = order.indexOf(a.color);
-      const bi = order.indexOf(b.color);
-      const ao = ai === -1 ? 999 : ai;
-      const bo = bi === -1 ? 999 : bi;
-      if (ao !== bo) return ao - bo;
-      return (a.name || '').localeCompare(b.name || '');
-    });
-  },
-
-  /** Get only default (seeded) tags — created_by is null */
-  _getDefaultTags() {
-    return this._investorTags.filter(t => !t.created_by);
-  },
-
-  renderManageTagsList() {
-    const container = document.getElementById('investorManageTagsList');
-    if (!container) return;
-    const esc = Utils.escapeHtml;
-    const defaultTags = this._sortTagsByCategory(this._getDefaultTags());
-    const defaultIds = new Set(defaultTags.map(t => t.id));
-    const customTags = this._investorTags.filter(t => !defaultIds.has(t.id));
-
-    if (defaultTags.length === 0 && customTags.length === 0) {
-      container.innerHTML = '<div class="manage-tags-empty"><i class="fas fa-tags"></i><p>No tags available.</p></div>';
-      return;
-    }
-
-    let html = '';
-    let lastColor = null;
-    defaultTags.forEach(tag => {
-      if (tag.color !== lastColor) {
-        if (lastColor !== null) html += '</div></div>';
-        const label = this._tagColorLabels[tag.color] || '';
-        html += '<div class="manage-tags-group"><span class="manage-tags-group-label" style="color:' + esc(tag.color) + ';">' + esc(label) + '</span><div class="manage-tags-group-pills">';
-        lastColor = tag.color;
-      }
-      const isSelected = this._selectedNoteTagIds.includes(tag.id);
-      html += '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
-        '" data-modal-tag="' + tag.id + '" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' +
-        esc(tag.name) + '</button>';
-    });
-    if (lastColor !== null) html += '</div></div>';
-
-    // Custom tags section
-    if (customTags.length > 0) {
-      html += '<div class="manage-tags-group"><span class="manage-tags-group-label" style="color:#FFD700;">Custom</span><div class="manage-tags-group-pills">';
-      customTags.forEach(tag => {
-        const isSelected = this._selectedNoteTagIds.includes(tag.id);
-        const inUse = tag.usage_count > 0;
-        html += '<span class="custom-tag-wrap">' +
-          '<button type="button" class="chat-tag-pill' + (isSelected ? ' selected' : '') +
-          '" data-modal-tag="' + tag.id + '" style="--tag-color: #FFD700;">' +
-          esc(tag.name) + '</button>' +
-          (inUse ? '' : '<button type="button" class="custom-tag-remove" data-remove-tag="' + tag.id + '" title="Delete tag"><i class="fas fa-times"></i></button>') +
-          '</span>';
-      });
-      html += '</div></div>';
-    }
-
-    container.innerHTML = html;
-
-    // Bind pill clicks to toggle selection
-    container.querySelectorAll('[data-modal-tag]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tid = parseInt(btn.dataset.modalTag);
-        if (this._selectedNoteTagIds.includes(tid)) {
-          this._selectedNoteTagIds = this._selectedNoteTagIds.filter(x => x !== tid);
-          btn.classList.remove('selected');
-        } else {
-          this._selectedNoteTagIds.push(tid);
-          btn.classList.add('selected');
-        }
-      });
-    });
-
-    // Bind custom tag delete buttons
-    container.querySelectorAll('[data-remove-tag]').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const tid = parseInt(btn.dataset.removeTag);
-        const tag = this._investorTags.find(t => t.id === tid);
-        if (!confirm('Delete custom tag "' + (tag?.name || '') + '"?')) return;
-        try {
-          await ServerAPI.deleteInvestorTag(tid);
-          this._investorTags = this._investorTags.filter(t => t.id !== tid);
-          this._selectedNoteTagIds = this._selectedNoteTagIds.filter(x => x !== tid);
-          this.renderManageTagsList();
-        } catch (err) {
-          alert(err?.message || 'Failed to delete tag.');
-        }
-      });
-    });
-  },
-
-  async createInvestorTag() {
-    const nameInput = document.getElementById('investorNewTagNameInput');
-    const name = nameInput?.value.trim();
-    if (!name) { nameInput?.focus(); return; }
-    const color = '#FFD700';
-
-    try {
-      const tag = await ServerAPI.createInvestorTag(name, color);
-      if (tag && tag.id && !this._investorTags.find(t => t.id === tag.id)) {
-        this._investorTags.push(tag);
-      }
-      // Auto-select the new tag
-      if (tag && tag.id && !this._selectedNoteTagIds.includes(tag.id)) {
-        this._selectedNoteTagIds.push(tag.id);
-      }
-      this.renderManageTagsList();
-      if (nameInput) nameInput.value = '';
-    } catch (err) { alert('Failed to create tag. It may already exist.'); }
-  },
-
-  /** Render read-only summary of selected tag pills in the notes area */
-  _renderNoteTagPills(containerId, selectedIds) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    if (selectedIds) this._selectedNoteTagIds = [...selectedIds];
-
-    const esc = Utils.escapeHtml;
-    const selectedTags = this._investorTags.filter(t => this._selectedNoteTagIds.includes(t.id));
-
-    if (selectedTags.length === 0) {
-      container.innerHTML = '<span style="font-size:0.72rem;color:var(--text-muted);">None \u2014 click Manage Tags to select</span>';
-      return;
-    }
-
-    const sorted = this._sortTagsByCategory(selectedTags);
-    let html = '';
-    sorted.forEach(tag => {
-      const color = tag.created_by ? '#FFD700' : (tag.color || '#8cc63e');
-      html += '<span class="chat-msg-tag" style="--tag-color: ' + esc(color) + ';">' + esc(tag.name) + '</span>';
-    });
-
-    container.innerHTML = html;
-  },
-
-  /** Bind a custom tag input — creates a one-off tag, auto-selects it, re-renders pills */
-  _bindCustomTagInput(inputId, pillsContainerId) {
-    const input = document.getElementById(inputId);
-    if (!input) return;
-    input.addEventListener('keydown', async (e) => {
-      if (e.key !== 'Enter') return;
-      e.preventDefault();
-      const name = input.value.trim();
-      if (!name) return;
-      // Check if this tag name already exists
-      const existing = this._investorTags.find(t => t.name.toLowerCase() === name.toLowerCase());
-      if (existing) {
-        if (!this._selectedNoteTagIds.includes(existing.id)) {
-          this._selectedNoteTagIds.push(existing.id);
-        }
-        input.value = '';
-        this._renderNoteTagPills(pillsContainerId);
-        return;
-      }
-      try {
-        const tag = await ServerAPI.createInvestorTag(name, '#FFD700');
-        if (tag && tag.id) {
-          this._investorTags.push(tag);
-          this._selectedNoteTagIds.push(tag.id);
-          input.value = '';
-          this._renderNoteTagPills(pillsContainerId);
-        }
-      } catch (err) { alert('Failed to create custom tag.'); }
-    });
-  },
-
-  // ========================================
-  // INVESTOR NOTES SYSTEM
-  // ========================================
-  async _loadInvestorNotes(investorId) {
-    const container = document.getElementById('investorNotesContainer');
-    if (!container) return;
-
-    try {
-      const notes = await ServerAPI.getInvestorNotes(investorId);
-      if (!notes || notes.length === 0) {
-        container.innerHTML = '<div class="pa-notes-empty">No notes yet.</div>';
-        return;
-      }
-
-      const esc = Utils.escapeHtml;
-      const currentUserId = CONFIG.currentUser?.id;
-      const isAdminUser = ['admin', 'manager'].includes((CONFIG.currentUser?.activeRole || '').toLowerCase());
-
-      container.innerHTML = notes.map(note => {
-        const canEdit = isAdminUser || note.author_id === currentUserId;
-        const ts = new Date(note.created_at);
-        const edited = note.updated_at && note.updated_at !== note.created_at;
-        const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-
-        // Tags are now objects {id, name, color}
-        const tagsHtml = (note.tags && note.tags.length > 0)
-          ? '<div class="pa-note-tags">' + note.tags.map(tag =>
-              '<span class="chat-msg-tag" style="--tag-color: ' + esc(tag.color || '#8cc63e') + ';">' + esc(tag.name) + '</span>'
-            ).join('') + '</div>'
-          : '';
-
-        const tagIdStr = (note.tags || []).map(t => t.id).join(',');
-
-        return `<div class="pa-note" data-note-id="${note.id}" data-parent-id="${investorId}" data-tag-ids="${tagIdStr}">
-          <div class="pa-note-header">
-            <span class="pa-note-author"><i class="fas fa-user-circle"></i> ${esc(note.author_name || 'Unknown')}</span>
-            <span class="pa-note-time">${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
-            ${canEdit ? `<div class="pa-note-actions">
-              <button type="button" class="pa-note-edit-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
-              <button type="button" class="pa-note-delete-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>
-            </div>` : ''}
-          </div>
-          <div class="pa-note-content">${esc(note.content)}</div>
-          ${tagsHtml}
-        </div>`;
-      }).join('');
-
-      container.querySelectorAll('.pa-note-edit-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const noteEl = btn.closest('.pa-note');
-          const tagIds = (noteEl.dataset.tagIds || '').split(',').filter(Boolean).map(Number);
-          this._editInvestorNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId), tagIds);
-        });
-      });
-      container.querySelectorAll('.pa-note-delete-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const noteEl = btn.closest('.pa-note');
-          this._deleteInvestorNote(parseInt(noteEl.dataset.parentId), parseInt(noteEl.dataset.noteId));
-        });
-      });
-    } catch (err) {
-      console.error('Failed to load investor notes:', err);
-      container.innerHTML = '<div class="pa-notes-empty" style="color:#e74c3c;">Failed to load notes.</div>';
-    }
-  },
-
-  async _addInvestorNote(investorId) {
-    const input = document.getElementById('investorNewNoteInput');
-    if (!input) return;
-    const content = input.value.trim();
-    if (!content) return;
-
-    try {
-      const tagIds = [...this._selectedNoteTagIds];
-      await ServerAPI.addInvestorNote(investorId, content, tagIds);
-      input.value = '';
-      this._selectedNoteTagIds = [];
-      // Refresh note-tags map so search picks up new tags
-      if (tagIds.length > 0) this.loadInvestorNoteTags();
-      this._renderNoteTagPills('investorNoteTagPills');
-      this._loadInvestorNotes(investorId);
-    } catch (err) {
-      alert('Failed to add note: ' + (err.message || 'Unknown error'));
-    }
-  },
-
-  async _editInvestorNote(investorId, noteId, currentTagIds) {
-    const noteEl = document.querySelector(`.pa-note[data-note-id="${noteId}"][data-parent-id="${investorId}"]`);
-    if (!noteEl) return;
-    const contentEl = noteEl.querySelector('.pa-note-content');
-    const tagsEl = noteEl.querySelector('.pa-note-tags');
-    const currentContent = contentEl.textContent;
-
-    const editPickerId = 'editTagPills_' + noteId;
-
-    contentEl.innerHTML = `<textarea class="form-input pa-note-edit-input" rows="2">${Utils.escapeHtml(currentContent)}</textarea>
-      <div class="inv-note-tag-bar">
-        <span class="inv-note-tag-label"><i class="fas fa-tags"></i> Tags:</span>
-        <div class="inv-note-tag-pills" id="${editPickerId}"></div>
-        <button type="button" class="btn btn-sm btn-outline edit-manage-tags-btn" style="font-size:0.65rem;padding:0.1rem 0.4rem;margin-left:0.5rem;"><i class="fas fa-tags"></i> Manage Tags</button>
-      </div>
-      <div class="pa-note-edit-actions">
-        <button type="button" class="btn btn-primary btn-sm pa-note-save-btn"><i class="fas fa-check"></i> Save</button>
-        <button type="button" class="btn btn-secondary btn-sm pa-note-cancel-btn">Cancel</button>
-      </div>`;
-
-    if (tagsEl) tagsEl.style.display = 'none';
-
-    const textarea = contentEl.querySelector('textarea');
-    textarea.focus();
-
-    // Save the new-note tag selections, switch to this note's tags
-    const savedNewNoteTags = [...this._selectedNoteTagIds];
-    this._selectedNoteTagIds = [...currentTagIds];
-    this._activeTagPillsId = editPickerId;
-    this._renderNoteTagPills(editPickerId);
-
-    // Manage Tags button opens the modal for this edit context
-    contentEl.querySelector('.edit-manage-tags-btn')?.addEventListener('click', () => this.openManageTagsModal(editPickerId));
-
-    contentEl.querySelector('.pa-note-save-btn').addEventListener('click', async () => {
-      const newContent = textarea.value.trim();
-      if (!newContent) return;
-      try {
-        await ServerAPI.updateInvestorNote(investorId, noteId, newContent, [...this._selectedNoteTagIds]);
-        // Restore new-note tag state and refresh
-        this._selectedNoteTagIds = savedNewNoteTags;
-        this._activeTagPillsId = 'investorNoteTagPills';
-        this.loadInvestorNoteTags();
-        this._loadInvestorNotes(investorId);
-      } catch (err) {
-        alert('Failed to update note: ' + (err.message || 'Unknown error'));
-      }
-    });
-
-    contentEl.querySelector('.pa-note-cancel-btn').addEventListener('click', () => {
-      // Restore new-note tag state
-      this._selectedNoteTagIds = savedNewNoteTags;
-      this._activeTagPillsId = 'investorNoteTagPills';
-      this._loadInvestorNotes(investorId);
-    });
-  },
-
-  async _deleteInvestorNote(investorId, noteId) {
-    if (!confirm('Delete this note?')) return;
-    try {
-      await ServerAPI.deleteInvestorNote(investorId, noteId);
-      this._loadInvestorNotes(investorId);
-    } catch (err) {
-      alert('Failed to delete note: ' + (err.message || 'Unknown error'));
-    }
+  _hideAllInvestors() {
+    InvestorDropdown._hideAll();
   },
 
   // =========================================================
@@ -1037,241 +667,6 @@ const Investors = {
       if (errCloseBtn) errCloseBtn.addEventListener('click', () => this.hideCompanyContactsModal());
     }
   },
-
-  // =========================================================
-  // All Investors Directory
-  // =========================================================
-  async showAllInvestors() {
-    const modal = document.getElementById('allInvestorsModal');
-    if (!modal) return;
-
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-
-    // Bind close
-    const closeBtn = document.getElementById('allInvestorsModalClose');
-    if (closeBtn) closeBtn.onclick = () => this._hideAllInvestors();
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) this._hideAllInvestors();
-    });
-
-    const tbody = document.getElementById('allInvestorsBody');
-    const countsEl = document.getElementById('allInvestorsCounts');
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
-
-    try {
-      const investors = await ServerAPI.getAllInvestors();
-      if (!Array.isArray(investors) || investors.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;">No investors found.</td></tr>';
-        return;
-      }
-
-      const esc = Utils.escapeHtml;
-      const sorted = investors.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      const activeCount = sorted.filter(i => i.is_active === 1 || i.is_active === true).length;
-      const inactiveCount = sorted.length - activeCount;
-      if (countsEl) countsEl.textContent = sorted.length + ' investors (' + activeCount + ' active, ' + inactiveCount + ' inactive)';
-
-      const toggleDefs = [
-        { field: 'conventional',          label: 'Conv',         cat: 'agency' },
-        { field: 'fha',                   label: 'FHA',          cat: 'agency' },
-        { field: 'va_loans',              label: 'VA',           cat: 'agency' },
-        { field: 'usda',                  label: 'USDA',         cat: 'agency' },
-        { field: 'jumbo',                 label: 'Jumbo',        cat: 'nonagency' },
-        { field: 'non_qm',               label: 'Non-QM',       cat: 'nonagency' },
-        { field: 'dscr',                  label: 'DSCR',         cat: 'nonagency' },
-        { field: 'bank_statement',        label: 'Bank Stmt',    cat: 'nonagency' },
-        { field: 'asset_depletion',       label: 'Asset Depl.',  cat: 'nonagency' },
-        { field: 'interest_only',         label: 'IO',           cat: 'nonagency' },
-        { field: 'itin_foreign_national', label: 'ITIN/FN',      cat: 'nonagency' },
-        { field: 'bridge_loans',          label: 'Bridge',       cat: 'specialty' },
-        { field: 'land_loans',            label: 'Land',         cat: 'specialty' },
-        { field: 'construction',          label: 'Construction', cat: 'specialty' },
-        { field: 'renovation',            label: 'Renovation',   cat: 'specialty' },
-        { field: 'manufactured',          label: 'Manufactured', cat: 'specialty' },
-        { field: 'doctor',                label: 'Doctor',       cat: 'specialty' },
-        { field: 'condo_non_warrantable', label: 'Condo/NW',     cat: 'specialty' },
-        { field: 'subordinate_financing', label: 'Sub. Fin.',    cat: 'specialty' },
-        { field: 'heloc_second',          label: 'HELOC/2nd',    cat: 'specialty' },
-        { field: 'manual_underwriting',   label: 'Manual UW',    cat: 'services' },
-        { field: 'servicing',             label: 'Servicing',    cat: 'services' },
-        { field: 'scenario_desk',         label: 'Scenario',     cat: 'services' },
-        { field: 'condo_review',          label: 'Condo Rev.',   cat: 'services' },
-        { field: 'exception_desk',        label: 'Exception',    cat: 'services' },
-        { field: 'review_wire_release',   label: 'Wire Review',  cat: 'services' },
-      ];
-
-      tbody.innerHTML = sorted.map(inv => {
-        const active = inv.is_active === 1 || inv.is_active === true;
-
-        // Build pills
-        let pillsHtml = '';
-        const activePills = toggleDefs.filter(t => Number(inv[t.field]) === 1);
-        (inv.customToggles || []).forEach(t => {
-          if (Number(t.enabled) === 1) activePills.push({ label: t.label, cat: 'custom' });
-        });
-        if (activePills.length > 0) {
-          pillsHtml = '<div class="inv-dir-pills">' +
-            activePills.map(t => '<span class="dropdown-pill dropdown-pill-' + t.cat + '">' + esc(t.label) + '</span>').join('') +
-          '</div>';
-        }
-
-        // Hidden note tags for search
-        const noteTagNames = (Investors._investorNoteTagsMap[inv.id] || []).join(' ');
-        const noteTagsHidden = noteTagNames ? '<span class="sr-only">' + esc(noteTagNames) + '</span>' : '';
-
-        return '<tr style="' + (active ? '' : 'opacity:0.55;') + '">' +
-          '<td><span class="inv-dir-name" data-investor-key="' + esc(inv.investor_key) + '">' + esc(inv.name) + '</span>' +
-            (active ? '' : '<span class="inv-dir-inactive">(Inactive)</span>') + noteTagsHidden + '</td>' +
-          '<td>' + esc(inv.account_executive_name || '--') + '</td>' +
-          '<td>' + esc(inv.states || '--') + '</td>' +
-          '<td>' + esc(inv.best_programs || '--') + '</td>' +
-          '<td>' + (pillsHtml || '--') + '</td>' +
-          '<td><div class="inv-dir-notes">' + esc(inv.notes || '--') + '</div></td>' +
-        '</tr>';
-      }).join('');
-
-      // Click name → open investor detail
-      tbody.querySelectorAll('.inv-dir-name').forEach(el => {
-        el.addEventListener('click', () => {
-          const key = el.dataset.investorKey;
-          if (key) {
-            this._hideAllInvestors();
-            this.showModal(key);
-          }
-        });
-      });
-
-      // Bind search
-      const searchInput = document.getElementById('allInvestorsSearch');
-      if (searchInput) {
-        searchInput.value = '';
-        searchInput.addEventListener('input', () => {
-          const q = searchInput.value.toLowerCase().trim();
-          const rows = tbody.querySelectorAll('tr');
-          rows.forEach(row => {
-            const text = (row.textContent || '').toLowerCase();
-            row.style.display = (!q || text.includes(q)) ? '' : 'none';
-          });
-        });
-      }
-    } catch (err) {
-      console.error('Failed to load all investors:', err);
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#e74c3c;">Failed to load investors.</td></tr>';
-    }
-  },
-
-  _hideAllInvestors() {
-    const modal = document.getElementById('allInvestorsModal');
-    if (!modal) return;
-    modal.classList.remove('active');
-    document.body.style.overflow = '';
-  },
-
-  // =========================================================
-  // Investor dropdown in nav
-  // =========================================================
-  _refreshDropdown() {
-    const container = document.getElementById('investorDropdownList');
-    if (!container) return;
-
-    const esc = Utils.escapeHtml;
-
-    const sorted = Object.entries(this.data)
-      .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || ''));
-
-    let html = '<div class="dropdown-header">Wholesale Partners (' + sorted.length + ')</div>' +
-      '<div class="investor-dropdown-search">' +
-        '<input type="text" id="investorDropdownSearch" class="form-input form-input-sm" placeholder="Search by name, product, service..." autocomplete="off" />' +
-      '</div>' +
-      '<div class="investor-card-grid" id="investorDropdownItems">';
-
-    sorted.forEach(([key, inv]) => {
-      // Build mini pills for dropdown
-      let pillsHtml = '';
-      const toggleDefs = [
-        { val: inv.conventional,         label: 'Conv',         cat: 'agency' },
-        { val: inv.fha,                  label: 'FHA',          cat: 'agency' },
-        { val: inv.vaLoans,              label: 'VA',           cat: 'agency' },
-        { val: inv.usda,                 label: 'USDA',         cat: 'agency' },
-        { val: inv.jumbo,                label: 'Jumbo',        cat: 'nonagency' },
-        { val: inv.nonQm,                label: 'Non-QM',       cat: 'nonagency' },
-        { val: inv.dscr,                 label: 'DSCR',         cat: 'nonagency' },
-        { val: inv.bankStatement,        label: 'Bank Stmt',    cat: 'nonagency' },
-        { val: inv.assetDepletion,       label: 'Asset Depl.',  cat: 'nonagency' },
-        { val: inv.interestOnly,         label: 'IO',           cat: 'nonagency' },
-        { val: inv.itinForeignNational,  label: 'ITIN/FN',      cat: 'nonagency' },
-        { val: inv.bridgeLoans,          label: 'Bridge',       cat: 'specialty' },
-        { val: inv.landLoans,            label: 'Land',         cat: 'specialty' },
-        { val: inv.construction,         label: 'Construction', cat: 'specialty' },
-        { val: inv.renovation,           label: 'Renovation',   cat: 'specialty' },
-        { val: inv.manufactured,         label: 'Manufactured', cat: 'specialty' },
-        { val: inv.doctor,               label: 'Doctor',       cat: 'specialty' },
-        { val: inv.condoNonWarrantable,  label: 'Condo/NW',     cat: 'specialty' },
-        { val: inv.subordinateFinancing, label: 'Sub. Fin.',    cat: 'specialty' },
-        { val: inv.helocSecond,          label: 'HELOC/2nd',    cat: 'specialty' },
-        { val: inv.manualUnderwriting,   label: 'Manual UW',    cat: 'services' },
-        { val: inv.servicing,            label: 'Servicing',    cat: 'services' },
-        { val: inv.scenarioDesk,         label: 'Scenario',     cat: 'services' },
-        { val: inv.condoReview,          label: 'Condo Rev.',   cat: 'services' },
-        { val: inv.exceptionDesk,        label: 'Exception',    cat: 'services' },
-        { val: inv.reviewWireRelease,    label: 'Wire Review',  cat: 'services' },
-      ];
-      (inv.customToggles || []).forEach(t => {
-        if (Number(t.enabled) === 1) {
-          toggleDefs.push({ val: 1, label: t.label, cat: 'custom' });
-        }
-      });
-      const activePills = toggleDefs.filter(t => Number(t.val) === 1);
-      if (activePills.length > 0) {
-        pillsHtml = '<div class="investor-card-pills">';
-        activePills.forEach(t => {
-          pillsHtml += '<span class="dropdown-pill dropdown-pill-' + t.cat + '">' + esc(t.label) + '</span>';
-        });
-        pillsHtml += '</div>';
-      }
-
-      // AE name if available
-      const aeNameStr = inv.accountExecutive?.name;
-      const aeName = aeNameStr ? '<div class="investor-card-ae"><i class="fas fa-user-tie"></i> ' + esc(aeNameStr) + '</div>' : '';
-
-      // Logo or initials
-      const logoHtml = inv.logoUrl
-        ? '<img src="' + esc(inv.logoUrl) + '" alt="" class="investor-card-logo" />'
-        : '<div class="investor-card-initials">' + esc((inv.name || key).charAt(0)) + '</div>';
-
-      // Note tags for search (hidden text)
-      const noteTagNames = (this._investorNoteTagsMap[inv.id] || []).join(' ');
-      const noteTagsHidden = noteTagNames ? '<span class="sr-only">' + esc(noteTagNames) + '</span>' : '';
-
-      html += '<button type="button" class="investor-card-item" data-action="open-investor" data-investor="' + key + '">' +
-        '<div class="investor-card-top">' +
-          logoHtml +
-          '<div class="investor-card-name">' + esc(inv.name || key) + '</div>' +
-        '</div>' +
-        aeName +
-        pillsHtml +
-        noteTagsHidden +
-      '</button>';
-    });
-
-    html += '</div>';
-    container.innerHTML = html;
-
-    // ── Search logic ──
-    const searchInput = document.getElementById('investorDropdownSearch');
-    if (searchInput) {
-      searchInput.addEventListener('input', () => {
-        const q = searchInput.value.toLowerCase().trim();
-        const items = document.querySelectorAll('#investorDropdownItems .investor-card-item');
-        items.forEach(btn => {
-          const text = (btn.textContent || '').toLowerCase();
-          btn.style.display = (!q || text.includes(q)) ? '' : 'none';
-        });
-      });
-      searchInput.addEventListener('click', (e) => e.stopPropagation());
-    }
-  }
 };
 
 window.Investors = Investors;

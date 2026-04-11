@@ -2,9 +2,9 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const db = require('../../db/connection');
 const { requireAdmin } = require('../../middleware/userContext');
 const { BUCKETS, getUploadUrl, getDownloadUrl, deleteObject } = require('../../services/s3');
+const Investor = require('../../models/Investor');
 
 const ALLOWED_DOC_TYPES = {
   'application/pdf': '.pdf',
@@ -22,11 +22,7 @@ const MAX_DOC_BYTES = 25 * 1024 * 1024; // 25 MB
 // GET /api/investors/:id/documents
 router.get('/:id/documents', async (req, res, next) => {
   try {
-    const investorId = req.params.id;
-    const [docs] = await db.query(
-      'SELECT * FROM investor_documents WHERE investor_id = ? ORDER BY created_at DESC',
-      [investorId]
-    );
+    const docs = await Investor.getDocuments(req.params.id);
     for (const doc of docs) {
       try { doc.download_url = await getDownloadUrl(BUCKETS.media, doc.file_key); }
       catch { doc.download_url = null; }
@@ -45,9 +41,9 @@ router.post('/:id/documents/upload-url', requireAdmin, async (req, res, next) =>
     if (fileSize && fileSize > MAX_DOC_BYTES) {
       return res.status(400).json({ error: 'File must be under 25 MB' });
     }
-
-    const [rows] = await db.query('SELECT id FROM investors WHERE id = ?', [investorId]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Investor not found' });
+    if (!await Investor.exists(investorId)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
 
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileKey = `investor-documents/${investorId}/${crypto.randomUUID()}-${safeName}`;
@@ -67,13 +63,10 @@ router.post('/:id/documents/confirm', requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: 'fileKey and fileName are required' });
     }
 
-    const [result] = await db.query(
-      `INSERT INTO investor_documents (investor_id, file_name, file_key, file_size, file_type, uploaded_by)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [investorId, fileName, fileKey, fileSize || null, fileType || null, req.dbUser?.id || null]
-    );
+    const docId = await Investor.createDocument(investorId, {
+      fileName, fileKey, fileSize, fileType, uploadedBy: req.dbUser?.id || null,
+    });
 
-    const docId = result.insertId;
     let download_url = null;
     try { download_url = await getDownloadUrl(BUCKETS.media, fileKey); } catch {}
 
@@ -84,15 +77,11 @@ router.post('/:id/documents/confirm', requireAdmin, async (req, res, next) => {
 // DELETE /api/investors/:id/documents/:docId
 router.delete('/:id/documents/:docId', requireAdmin, async (req, res, next) => {
   try {
-    const { id: investorId, docId } = req.params;
-    const [rows] = await db.query(
-      'SELECT * FROM investor_documents WHERE id = ? AND investor_id = ?',
-      [docId, investorId]
-    );
-    if (rows.length === 0) return res.status(404).json({ error: 'Document not found' });
+    const doc = await Investor.findDocument(req.params.id, req.params.docId);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
 
-    try { await deleteObject(BUCKETS.media, rows[0].file_key); } catch {}
-    await db.query('DELETE FROM investor_documents WHERE id = ?', [docId]);
+    try { await deleteObject(BUCKETS.media, doc.file_key); } catch {}
+    await Investor.deleteDocument(req.params.docId);
     res.json({ success: true });
   } catch (error) { next(error); }
 });

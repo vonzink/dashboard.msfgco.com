@@ -15,7 +15,9 @@
     10. chat.js               — Chat (messages, tags, polling)
     11. api.js                — API (data loading, pipeline/PA rendering)
     12. sync-manager.js       — SyncManager (data sync orchestration)
-    13. investors.js          — Investors (modals, CRUD, contact cards)
+    13. investor-notes.js     — InvestorNotes (tags, notes CRUD, Manage Tags modal)
+    14. investor-dropdown.js  — InvestorDropdown (nav dropdown, All Investors directory)
+    15. investors.js          — Investors (data, modal, contact cards — delegates to InvestorNotes/Dropdown)
     14. funded-loans.js       — FundedLoans — depends on API._displayPrefs, ServerAPI
     15. goals.js              — GoalsManager — depends on API (pipeline/funded data)
     16. announcements.js      — Announcements carousel
