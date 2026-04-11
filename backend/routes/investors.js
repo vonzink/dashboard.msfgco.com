@@ -95,7 +95,10 @@ router.get('/', async (req, res, next) => {
 // GET /api/investors/tags
 router.get('/tags', async (req, res, next) => {
   try {
-    const [tags] = await db.query('SELECT * FROM investor_tags ORDER BY name');
+    const [tags] = await db.query(
+      `SELECT t.*, (SELECT COUNT(*) FROM investor_note_tags nt WHERE nt.tag_id = t.id) AS usage_count
+       FROM investor_tags t ORDER BY t.name`
+    );
     res.json(tags);
   } catch (error) { next(error); }
 });
@@ -116,9 +119,15 @@ router.post('/tags', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// DELETE /api/investors/tags/:tagId
-router.delete('/tags/:tagId', requireAdmin, async (req, res, next) => {
+// DELETE /api/investors/tags/:tagId — soft-delete so existing notes keep the tag
+router.delete('/tags/:tagId', async (req, res, next) => {
   try {
+    // Check if tag is used on any notes
+    const [usage] = await db.query('SELECT COUNT(*) AS cnt FROM investor_note_tags WHERE tag_id = ?', [req.params.tagId]);
+    if (usage[0].cnt > 0) {
+      return res.status(409).json({ error: 'This tag is in use on ' + usage[0].cnt + ' note(s). Remove it from those notes first.' });
+    }
+    // Not in use — safe to hard-delete
     await db.query('DELETE FROM investor_tags WHERE id = ?', [req.params.tagId]);
     res.json({ success: true });
   } catch (error) { next(error); }
