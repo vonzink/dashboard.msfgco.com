@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
-const { getDbUser, getUserId, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
+const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { preApproval, preApprovalUpdate, validate } = require('../validation/schemas');
 const logger = require('../lib/logger');
 const { getMondayToken } = require('../services/monday/sync');
@@ -25,32 +25,46 @@ router.get('/', async (req, res, next) => {
 
     if (!isAdmin(req) && !hasRole(req, 'manager')) {
       const currentUserId = getUserId(req);
+      const role = getUserRole(req);
       const boardIds = await getAccessibleBoardIds(currentUserId);
 
-      if (hasRole(req, 'lo')) {
-        // LO: see own pre-approvals from accessible boards + any assigned to them directly
-        const loConditions = [];
-        if (boardIds.length > 0) {
-          loConditions.push(`(pa.source_board_id IN (${boardIds.map(() => '?').join(',')}) AND pa.assigned_lo_id = ?)`);
-          params.push(...boardIds, currentUserId);
-        }
-        // Always match by assigned_lo_id regardless of board access
-        loConditions.push('pa.assigned_lo_id = ?');
-        params.push(currentUserId);
-        // Name fallback for unresolved LO assignments
-        const dbUser = getDbUser(req);
-        if (dbUser?.name) {
-          loConditions.push('(pa.assigned_lo_id IS NULL AND pa.assigned_lo_name = ?)');
-          params.push(dbUser.name);
-        }
-        query += ` AND (${loConditions.join(' OR ')})`;
-      } else {
-        // Processor: board-based access
+      if (role === 'processor') {
+        // Processor: board-based access only
         if (boardIds.length === 0) {
           return res.json({ data: [], boards: [], groups: [] });
         }
         query += ` AND pa.source_board_id IN (${boardIds.map(() => '?').join(',')})`;
         params.push(...boardIds);
+      } else {
+        // LO (or any non-admin/non-manager/non-processor):
+        //   1. See ALL items on boards they have explicit access to
+        //   2. See items assigned to them (by ID) from any board
+        //   3. See items assigned to them (by name fallback) from any board
+        const dbUser = getDbUser(req);
+        const loConditions = [];
+
+        // Board access grants visibility to ALL items on those boards
+        if (boardIds.length > 0) {
+          loConditions.push(`pa.source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+          params.push(...boardIds);
+        }
+        // Always match by assigned_lo_id regardless of board access
+        loConditions.push('pa.assigned_lo_id = ?');
+        params.push(currentUserId);
+        // Name fallback for unresolved LO assignments (case-insensitive)
+        if (dbUser?.name) {
+          loConditions.push('(pa.assigned_lo_id IS NULL AND LOWER(TRIM(pa.assigned_lo_name)) = LOWER(TRIM(?)))');
+          params.push(dbUser.name);
+        }
+        query += ` AND (${loConditions.join(' OR ')})`;
+
+        logger.debug({
+          userId: currentUserId,
+          userName: dbUser?.name,
+          role,
+          boardIds,
+          loConditionCount: loConditions.length,
+        }, 'Pre-approvals: LO filtering applied');
       }
     }
 
@@ -141,15 +155,11 @@ router.get('/summary', async (req, res, next) => {
         whereClause += ' AND assigned_lo_id = ?';
         params.push(lo_id);
       }
-    } else if (!isAdmin(req)) {
+    } else {
       const currentUserId = getUserId(req);
+      const role = getUserRole(req);
 
-      if (hasRole(req, 'lo')) {
-        // LO: see their own items (by ID or name fallback)
-        const dbUser = getDbUser(req);
-        whereClause += ' AND (assigned_lo_id = ? OR (assigned_lo_id IS NULL AND assigned_lo_name = ?))';
-        params.push(currentUserId, dbUser?.name || '');
-      } else {
+      if (role === 'processor') {
         // Processor: board-based access
         const boardIds = await getAccessibleBoardIds(currentUserId);
         if (boardIds.length === 0) {
@@ -157,6 +167,22 @@ router.get('/summary', async (req, res, next) => {
         }
         whereClause += ` AND source_board_id IN (${boardIds.map(() => '?').join(',')})`;
         params.push(...boardIds);
+      } else {
+        // LO (or any non-admin/non-manager/non-processor): own items + board access
+        const dbUser = getDbUser(req);
+        const boardIds = await getAccessibleBoardIds(currentUserId);
+        const loConditions = [];
+        if (boardIds.length > 0) {
+          loConditions.push(`source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+          params.push(...boardIds);
+        }
+        loConditions.push('assigned_lo_id = ?');
+        params.push(currentUserId);
+        if (dbUser?.name) {
+          loConditions.push('(assigned_lo_id IS NULL AND LOWER(TRIM(assigned_lo_name)) = LOWER(TRIM(?)))');
+          params.push(dbUser.name);
+        }
+        whereClause += ` AND (${loConditions.join(' OR ')})`;
       }
     }
 
@@ -189,10 +215,17 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Pre-approval not found' });
     }
 
-    if (!isAdmin(req)) {
-      const boardIds = await getAccessibleBoardIds(getUserId(req));
-      if (!boardIds.includes(preApprovals[0].source_board_id)) {
-        return res.status(403).json({ error: 'Access denied' });
+    if (!isAdmin(req) && !hasRole(req, 'manager')) {
+      const currentUserId = getUserId(req);
+      const item = preApprovals[0];
+      // Allow access if the LO is assigned to this item (by ID) or via board access
+      if (item.assigned_lo_id === currentUserId) {
+        // Direct assignment — allow
+      } else {
+        const boardIds = await getAccessibleBoardIds(currentUserId);
+        if (!boardIds.includes(item.source_board_id)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
       }
     }
 

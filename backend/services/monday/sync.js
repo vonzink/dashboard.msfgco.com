@@ -418,14 +418,17 @@ async function syncAllBoards(userId) {
         }
       }
 
-      // Log unresolved LO names for debugging
+      // Log unresolved LO names for debugging with user name map context
       if (unresolvedLOs.size > 0) {
+        // Show what names are in the map so admin can diagnose the mismatch
+        const mapFullNames = Object.keys(userNameMap).filter(k => !k.includes(':'));
         logger.warn({
           boardId,
           boardName: board.board_name,
           section,
           unresolvedLONames: [...unresolvedLOs],
           count: unresolvedLOs.size,
+          availableDbNames: mapFullNames,
         }, 'Monday sync: items have assigned_lo_name but no matching assigned_lo_id — LO filtering will rely on name fallback');
       }
 

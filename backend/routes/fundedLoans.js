@@ -4,6 +4,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
+const logger = require('../lib/logger');
 const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
 
@@ -92,7 +93,7 @@ router.get('/', async (req, res, next) => {
     // ROLE-BASED + BOARD-ACCESS DATA FILTERING
     // ========================================
 
-    if (userGroup === 'admin' || userGroup === 'manager') {
+    if (hasRole(req, 'admin', 'manager')) {
       // Admin/Manager: See all funded loans
       // Optional filter by specific board
       if (board_id) {
@@ -100,8 +101,7 @@ router.get('/', async (req, res, next) => {
         params.push(board_id);
       }
     } else if (userGroup === 'processor') {
-      // Processor: See loans from their assigned LOs (fallback for non-Monday data)
-      // AND loans from boards they have access to
+      // Processor: See loans from their assigned LOs + accessible boards
       const loIds = await getProcessorLOIds(userId);
       const boardIds = await getAccessibleBoardIds(userId);
 
@@ -124,19 +124,27 @@ router.get('/', async (req, res, next) => {
         whereClause += ' AND fl.source_board_id = ?';
         params.push(board_id);
       }
-    } else if (userGroup === 'lo') {
-      // LO: See own loans (by ID or name fallback) + optionally scoped to boards
+    } else {
+      // LO (or any non-admin/non-manager/non-processor):
+      //   1. See ALL items on boards they have explicit access to
+      //   2. See items assigned to them (by ID) from any board
+      //   3. See items assigned to them (by name fallback) from any board
       const dbUser = getDbUser(req);
       const boardIds = await getAccessibleBoardIds(userId);
       const loConditions = [];
 
+      // Board access grants visibility to ALL items on those boards
+      if (boardIds.length > 0) {
+        loConditions.push(`fl.source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
       // Always match by assigned_lo_id
       loConditions.push('fl.assigned_lo_id = ?');
       params.push(userId);
 
-      // Name fallback for unresolved LO assignments
+      // Name fallback for unresolved LO assignments (case-insensitive)
       if (dbUser?.name) {
-        loConditions.push('(fl.assigned_lo_id IS NULL AND fl.assigned_lo_name = ?)');
+        loConditions.push('(fl.assigned_lo_id IS NULL AND LOWER(TRIM(fl.assigned_lo_name)) = LOWER(TRIM(?)))');
         params.push(dbUser.name);
       }
 
@@ -146,8 +154,14 @@ router.get('/', async (req, res, next) => {
         whereClause += ' AND fl.source_board_id = ?';
         params.push(board_id);
       }
-    } else {
-      return res.status(403).json({ error: 'Access denied to funded loans' });
+
+      logger.debug({
+        userId,
+        userName: dbUser?.name,
+        role: userGroup,
+        boardIds,
+        loConditionCount: loConditions.length,
+      }, 'Funded loans: LO filtering applied');
     }
 
     // ========================================
@@ -286,7 +300,7 @@ router.get('/summary', async (req, res, next) => {
     const params = [];
 
     // Role-based + board-access filtering
-    if (userGroup === 'admin' || userGroup === 'manager') {
+    if (hasRole(req, 'admin', 'manager')) {
       // Admin/Manager can filter by specific LO for goals view
       if (lo_id) {
         whereClause += ' AND assigned_lo_id = ?';
@@ -312,12 +326,22 @@ router.get('/summary', async (req, res, next) => {
         return res.json({ units: 0, total_amount: 0 });
       }
       whereClause += ` AND (${conditions.join(' OR ')})`;
-    } else if (userGroup === 'lo') {
-      const dbUser = getDbUser(req);
-      whereClause += ' AND (assigned_lo_id = ? OR (assigned_lo_id IS NULL AND assigned_lo_name = ?))';
-      params.push(userId, dbUser?.name || '');
     } else {
-      return res.status(403).json({ error: 'Access denied' });
+      // LO (or any non-admin/non-manager/non-processor): own items + board access
+      const dbUser = getDbUser(req);
+      const boardIds = await getAccessibleBoardIds(userId);
+      const loConditions = [];
+      if (boardIds.length > 0) {
+        loConditions.push(`source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
+      loConditions.push('assigned_lo_id = ?');
+      params.push(userId);
+      if (dbUser?.name) {
+        loConditions.push('(assigned_lo_id IS NULL AND LOWER(TRIM(assigned_lo_name)) = LOWER(TRIM(?)))');
+        params.push(dbUser.name);
+      }
+      whereClause += ` AND (${loConditions.join(' OR ')})`;
     }
 
     // Date filtering
@@ -418,7 +442,7 @@ router.get('/:id', async (req, res, next) => {
     const loan = loans[0];
 
     // Check access based on role + board access
-    if (userGroup === 'admin' || userGroup === 'manager') {
+    if (hasRole(req, 'admin', 'manager')) {
       // Full access
     } else if (userGroup === 'processor') {
       const loIds = await getProcessorLOIds(userId);
@@ -426,13 +450,16 @@ router.get('/:id', async (req, res, next) => {
       if (!loIds.includes(loan.assigned_lo_id) && !boardIds.includes(loan.source_board_id)) {
         return res.status(403).json({ error: 'Access denied to this loan' });
       }
-    } else if (userGroup === 'lo') {
-      const boardIds = await getAccessibleBoardIds(userId);
-      if (!boardIds.includes(loan.source_board_id)) {
-        return res.status(403).json({ error: 'Access denied to this loan' });
-      }
     } else {
-      return res.status(403).json({ error: 'Access denied' });
+      // LO (or any non-admin/non-manager/non-processor): allow if assigned to them or via board access
+      if (loan.assigned_lo_id === userId) {
+        // Direct assignment — allow
+      } else {
+        const boardIds = await getAccessibleBoardIds(userId);
+        if (!boardIds.includes(loan.source_board_id)) {
+          return res.status(403).json({ error: 'Access denied to this loan' });
+        }
+      }
     }
 
     res.json({ data: loan });

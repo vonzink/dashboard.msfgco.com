@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
+const logger = require('../lib/logger');
 const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { pipelineUpdate, validate } = require('../validation/schemas');
 const { buildUpdate } = require('../utils/queryBuilder');
@@ -41,9 +42,31 @@ router.get('/', async (req, res, next) => {
       }
       query += ` AND (${conditions.join(' OR ')})`;
     } else {
-      // LO: see own loans (by ID or by name fallback for unresolved assignments)
-      query += ' AND (p.assigned_lo_id = ? OR (p.assigned_lo_id IS NULL AND p.assigned_lo_name = ?))';
-      params.push(userId, dbUser?.name || '');
+      // LO (or any non-admin/non-manager/non-processor):
+      //   1. See ALL items on boards they have explicit access to
+      //   2. See items assigned to them (by ID) from any board
+      //   3. See items assigned to them (by name fallback) from any board
+      const boardIds = await getAccessibleBoardIds(userId);
+      const loConditions = [];
+
+      if (boardIds.length > 0) {
+        loConditions.push(`p.source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
+      loConditions.push('p.assigned_lo_id = ?');
+      params.push(userId);
+      if (dbUser?.name) {
+        loConditions.push('(p.assigned_lo_id IS NULL AND LOWER(TRIM(p.assigned_lo_name)) = LOWER(TRIM(?)))');
+        params.push(dbUser.name);
+      }
+      query += ` AND (${loConditions.join(' OR ')})`;
+
+      logger.debug({
+        userId,
+        userName: dbUser?.name,
+        role,
+        boardIds,
+      }, 'Pipeline: LO filtering applied');
     }
 
     if (stage) {
@@ -105,8 +128,19 @@ router.get('/summary', async (req, res, next) => {
       whereClause += ` AND (${conditions.join(' OR ')})`;
     } else {
       const dbUser = getDbUser(req);
-      whereClause += ' AND (assigned_lo_id = ? OR (assigned_lo_id IS NULL AND assigned_lo_name = ?))';
-      params.push(userId, dbUser?.name || '');
+      const boardIds = await getAccessibleBoardIds(userId);
+      const loConditions = [];
+      if (boardIds.length > 0) {
+        loConditions.push(`source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+        params.push(...boardIds);
+      }
+      loConditions.push('assigned_lo_id = ?');
+      params.push(userId);
+      if (dbUser?.name) {
+        loConditions.push('(assigned_lo_id IS NULL AND LOWER(TRIM(assigned_lo_name)) = LOWER(TRIM(?)))');
+        params.push(dbUser.name);
+      }
+      whereClause += ` AND (${loConditions.join(' OR ')})`;
     }
 
     const [summary] = await db.query(
@@ -125,6 +159,87 @@ router.get('/summary', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+// GET /api/pipeline/debug/lo-identity — Admin diagnostic: show how a user is resolved for LO filtering
+router.get('/debug/lo-identity', async (req, res, next) => {
+  try {
+    if (!isAdmin(req)) return res.status(403).json({ error: 'Admin only' });
+
+    const targetUserId = req.query.user_id ? parseInt(req.query.user_id) : getUserId(req);
+    const [users] = await db.query('SELECT id, name, email, role FROM users WHERE id = ?', [targetUserId]);
+    if (users.length === 0) return res.status(404).json({ error: 'User not found' });
+
+    const user = users[0];
+    const role = req.query.user_id ? user.role : getUserRole(req);
+
+    // Count items matching by ID
+    const [byId] = await db.query('SELECT COUNT(*) as cnt FROM pipeline WHERE assigned_lo_id = ?', [user.id]);
+    const [byNameExact] = await db.query('SELECT COUNT(*) as cnt FROM pipeline WHERE assigned_lo_id IS NULL AND assigned_lo_name = ?', [user.name]);
+    const [byNameLower] = await db.query('SELECT COUNT(*) as cnt FROM pipeline WHERE assigned_lo_id IS NULL AND LOWER(TRIM(assigned_lo_name)) = LOWER(TRIM(?))', [user.name]);
+    const [nullLoId] = await db.query('SELECT COUNT(*) as cnt FROM pipeline WHERE assigned_lo_id IS NULL');
+    const [totalItems] = await db.query('SELECT COUNT(*) as cnt FROM pipeline');
+
+    // Same for pre-approvals
+    const [paById] = await db.query('SELECT COUNT(*) as cnt FROM pre_approvals WHERE assigned_lo_id = ?', [user.id]);
+    const [paByName] = await db.query('SELECT COUNT(*) as cnt FROM pre_approvals WHERE assigned_lo_id IS NULL AND LOWER(TRIM(assigned_lo_name)) = LOWER(TRIM(?))', [user.name]);
+    const [paTotal] = await db.query('SELECT COUNT(*) as cnt FROM pre_approvals');
+
+    // Same for funded-loans
+    const [flById] = await db.query('SELECT COUNT(*) as cnt FROM funded_loans WHERE assigned_lo_id = ?', [user.id]);
+    const [flByName] = await db.query('SELECT COUNT(*) as cnt FROM funded_loans WHERE assigned_lo_id IS NULL AND LOWER(TRIM(assigned_lo_name)) = LOWER(TRIM(?))', [user.name]);
+    const [flTotal] = await db.query('SELECT COUNT(*) as cnt FROM funded_loans');
+
+    // Board access
+    const [boardAccess] = await db.query(
+      `SELECT ba.board_id, mb.board_name, mb.target_section
+       FROM monday_board_access ba
+       LEFT JOIN monday_boards mb ON ba.board_id = mb.board_id
+       WHERE ba.user_id = ?`,
+      [user.id]
+    );
+
+    // Sample unresolved names (items with assigned_lo_name but NULL assigned_lo_id)
+    const [unresolvedPipeline] = await db.query(
+      'SELECT DISTINCT assigned_lo_name FROM pipeline WHERE assigned_lo_id IS NULL AND assigned_lo_name IS NOT NULL LIMIT 20'
+    );
+    const [unresolvedPA] = await db.query(
+      'SELECT DISTINCT assigned_lo_name FROM pre_approvals WHERE assigned_lo_id IS NULL AND assigned_lo_name IS NOT NULL LIMIT 20'
+    );
+    const [unresolvedFL] = await db.query(
+      'SELECT DISTINCT assigned_lo_name FROM funded_loans WHERE assigned_lo_id IS NULL AND assigned_lo_name IS NOT NULL LIMIT 20'
+    );
+
+    res.json({
+      user: { id: user.id, name: user.name, email: user.email, dbRole: user.role, activeRole: role },
+      pipeline: {
+        matchedById: byId[0].cnt,
+        matchedByNameExact: byNameExact[0].cnt,
+        matchedByNameLower: byNameLower[0].cnt,
+        nullLoIdItems: nullLoId[0].cnt,
+        totalItems: totalItems[0].cnt,
+        wouldSee: byId[0].cnt + byNameLower[0].cnt,
+      },
+      preApprovals: {
+        matchedById: paById[0].cnt,
+        matchedByNameLower: paByName[0].cnt,
+        totalItems: paTotal[0].cnt,
+        wouldSee: paById[0].cnt + paByName[0].cnt,
+      },
+      fundedLoans: {
+        matchedById: flById[0].cnt,
+        matchedByNameLower: flByName[0].cnt,
+        totalItems: flTotal[0].cnt,
+        wouldSee: flById[0].cnt + flByName[0].cnt,
+      },
+      boardAccess,
+      unresolvedNames: {
+        pipeline: unresolvedPipeline.map(r => r.assigned_lo_name),
+        preApprovals: unresolvedPA.map(r => r.assigned_lo_name),
+        fundedLoans: unresolvedFL.map(r => r.assigned_lo_name),
+      },
+    });
+  } catch (error) { next(error); }
 });
 
 // GET /api/pipeline/:id - Get specific pipeline item
