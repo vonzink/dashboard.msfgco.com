@@ -132,6 +132,12 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
     credit_report_date: row.credit_report_date || null,
     coborrower_name: row.coborrower_name || null,
     campaign: row.campaign || null,
+    // Additional loan detail fields
+    purchase_price: row.purchase_price || null,
+    ltv: row.ltv || null,
+    dti: row.dti || null,
+    lp_loan_number: row.lp_loan_number || null,
+    investor_loan_number: row.investor_loan_number || null,
   };
 
   if (row.assigned_lo_name) {

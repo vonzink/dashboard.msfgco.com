@@ -28,6 +28,11 @@ const PreApprovals = {
     { field: 'credit_score', label: 'Credit Score' },
     { field: 'income', label: 'Income' },
     { field: 'property_type', label: 'Property Type' },
+    { field: 'purchase_price', label: 'Purchase Price' },
+    { field: 'ltv', label: 'LTV' },
+    { field: 'dti', label: 'DTI' },
+    { field: 'lp_loan_number', label: 'LP Loan #' },
+    { field: 'investor_loan_number', label: 'Loan # (Investor)' },
     { field: 'referring_agent', label: 'Referring Agent' },
     { field: 'referring_agent_email', label: 'Agent Email' },
     { field: 'referring_agent_phone', label: 'Agent Phone' },
@@ -39,7 +44,7 @@ const PreApprovals = {
 
   DATE_FIELDS: ['pre_approval_date', 'expiration_date', 'contact_date', 'borrower_dob',
     'coborrower_dob', 'credit_report_date'],
-  CURRENCY_FIELDS: ['loan_amount', 'income'],
+  CURRENCY_FIELDS: ['loan_amount', 'income', 'purchase_price'],
 
   // ========================================
   // DATA LOADING
@@ -449,14 +454,19 @@ const PreApprovals = {
         <div class="pa-detail-section">
           <h3 class="pa-detail-section-title"><i class="fas fa-dollar-sign"></i> Loan Details</h3>
           ${detailRow('Loan Amount', fmtCur(item.loan_amount))}
+          ${detailRow('Purchase Price', fmtCur(item.purchase_price))}
           ${detailRow('Pre-Approval Date', fmtDate(item.pre_approval_date))}
           ${detailRow('Expiration Date', fmtDate(item.expiration_date))}
           ${detailRow('Loan Type', esc(item.loan_type || ''))}
+          <div class="pa-detail-row"><span class="pa-detail-label">${esc('LP Loan #')}</span><span class="pa-detail-value">${esc(item.lp_loan_number || '--')}</span></div>
+          ${detailRow('Loan # (Investor)', esc(item.investor_loan_number || ''))}
           ${detailRow('Loan Number', esc(item.loan_number || ''))}
           ${detailRow('Lender', esc(item.lender || ''))}
           ${detailRow('Loan Purpose', esc(item.loan_purpose || ''))}
           ${detailRow('Occupancy', esc(item.occupancy || ''))}
           ${detailRow('Rate', esc(item.rate || ''))}
+          ${detailRow('LTV', esc(item.ltv || ''))}
+          ${detailRow('DTI', esc(item.dti || ''))}
           ${detailRow('Credit Score', item.credit_score ? String(item.credit_score) : '')}
           ${detailRow('Income', fmtCur(item.income))}
           ${detailRow('Property Type', esc(item.property_type || ''))}

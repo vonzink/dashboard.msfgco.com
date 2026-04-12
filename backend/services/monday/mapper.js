@@ -35,6 +35,8 @@ const VALID_PRE_APPROVAL_FIELDS = [
   'current_address', 'city', 'state', 'zip',
   'borrower_dob', 'citizenship', 'borrower_first_name', 'borrower_last_name',
   'coborrower_dob', 'credit_report_date', 'coborrower_name', 'campaign',
+  // Additional loan detail fields
+  'purchase_price', 'ltv', 'dti', 'lp_loan_number', 'investor_loan_number',
 ];
 
 const VALID_FUNDED_LOAN_FIELDS = [
@@ -176,6 +178,8 @@ const FIELD_LABELS = {
   citizenship: 'Citizenship',
   credit_report_date: 'Credit Report Date',
   campaign: 'Campaign',
+  dti: 'DTI',
+  investor_loan_number: 'Loan # (Investor)',
 };
 
 const FIELD_LABELS_BY_SECTION = {
@@ -358,6 +362,15 @@ const DEFAULT_TITLE_MAP = {
   'remove from pipeline': 'status',
   'campaign':             'campaign',
   'date':                 'contact_date',
+  // DTI / investor loan number mappings
+  'dti':                   'dti',
+  'debt to income':        'dti',
+  'debt-to-income':        'dti',
+  'back end ratio':        'dti',
+  'investor loan number':  'investor_loan_number',
+  'loan number (investor)': 'investor_loan_number',
+  'investor loan #':       'investor_loan_number',
+  'investor loan no':      'investor_loan_number',
 };
 
 const DATE_FIELDS = [
