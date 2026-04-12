@@ -49,6 +49,11 @@ const preApproval = z.object({
   referring_agent_email: optionalString(200),
   referring_agent_phone: optionalString(50),
   contact_date: dateString.optional().nullable(),
+  purchase_price: z.number().positive().optional().nullable(),
+  ltv: optionalString(50),
+  dti: optionalString(50),
+  lp_loan_number: optionalString(100),
+  investor_loan_number: optionalString(100),
 });
 
 // ── Pipeline ────────────────────────────────────

@@ -330,6 +330,11 @@ const PreApprovals = {
     document.getElementById('paOccupancy').value = item.occupancy || '';
     document.getElementById('paPropertyType').value = item.property_type || '';
     document.getElementById('paRate').value = item.rate || '';
+    document.getElementById('paPurchasePrice').value = item.purchase_price || '';
+    document.getElementById('paLTV').value = item.ltv || '';
+    document.getElementById('paDTI').value = item.dti || '';
+    document.getElementById('paLPLoanNumber').value = item.lp_loan_number || '';
+    document.getElementById('paInvestorLoanNumber').value = item.investor_loan_number || '';
     document.getElementById('paCreditScore').value = item.credit_score || '';
     document.getElementById('paIncome').value = item.income || '';
     document.getElementById('paReferringAgent').value = item.referring_agent || '';
@@ -362,6 +367,7 @@ const PreApprovals = {
       const id = document.getElementById('paFormId').value;
       const creditScoreVal = document.getElementById('paCreditScore').value;
       const incomeVal = document.getElementById('paIncome').value;
+      const purchasePriceVal = document.getElementById('paPurchasePrice').value;
 
       const data = {
         client_name: document.getElementById('paClientName').value.trim(),
@@ -376,6 +382,11 @@ const PreApprovals = {
         occupancy: document.getElementById('paOccupancy').value.trim() || null,
         property_type: document.getElementById('paPropertyType').value.trim() || null,
         rate: document.getElementById('paRate').value.trim() || null,
+        purchase_price: purchasePriceVal ? parseFloat(purchasePriceVal) : null,
+        ltv: document.getElementById('paLTV').value.trim() || null,
+        dti: document.getElementById('paDTI').value.trim() || null,
+        lp_loan_number: document.getElementById('paLPLoanNumber').value.trim() || null,
+        investor_loan_number: document.getElementById('paInvestorLoanNumber').value.trim() || null,
         credit_score: creditScoreVal ? parseInt(creditScoreVal, 10) : null,
         income: incomeVal ? parseFloat(incomeVal) : null,
         referring_agent: document.getElementById('paReferringAgent').value.trim() || null,
