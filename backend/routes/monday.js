@@ -308,12 +308,27 @@ router.get('/view-config', async (req, res, next) => {
 
     if (unique.length > 0) {
       for (const m of unique) {
+        seen.add(m.pipeline_field);
         columns.push({
           field: m.pipeline_field,
           label: m.display_label || FIELD_LABELS[m.pipeline_field] || m.pipeline_field,
           order: m.display_order ?? 99,
           visible: m.visible !== 0,
         });
+      }
+      // Also include any valid fields NOT yet in saved mappings so admins
+      // can see and configure newly added fields without re-saving mappings
+      const validFields = VALID_FIELDS_BY_SECTION[section] || [];
+      let nextOrder = Math.max(...columns.map(c => c.order ?? 0)) + 1;
+      for (const field of validFields) {
+        if (!seen.has(field)) {
+          columns.push({
+            field,
+            label: FIELD_LABELS[field] || field,
+            order: nextOrder++,
+            visible: true,
+          });
+        }
       }
     } else {
       // No saved mappings — return all valid fields for this section so the
