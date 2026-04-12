@@ -339,26 +339,49 @@ async function syncAllBoards(userId) {
     const boardId = board.board_id;
     const section = board.target_section || 'pipeline';
 
-    let [mappings] = await db.query(
+    let [savedMappings] = await db.query(
       'SELECT monday_column_id, pipeline_field FROM monday_column_mappings WHERE board_id = ?',
       [boardId]
     );
 
-    if (mappings.length === 0) {
-      const autoMappings = await autoMapColumns(token, boardId, section);
-      if (autoMappings.length === 0) {
-        logger.info({ boardId }, 'Monday sync: no mappings for board, skipping');
-        continue;
-      }
-      mappings = autoMappings;
+    // Always run autoMapColumns to discover any new Monday columns
+    const autoMappings = await autoMapColumns(token, boardId, section);
+
+    if (savedMappings.length === 0 && autoMappings.length === 0) {
+      logger.info({ boardId }, 'Monday sync: no mappings for board, skipping');
+      continue;
     }
 
+    // Merge strategy: saved mappings take priority, but auto-mapped columns
+    // fill in any gaps (new columns added to Monday after initial mapping)
     const columnMap = {};
     let hasLOMapped = false;
-    for (const m of mappings) {
+
+    // First, apply auto-mapped columns as the base
+    for (const m of autoMappings) {
       columnMap[m.monday_column_id] = m.pipeline_field;
       if (m.pipeline_field === 'assigned_lo_name') hasLOMapped = true;
     }
+
+    // Then overlay saved mappings (these take priority over auto)
+    for (const m of savedMappings) {
+      columnMap[m.monday_column_id] = m.pipeline_field;
+      if (m.pipeline_field === 'assigned_lo_name') hasLOMapped = true;
+    }
+
+    if (Object.keys(columnMap).length === 0) {
+      logger.info({ boardId }, 'Monday sync: no mappings resolved for board, skipping');
+      continue;
+    }
+
+    logger.info({
+      boardId,
+      boardName: board.board_name,
+      savedMappingCount: savedMappings.length,
+      autoMappingCount: autoMappings.length,
+      totalMappedFields: Object.keys(columnMap).length,
+      mappedFields: Object.values(columnMap).sort(),
+    }, 'Monday sync: column mappings resolved');
 
     // Infer board-level LO from board name — used as fallback when items lack an LO value
     let boardLO = null;
