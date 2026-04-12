@@ -434,7 +434,11 @@ async function syncNoteTags(noteId, tagIds) {
 
 async function getNotes(investorId) {
   const [notes] = await db.query(
-    'SELECT * FROM investor_notes WHERE investor_id = ? ORDER BY created_at DESC',
+    `SELECT n.*, u.initials AS author_initials
+     FROM investor_notes n
+     LEFT JOIN users u ON u.id = n.author_id
+     WHERE n.investor_id = ?
+     ORDER BY n.created_at DESC`,
     [investorId]
   );
   await attachNoteTags(notes);

@@ -250,7 +250,7 @@ const InvestorNotes = {
         const ts = new Date(note.created_at);
         const edited = note.updated_at && note.updated_at !== note.created_at;
         const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-        const initials = (note.author_name || '').split(/\s+/).map(w => w.charAt(0).toUpperCase()).join('');
+        const initials = note.author_initials || (note.author_name || '').split(/\s+/).map(w => w.charAt(0).toUpperCase()).join('');
 
         const tagsHtml = (note.tags && note.tags.length > 0)
           ? '<div class="pa-note-tags">' + note.tags.map(tag =>
