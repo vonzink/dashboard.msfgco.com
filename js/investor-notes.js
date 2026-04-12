@@ -250,6 +250,7 @@ const InvestorNotes = {
         const ts = new Date(note.created_at);
         const edited = note.updated_at && note.updated_at !== note.created_at;
         const timeStr = ts.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        const initials = (note.author_name || '').split(/\s+/).map(w => w.charAt(0).toUpperCase()).join('');
 
         const tagsHtml = (note.tags && note.tags.length > 0)
           ? '<div class="pa-note-tags">' + note.tags.map(tag =>
@@ -262,7 +263,7 @@ const InvestorNotes = {
         return `<div class="pa-note" data-note-id="${note.id}" data-parent-id="${investorId}" data-tag-ids="${tagIdStr}">
           <div class="pa-note-header">
             <span class="pa-note-author"><i class="fas fa-user-circle"></i> ${esc(note.author_name || 'Unknown')}</span>
-            <span class="pa-note-time">${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
+            <span class="pa-note-time">${esc(initials)} — ${esc(timeStr)}${edited ? ' (edited)' : ''}</span>
             ${canEdit ? `<div class="pa-note-actions">
               <button type="button" class="pa-note-edit-btn" title="Edit"><i class="fas fa-pencil-alt"></i></button>
               <button type="button" class="pa-note-delete-btn" title="Delete"><i class="fas fa-trash-alt"></i></button>
