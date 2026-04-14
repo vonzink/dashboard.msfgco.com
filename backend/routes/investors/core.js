@@ -74,6 +74,7 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'manufactured', 'doctor', 'condo_non_warrantable', 'heloc_second',
       'scenario_desk', 'condo_review', 'exception_desk',
       'website_url', 'logo_url', 'login_url', 'is_active',
+      'doc_4506c', 'doc_mailing_address', 'doc_ssa', 'doc_other',
     ];
     const allowedFields = admin ? ['notes', ...ADMIN_FIELDS] : ['notes'];
 

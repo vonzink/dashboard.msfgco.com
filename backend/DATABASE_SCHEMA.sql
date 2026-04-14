@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS investors (
 
     is_active BOOLEAN DEFAULT TRUE,
 
+    -- Document form-fill fields
+    doc_4506c TEXT,
+    doc_mailing_address TEXT,
+    doc_ssa TEXT,
+    doc_other TEXT,
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 

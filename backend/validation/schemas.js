@@ -232,6 +232,11 @@ const investor = z.object({
   logo_url: optionalString(500),
   login_url: optionalString(500),
   notes: optionalString(5000),
+  // Document form-fill fields
+  doc_4506c: optionalString(5000),
+  doc_mailing_address: optionalString(2000),
+  doc_ssa: optionalString(5000),
+  doc_other: optionalString(5000),
 });
 
 const investorUpdate = investor.extend({
