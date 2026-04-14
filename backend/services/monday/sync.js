@@ -48,7 +48,7 @@ async function _getPipelineColumns() {
   return _pipelineColumnsCache;
 }
 
-async function upsertPipelineRow(mondayItemId, row) {
+async function upsertPipelineRow(mondayItemId, row, boardId) {
   const [existing] = await db.query('SELECT id FROM pipeline WHERE monday_item_id = ?', [mondayItemId]);
   const validCols = await _getPipelineColumns();
 
@@ -57,6 +57,7 @@ async function upsertPipelineRow(mondayItemId, row) {
   for (const [k, v] of Object.entries(row)) {
     if (!k.startsWith('_') && validCols.has(k)) dbRow[k] = v;
   }
+  if (boardId && validCols.has('source_board_id')) dbRow.source_board_id = boardId;
 
   if (existing.length > 0) {
     const sets = [];
@@ -434,7 +435,7 @@ async function syncAllBoards(userId) {
         try {
           let result;
           if (section === 'pipeline') {
-            result = await upsertPipelineRow(item.id, row);
+            result = await upsertPipelineRow(item.id, row, boardId);
           } else if (section === 'pre_approvals') {
             result = await upsertPreApprovalRow(item.id, row, userNameMap, boardId);
           } else if (section === 'funded_loans') {
