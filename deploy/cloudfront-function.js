@@ -34,5 +34,16 @@ function handler(event) {
     };
   }
 
+  // Redirect bare /docs to /docs/ (matches docs/* cache behavior)
+  if (uri === "/docs") {
+    return {
+      statusCode: 301,
+      statusDescription: "Moved Permanently",
+      headers: {
+        "location": { value: "/docs/" }
+      }
+    };
+  }
+
   return request;
 }
