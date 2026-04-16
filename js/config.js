@@ -137,6 +137,7 @@
       listreports: "https://listreports.com/login?redirect=https%253A%252F%252Flistreports.com%252Fagent-intel%253Ftab%253Dlistside",
       passport: "https://v3.titlepro247.com/Account",
       flueid: "https://pro.flueid.com/auth/sign-in",
+      scanner: "/scanner.html",
 
       advantage_credit: "https://credit.advcredit.com/custom/login.aspx",
       dropbox: "https://www.dropbox.com",
