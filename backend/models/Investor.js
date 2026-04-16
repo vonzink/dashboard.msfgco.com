@@ -83,7 +83,7 @@ async function findByKey(key) {
   const investor = investors[0];
   const id = investor.id;
 
-  const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult, documentsResult, customTogglesResult] = await Promise.all([
+  const [teamResult, lenderIdsResult, clausesResult, linksResult, turnTimesResult, documentsResult, customTogglesResult, aesResult] = await Promise.all([
     db.query('SELECT * FROM investor_team WHERE investor_id = ? ORDER BY sort_order, name', [id]),
     db.query('SELECT * FROM investor_lender_ids WHERE investor_id = ?', [id]),
     db.query('SELECT * FROM investor_mortgagee_clauses WHERE investor_id = ?', [id]),
@@ -91,6 +91,7 @@ async function findByKey(key) {
     db.query('SELECT * FROM investor_turn_times WHERE investor_id = ? ORDER BY sort_order', [id]),
     db.query('SELECT * FROM investor_documents WHERE investor_id = ? ORDER BY created_at DESC', [id]),
     db.query('SELECT * FROM investor_custom_toggles WHERE investor_id = ? ORDER BY sort_order, id', [id]),
+    db.query('SELECT * FROM investor_aes WHERE investor_id = ? ORDER BY sort_order, name', [id]),
   ]);
 
   investor.team = teamResult[0];
@@ -100,6 +101,7 @@ async function findByKey(key) {
   investor.turnTimes = turnTimesResult[0];
   investor.documents = documentsResult[0];
   investor.customToggles = customTogglesResult[0];
+  investor.aes = aesResult[0];
 
   return investor;
 }
@@ -228,6 +230,20 @@ async function remove(idOrKey) {
 // Sub-resources — team, lender IDs, clauses, links, turn times
 // ============================================================
 
+async function saveAes(investorId, aes) {
+  await db.query('DELETE FROM investor_aes WHERE investor_id = ?', [investorId]);
+  for (let i = 0; i < aes.length; i++) {
+    const a = aes[i];
+    if (!a.name && !a.email && !a.mobile) continue;
+    await db.query(
+      'INSERT INTO investor_aes (investor_id, name, email, mobile, photo_url, sort_order) VALUES (?, ?, ?, ?, ?, ?)',
+      [investorId, a.name || null, a.email || null, a.mobile || null, a.photo_url || null, a.sort_order ?? i]
+    );
+  }
+  const [rows] = await db.query('SELECT * FROM investor_aes WHERE investor_id = ? ORDER BY sort_order, name', [investorId]);
+  return rows;
+}
+
 async function saveTeam(investorId, team) {
   await db.query('DELETE FROM investor_team WHERE investor_id = ?', [investorId]);
   for (let i = 0; i < team.length; i++) {
@@ -349,11 +365,11 @@ async function getDocuments(investorId) {
   return docs;
 }
 
-async function createDocument(investorId, { fileName, fileKey, fileSize, fileType, uploadedBy }) {
+async function createDocument(investorId, { fileName, fileKey, fileSize, fileType, docType, uploadedBy }) {
   const [result] = await db.query(
-    `INSERT INTO investor_documents (investor_id, file_name, file_key, file_size, file_type, uploaded_by)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [investorId, fileName, fileKey, fileSize || null, fileType || null, uploadedBy || null]
+    `INSERT INTO investor_documents (investor_id, file_name, file_key, file_size, file_type, doc_type, uploaded_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [investorId, fileName, fileKey, fileSize || null, fileType || null, docType || null, uploadedBy || null]
   );
   return result.insertId;
 }
@@ -364,6 +380,15 @@ async function findDocument(investorId, docId) {
     [docId, investorId]
   );
   return rows[0] || null;
+}
+
+async function updateDocumentType(docId, docType) {
+  // docType is a short whitelist string (validated in the route handler).
+  // null/empty clears the classification.
+  await db.query(
+    'UPDATE investor_documents SET doc_type = ? WHERE id = ?',
+    [docType || null, docId]
+  );
 }
 
 async function deleteDocument(docId) {
@@ -542,6 +567,7 @@ module.exports = {
   toggleActive,
   remove,
   // Sub-resources
+  saveAes,
   saveTeam,
   saveLenderIds,
   saveMortgageeClauses,
@@ -556,6 +582,7 @@ module.exports = {
   getDocuments,
   createDocument,
   findDocument,
+  updateDocumentType,
   deleteDocument,
   // Logos & photos
   getLogoUrl,

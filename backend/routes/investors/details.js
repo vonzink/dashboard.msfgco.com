@@ -4,6 +4,21 @@ const router = express.Router();
 const { requireAdmin } = require('../../middleware/userContext');
 const Investor = require('../../models/Investor');
 
+// PUT /api/investors/:id/aes — additional Account Executives (beyond the primary)
+router.put('/:id/aes', requireAdmin, async (req, res, next) => {
+  try {
+    const { aes } = req.body;
+    if (!Array.isArray(aes)) {
+      return res.status(400).json({ error: 'aes must be an array' });
+    }
+    if (!await Investor.exists(req.params.id)) {
+      return res.status(404).json({ error: 'Investor not found' });
+    }
+    const rows = await Investor.saveAes(req.params.id, aes);
+    res.json(rows);
+  } catch (error) { next(error); }
+});
+
 // PUT /api/investors/:id/team
 router.put('/:id/team', requireAdmin, async (req, res, next) => {
   try {

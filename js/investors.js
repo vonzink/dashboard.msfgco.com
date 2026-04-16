@@ -193,22 +193,36 @@ const Investors = {
     const body = document.getElementById('investorDetailBody');
     if (!body) return;
 
-    // --- Build AE section ---
+    // --- Build AE section (primary + additional) ---
     const ae = investor.accountExecutive || {};
     const aeName = ae.name || investor.account_executive_name;
     const aeEmail = ae.email || investor.account_executive_email;
     const aePhone = ae.mobile || investor.account_executive_mobile;
     const aePhoto = investor.account_executive_photo_url;
 
+    const renderAeBlock = (name, phone, email, photo) => {
+      const photoHtml = photo
+        ? '<img src="' + photo + '" alt="' + esc(name) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--green-bright);flex-shrink:0;" />'
+        : '';
+      return (photoHtml
+          ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;">' + photoHtml + '<strong style="color:var(--text-primary);">' + esc(name) + '</strong></div>'
+          : detailRow('Name', esc(name))) +
+        detailRow('Phone', phone ? '<a href="tel:' + phone.replace(/\D/g, '') + '">' + esc(phone) + '</a>' : '') +
+        detailRow('Email', email ? '<a href="mailto:' + email + '">' + esc(email) + '</a>' : '');
+    };
+
     let aeHtml = '';
     if (aeName && aeName !== 'TBD') {
-      const photoHtml = aePhoto
-        ? '<img src="' + aePhoto + '" alt="' + esc(aeName) + '" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:2px solid var(--green-bright);flex-shrink:0;" />'
-        : '';
-      aeHtml = (photoHtml ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:0.5rem;">' + photoHtml + '<strong style="color:var(--text-primary);">' + esc(aeName) + '</strong></div>' : detailRow('Name', esc(aeName))) +
-        detailRow('Phone', aePhone ? '<a href="tel:' + aePhone.replace(/\D/g, '') + '">' + esc(aePhone) + '</a>' : '') +
-        detailRow('Email', aeEmail ? '<a href="mailto:' + aeEmail + '">' + esc(aeEmail) + '</a>' : '');
+      aeHtml += renderAeBlock(aeName, aePhone, aeEmail, aePhoto);
     }
+
+    // Additional AEs (from investor_aes table)
+    const additionalAes = Array.isArray(investor.aes) ? investor.aes : [];
+    additionalAes.forEach((a, idx) => {
+      if (!a.name && !a.email && !a.mobile) return;
+      aeHtml += '<div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px dashed var(--border-color, #3a3a3a);"></div>';
+      aeHtml += renderAeBlock(a.name, a.mobile, a.email, a.photo_url);
+    });
 
     // --- Build products & services pills ---
     const toggleCategories = [

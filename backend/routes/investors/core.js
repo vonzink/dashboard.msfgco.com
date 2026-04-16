@@ -44,6 +44,15 @@ router.get('/:key', async (req, res, next) => {
       }
     }));
 
+    if (Array.isArray(investor.aes)) {
+      await Promise.all(investor.aes.map(async (a) => {
+        if (a.photo_url) {
+          a.photo_key = a.photo_url;
+          a.photo_url = await resolveUrl(BUCKETS.media, a.photo_url);
+        }
+      }));
+    }
+
     res.json(investor);
   } catch (error) { next(error); }
 });

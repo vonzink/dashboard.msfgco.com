@@ -594,6 +594,17 @@
                 <label>AE Phone</label>
                 <input type="tel" id="invEditAePhone" />
               </div>
+              <div class="form-group" style="grid-column: 1 / -1;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <label style="margin:0;">Additional Account Executives</label>
+                  <div style="display:flex; gap:6px;">
+                    <button type="button" class="btn btn-sm btn-secondary" id="invAddAeBtn"><i class="fas fa-plus"></i> Add AE</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="invAesSaveBtn"><i class="fas fa-save"></i> Save AEs</button>
+                  </div>
+                </div>
+                <div style="font-size:0.78rem; color:#888; margin-bottom:6px;">Use this for investors with multiple AEs. The primary AE above stays as the main contact.</div>
+                <div id="invAesRows"></div>
+              </div>
               <div class="form-group">
                 <label>States</label>
                 <input type="text" id="invEditStates" placeholder="e.g. CO, TX, FL" />
@@ -767,7 +778,19 @@
       <div class="inv-profile-section" id="inv-documents">
         <p style="margin:0 0 12px; font-size:13px; color:#888;">
           Upload investor-specific documents (rate sheets, guidelines, forms). Drag &amp; drop or click to browse.
+          Tag editable forms with a <strong>Type</strong> so the document tool can prepopulate them from MISMO.
         </p>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; padding:8px 12px; background:#f7f7f7; border-radius:6px; font-size:13px;">
+          <label for="invDocDefaultType" style="margin:0; font-weight:600; color:#104547;">Default type for next upload:</label>
+          <select id="invDocDefaultType" style="padding:4px 8px; font-size:13px; border:1px solid #ccc; border-radius:4px;">
+            <option value="">— Reference (no fillable form) —</option>
+            <option value="form-4506c">Form 4506-C (pre-filled)</option>
+            <option value="form-ssa89">Form SSA-89 (pre-filled)</option>
+            <option value="template">Editable Template (custom)</option>
+            <option value="reference">Reference / static doc</option>
+          </select>
+          <span style="color:#888; font-size:12px;">You can change a doc's type any time from its row below.</span>
+        </div>
         <div id="invDocDropZone" style="border:2px dashed #ccc; border-radius:8px; padding:32px; text-align:center; cursor:pointer; transition:border-color 0.2s, background 0.2s; margin-bottom:16px;">
           <i class="fas fa-cloud-upload-alt" style="font-size:28px; color:#aaa; margin-bottom:8px; display:block;"></i>
           <p style="margin:0; font-size:14px; color:#888;">Drop files here or click to browse</p>
@@ -1093,7 +1116,7 @@
     /* ── API Config ── */
     const API_BASE = window.location.protocol === 'https:'
       ? 'https://api.msfgco.com/api'
-      : 'http://54.175.238.145:8080/api';
+      : 'http://52.203.186.217:8080/api';
 
     function getAuthToken() {
       const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
@@ -2374,6 +2397,7 @@
         populateInvestorBasicInfo(data);
 
         // Populate sub-sections
+        populateInvestorAes(data.aes || []);
         populateInvestorTeam(data.team || []);
         // Turn times removed
         populateInvestorLenderIds(data.lenderIds || {});
@@ -2548,6 +2572,87 @@
       try {
         await api('/investors/' + currentInvestorId + '/ae-photo', { method: 'DELETE' });
         loadAePhoto({});
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    });
+
+    // --- Additional AEs (multi-entry) ---
+    function populateInvestorAes(aes) {
+      const container = document.getElementById('invAesRows');
+      container.innerHTML = '';
+      if (!Array.isArray(aes) || aes.length === 0) return;
+      aes.forEach(a => addAeRow(container, a));
+    }
+
+    function addAeRow(container, data) {
+      container = container || document.getElementById('invAesRows');
+      const row = document.createElement('div');
+      row.className = 'inv-repeatable-row';
+      const photoUrl = (data && data.photo_url) || '';
+      const photoKey = (data && data.photo_key) || '';
+      row.innerHTML =
+        '<div class="inv-ae-photo" title="Click to upload photo" style="width:40px;height:40px;border-radius:50%;overflow:hidden;background:#f0f0f0;border:1px solid #ddd;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;">' +
+          '<img src="' + escHtml(photoUrl) + '" style="width:100%;height:100%;object-fit:cover;' + (photoUrl ? '' : 'display:none;') + '" />' +
+          '<i class="fas fa-user-tie" style="color:#bbb;font-size:14px;' + (photoUrl ? 'display:none;' : '') + '"></i>' +
+        '</div>' +
+        '<input type="hidden" data-field="photo_url" value="' + escHtml(photoKey) + '" />' +
+        '<input type="text" placeholder="AE Name" value="' + escHtml((data && data.name) || '') + '" data-field="name" />' +
+        '<input type="tel" placeholder="Phone" value="' + escHtml((data && data.mobile) || '') + '" data-field="mobile" />' +
+        '<input type="email" placeholder="Email" value="' + escHtml((data && data.email) || '') + '" data-field="email" />' +
+        '<button class="btn btn-sm btn-danger" title="Remove"><i class="fas fa-times"></i></button>';
+      row.querySelector('button').addEventListener('click', () => row.remove());
+      row.querySelector('.inv-ae-photo').addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/png,image/jpeg,image/svg+xml';
+        input.addEventListener('change', async (e) => {
+          const file = e.target.files[0];
+          if (!file || !currentInvestorId) return;
+          try {
+            const { uploadUrl, fileKey } = await api('/investors/' + currentInvestorId + '/photo/upload-url', {
+              method: 'POST',
+              body: JSON.stringify({ fileName: file.name, fileType: file.type, fileSize: file.size, purpose: 'team' }),
+            });
+            await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+            const result = await api('/investors/' + currentInvestorId + '/photo/confirm', {
+              method: 'PUT',
+              body: JSON.stringify({ fileKey, purpose: 'team' }),
+            });
+            const img = row.querySelector('.inv-ae-photo img');
+            const icon = row.querySelector('.inv-ae-photo i');
+            img.src = result.photo_url;
+            img.style.display = '';
+            icon.style.display = 'none';
+            row.querySelector('[data-field="photo_url"]').value = fileKey;
+          } catch (err) {
+            alert('Photo upload failed: ' + err.message);
+          }
+        });
+        input.click();
+      });
+      container.appendChild(row);
+    }
+
+    document.getElementById('invAddAeBtn').addEventListener('click', () => addAeRow());
+
+    document.getElementById('invAesSaveBtn').addEventListener('click', async () => {
+      if (!currentInvestorId) return;
+      const rows = document.querySelectorAll('#invAesRows .inv-repeatable-row');
+      const aes = [];
+      rows.forEach((row, i) => {
+        const name = row.querySelector('[data-field="name"]').value.trim();
+        const mobile = row.querySelector('[data-field="mobile"]').value.trim();
+        const email = row.querySelector('[data-field="email"]').value.trim();
+        const photo_url = row.querySelector('[data-field="photo_url"]').value.trim();
+        if (name || email || mobile) aes.push({ name, mobile, email, photo_url: photo_url || null, sort_order: i });
+      });
+      try {
+        await api('/investors/' + currentInvestorId + '/aes', {
+          method: 'PUT',
+          body: JSON.stringify({ aes }),
+        });
+        alert('Additional AEs saved!');
       } catch (err) {
         alert('Error: ' + err.message);
       }
@@ -2952,6 +3057,11 @@
       const statusText = document.getElementById('invDocUploadText');
       status.style.display = 'block';
 
+      // Default doc_type chosen from the dropdown above the dropzone.
+      // Falls back to '' (unclassified) when the user doesn't pick one.
+      const defaultTypeEl = document.getElementById('invDocDefaultType');
+      const defaultDocType = defaultTypeEl ? (defaultTypeEl.value || '') : '';
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         statusText.textContent = 'Uploading ' + (i + 1) + ' of ' + files.length + ': ' + file.name;
@@ -2969,7 +3079,7 @@
             body: file,
           });
 
-          // 3. Confirm upload
+          // 3. Confirm upload (with classification — backend whitelists & normalizes)
           await api('/investors/' + currentInvestorId + '/documents/confirm', {
             method: 'POST',
             body: JSON.stringify({
@@ -2977,6 +3087,7 @@
               fileName: file.name,
               fileType: file.type,
               fileSize: file.size,
+              docType: defaultDocType,
             }),
           });
         } catch (err) {
@@ -3053,6 +3164,24 @@
       } catch (err) { alert('Failed to add toggle: ' + err.message); }
     });
 
+    // Per-doc type options shown in the table dropdown — must match the
+    // whitelist in backend/routes/investors/documents.js (ALLOWED_DOCUMENT_CLASSIFICATIONS).
+    const INV_DOC_TYPE_OPTIONS = [
+      { value: '',           label: '— Unclassified —' },
+      { value: 'form-4506c', label: 'Form 4506-C' },
+      { value: 'form-ssa89', label: 'Form SSA-89' },
+      { value: 'template',   label: 'Editable Template' },
+      { value: 'reference',  label: 'Reference / static' },
+    ];
+
+    function renderDocTypeSelect(docId, current) {
+      const cur = current || '';
+      const opts = INV_DOC_TYPE_OPTIONS.map(o =>
+        '<option value="' + o.value + '"' + (o.value === cur ? ' selected' : '') + '>' + escHtml(o.label) + '</option>'
+      ).join('');
+      return '<select class="inv-doc-type-select" data-doc-id="' + docId + '" style="font-size:12px; padding:2px 6px; border:1px solid #ddd; border-radius:4px; max-width:170px;">' + opts + '</select>';
+    }
+
     async function loadInvestorDocs() {
       const list = document.getElementById('invDocList');
       if (!currentInvestorId) { list.innerHTML = ''; return; }
@@ -3072,13 +3201,20 @@
           'text/plain': 'fa-file-alt', 'text/csv': 'fa-file-csv',
         };
         let html = '<table style="width:100%; font-size:13px; border-collapse:collapse;">';
-        html += '<thead><tr style="border-bottom:2px solid #eee; text-align:left;"><th style="padding:6px 8px;">File</th><th style="padding:6px 8px; width:80px;">Size</th><th style="padding:6px 8px; width:120px;">Uploaded</th><th style="padding:6px 8px; width:80px;"></th></tr></thead><tbody>';
+        html += '<thead><tr style="border-bottom:2px solid #eee; text-align:left;">'
+          + '<th style="padding:6px 8px;">File</th>'
+          + '<th style="padding:6px 8px; width:180px;">Type</th>'
+          + '<th style="padding:6px 8px; width:80px;">Size</th>'
+          + '<th style="padding:6px 8px; width:120px;">Uploaded</th>'
+          + '<th style="padding:6px 8px; width:80px;"></th>'
+          + '</tr></thead><tbody>';
         docs.forEach(doc => {
           const icon = DOC_ICONS[doc.file_type] || 'fa-file';
           const size = doc.file_size ? (doc.file_size < 1024 * 1024 ? (doc.file_size / 1024).toFixed(1) + ' KB' : (doc.file_size / (1024 * 1024)).toFixed(1) + ' MB') : '';
           const date = doc.created_at ? new Date(doc.created_at).toLocaleDateString() : '';
           html += '<tr style="border-bottom:1px solid #f0f0f0;">';
           html += '<td style="padding:6px 8px;"><i class="fas ' + icon + '" style="color:#104547; margin-right:6px;"></i>' + escHtml(doc.file_name) + '</td>';
+          html += '<td style="padding:6px 8px;">' + renderDocTypeSelect(doc.id, doc.doc_type) + '</td>';
           html += '<td style="padding:6px 8px; color:#888;">' + size + '</td>';
           html += '<td style="padding:6px 8px; color:#888;">' + date + '</td>';
           html += '<td style="padding:6px 8px; text-align:right;">';
@@ -3088,6 +3224,29 @@
         });
         html += '</tbody></table>';
         list.innerHTML = html;
+
+        // Bind type-change handlers — saves immediately via PATCH.
+        list.querySelectorAll('.inv-doc-type-select').forEach(sel => {
+          sel.addEventListener('change', async () => {
+            const docId = sel.dataset.docId;
+            const prev = sel.dataset.prevValue || '';
+            sel.disabled = true;
+            try {
+              await api('/investors/' + currentInvestorId + '/documents/' + docId, {
+                method: 'PATCH',
+                body: JSON.stringify({ docType: sel.value }),
+              });
+              sel.dataset.prevValue = sel.value;
+            } catch (err) {
+              alert('Failed to update document type: ' + err.message);
+              sel.value = prev;
+            } finally {
+              sel.disabled = false;
+            }
+          });
+          // Stash the initial value so we can revert on PATCH failure.
+          sel.dataset.prevValue = sel.value;
+        });
       } catch (err) {
         list.innerHTML = '<p style="color:#c0392b; font-size:13px;">Failed to load documents: ' + err.message + '</p>';
       }
