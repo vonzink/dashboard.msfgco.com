@@ -802,34 +802,10 @@
         </div>
         <div id="invDocList"></div>
 
-        <!-- Document Form-Fill Fields -->
-        <div style="margin-top:24px; border-top:1px solid #e0e0e0; padding-top:20px;">
-          <h4 style="margin:0 0 4px; font-size:14px; color:#104547;"><i class="fas fa-file-signature"></i> Document Form-Fill Data</h4>
-          <p style="margin:0 0 16px; font-size:12px; color:#999;">Store investor-specific data for auto-populating forms (4506-C, SSA-89, etc.).</p>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-            <div class="form-group">
-              <label>4506-C Info</label>
-              <textarea id="invDoc4506c" rows="4" style="width:100%;" placeholder="4506-C form data (name, address, SSN format, etc.)"></textarea>
-            </div>
-            <div class="form-group">
-              <label>SSA-89 Info</label>
-              <textarea id="invDocSsa" rows="4" style="width:100%;" placeholder="SSA-89 form data"></textarea>
-            </div>
-            <div class="form-group">
-              <label>Mailing Address</label>
-              <textarea id="invDocMailingAddress" rows="3" style="width:100%;" placeholder="Investor mailing address for documents"></textarea>
-            </div>
-            <div class="form-group">
-              <label>Other</label>
-              <textarea id="invDocOther" rows="3" style="width:100%;" placeholder="Additional form-fill notes or data"></textarea>
-            </div>
-          </div>
-
-          <div class="form-actions" style="margin-top:12px;">
-            <button class="btn btn-primary" id="invDocFormSaveBtn"><i class="fas fa-save"></i> Save Document Data</button>
-          </div>
-        </div>
+        <!-- (Removed) Document Form-Fill Data textareas — replaced by per-document
+             Type tags above. The doc_4506c / doc_ssa / doc_mailing_address /
+             doc_other DB columns are still in place; we'll drop them in a
+             follow-up migration once nothing reads from them. -->
       </div>
     </div>
   </div>
@@ -2407,12 +2383,6 @@
         // Documents
         loadInvestorDocs();
 
-        // Document form-fill fields
-        document.getElementById('invDoc4506c').value = data.doc_4506c || '';
-        document.getElementById('invDocSsa').value = data.doc_ssa || '';
-        document.getElementById('invDocMailingAddress').value = data.doc_mailing_address || '';
-        document.getElementById('invDocOther').value = data.doc_other || '';
-
         // Logo
         loadInvestorLogo(data);
 
@@ -2718,24 +2688,8 @@
       }
     });
 
-    // Save Document Form-Fill Data
-    document.getElementById('invDocFormSaveBtn').addEventListener('click', async () => {
-      if (!currentInvestorId) return;
-      try {
-        await api('/investors/' + currentInvestorId, {
-          method: 'PUT',
-          body: JSON.stringify({
-            doc_4506c: document.getElementById('invDoc4506c').value.trim() || null,
-            doc_ssa: document.getElementById('invDocSsa').value.trim() || null,
-            doc_mailing_address: document.getElementById('invDocMailingAddress').value.trim() || null,
-            doc_other: document.getElementById('invDocOther').value.trim() || null,
-          }),
-        });
-        alert('Document data saved!');
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    });
+    // (Removed) Save Document Form-Fill Data — replaced by per-document
+    // Type tags in the Documents list above.
 
     // --- Logo ---
     function loadInvestorLogo(data) {
