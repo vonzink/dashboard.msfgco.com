@@ -24,6 +24,7 @@ const MAX_DOC_BYTES = 25 * 1024 * 1024; // 25 MB
 const ALLOWED_DOCUMENT_CLASSIFICATIONS = new Set([
   'form-4506c',
   'form-ssa89',
+  'form-condo',     // Investor's pre-filled limited condo questionnaire
   'template',
   'reference',
 ]);
