@@ -275,6 +275,7 @@
       <nav class="proc-sidebar__nav" id="procSidebarNav">
         <button class="proc-sidebar__link" data-type="title"><i class="fas fa-file-contract"></i> Title</button>
         <button class="proc-sidebar__link" data-type="insurance"><i class="fas fa-shield-alt"></i> Insurance</button>
+        <button class="proc-sidebar__link" data-type="pmi"><i class="fas fa-house-chimney-user"></i> PMI</button>
         <button class="proc-sidebar__link" data-type="voe"><i class="fas fa-user-check"></i> VOE</button>
         <button class="proc-sidebar__link" data-type="taxes"><i class="fas fa-receipt"></i> Taxes</button>
         <button class="proc-sidebar__link" data-type="amc"><i class="fas fa-home"></i> AMC</button>
@@ -640,6 +641,60 @@
     </div>
   </div>
 
+  <!-- PMI Companies Modal -->
+  <div class="proc-modal-overlay" id="pmiModalOverlay" style="display:none;">
+    <div class="proc-modal">
+      <div class="proc-modal__header">
+        <h2 id="pmiModalTitle">Add PMI Company</h2>
+        <button class="proc-modal__close" id="pmiModalClose">&times;</button>
+      </div>
+      <div class="proc-modal__body">
+        <div class="form-grid">
+          <div class="form-group form-full">
+            <label>Company</label>
+            <input type="text" id="pmiFieldCompany" placeholder="e.g. Arch MI">
+          </div>
+          <div class="form-group form-full">
+            <label>Primary Quote Link</label>
+            <input type="url" id="pmiFieldPrimaryLink" placeholder="https://...">
+          </div>
+          <div class="form-group form-full">
+            <label>Backup Rate / Info Link</label>
+            <input type="url" id="pmiFieldBackupLink" placeholder="https://...">
+          </div>
+          <div class="form-group">
+            <label>Login Required?</label>
+            <select id="pmiFieldLogin">
+              <option value="">—</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+              <option value="Likely">Likely</option>
+              <option value="Maybe">Maybe</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Client Friendly?</label>
+            <select id="pmiFieldClientFriendly">
+              <option value="">—</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+              <option value="Likely">Likely</option>
+              <option value="Maybe">Maybe</option>
+            </select>
+          </div>
+          <div class="form-group form-full">
+            <label>Notes</label>
+            <textarea id="pmiFieldNotes" rows="2" placeholder="Additional details..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="proc-modal__footer">
+        <button class="btn btn-secondary" id="pmiModalCancel">Cancel</button>
+        <button class="btn btn-primary" id="pmiModalSave">Save Company</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Tax Counties Modal -->
   <div class="proc-modal-overlay" id="taxModalOverlay" style="display:none;">
     <div class="proc-modal">
@@ -813,6 +868,7 @@
     var TYPE_META = {
       title:     { name: 'Title',     icon: 'fa-file-contract', desc: 'Title company directory — contacts, addresses, and quick links' },
       insurance: { name: 'Insurance', icon: 'fa-shield-alt',    desc: 'Homeowner insurance policies, binders, and verification' },
+      pmi:       { name: 'PMI',       icon: 'fa-house-chimney-user', desc: 'Private Mortgage Insurance providers — quote portals and rate sheets' },
       voe:       { name: 'VOE',       icon: 'fa-user-check',    desc: 'Verification of Employment requests and results' },
       taxes:     { name: 'Taxes',     icon: 'fa-receipt',       desc: 'County tax records, assessor portals, and treasurer links' },
       amc:       { name: 'AMC',       icon: 'fa-home',          desc: 'Appraisal management company orders and reports' },
@@ -824,6 +880,7 @@
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
     var TITLE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>NMLS</th><th>State License</th><th>Contact Email</th><th>Phone</th><th>Work Phone</th><th>Contact NMLS</th><th>State</th><th></th></tr>';
     var INSURANCE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>Contact Phone</th><th>Work Phone</th><th>Fax</th><th>Email</th><th>NMLS</th><th>State License</th><th>Contact NMLS</th><th>State</th><th></th></tr>';
+    var PMI_THEAD = '<tr><th>Company</th><th>Primary Quote Link</th><th>Backup Rate / Info Link</th><th>Login Required?</th><th>Client Friendly?</th><th>Notes</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
     var LINKS_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th></th></tr>';
     var LINKS_INSURANCE_THEAD = '<tr><th style="width:40px;"></th><th>Name</th><th>URL</th><th>Email</th><th>Phone</th><th>Fax</th><th>Agent</th><th>Agent Email</th><th></th></tr>';
@@ -851,17 +908,19 @@
 
     function isTitleView() { return currentType === 'title'; }
     function isInsuranceView() { return currentType === 'insurance'; }
+    function isPmiView() { return currentType === 'pmi'; }
     function isTaxView() { return currentType === 'taxes'; }
     function isRealtorsView() { return currentType === 'realtors'; }
     function isOtherView() { return currentType === 'other'; }
     function isLinksView() { return LINK_TYPES.indexOf(currentType) !== -1; }
-    function isLookupView() { return isTitleView() || isInsuranceView() || isTaxView() || isRealtorsView() || isOtherView() || isLinksView(); }
+    function isLookupView() { return isTitleView() || isInsuranceView() || isPmiView() || isTaxView() || isRealtorsView() || isOtherView() || isLinksView(); }
 
     var searchInput, statusFilter, sortSelect, tableBody, tableHead, emptyState, loadingState;
     var procModalOverlay, taxModalOverlay, titleModalOverlay, linksModalOverlay, paginationWrap, pageInfo, prevBtn, nextBtn;
     var procSaveBtn, procModalTitle, taxSaveBtn, taxModalTitle, titleSaveBtn, titleModalTitle, linksSaveBtn, linksModalTitle, addNewBtn;
     var realtorModalOverlay, realtorSaveBtn, realtorModalTitle;
     var insuranceModalOverlay, insuranceSaveBtn, insuranceModalTitle;
+    var pmiModalOverlay, pmiSaveBtn, pmiModalTitle;
     var quickLinkModalOverlay, stateResModalOverlay, qlSaveBtn, qlModalTitle, srSaveBtn, srModalTitle;
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -894,6 +953,9 @@
       insuranceModalOverlay = document.getElementById('insuranceModalOverlay');
       insuranceSaveBtn    = document.getElementById('insuranceModalSave');
       insuranceModalTitle = document.getElementById('insuranceModalTitle');
+      pmiModalOverlay = document.getElementById('pmiModalOverlay');
+      pmiSaveBtn      = document.getElementById('pmiModalSave');
+      pmiModalTitle   = document.getElementById('pmiModalTitle');
       quickLinkModalOverlay = document.getElementById('quickLinkModalOverlay');
       stateResModalOverlay  = document.getElementById('stateResModalOverlay');
       qlSaveBtn    = document.getElementById('quickLinkModalSave');
@@ -923,7 +985,7 @@
       sortSelect.addEventListener('change', function() { currentPage = 1; runSearch(); });
 
       // Generic modal
-      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isInsuranceView() ? openInsuranceModal() : isRealtorsView() ? openRealtorModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
+      addNewBtn.addEventListener('click', function() { isTitleView() ? openTitleModal() : isInsuranceView() ? openInsuranceModal() : isPmiView() ? openPmiModal() : isRealtorsView() ? openRealtorModal() : isTaxView() ? openTaxModal() : isLinksView() ? openLinksModal() : openProcModal(); });
       document.getElementById('procModalClose').addEventListener('click', closeProcModal);
       document.getElementById('procModalCancel').addEventListener('click', closeProcModal);
       procSaveBtn.addEventListener('click', saveProcRecord);
@@ -940,6 +1002,12 @@
       document.getElementById('insuranceModalCancel').addEventListener('click', closeInsuranceModal);
       insuranceSaveBtn.addEventListener('click', saveInsuranceCompany);
       insuranceModalOverlay.addEventListener('click', function(e) { if (e.target === insuranceModalOverlay) closeInsuranceModal(); });
+
+      // PMI modal
+      document.getElementById('pmiModalClose').addEventListener('click', closePmiModal);
+      document.getElementById('pmiModalCancel').addEventListener('click', closePmiModal);
+      pmiSaveBtn.addEventListener('click', savePmiCompany);
+      pmiModalOverlay.addEventListener('click', function(e) { if (e.target === pmiModalOverlay) closePmiModal(); });
 
       // Realtor modal
       document.getElementById('realtorModalClose').addEventListener('click', closeRealtorModal);
@@ -975,6 +1043,7 @@
         if (e.key !== 'Escape') return;
         if (titleModalOverlay.style.display !== 'none') closeTitleModal();
         if (insuranceModalOverlay.style.display !== 'none') closeInsuranceModal();
+        if (pmiModalOverlay.style.display !== 'none') closePmiModal();
         if (realtorModalOverlay.style.display !== 'none') closeRealtorModal();
         if (procModalOverlay.style.display !== 'none') closeProcModal();
         if (taxModalOverlay.style.display !== 'none') closeTaxModal();
@@ -1014,11 +1083,11 @@
       toolbar.style.display = '';
       addNewBtn.style.display = '';
       // Switch table headers and toolbar
-      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isInsuranceView() ? INSURANCE_THEAD : isRealtorsView() ? REALTORS_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? LINKS_THEAD : GENERIC_THEAD;
+      tableHead.innerHTML = isTitleView() ? TITLE_THEAD : isInsuranceView() ? INSURANCE_THEAD : isPmiView() ? PMI_THEAD : isRealtorsView() ? REALTORS_THEAD : isTaxView() ? TAX_THEAD : isLinksView() ? LINKS_THEAD : GENERIC_THEAD;
       statusFilter.style.display = isLookupView() ? 'none' : '';
       sortSelect.style.display = isLookupView() ? 'none' : '';
-      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isInsuranceView() ? '<i class="fas fa-plus"></i> Add Company' : isRealtorsView() ? '<i class="fas fa-plus"></i> Add Realtor' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
-      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or NMLS...' : isInsuranceView() ? 'Search by company, contact, email, or NMLS...' : isRealtorsView() ? 'Search by company, agent, email, or NMLS...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
+      addNewBtn.innerHTML = isTitleView() ? '<i class="fas fa-plus"></i> Add Company' : isInsuranceView() ? '<i class="fas fa-plus"></i> Add Company' : isPmiView() ? '<i class="fas fa-plus"></i> Add Company' : isRealtorsView() ? '<i class="fas fa-plus"></i> Add Realtor' : isTaxView() ? '<i class="fas fa-plus"></i> Add County' : isLinksView() ? '<i class="fas fa-plus"></i> Add Link' : '<i class="fas fa-plus"></i> New Record';
+      searchInput.placeholder = isTitleView() ? 'Search by company, contact, email, or NMLS...' : isInsuranceView() ? 'Search by company, contact, email, or NMLS...' : isPmiView() ? 'Search by company or notes...' : isRealtorsView() ? 'Search by company, agent, email, or NMLS...' : isTaxView() ? 'Search by county or state...' : isLinksView() ? 'Search by name or URL...' : 'Search by borrower, loan #, or address...';
     }
 
     /* ==================== SEARCH ==================== */
@@ -1042,6 +1111,15 @@
             if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
             paginationWrap.style.display = 'none';
             renderInsuranceResults(data.results);
+          })
+          .catch(function() { showEmpty('Connection error.'); });
+      } else if (isPmiView()) {
+        var params = new URLSearchParams({ q: (searchInput.value || '').trim() });
+        apiRequest('GET', '/processing/pmi-companies?' + params.toString())
+          .then(function(data) {
+            if (!data.success) { showEmpty(data.error || 'Failed to load.'); return; }
+            paginationWrap.style.display = 'none';
+            renderPmiResults(data.results);
           })
           .catch(function() { showEmpty('Connection error.'); });
       } else if (isRealtorsView()) {
@@ -1168,6 +1246,33 @@
           '</td>';
         tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openInsuranceModal(rec); });
         tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deleteInsuranceCompany(rec.id, rec.company_name); });
+        tableBody.appendChild(tr);
+      });
+    }
+
+    /* ==================== PMI COMPANIES RENDER ==================== */
+
+    function renderPmiResults(results) {
+      hideLoading();
+      if (!results || results.length === 0) { showEmpty('No PMI companies found. Click <strong>Add Company</strong> to create one.'); return; }
+      emptyState.style.display = 'none';
+      tableBody.innerHTML = '';
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
+      results.forEach(function(rec) {
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td data-label="Company">' + esc(rec.company_name) + '</td>' +
+          '<td data-label="Primary Quote Link">' + urlLink(rec.primary_quote_link) + '</td>' +
+          '<td data-label="Backup Rate / Info Link">' + urlLink(rec.backup_rate_link) + '</td>' +
+          '<td data-label="Login Required?">' + (rec.login_required ? esc(rec.login_required) : dash) + '</td>' +
+          '<td data-label="Client Friendly?">' + (rec.client_friendly ? esc(rec.client_friendly) : dash) + '</td>' +
+          '<td data-label="Notes">' + (rec.notes ? esc(rec.notes) : dash) + '</td>' +
+          '<td class="proc-row-actions">' +
+            '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
+            '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
+          '</td>';
+        tr.querySelector('.proc-edit-btn').addEventListener('click', function(e) { e.stopPropagation(); openPmiModal(rec); });
+        tr.querySelector('.proc-delete-btn').addEventListener('click', function(e) { e.stopPropagation(); deletePmiCompany(rec.id, rec.company_name); });
         tableBody.appendChild(tr);
       });
     }
@@ -1422,9 +1527,9 @@
     }
     function showEmpty(msg) {
       hideLoading(); tableBody.innerHTML = ''; paginationWrap.style.display = 'none'; emptyState.style.display = '';
-      var heading = isTitleView() ? 'No title companies found' : isInsuranceView() ? 'No insurance companies found' : isRealtorsView() ? 'No realtors found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
+      var heading = isTitleView() ? 'No title companies found' : isInsuranceView() ? 'No insurance companies found' : isPmiView() ? 'No PMI companies found' : isRealtorsView() ? 'No realtors found' : isTaxView() ? 'No counties found' : isLinksView() ? 'No links found' : 'No records found';
       emptyState.querySelector('h3').textContent = heading;
-      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isInsuranceView() ? 'Click <strong>Add Company</strong> to create one.' : isRealtorsView() ? 'Click <strong>Add Realtor</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
+      var defaultMsg = isTitleView() ? 'Click <strong>Add Company</strong> to create one.' : isInsuranceView() ? 'Click <strong>Add Company</strong> to create one.' : isPmiView() ? 'Click <strong>Add Company</strong> to create one.' : isRealtorsView() ? 'Click <strong>Add Realtor</strong> to create one.' : isTaxView() ? 'Click <strong>Add County</strong> to create one.' : isLinksView() ? 'Click <strong>Add Link</strong> to create one.' : 'Click <strong>New Record</strong> to add one.';
       emptyState.querySelector('p').innerHTML = msg || defaultMsg;
     }
     function showLoading() { emptyState.style.display = 'none'; tableBody.innerHTML = ''; loadingState.style.display = ''; }
@@ -1621,6 +1726,58 @@
     function deleteInsuranceCompany(id, name) {
       if (!confirm('Delete "' + name + '"?')) return;
       apiRequest('DELETE', '/processing/insurance-companies/' + id)
+        .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
+        .catch(function() { alert('Connection error.'); });
+    }
+
+    /* ==================== PMI COMPANIES MODAL ==================== */
+
+    function openPmiModal(record) {
+      editingId = record ? record.id : null;
+      if (record) {
+        pmiModalTitle.textContent = 'Edit PMI Company';
+        pmiSaveBtn.textContent = 'Update Company';
+        document.getElementById('pmiFieldCompany').value = record.company_name || '';
+        document.getElementById('pmiFieldPrimaryLink').value = record.primary_quote_link || '';
+        document.getElementById('pmiFieldBackupLink').value = record.backup_rate_link || '';
+        document.getElementById('pmiFieldLogin').value = record.login_required || '';
+        document.getElementById('pmiFieldClientFriendly').value = record.client_friendly || '';
+        document.getElementById('pmiFieldNotes').value = record.notes || '';
+      } else {
+        pmiModalTitle.textContent = 'Add PMI Company';
+        pmiSaveBtn.textContent = 'Save Company';
+        ['pmiFieldCompany','pmiFieldPrimaryLink','pmiFieldBackupLink','pmiFieldNotes'].forEach(function(id) { document.getElementById(id).value = ''; });
+        document.getElementById('pmiFieldLogin').value = '';
+        document.getElementById('pmiFieldClientFriendly').value = '';
+      }
+      pmiModalOverlay.style.display = '';
+      document.body.style.overflow = 'hidden';
+      setTimeout(function() { document.getElementById('pmiFieldCompany').focus(); }, 100);
+    }
+    function closePmiModal() { pmiModalOverlay.style.display = 'none'; document.body.style.overflow = ''; editingId = null; }
+
+    function savePmiCompany() {
+      var companyName = (document.getElementById('pmiFieldCompany').value || '').trim();
+      if (!companyName) { document.getElementById('pmiFieldCompany').focus(); return; }
+      var payload = {
+        companyName: companyName,
+        primaryQuoteLink: (document.getElementById('pmiFieldPrimaryLink').value || '').trim(),
+        backupRateLink: (document.getElementById('pmiFieldBackupLink').value || '').trim(),
+        loginRequired: (document.getElementById('pmiFieldLogin').value || '').trim(),
+        clientFriendly: (document.getElementById('pmiFieldClientFriendly').value || '').trim(),
+        notes: (document.getElementById('pmiFieldNotes').value || '').trim()
+      };
+      pmiSaveBtn.disabled = true; pmiSaveBtn.textContent = 'Saving...';
+      var method = editingId ? 'PUT' : 'POST';
+      var path = editingId ? '/processing/pmi-companies/' + editingId : '/processing/pmi-companies';
+      apiRequest(method, path, payload)
+        .then(function(data) { pmiSaveBtn.disabled = false; if (!data.success) { alert(data.error || 'Failed to save.'); return; } closePmiModal(); runSearch(); })
+        .catch(function() { pmiSaveBtn.disabled = false; alert('Connection error.'); });
+    }
+
+    function deletePmiCompany(id, name) {
+      if (!confirm('Delete "' + name + '"?')) return;
+      apiRequest('DELETE', '/processing/pmi-companies/' + id)
         .then(function(data) { if (!data.success) { alert(data.error || 'Failed.'); return; } runSearch(); })
         .catch(function() { alert('Connection error.'); });
     }

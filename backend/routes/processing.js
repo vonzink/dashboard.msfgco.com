@@ -625,6 +625,116 @@ router.delete('/links/:sectionType/:id', requireProcessorOrAdmin, async (req, re
 });
 
 /* ========================================
+   PMI Companies Lookup Table
+   ======================================== */
+
+// GET /api/processing/pmi-companies - List all (with optional search)
+router.get('/pmi-companies', async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    const conditions = [];
+    const params = [];
+
+    if (q && q.trim()) {
+      conditions.push('(company_name LIKE ? OR notes LIKE ?)');
+      const pattern = '%' + q.trim() + '%';
+      params.push(pattern, pattern);
+    }
+
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    const [rows] = await db.query(
+      `SELECT * FROM pmi_companies ${where} ORDER BY sort_order, company_name`,
+      params
+    );
+
+    res.json({ success: true, results: rows, total: rows.length });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/processing/pmi-companies - Add a PMI company
+router.post('/pmi-companies', requireWriteAccess, async (req, res, next) => {
+  try {
+    const { companyName, primaryQuoteLink, backupRateLink, loginRequired, clientFriendly, notes } = req.body;
+
+    if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
+
+    const [[{ maxSort }]] = await db.query('SELECT COALESCE(MAX(sort_order), 0) as maxSort FROM pmi_companies');
+
+    const [result] = await db.query(
+      `INSERT INTO pmi_companies (company_name, primary_quote_link, backup_rate_link, login_required, client_friendly, notes, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        companyName.trim(),
+        (primaryQuoteLink || '').trim() || null,
+        (backupRateLink || '').trim() || null,
+        (loginRequired || '').trim() || null,
+        (clientFriendly || '').trim() || null,
+        (notes || '').trim() || null,
+        maxSort + 1
+      ]
+    );
+
+    const [rows] = await db.query('SELECT * FROM pmi_companies WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, record: rows[0] });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'A PMI company with that name already exists.' });
+    }
+    next(error);
+  }
+});
+
+// PUT /api/processing/pmi-companies/:id - Update a PMI company
+router.put('/pmi-companies/:id', requireWriteAccess, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM pmi_companies WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'PMI company not found.' });
+
+    const fieldMap = {
+      companyName: 'company_name',
+      primaryQuoteLink: 'primary_quote_link',
+      backupRateLink: 'backup_rate_link',
+      loginRequired: 'login_required',
+      clientFriendly: 'client_friendly',
+      notes: 'notes',
+      sortOrder: 'sort_order'
+    };
+
+    const { setClauses, values } = buildUpdateClauses(fieldMap, req.body);
+
+    if (setClauses.length === 0) return res.status(400).json({ error: 'No valid fields to update.' });
+
+    values.push(id);
+    await db.query(`UPDATE pmi_companies SET ${setClauses.join(', ')} WHERE id = ?`, values);
+
+    const [rows] = await db.query('SELECT * FROM pmi_companies WHERE id = ?', [id]);
+    res.json({ success: true, record: rows[0] });
+  } catch (error) {
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'A PMI company with that name already exists.' });
+    }
+    next(error);
+  }
+});
+
+// DELETE /api/processing/pmi-companies/:id - Delete a PMI company
+router.delete('/pmi-companies/:id', requireProcessorOrAdmin, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [existing] = await db.query('SELECT * FROM pmi_companies WHERE id = ?', [id]);
+    if (existing.length === 0) return res.status(404).json({ error: 'PMI company not found.' });
+
+    await db.query('DELETE FROM pmi_companies WHERE id = ?', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/* ========================================
    Processing Records (generic order tracking)
    ======================================== */
 
