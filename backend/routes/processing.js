@@ -61,13 +61,13 @@ router.get('/title-companies', async (req, res, next) => {
 // POST /api/processing/title-companies - Add a title company
 router.post('/title-companies', requireWriteAccess, async (req, res, next) => {
   try {
-    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, fax, tollFreePhone, licenseNumber, nmls, stateLicense, contactNmls, contactEmail, contactPhone } = req.body;
+    const { companyName, contactName, email, workPhone, mobilePhone, street, city, state, zipCode, website, rateCalculatorUrl, fax, tollFreePhone, licenseNumber, nmls, stateLicense, contactNmls, contactEmail, contactPhone } = req.body;
 
     if (!companyName || !companyName.trim()) return res.status(400).json({ error: 'Company name is required.' });
 
     const [result] = await db.query(
-      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, fax, toll_free_phone, license_number, nmls, state_license, contact_nmls, contact_email, contact_phone)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO title_companies (company_name, contact_name, email, work_phone, mobile_phone, street, city, state, zip_code, website, rate_calculator_url, fax, toll_free_phone, license_number, nmls, state_license, contact_nmls, contact_email, contact_phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         companyName.trim(),
         (contactName || '').trim() || null,
@@ -79,6 +79,7 @@ router.post('/title-companies', requireWriteAccess, async (req, res, next) => {
         state ? state.trim().toUpperCase() : null,
         (zipCode || '').trim() || null,
         (website || '').trim() || null,
+        (rateCalculatorUrl || '').trim() || null,
         (fax || '').trim() || null,
         (tollFreePhone || '').trim() || null,
         (licenseNumber || '').trim() || null,
@@ -115,6 +116,7 @@ router.put('/title-companies/:id', requireWriteAccess, async (req, res, next) =>
       state: 'state',
       zipCode: 'zip_code',
       website: 'website',
+      rateCalculatorUrl: 'rate_calculator_url',
       fax: 'fax',
       tollFreePhone: 'toll_free_phone',
       licenseNumber: 'license_number',

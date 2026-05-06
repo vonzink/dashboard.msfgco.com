@@ -110,8 +110,8 @@
     .proc-filter-select:focus { outline: none; border-color: #2d6a4f; }
 
     /* ---- Table ---- */
-    .proc-results { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow: hidden; }
-    .proc-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .proc-results { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .proc-table { width: 100%; min-width: 1180px; border-collapse: collapse; font-size: 0.85rem; }
     .proc-table thead { background: #f5f7fa; border-bottom: 2px solid #e0e4ea; }
     .proc-table th { text-align: left; padding: 0.6rem 1rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8888a4; white-space: nowrap; }
     .proc-table td { padding: 0.6rem 1rem; border-bottom: 1px solid #f0f2f5; color: #4a4a68; vertical-align: middle; }
@@ -254,6 +254,8 @@
       .proc-main { padding: 1rem; }
       .proc-header { flex-direction: column; }
       .form-grid { grid-template-columns: 1fr; }
+      .proc-results { overflow-x: visible; }
+      .proc-table { min-width: 0; }
       .proc-table thead { display: none; }
       .proc-table, .proc-table tbody, .proc-table tr, .proc-table td { display: block; width: 100%; }
       .proc-table tr { padding: 0.5rem 1rem; border-bottom: 1px solid #f0f2f5; }
@@ -495,6 +497,10 @@
           <div class="form-group form-full">
             <label>Website</label>
             <input type="url" id="titleFieldWebsite" placeholder="https://...">
+          </div>
+          <div class="form-group form-full">
+            <label>Rate Calculator URL</label>
+            <input type="url" id="titleFieldRateCalc" placeholder="https://www.titlecompany.com/calculators/">
           </div>
         </div>
       </div>
@@ -878,7 +884,7 @@
     };
 
     var GENERIC_THEAD = '<tr><th>Borrower</th><th>Loan #</th><th>Property</th><th>Vendor</th><th>Status</th><th>Ordered</th><th>Updated</th><th></th></tr>';
-    var TITLE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>NMLS</th><th>State License</th><th>Contact Email</th><th>Phone</th><th>Work Phone</th><th>Contact NMLS</th><th>State</th><th></th></tr>';
+    var TITLE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>NMLS</th><th>State License</th><th>Contact Email</th><th>Phone</th><th>Work Phone</th><th>Contact NMLS</th><th>State</th><th>Website</th><th>Location</th><th>Rate Calc</th><th></th></tr>';
     var INSURANCE_THEAD = '<tr><th>Company Name</th><th>Point of Contact</th><th>Contact Phone</th><th>Work Phone</th><th>Fax</th><th>Email</th><th>NMLS</th><th>State License</th><th>Contact NMLS</th><th>State</th><th></th></tr>';
     var PMI_THEAD = '<tr><th>Company</th><th>Primary Quote Link</th><th>Backup Rate / Info Link</th><th>Login Required?</th><th>Client Friendly?</th><th>Notes</th><th></th></tr>';
     var TAX_THEAD = '<tr><th>County</th><th>State</th><th>Assessor / Property Records URL</th><th>Treasurer / Tax Cert URL</th><th>Login Required?</th><th>Known Costs/Fees</th><th>Online Portal?</th><th></th></tr>';
@@ -1191,6 +1197,34 @@
 
     /* ==================== TITLE COMPANIES RENDER ==================== */
 
+    function renderTitleWebsite(url) {
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
+      if (!url) return dash;
+      var trimmed = String(url).trim();
+      if (!trimmed) return dash;
+      var href = /^https?:\/\//i.test(trimmed) ? trimmed : 'https://' + trimmed;
+      var label = trimmed.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+      if (label.length > 32) label = label.slice(0, 30) + '…';
+      return '<a href="' + esc(href) + '" target="_blank" rel="noopener" class="proc-url">' + esc(label) + '</a>';
+    }
+    function renderTitleLocation(city, state) {
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
+      var c = (city || '').trim();
+      var s = (state || '').trim().toUpperCase();
+      if (c && s) return esc(c + ', ' + s);
+      if (c) return esc(c);
+      if (s) return esc(s);
+      return dash;
+    }
+    function renderTitleRateCalc(url) {
+      var dash = '<span style="color:#bbb;">&mdash;</span>';
+      if (!url) return dash;
+      var trimmed = String(url).trim();
+      if (!trimmed) return dash;
+      var href = /^https?:\/\//i.test(trimmed) ? trimmed : 'https://' + trimmed;
+      return '<a href="' + esc(href) + '" target="_blank" rel="noopener" class="proc-url" title="' + esc(trimmed) + '">Open ↗</a>';
+    }
+
     function renderTitleResults(results) {
       hideLoading();
       if (!results || results.length === 0) { showEmpty('No title companies found. Click <strong>Add Company</strong> to create one.'); return; }
@@ -1208,7 +1242,10 @@
           '<td data-label="Phone">' + (rec.contact_phone ? '<a href="tel:' + esc(rec.contact_phone) + '" class="proc-url">' + esc(rec.contact_phone) + '</a>' : dash) + '</td>' +
           '<td data-label="Work Phone">' + (rec.work_phone ? '<a href="tel:' + esc(rec.work_phone) + '" class="proc-url">' + esc(rec.work_phone) + '</a>' : dash) + '</td>' +
           '<td data-label="Contact NMLS">' + (rec.contact_nmls ? esc(rec.contact_nmls) : dash) + '</td>' +
-          '<td data-label="State">' + esc(rec.state) + '</td>' +
+          '<td data-label="State">' + (rec.state ? esc(rec.state) : dash) + '</td>' +
+          '<td data-label="Website">' + renderTitleWebsite(rec.website) + '</td>' +
+          '<td data-label="Location">' + renderTitleLocation(rec.city, rec.state) + '</td>' +
+          '<td data-label="Rate Calc">' + renderTitleRateCalc(rec.rate_calculator_url) + '</td>' +
           '<td class="proc-row-actions">' +
             '<button class="proc-row-action proc-edit-btn" title="Edit"><i class="fas fa-pen"></i></button>' +
             '<button class="proc-row-action proc-delete-btn" title="Delete"><i class="fas fa-trash"></i></button>' +
@@ -1617,10 +1654,11 @@
         document.getElementById('titleFieldContactEmail').value = record.contact_email || '';
         document.getElementById('titleFieldContactPhone').value = record.contact_phone || '';
         document.getElementById('titleFieldWebsite').value = record.website || '';
+        document.getElementById('titleFieldRateCalc').value = record.rate_calculator_url || '';
       } else {
         titleModalTitle.textContent = 'Add Title Company';
         titleSaveBtn.textContent = 'Save Company';
-        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldLicense','titleFieldNmls','titleFieldStateLicense','titleFieldContactNmls','titleFieldContactEmail','titleFieldContactPhone','titleFieldWebsite'].forEach(function(id) { document.getElementById(id).value = ''; });
+        ['titleFieldCompany','titleFieldContact','titleFieldEmail','titleFieldWorkPhone','titleFieldMobilePhone','titleFieldFax','titleFieldStreet','titleFieldCity','titleFieldState','titleFieldZip','titleFieldTollFree','titleFieldLicense','titleFieldNmls','titleFieldStateLicense','titleFieldContactNmls','titleFieldContactEmail','titleFieldContactPhone','titleFieldWebsite','titleFieldRateCalc'].forEach(function(id) { document.getElementById(id).value = ''; });
       }
       titleModalOverlay.style.display = '';
       document.body.style.overflow = 'hidden';
@@ -1649,7 +1687,8 @@
         contactNmls: (document.getElementById('titleFieldContactNmls').value || '').trim(),
         contactEmail: (document.getElementById('titleFieldContactEmail').value || '').trim(),
         contactPhone: (document.getElementById('titleFieldContactPhone').value || '').trim(),
-        website: (document.getElementById('titleFieldWebsite').value || '').trim()
+        website: (document.getElementById('titleFieldWebsite').value || '').trim(),
+        rateCalculatorUrl: (document.getElementById('titleFieldRateCalc').value || '').trim()
       };
       titleSaveBtn.disabled = true; titleSaveBtn.textContent = 'Saving...';
       var method = editingId ? 'PUT' : 'POST';
