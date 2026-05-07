@@ -138,6 +138,7 @@
       passport: "https://v3.titlepro247.com/Account",
       flueid: "https://pro.flueid.com/auth/sign-in",
       scanner: "/scanner.html",
+      kbase_docs: "/Calculators/File%20Browser/file-browser.html?library=forms",
 
       advantage_credit: "https://credit.advcredit.com/custom/login.aspx",
       dropbox: "https://www.dropbox.com",

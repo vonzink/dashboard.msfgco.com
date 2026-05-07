@@ -637,6 +637,10 @@
                 <label>In House Servicing</label>
                 <input type="text" id="invEditInHouseServicing" placeholder="e.g. Yes, No, Partial" />
               </div>
+              <div class="form-group">
+                <label>Adverse Action Notice</label>
+                <input type="text" id="invEditAdverseActionNotice" />
+              </div>
               <!-- Toggle fields — organized by category -->
               <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="margin-bottom:4px;">Product &amp; Service Toggles</label>
@@ -2455,6 +2459,7 @@
       document.getElementById('invEditMaxComp').value = data.max_comp ?? '';
       document.getElementById('invEditUnderwritingFee').value = data.underwriting_fee || '';
       document.getElementById('invEditInHouseServicing').value = data.in_house_servicing || '';
+      document.getElementById('invEditAdverseActionNotice').value = data.adverse_action_notice || '';
       document.getElementById('invEditNotes').value = data.notes || '';
       // Custom toggles
       loadCustomToggles();
@@ -2648,6 +2653,7 @@
             max_comp: document.getElementById('invEditMaxComp').value || null,
             underwriting_fee: document.getElementById('invEditUnderwritingFee').value.trim() || null,
             in_house_servicing: document.getElementById('invEditInHouseServicing').value.trim() || null,
+            adverse_action_notice: document.getElementById('invEditAdverseActionNotice').value.trim() || null,
             notes: document.getElementById('invEditNotes').value.trim() || null,
             // Agency/Gov
             conventional: document.getElementById('invToggleConventional').checked ? 1 : 0,

@@ -74,7 +74,7 @@ router.put('/:idOrKey', validate(investorUpdate), async (req, res, next) => {
       'account_executive_email', 'account_executive_address',
       'account_executive_photo_url',
       'states', 'best_programs', 'minimum_fico', 'in_house_dpa',
-      'epo', 'max_comp', 'underwriting_fee', 'in_house_servicing',
+      'epo', 'max_comp', 'underwriting_fee', 'in_house_servicing', 'adverse_action_notice',
       'servicing', 'manual_underwriting', 'non_qm', 'jumbo',
       'subordinate_financing', 'review_wire_release',
       'usda', 'land_loans', 'va_loans', 'bridge_loans', 'dscr',
