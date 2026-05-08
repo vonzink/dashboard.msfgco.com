@@ -142,7 +142,9 @@
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Team Directory</div>
             <div id="contactsEmployeeList" class="dropdown-contacts-list">
-              <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
+              <div class="skeleton-row"><div class="skeleton skeleton-cell"></div></div>
+              <div class="skeleton-row"><div class="skeleton skeleton-cell"></div></div>
+              <div class="skeleton-row"><div class="skeleton skeleton-cell"></div></div>
             </div>
           </div>
         </li>
@@ -260,7 +262,9 @@
 
             <div id="investorDropdownList">
               <div class="dropdown-header">Wholesale Partners</div>
-              <span class="text-muted" style="padding: 0.5rem 1rem; font-size: 0.8rem;">Loading...</span>
+              <div class="skeleton-row"><div class="skeleton skeleton-cell"></div></div>
+              <div class="skeleton-row"><div class="skeleton skeleton-cell"></div></div>
+              <div class="skeleton-row"><div class="skeleton skeleton-cell"></div></div>
             </div>
 
             <div class="dropdown-divider"></div>
@@ -587,7 +591,7 @@
     </section>
 
     <!-- Goal Edit Modal -->
-    <div class="goal-modal-overlay" id="goalEditModal" style="display:none;">
+    <div class="goal-modal-overlay" id="goalEditModal" aria-hidden="true">
       <div class="goal-modal">
         <div class="goal-modal-header">
           <h3 id="goalEditTitle">Set Your Target</h3>
@@ -614,7 +618,7 @@
     </div>
 
     <!-- Content Studio Modal -->
-    <div class="modal-overlay" id="contentStudioModal" style="display:none;">
+    <div class="modal-overlay" id="contentStudioModal" aria-hidden="true">
       <div class="modal cs-modal">
         <div class="modal-header">
           <h3><i class="fas fa-magic"></i> Content Studio</h3>
@@ -650,7 +654,7 @@
 
             <div class="cs-results" id="csResults">
               <div class="cs-empty">
-                <i class="fas fa-pen-fancy" style="font-size:2rem; opacity:0.3;"></i>
+                <i class="fas fa-pen-fancy cs-empty-icon"></i>
                 <p>Enter a topic above and click Generate to create platform-specific posts.</p>
               </div>
             </div>
@@ -707,14 +711,14 @@
 
     <!-- All Investors Directory Modal -->
     <div id="allInvestorsModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:1200px;">
+      <div class="modal-content modal-lg">
         <button type="button" class="modal-close" id="allInvestorsModalClose" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
-            <h2 class="investor-name"><i class="fas fa-handshake" style="color:var(--green-bright);margin-right:0.5rem;"></i> All Investors</h2>
+            <h2 class="investor-name"><i class="fas fa-handshake u-icon-accent" style="margin-right:0.5rem;"></i> All Investors</h2>
           </div>
         </div>
-        <div class="modal-body" style="padding:var(--spacing-lg);">
+        <div class="modal-body">
           <div class="all-inv-toolbar">
             <input type="text" id="allInvestorsSearch" class="form-input" placeholder="Search by name, AE, state, program, notes..." autocomplete="off" />
             <div class="all-inv-counts" id="allInvestorsCounts"></div>
@@ -732,7 +736,7 @@
                 </tr>
               </thead>
               <tbody id="allInvestorsBody">
-                <tr><td colspan="6" style="text-align:center;padding:2rem;"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>
+                <tr><td colspan="6" class="empty-state"><div class="skeleton skeleton-line long"></div><div class="skeleton skeleton-line medium"></div><div class="skeleton skeleton-line short"></div></td></tr>
               </tbody>
             </table>
           </div>
@@ -742,7 +746,7 @@
 
     <!-- Investor Modal (required by investors.js) -->
     <div id="investorModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:900px;">
+      <div class="modal-content modal-md">
         <button type="button" class="modal-close investor-detail-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
@@ -758,7 +762,7 @@
 
     <!-- Investor Manage Tags Modal -->
     <div id="investorManageTagsModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-content modal-sm">
         <div class="modal-header">
           <h3 class="modal-title"><i class="fas fa-tags"></i> Manage Tags</h3>
           <button type="button" class="modal-close" id="closeInvestorManageTagsModal" aria-label="Close modal">&times;</button>
@@ -1059,7 +1063,7 @@
 
     <!-- Pre-Approval Detail Modal -->
     <div id="paDetailModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:900px;">
+      <div class="modal-content modal-md">
         <button type="button" class="modal-close pa-detail-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
@@ -1074,7 +1078,7 @@
 
     <!-- Pipeline Detail Modal -->
     <div id="pipelineDetailModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:900px;">
+      <div class="modal-content modal-md">
         <button type="button" class="modal-close pipeline-detail-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
@@ -1089,7 +1093,7 @@
 
     <!-- Funded Loan Detail Modal -->
     <div id="fundedDetailModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:900px;">
+      <div class="modal-content modal-md">
         <button type="button" class="modal-close funded-detail-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header">
           <div class="investor-header-content">
@@ -1114,7 +1118,8 @@
         <div class="modal-body" style="padding-top:var(--spacing-sm);">
           <!-- Existing Notifications List -->
           <div id="notificationsList" class="notif-list">
-            <div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+            <div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:0.5;"></div></div>
+            <div class="skeleton-row"><div class="skeleton skeleton-cell"></div><div class="skeleton skeleton-cell" style="flex:0.5;"></div></div>
           </div>
 
           <!-- Add New Reminder Form (collapsible) -->
@@ -1288,7 +1293,7 @@
     <!-- Manage Investors Modal (admin only) -->
     <!-- Manage Tags Modal -->
     <div id="manageTagsModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width: 520px;">
+      <div class="modal-content modal-sm">
         <div class="modal-header">
           <h3 class="modal-title"><i class="fas fa-tags"></i> Manage Tags</h3>
           <button type="button" class="modal-close" id="closeManageTagsModal" aria-label="Close modal">&times;</button>

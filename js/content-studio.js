@@ -24,7 +24,9 @@ const ContentStudio = {
   async open() {
     const modal = document.getElementById('contentStudioModal');
     if (!modal) return;
-    modal.style.display = 'flex';
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
 
     // Show loading while we fetch profile
     this._showTab('generate');
@@ -34,7 +36,11 @@ const ContentStudio = {
 
   close() {
     const modal = document.getElementById('contentStudioModal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    document.body.style.overflow = '';
   },
 
   // ========================================
@@ -119,7 +125,7 @@ const ContentStudio = {
         <div class="cs-no-platforms">
           <i class="fas fa-exclamation-circle"></i>
           <span>No social media accounts found in your profile.
-          <a href="#" onclick="document.getElementById('contentStudioModal').style.display='none'; UserSettings.open && UserSettings.open('profile'); return false;">Add them in Settings → Profile</a>.</span>
+          <a href="#" onclick="ContentStudio.close(); UserSettings.open && UserSettings.open('profile'); return false;">Add them in Settings → Profile</a>.</span>
         </div>
       `;
       return;

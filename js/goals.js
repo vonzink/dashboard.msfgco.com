@@ -149,16 +149,26 @@ const GoalsManager = {
         input.placeholder = goal.type === 'currency' ? '5.0' : '10';
 
         overlay.dataset.goalId = goalId;
-        overlay.style.display = 'flex';
+        overlay.classList.add('active');
+        overlay.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
 
         setTimeout(() => input.focus(), 100);
+    },
+
+    _closeGoalModal() {
+        const overlay = document.getElementById('goalEditModal');
+        if (!overlay) return;
+        overlay.classList.remove('active');
+        overlay.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
     },
 
     _bindModalEvents() {
         const overlay = document.getElementById('goalEditModal');
         if (!overlay) return;
 
-        const close = () => { overlay.style.display = 'none'; };
+        const close = () => this._closeGoalModal();
 
         document.getElementById('goalEditClose')?.addEventListener('click', close);
         document.getElementById('goalEditCancel')?.addEventListener('click', close);
@@ -170,7 +180,7 @@ const GoalsManager = {
 
         // Close on Escape
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && overlay.style.display !== 'none') close();
+            if (e.key === 'Escape' && overlay.classList.contains('active')) close();
         });
 
         // Save
