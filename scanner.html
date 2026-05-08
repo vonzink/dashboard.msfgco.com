@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="css/layout.css?v=20260302-1" />
   <link rel="stylesheet" href="css/components.css?v=20260302-1" />
   <link rel="stylesheet" href="css/sections.css?v=20260302-1" />
-  <link rel="stylesheet" href="css/scanner.css?v=20260416-1" />
+  <link rel="stylesheet" href="css/scanner.css?v=20260417-4" />
 </head>
 
 <body>
@@ -27,51 +27,115 @@
         <h1><i class="fas fa-file-invoice"></i> Document Scanner</h1>
         <p class="sc-subtitle">Clean up hard-to-read scans and photos.</p>
       </div>
-      <a href="/" class="sc-back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      <div class="sc-header-actions">
+        <a href="/" class="sc-back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+      </div>
     </div>
 
     <section>
       <div id="dropzone" class="sc-dropzone" tabindex="0">
         <div>
-          <p class="sc-dropzone-primary">Drop an image here, or click to browse</p>
-          <p class="sc-dropzone-secondary">JPG or PNG, up to 50 MB</p>
-          <input type="file" id="file-input" accept="image/jpeg,image/png" hidden />
+          <p class="sc-dropzone-primary">Drop a file here, or click to browse</p>
+          <p class="sc-dropzone-secondary">Accepts JPG, JPEG, PNG, PDF, HEIC, SVG &mdash; up to 50 MB</p>
+          <input type="file" id="file-input" accept="image/jpeg,image/png,image/heic,image/heif,image/svg+xml,application/pdf,.jpg,.jpeg,.png,.pdf,.heic,.heif,.svg" hidden />
         </div>
       </div>
     </section>
 
     <section class="sc-controls" id="controls" hidden>
-      <div class="sc-control-row">
+      <div class="sc-control-row" title="Choose how the scanner cleans up the image when you drop it in.">
         <label for="preset-select">Preset</label>
         <select id="preset-select">
-          <option value="auto" selected>Auto</option>
+          <option value="none" selected>Original (no enhancement)</option>
+          <option value="document-color">Document (Color)</option>
+          <option value="auto">Document B&amp;W (Auto)</option>
+          <option value="photo">Photo</option>
         </select>
+        <button type="button" id="reprocess-btn" class="sc-btn" title="Re-run the selected preset on the current image">Apply</button>
       </div>
+      <div class="sc-control-row sc-adjust">
+        <label for="adj-brightness">Brightness</label>
+        <input type="range" id="adj-brightness" min="50" max="150" value="100" />
+        <span class="sc-adj-value" data-for="adj-brightness">100%</span>
+      </div>
+      <div class="sc-control-row sc-adjust">
+        <label for="adj-contrast">Contrast</label>
+        <input type="range" id="adj-contrast" min="50" max="200" value="100" />
+        <span class="sc-adj-value" data-for="adj-contrast">100%</span>
+      </div>
+      <div class="sc-control-row sc-adjust">
+        <label for="adj-saturate">Saturation</label>
+        <input type="range" id="adj-saturate" min="0" max="200" value="100" />
+        <span class="sc-adj-value" data-for="adj-saturate">100%</span>
+      </div>
+      <div class="sc-control-row sc-adjust">
+        <label for="adj-sharpness">Sharpness</label>
+        <input type="range" id="adj-sharpness" min="0" max="100" value="0" />
+        <span class="sc-adj-value" data-for="adj-sharpness">0%</span>
+      </div>
+      <button type="button" id="adj-reset" class="sc-btn">Reset</button>
     </section>
 
-    <section class="sc-preview" id="preview" hidden>
-      <div class="sc-pane">
-        <div class="sc-pane-header">
-          <h3>Before</h3>
+    <!-- Inline SVG filter for live sharpness preview (unsharp mask via feConvolveMatrix). -->
+    <svg width="0" height="0" style="position:absolute">
+      <defs>
+        <filter id="sc-sharpen" x="-5%" y="-5%" width="110%" height="110%">
+          <feConvolveMatrix id="sc-sharpen-matrix" order="3" kernelMatrix="0 0 0 0 1 0 0 0 0" preserveAlpha="true" />
+        </filter>
+      </defs>
+    </svg>
+
+    <section class="sc-preview-section" id="preview" hidden>
+      <div class="sc-toolbar-row">
+        <div class="sc-zoom-toolbar">
+          <button type="button" class="sc-btn" data-zoom="fit">Fit</button>
+          <button type="button" class="sc-btn" data-zoom="100">100%</button>
+          <button type="button" class="sc-btn" data-zoom="out" aria-label="Zoom out">&minus;</button>
+          <span id="zoom-level">100%</span>
+          <button type="button" class="sc-btn" data-zoom="in" aria-label="Zoom in">+</button>
         </div>
-        <img id="before-img" alt="Original" />
+        <div class="sc-image-tools">
+          <button id="rotate-left-btn" class="sc-btn" disabled title="Rotate 90° left"><i class="fas fa-rotate-left"></i></button>
+          <button id="rotate-right-btn" class="sc-btn" disabled title="Rotate 90° right"><i class="fas fa-rotate-right"></i></button>
+          <button id="upscale-btn" class="sc-btn" disabled title="Upscale 2× for low-res images">2&times; Upscale</button>
+          <button id="denoise-btn" class="sc-btn" disabled title="Reduce noise + soften JPEG artifacts">Denoise</button>
+          <button id="auto-levels-btn" class="sc-btn" disabled title="Auto-stretch histogram (fixes dull/washed-out contrast)">Auto Levels</button>
+          <button id="crop-btn" class="sc-btn" disabled>Crop</button>
+          <button id="crop-apply-btn" class="sc-btn sc-btn-primary" hidden>Apply</button>
+          <button id="crop-cancel-btn" class="sc-btn" hidden>Cancel</button>
+          <button id="reset-img-btn" class="sc-btn" disabled title="Revert the After image to the original result">Reset Image</button>
+        </div>
       </div>
-      <div class="sc-pane">
-        <div class="sc-pane-header">
-          <h3>After</h3>
-          <div class="sc-pane-actions">
-            <button id="download-btn" class="sc-btn sc-btn-primary" disabled>Download</button>
-            <button id="save-btn" class="sc-btn" disabled>Save As&hellip;</button>
-            <button id="print-btn" class="sc-btn" disabled>Print</button>
+      <p class="sc-zoom-hint">Scroll to zoom &middot; drag to pan &middot; double&#8209;click to toggle</p>
+      <div class="sc-preview-grid">
+        <div class="sc-pane">
+          <div class="sc-pane-header"><h3>Before</h3></div>
+          <div class="sc-viewport" id="before-viewport">
+            <img id="before-img" alt="Original" />
           </div>
         </div>
-        <img id="after-img" alt="Cleaned" />
+        <div class="sc-pane">
+          <div class="sc-pane-header"><h3>After</h3></div>
+          <div class="sc-viewport" id="after-viewport">
+            <img id="after-img" alt="Cleaned" />
+            <div id="crop-overlay" class="sc-crop-overlay" hidden>
+              <div id="crop-rect" class="sc-crop-rect"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
     <div id="status" class="sc-status">Loading scanner engine&hellip;</div>
+
+    <div class="sc-actions-footer" id="actions-footer" hidden>
+      <button id="download-btn" class="sc-btn sc-btn-primary" disabled><i class="fas fa-download"></i> Download</button>
+      <button id="copy-btn" class="sc-btn" disabled title="Copy image to clipboard"><i class="fas fa-copy"></i> Copy</button>
+      <button id="print-btn" class="sc-btn" disabled><i class="fas fa-print"></i> Print</button>
+      <button type="button" id="clear-btn" class="sc-btn"><i class="fas fa-times"></i> Clear</button>
+    </div>
   </div>
 
-  <script type="module" src="js/scanner-main.js?v=20260416-1"></script>
+  <script type="module" src="js/scanner-main.js?v=20260417-5"></script>
 </body>
 </html>

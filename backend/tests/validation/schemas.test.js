@@ -45,6 +45,63 @@ describe('announcement schema', () => {
     const result = announcement.safeParse({ title: 'x'.repeat(201), content: 'ok' });
     expect(result.success).toBe(false);
   });
+
+  it('preserves multiple links, attachments, and primary image metadata', () => {
+    const result = announcement.safeParse({
+      title: 'Market update',
+      content: '<p>Rates moved this week.</p>',
+      links: [
+        { label: 'Rate sheet', url: 'https://example.com/rates' },
+        { label: 'Calendar', url: 'https://example.com/events' },
+      ],
+      attachments: [
+        {
+          file_s3_key: 'uploads/one.png',
+          file_name: 'one.png',
+          file_size: 1234,
+          file_type: 'image/png',
+        },
+        {
+          file_s3_key: 'uploads/two.pdf',
+          file_name: 'two.pdf',
+          file_size: 4321,
+          file_type: 'application/pdf',
+        },
+      ],
+      image_s3_key: 'uploads/hero.png',
+      image_name: 'hero.png',
+      image_size: 2048,
+      image_type: 'image/png',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data.links).toHaveLength(2);
+    expect(result.data.attachments).toHaveLength(2);
+    expect(result.data.image_s3_key).toBe('uploads/hero.png');
+  });
+
+  it('rejects malformed announcement links', () => {
+    const result = announcement.safeParse({
+      title: 'Bad link',
+      content: 'Content here',
+      links: [{ label: 'Broken', url: 'not-a-url' }],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects primary graphics that are not images', () => {
+    const result = announcement.safeParse({
+      title: 'Bad graphic',
+      content: 'Content here',
+      image_s3_key: 'uploads/report.pdf',
+      image_name: 'report.pdf',
+      image_size: 2048,
+      image_type: 'application/pdf',
+    });
+
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('preApproval schema', () => {

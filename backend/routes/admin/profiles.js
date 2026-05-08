@@ -23,6 +23,7 @@ router.get('/:id/profile', async (req, res, next) => {
       nmls_number: null,
       insurance_provider: null, insurance_policy_number: null, insurance_expiration: null,
       bond_company: null, bond_number: null, bond_expiration: null, computer_id: null,
+      client_dropbox_location: null,
       email_signature: null,
     };
 
@@ -82,6 +83,7 @@ router.put('/:id/profile', async (req, res, next) => {
       'nmls_number',
       'insurance_provider', 'insurance_policy_number', 'insurance_expiration',
       'bond_company', 'bond_number', 'bond_expiration', 'computer_id',
+      'client_dropbox_location',
       'email_signature',
     ];
 

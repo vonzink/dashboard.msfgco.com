@@ -13,16 +13,37 @@ const chatMessage = z.object({
 });
 
 // ── Announcements ───────────────────────────────
+const announcementLink = z.object({
+  label: optionalString(120),
+  url: z.string().trim().url().max(500),
+});
+
+const announcementAttachment = z.object({
+  file_s3_key: trimmedString(500),
+  file_name: trimmedString(255),
+  file_size: z.number().int().positive().optional().nullable(),
+  file_type: optionalString(100),
+});
+
 const announcement = z.object({
   title: trimmedString(200),
   content: trimmedString(5000),
   link: optionalString(500),
+  links: z.array(announcementLink).max(10).optional().default([]),
   icon: optionalString(50),
   file_s3_key: optionalString(500),
   file_name: optionalString(255),
   file_size: z.number().int().positive().optional().nullable(),
   file_type: optionalString(100),
-});
+  attachments: z.array(announcementAttachment).max(10).optional().default([]),
+  image_s3_key: optionalString(500),
+  image_name: optionalString(255),
+  image_size: z.number().int().positive().optional().nullable(),
+  image_type: optionalString(100),
+}).refine(
+  data => !data.image_s3_key || (data.image_type && data.image_type.startsWith('image/')),
+  { message: 'Primary graphic must be an image', path: ['image_type'] }
+);
 
 // ── Pre-Approvals ───────────────────────────────
 const preApproval = z.object({

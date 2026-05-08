@@ -73,6 +73,12 @@
   color: var(--green-bright, #8cc63e);
 }
 
+.sc-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-md, 16px);
+}
+
 /* Dropzone */
 .sc-dropzone {
   border: 2px dashed var(--sc-border-strong);
@@ -183,7 +189,13 @@
 }
 
 /* Preview */
-.sc-preview {
+.sc-preview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sc-preview-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
@@ -223,19 +235,157 @@
   flex-wrap: wrap;
 }
 
-.sc-pane img {
-  width: 100%;
-  height: auto;
-  max-height: 70vh;
-  object-fit: contain;
+/* Zoom / pan viewport */
+.sc-viewport {
+  position: relative;
+  overflow: hidden;
   background: var(--bg-tertiary, #fafafa);
   border-radius: 4px;
+  width: 100%;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.sc-viewport.is-panning {
+  cursor: grabbing;
+}
+
+.sc-viewport img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  transform-origin: 0 0;
+  will-change: transform;
+  pointer-events: none;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.sc-viewport img:not([src]) {
+  visibility: hidden;
+}
+
+/* Toolbar row: zoom (left) + image tools (right) */
+.sc-toolbar-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sc-zoom-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+
+.sc-zoom-toolbar #zoom-level {
+  min-width: 54px;
+  text-align: center;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.85rem;
+  color: var(--sc-text);
+}
+
+.sc-image-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sc-zoom-hint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--sc-text-muted);
+  text-align: center;
 }
 
 @media (max-width: 700px) {
-  .sc-preview {
+  .sc-preview-grid {
     grid-template-columns: 1fr;
   }
+
+  .sc-zoom-hint {
+    display: none;
+  }
+}
+
+/* Adjustment sliders */
+.sc-adjust input[type="range"] {
+  width: 120px;
+  cursor: pointer;
+}
+
+.sc-adj-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--sc-text-muted);
+  min-width: 44px;
+  text-align: right;
+}
+
+/* Crop overlay */
+.sc-crop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: auto;
+  cursor: crosshair;
+  background: rgba(0, 0, 0, 0.25);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.sc-crop-rect {
+  position: absolute;
+  border: 2px dashed #fff;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  display: none;
+}
+
+.sc-crop-rect.is-active {
+  display: block;
+}
+
+.sc-viewport.is-cropping {
+  cursor: crosshair;
+}
+
+/* Actions footer (Download / Print / Clear) */
+.sc-actions-footer {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-md, 12px);
+  padding: 16px 20px;
+  background: var(--sc-surface);
+  border: 1px solid var(--sc-border);
+  border-radius: var(--sc-radius);
+  flex-wrap: wrap;
+}
+
+.sc-actions-footer .sc-btn {
+  padding: 8px 20px;
+  font-weight: 500;
 }
 
 /* Status bar */

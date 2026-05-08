@@ -11,8 +11,20 @@
     // =====================
     // Modals
     // =====================
-    'open-support-ticket': () =>
-      window.ModalsManager?.showSupportTicketModal(),
+    'open-loan-folder-creator': async () => {
+      try {
+        let basePath = '';
+        try {
+          const me = await ServerAPI.get('/me/profile');
+          basePath = me?.client_dropbox_location || '';
+        } catch { /* popout still works without preset basePath */ }
+        const baseUrl = CONFIG?.loanFolderCreator?.url || 'http://localhost:5173/';
+        const url = basePath ? `${baseUrl}?basePath=${encodeURIComponent(basePath)}` : baseUrl;
+        Utils.openPopup(url, 'MSFGLoanFolders', 560, 740);
+      } catch (e) {
+        Utils.showToast('Could not open Loan Folder Creator');
+      }
+    },
 
     'open-notifications': () =>
       window.ModalsManager?.showNotificationsModal(),

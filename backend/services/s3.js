@@ -21,6 +21,7 @@ const s3West = new S3Client({ region: 'us-west-2' });
 const BUCKETS = {
   forms: 'msfg-mortgage-documents-prod',
   media: 'msfg-media',
+  dashboard: process.env.S3_BUCKET_NAME || 'msfg-dashboard-files',
 };
 
 /** Pick the right client for a given bucket. */

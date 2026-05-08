@@ -319,6 +319,10 @@ const ServerAPI = {
         return this.post("/announcements", data);
     },
 
+    generateAnnouncementImage(data) {
+        return this.post("/announcements/generate-image", data);
+    },
+
     deleteAnnouncement(id) {
         return this.delete(`/announcements/${id}`);
     },

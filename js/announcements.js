@@ -104,11 +104,7 @@ const Announcements = {
         // Reset char counter
         const charCount = document.getElementById('annCharCount');
         if (charCount) charCount.textContent = '0 / 5,000';
-        // Reset file dropzone
-        const dropContent = document.getElementById('annDropzoneContent');
-        const filePreview = document.getElementById('annFilePreview');
-        if (dropContent) dropContent.style.display = '';
-        if (filePreview) filePreview.style.display = 'none';
+        if (window.AnnouncementEditor?.reset) window.AnnouncementEditor.reset();
       }
     }, 200);
   },
@@ -129,16 +125,14 @@ const Announcements = {
   async handleAnnouncementSubmit() {
     const titleEl = document.getElementById('announcementTitle');
     const contentEl = document.getElementById('announcementContent');
-    const linkEl = document.getElementById('announcementLink');
     const iconEl = document.getElementById('announcementIcon');
-    const fileInput = document.getElementById('announcementFile');
+    const publishBtn = document.getElementById('announcementPublishBtn');
 
     const title = titleEl ? titleEl.value : '';
-    // Rich text editor uses contenteditable div — grab innerHTML
-    const content = contentEl ? (contentEl.getAttribute('contenteditable') ? contentEl.innerHTML.trim() : contentEl.value) : '';
-    const link = linkEl ? linkEl.value : '';
     const icon = iconEl ? iconEl.value : '';
-    const file = fileInput && fileInput.files ? fileInput.files[0] : null;
+    const links = window.AnnouncementEditor?.getLinks ? window.AnnouncementEditor.getLinks() : [];
+    const attachmentFiles = window.AnnouncementEditor?.getAttachmentFiles ? window.AnnouncementEditor.getAttachmentFiles() : [];
+    const graphicFile = window.AnnouncementEditor?.getGraphicFile ? window.AnnouncementEditor.getGraphicFile() : null;
 
     // Check if editor is truly empty (strip tags for validation)
     const plainText = contentEl ? contentEl.innerText.trim() : '';
@@ -155,42 +149,54 @@ const Announcements = {
     const cfg = window.MSFG_CONFIG || window.CONFIG || {};
     const authorName = cfg?.currentUser?.name || 'User';
 
-    const announcement = {
-      title,
-      content,
-      link: link || null,
-      icon: icon || null,
-      author: authorName,
-      createdAt: new Date().toISOString(),
-      file_s3_key: null,
-      fileName: null,
-      fileSize: null,
-      fileType: null
-    };
+    try {
+      if (publishBtn) {
+        publishBtn.disabled = true;
+        publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing';
+      }
 
-    if (file) {
-      this.uploadFileAndSaveAnnouncement(file, announcement);
-    } else {
-      this.saveAnnouncement(announcement);
+      const content = window.AnnouncementEditor?.prepareContentForPublish
+        ? await window.AnnouncementEditor.prepareContentForPublish(this.uploadAnnouncementFile.bind(this))
+        : (contentEl ? (contentEl.getAttribute('contenteditable') ? contentEl.innerHTML.trim() : contentEl.value) : '');
+
+      const attachments = await Promise.all(attachmentFiles.map(file => this.uploadAnnouncementFile(file)));
+      const image = graphicFile
+        ? await this.uploadAnnouncementFile(graphicFile)
+        : (attachments.find(item => item.file_type && item.file_type.startsWith('image/')) || null);
+
+      const announcement = {
+        title,
+        content,
+        links,
+        link: links[0]?.url || null,
+        icon: icon || null,
+        author: authorName,
+        createdAt: new Date().toISOString(),
+        attachments,
+        image
+      };
+
+      await this.saveAnnouncement(announcement);
+    } catch (error) {
+      console.error('Failed to publish announcement:', error);
+      alert(error.message || 'Failed to publish announcement. Please try again.');
+    } finally {
+      if (publishBtn) {
+        publishBtn.disabled = false;
+        publishBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish';
+      }
     }
   },
 
-  async uploadFileAndSaveAnnouncement(file, announcement) {
-    try {
-      const uploadData = await ServerAPI.getUploadUrl(file.name, file.type, file.size);
-      await ServerAPI.uploadToS3(uploadData.uploadUrl, file);
-
-      announcement.file_s3_key = uploadData.fileKey;
-      announcement.fileName = file.name;
-      announcement.fileSize = file.size;
-      announcement.fileType = file.type;
-
-      this.saveAnnouncement(announcement);
-    } catch (error) {
-      console.error('File upload failed:', error);
-      alert('File upload failed. Saving announcement without file.');
-      this.saveAnnouncement(announcement);
-    }
+  async uploadAnnouncementFile(file) {
+    const uploadData = await ServerAPI.getUploadUrl(file.name, file.type, file.size);
+    await ServerAPI.uploadToS3(uploadData.uploadUrl, file);
+    return {
+      file_s3_key: uploadData.fileKey,
+      file_name: file.name,
+      file_size: file.size,
+      file_type: file.type || 'application/octet-stream'
+    };
   },
 
   async saveAnnouncement(announcement) {
@@ -203,12 +209,18 @@ const Announcements = {
         title: announcement.title,
         content: announcement.content,
         link: announcement.link || null,
+        links: announcement.links || [],
         icon: announcement.icon || null,
         author_id: userId,
-        file_s3_key: announcement.file_s3_key || null,
-        file_name: announcement.fileName || null,
-        file_size: announcement.fileSize || null,
-        file_type: announcement.fileType || null
+        file_s3_key: announcement.attachments?.[0]?.file_s3_key || null,
+        file_name: announcement.attachments?.[0]?.file_name || null,
+        file_size: announcement.attachments?.[0]?.file_size || null,
+        file_type: announcement.attachments?.[0]?.file_type || null,
+        attachments: announcement.attachments || [],
+        image_s3_key: announcement.image?.file_s3_key || null,
+        image_name: announcement.image?.file_name || null,
+        image_size: announcement.image?.file_size || null,
+        image_type: announcement.image?.file_type || null
       };
 
       const saved = await ServerAPI.createAnnouncement(announcementData);
@@ -225,10 +237,15 @@ const Announcements = {
         title: saved.title,
         content: saved.content,
         link: saved.link,
+        links: saved.links || [],
         icon: saved.icon,
         author: saved.author_name || authorName,
         createdAt: saved.created_at,
-        fileName: saved.file_name
+        fileName: saved.file_name,
+        attachments: saved.attachments || [],
+        imageUrl: saved.image_url,
+        imageName: saved.image_name,
+        imageType: saved.image_type
       };
 
       this.addAnnouncementToUI(uiAnnouncement);
@@ -266,7 +283,8 @@ const Announcements = {
     // Remove event handler attributes
     tmp.querySelectorAll('*').forEach(el => {
       for (const attr of [...el.attributes]) {
-        if (attr.name.startsWith('on') || attr.name === 'srcdoc' || (attr.name === 'href' && attr.value.trim().toLowerCase().startsWith('javascript:'))) {
+        const unsafeUrl = ['href', 'src'].includes(attr.name) && /^(javascript|data):/i.test(attr.value.trim());
+        if (attr.name.startsWith('on') || attr.name === 'srcdoc' || unsafeUrl) {
           el.removeAttribute(attr.name);
         }
       }
@@ -281,12 +299,72 @@ const Announcements = {
     return tmp.textContent || tmp.innerText || '';
   },
 
+  _getLinks(announcement) {
+    if (Array.isArray(announcement.links) && announcement.links.length > 0) {
+      return announcement.links.filter(link => link && link.url);
+    }
+    return announcement.link ? [{ label: 'Link 1', url: announcement.link }] : [];
+  },
+
+  _getAttachments(announcement) {
+    if (Array.isArray(announcement.attachments) && announcement.attachments.length > 0) {
+      return announcement.attachments;
+    }
+    return announcement.fileName ? [{
+      file_name: announcement.fileName,
+      file_type: announcement.fileType || null,
+      file_size: announcement.fileSize || null,
+      url: announcement.fileUrl || null
+    }] : [];
+  },
+
+  _safeUrl(url) {
+    if (!url) return '';
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+      return Utils.escapeHtml(parsed.href);
+    } catch {
+      return '';
+    }
+  },
+
   buildAnnouncementCard(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
     const relativeTime = Utils.getRelativeTime(announcement.createdAt);
-    const safeLink = announcement.link ? Utils.escapeHtml(announcement.link) : null;
-    const fallbackLogo = (window.CONFIG && CONFIG.assets && CONFIG.assets.logoFallback) || '/assets/msfg-logo-fallback.svg';
+    const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
+    const links = this._getLinks(announcement);
+    const attachments = this._getAttachments(announcement);
     const showDelete = this._canDelete();
+    const linksHtml = links.map((link, index) => {
+      const safeUrl = this._safeUrl(link.url);
+      if (!safeUrl) return '';
+      const label = link.label || `Link ${index + 1}`;
+      return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="news-link-pill">
+        <i class="fas fa-link"></i> ${Utils.escapeHtml(label)}
+      </a>`;
+    }).join('');
+    const attachmentsHtml = attachments.map((attachment) => {
+      const name = attachment.file_name || attachment.fileName || 'Attachment';
+      const type = attachment.file_type || attachment.fileType || '';
+      const size = attachment.file_size || attachment.fileSize || 0;
+      const safeUrl = this._safeUrl(attachment.url || attachment.file_url || '');
+      const isImage = type.startsWith('image/') && safeUrl;
+      const thumb = isImage
+        ? `<img src="${safeUrl}" alt="">`
+        : `<i class="fas ${Utils.fileIconForMime ? Utils.fileIconForMime(type) : 'fa-file'}"></i>`;
+      const inner = `
+        <div class="news-attachment-thumb">${thumb}</div>
+        <div>
+          <div class="news-attachment-name">${Utils.escapeHtml(name)}</div>
+          <div class="news-attachment-meta">${Utils.escapeHtml(type || 'file')}${size ? ' &middot; ' + Utils.formatFileSize(size) : ''}</div>
+        </div>
+        ${safeUrl ? '<i class="fas fa-download"></i>' : ''}
+      `;
+      return safeUrl
+        ? `<a class="news-attachment" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${inner}</a>`
+        : `<div class="news-attachment">${inner}</div>`;
+    }).join('');
 
     return `
       <div class="news-item" data-id="${announcement.id}">
@@ -299,32 +377,11 @@ const Announcements = {
             </button>` : ''}
           </div>
 
+          ${imageUrl ? `<div class="news-hero-image"><img src="${imageUrl}" alt=""></div>` : ''}
           <div class="announcement-body">${this._sanitizeHtml(announcement.content)}</div>
 
-          ${safeLink ? `
-            <div class="news-embed-wrapper">
-              <div class="news-embed-toolbar">
-                <button type="button" class="news-embed-toggle" data-url="${safeLink}" title="Preview page">
-                  <i class="fas fa-eye"></i> Preview Page
-                </button>
-                <a href="${safeLink}" target="_blank" rel="noopener noreferrer" class="news-link-external" title="Open in new tab">
-                  <i class="fas fa-external-link-alt"></i> Open in New Tab
-                </a>
-              </div>
-              <div class="news-embed-container" style="display:none;">
-                <div class="news-embed-frame-wrapper">
-                  <iframe class="news-embed-frame" data-src="${safeLink}" sandbox="allow-scripts allow-same-origin allow-popups allow-forms" loading="lazy"></iframe>
-                  <div class="news-embed-resize-handle" title="Drag to resize">
-                    <i class="fas fa-grip-lines"></i>
-                  </div>
-                </div>
-              </div>
-            </div>` : ''}
-
-          ${announcement.fileName ? `
-            <div class="news-file">
-              <i class="fas fa-file"></i> ${Utils.escapeHtml(announcement.fileName)}
-            </div>` : ''}
+          ${linksHtml ? `<div class="news-links">${linksHtml}</div>` : ''}
+          ${attachmentsHtml ? `<div class="news-attachments">${attachmentsHtml}</div>` : ''}
 
           <div class="news-meta">
             <span><i class="fas fa-user"></i> ${Utils.escapeHtml(announcement.author)}</span>
@@ -353,9 +410,11 @@ const Announcements = {
     const iconClass = announcement.icon || 'fa-bullhorn';
     const relativeTime = Utils.getRelativeTime(announcement.createdAt);
     const category = this._detectCategory(announcement);
+    const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
 
     return `
       <div class="news-card" data-announcement-id="${announcement.id}" data-category="${category}">
+        ${imageUrl ? `<div class="news-card-image"><img src="${imageUrl}" alt=""></div>` : ''}
         <div class="news-card-header">
           <div class="news-card-icon"><i class="fas ${iconClass}"></i></div>
           <h4 class="news-card-title">${Utils.escapeHtml(announcement.title)}</h4>
@@ -498,10 +557,18 @@ const Announcements = {
         title: a.title,
         content: a.content,
         link: a.link,
+        links: a.links || [],
         icon: a.icon,
         author: a.author_name || 'Unknown',
         createdAt: a.created_at,
-        fileName: a.file_name
+        fileName: a.file_name,
+        fileType: a.file_type,
+        fileSize: a.file_size,
+        fileUrl: a.file_url,
+        attachments: a.attachments || [],
+        imageUrl: a.image_url,
+        imageName: a.image_name,
+        imageType: a.image_type
       }));
 
       this.renderCardGrid();

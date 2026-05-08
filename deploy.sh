@@ -54,6 +54,13 @@ echo ""
 
 # ── Frontend Deploy ──
 if [ "$DEPLOY_FRONTEND" = true ]; then
+  # Regenerate scanner JS + vendor from the canonical ../msfg-scanner source
+  # before pushing to S3. Keeps the fork surface to just the CSS + HTML shell.
+  if [ -x "./sync-scanner.sh" ]; then
+    ./sync-scanner.sh
+    echo ""
+  fi
+
   echo -e "${YELLOW}▸ Syncing frontend to S3...${NC}"
   aws s3 sync . "$S3_BUCKET" \
     --exclude "backend/*" \

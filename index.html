@@ -60,9 +60,9 @@
             <i class="fas fa-chart-bar"></i>
             <span class="util-label">Rates</span>
           </a>
-          <button type="button" class="header-util-btn" data-action="open-support-ticket" title="Support Ticket">
-            <i class="fas fa-headset"></i>
-            <span class="util-label">Support</span>
+          <button type="button" class="header-util-btn" data-action="open-loan-folder-creator" title="Create loan folder structure in Dropbox">
+            <i class="fas fa-folder-plus"></i>
+            <span class="util-label">New Folder</span>
           </button>
           <button type="button" class="header-util-btn" data-action="open-notifications" title="Notifications">
             <i class="fas fa-bell"></i>
@@ -1168,7 +1168,7 @@
 
     <!-- Add Announcement Modal -->
     <div id="addAnnouncementModal" class="investor-modal" aria-hidden="true">
-      <div class="modal-content" style="max-width:680px;">
+      <div class="modal-content announcement-modal-content">
         <button type="button" class="modal-close announcement-modal-close" aria-label="Close modal"><i class="fas fa-times"></i></button>
         <div class="modal-header" style="padding-bottom:0;">
           <div class="investor-header-content">
@@ -1176,91 +1176,107 @@
           </div>
         </div>
         <div class="modal-body" style="padding-top:var(--spacing-sm);">
-          <form id="announcementForm" class="form" style="display:flex;flex-direction:column;gap:0.75rem;">
-
-            <!-- Title + Icon row -->
-            <div style="display:flex;gap:0.75rem;align-items:flex-end;">
-              <div style="flex:1;">
-                <label for="announcementTitle" style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Title</label>
-                <input type="text" id="announcementTitle" maxlength="200" required placeholder="Announcement title..." style="width:100%;padding:0.55rem 0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-size:0.95rem;" />
-              </div>
-              <div style="width:140px;">
-                <label for="announcementIcon" style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Icon</label>
-                <select id="announcementIcon" style="width:100%;padding:0.55rem 0.5rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-size:0.85rem;">
-                  <option value="fa-bullhorn" selected>📢 Announce</option>
-                  <option value="fa-star">⭐ Star</option>
-                  <option value="fa-triangle-exclamation">⚠️ Alert</option>
-                  <option value="fa-circle-info">ℹ️ Info</option>
-                  <option value="fa-graduation-cap">🎓 Training</option>
-                  <option value="fa-handshake">🤝 Partner</option>
-                  <option value="fa-chart-line">📈 Rates</option>
-                  <option value="fa-calendar-check">📅 Event</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- Rich Text Editor -->
-            <div>
-              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Content</label>
-              <div id="announcementEditorWrap" style="border:1px solid var(--border-color);border-radius:var(--radius-md);overflow:hidden;background:var(--bg-primary);">
-                <!-- Toolbar -->
-                <div id="announcementToolbar" style="display:flex;flex-wrap:wrap;gap:2px;padding:0.35rem 0.5rem;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);align-items:center;">
-                  <button type="button" class="ann-tb-btn" data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
-                  <button type="button" class="ann-tb-btn" data-cmd="italic" title="Italic"><i class="fas fa-italic"></i></button>
-                  <button type="button" class="ann-tb-btn" data-cmd="underline" title="Underline"><i class="fas fa-underline"></i></button>
-                  <span style="width:1px;height:18px;background:var(--border-color);margin:0 4px;"></span>
-                  <button type="button" class="ann-tb-btn" data-cmd="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button>
-                  <button type="button" class="ann-tb-btn" data-cmd="insertOrderedList" title="Numbered List"><i class="fas fa-list-ol"></i></button>
-                  <span style="width:1px;height:18px;background:var(--border-color);margin:0 4px;"></span>
-                  <select id="annFontSize" title="Font Size" style="padding:2px 4px;border:1px solid var(--border-color);border-radius:4px;font-size:0.75rem;background:var(--bg-primary);color:var(--text-primary);cursor:pointer;">
-                    <option value="">Size</option>
-                    <option value="1">Small</option>
-                    <option value="3">Normal</option>
-                    <option value="5">Large</option>
-                    <option value="7">X-Large</option>
-                  </select>
-                  <button type="button" class="ann-tb-btn" data-cmd="removeFormat" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
-                </div>
-                <!-- Editable area -->
-                <div id="announcementContent" contenteditable="true" style="min-height:180px;max-height:400px;overflow-y:auto;padding:0.75rem;font-size:0.92rem;line-height:1.6;color:var(--text-primary);outline:none;" data-placeholder="Write your announcement here..."></div>
-              </div>
-              <div style="display:flex;justify-content:flex-end;margin-top:0.25rem;">
-                <span id="annCharCount" style="font-size:0.72rem;color:var(--text-muted);">0 / 5,000</span>
-              </div>
-            </div>
-
-            <!-- Optional Link -->
-            <div>
-              <label for="announcementLink" style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Link <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-              <input type="url" id="announcementLink" placeholder="https://..." style="width:100%;padding:0.55rem 0.75rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);font-size:0.9rem;" />
-            </div>
-
-            <!-- File Upload Dropzone -->
-            <div>
-              <label style="font-size:0.8rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Attachment <span style="font-weight:400;color:var(--text-muted);">(optional)</span></label>
-              <div id="announcementDropzone" style="border:2px dashed var(--border-color);border-radius:var(--radius-md);padding:1.25rem;text-align:center;cursor:pointer;transition:all 0.2s;background:var(--bg-secondary);">
-                <input type="file" id="announcementFile" style="display:none;" />
-                <div id="annDropzoneContent">
-                  <i class="fas fa-cloud-upload-alt" style="font-size:1.5rem;color:var(--text-muted);margin-bottom:0.4rem;display:block;"></i>
-                  <span style="font-size:0.85rem;color:var(--text-muted);">Click or drag & drop a file here</span>
-                </div>
-                <div id="annFilePreview" style="display:none;align-items:center;gap:0.75rem;justify-content:center;">
-                  <div id="annFileThumbnail" style="width:48px;height:48px;border-radius:6px;overflow:hidden;background:var(--bg-tertiary);display:flex;align-items:center;justify-content:center;">
-                    <i class="fas fa-file" style="font-size:1.2rem;color:var(--text-muted);"></i>
+          <form id="announcementForm" class="form announcement-form">
+            <div class="announcement-compose-grid">
+              <div class="announcement-compose-main">
+                <div class="announcement-title-row">
+                  <div class="announcement-field">
+                    <label for="announcementTitle">Title</label>
+                    <input type="text" id="announcementTitle" maxlength="200" required placeholder="Announcement title..." />
                   </div>
-                  <div style="text-align:left;">
-                    <div id="annFileName" style="font-size:0.85rem;font-weight:600;color:var(--text-primary);"></div>
-                    <div id="annFileSize" style="font-size:0.75rem;color:var(--text-muted);"></div>
+                  <div class="announcement-icon-field">
+                    <label for="announcementIcon">Icon</label>
+                    <select id="announcementIcon">
+                      <option value="fa-bullhorn" selected>Announce</option>
+                      <option value="fa-star">Star</option>
+                      <option value="fa-triangle-exclamation">Alert</option>
+                      <option value="fa-circle-info">Info</option>
+                      <option value="fa-graduation-cap">Training</option>
+                      <option value="fa-handshake">Partner</option>
+                      <option value="fa-chart-line">Rates</option>
+                      <option value="fa-calendar-check">Event</option>
+                    </select>
                   </div>
-                  <button type="button" id="annFileRemove" style="margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;padding:0.25rem;" title="Remove file"><i class="fas fa-times-circle"></i></button>
+                </div>
+
+                <div class="announcement-field">
+                  <label>Content</label>
+                  <div id="announcementEditorWrap" class="announcement-editor-wrap">
+                    <div id="announcementToolbar" class="announcement-toolbar">
+                      <button type="button" class="ann-tb-btn" data-cmd="bold" title="Bold"><i class="fas fa-bold"></i></button>
+                      <button type="button" class="ann-tb-btn" data-cmd="italic" title="Italic"><i class="fas fa-italic"></i></button>
+                      <button type="button" class="ann-tb-btn" data-cmd="underline" title="Underline"><i class="fas fa-underline"></i></button>
+                      <span class="announcement-toolbar-separator"></span>
+                      <button type="button" class="ann-tb-btn" data-cmd="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button>
+                      <button type="button" class="ann-tb-btn" data-cmd="insertOrderedList" title="Numbered List"><i class="fas fa-list-ol"></i></button>
+                      <span class="announcement-toolbar-separator"></span>
+                      <button type="button" class="ann-tb-btn" data-action="insert-inline-image" title="Insert PNG"><i class="fas fa-image"></i></button>
+                      <input type="file" id="announcementInlineImageInput" accept="image/png,image/jpeg,image/webp" hidden />
+                      <select id="annFontSize" title="Font Size" class="announcement-font-size">
+                        <option value="">Size</option>
+                        <option value="1">Small</option>
+                        <option value="3">Normal</option>
+                        <option value="5">Large</option>
+                        <option value="7">X-Large</option>
+                      </select>
+                      <button type="button" class="ann-tb-btn" data-cmd="removeFormat" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
+                    </div>
+                    <div id="announcementContent" contenteditable="true" class="announcement-content-editor" data-placeholder="Write your announcement here..."></div>
+                  </div>
+                  <div class="announcement-char-row">
+                    <span id="annCharCount">0 / 5,000</span>
+                  </div>
+                </div>
+
+                <div class="announcement-field">
+                  <div class="announcement-label-row">
+                    <label>Links <span>(optional)</span></label>
+                    <button type="button" id="annAddLink" class="ann-text-btn"><i class="fas fa-plus"></i> Add Link</button>
+                  </div>
+                  <div id="announcementLinks" class="announcement-links-list">
+                    <div class="announcement-link-row">
+                      <input type="text" class="ann-link-label" placeholder="Label" aria-label="Link label" />
+                      <input type="url" class="ann-link-url" placeholder="https://..." aria-label="Link URL" />
+                      <button type="button" class="ann-link-remove" title="Remove link"><i class="fas fa-times"></i></button>
+                    </div>
+                  </div>
+                  <input type="url" id="announcementLink" hidden />
+                </div>
+
+                <div class="announcement-field">
+                  <label>Attachments <span>(optional)</span></label>
+                  <div id="announcementDropzone" class="announcement-dropzone">
+                    <input type="file" id="announcementFile" multiple hidden />
+                    <div id="annDropzoneContent" class="announcement-dropzone-content">
+                      <i class="fas fa-cloud-upload-alt"></i>
+                      <span>Drop pictures or files here</span>
+                    </div>
+                  </div>
+                  <div id="annAttachmentList" class="announcement-attachment-list"></div>
                 </div>
               </div>
+
+              <aside class="announcement-preview-panel">
+                <div class="announcement-preview-window">
+                  <div class="announcement-preview-empty" id="annGraphicPreviewEmpty">
+                    <i class="fas fa-image"></i>
+                    <span>Graphic Preview</span>
+                  </div>
+                  <img id="annGraphicPreviewImage" alt="Announcement graphic preview" hidden />
+                </div>
+                <input type="file" id="announcementGraphicFile" accept="image/png,image/jpeg,image/webp" hidden />
+                <div class="announcement-graphic-actions">
+                  <button type="button" id="annGraphicUploadBtn" class="btn btn-secondary btn-sm"><i class="fas fa-upload"></i> Upload</button>
+                  <button type="button" id="annGenerateImageBtn" class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> AI Picture</button>
+                  <button type="button" id="annGraphicClearBtn" class="btn btn-outline btn-sm"><i class="fas fa-trash"></i></button>
+                </div>
+                <div id="annGraphicStatus" class="announcement-graphic-status"></div>
+              </aside>
             </div>
 
-            <!-- Actions -->
-            <div style="display:flex;justify-content:flex-end;gap:0.75rem;padding-top:0.5rem;border-top:1px solid var(--border-color);">
-              <button type="button" class="btn btn-secondary announcement-modal-close" style="padding:0.5rem 1.25rem;">Cancel</button>
-              <button type="submit" class="btn btn-primary" style="padding:0.5rem 1.5rem;display:flex;align-items:center;gap:0.4rem;"><i class="fas fa-paper-plane"></i> Publish</button>
+            <div class="announcement-actions">
+              <button type="button" class="btn btn-secondary announcement-modal-close">Cancel</button>
+              <button type="submit" id="announcementPublishBtn" class="btn btn-primary"><i class="fas fa-paper-plane"></i> Publish</button>
             </div>
           </form>
         </div>

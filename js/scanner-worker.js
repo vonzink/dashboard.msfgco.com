@@ -1,3 +1,10 @@
+// ─────────────────────────────────────────────────────────────────
+// GENERATED FILE — DO NOT EDIT
+// Source:    ../msfg-scanner/js/cv-worker.js
+// Generator: dashboard.msfgco.com/sync-scanner.sh
+// Edits will be overwritten on next deploy.
+// ─────────────────────────────────────────────────────────────────
+
 // MSFG Scanner — OpenCV worker.
 // Loads opencv.js, runs the enhancement pipeline on each incoming bitmap,
 // posts back the result as a PNG Blob.
@@ -174,8 +181,89 @@ function matToImageData(mat) {
   return imageData;
 }
 
+// Preset: Document Color — preserves color while enhancing contrast and
+// sharpness. Converts BGR→YCrCb, runs CLAHE on Y only, converts back, then
+// mild convertScaleAbs for pop. Returns RGB Mat.
+function runDocumentColorPreset(src, pool) {
+  // src is RGBA. Strip alpha to RGB.
+  const rgb = pool.track(new cv.Mat());
+  cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+
+  const ycrcb = pool.track(new cv.Mat());
+  cv.cvtColor(rgb, ycrcb, cv.COLOR_RGB2YCrCb);
+
+  const channels = pool.track(new cv.MatVector());
+  cv.split(ycrcb, channels);
+  const y = pool.track(channels.get(0).clone());
+  const cr = pool.track(channels.get(1).clone());
+  const cb = pool.track(channels.get(2).clone());
+
+  const clahe = new cv.CLAHE(2.5, new cv.Size(8, 8));
+  try {
+    clahe.apply(y, y);
+  } finally {
+    clahe.delete();
+  }
+
+  const merged = pool.track(new cv.MatVector());
+  merged.push_back(y);
+  merged.push_back(cr);
+  merged.push_back(cb);
+  const mergedMat = pool.track(new cv.Mat());
+  cv.merge(merged, mergedMat);
+
+  const outRgb = pool.track(new cv.Mat());
+  cv.cvtColor(mergedMat, outRgb, cv.COLOR_YCrCb2RGB);
+  cv.convertScaleAbs(outRgb, outRgb, 1.08, 4);
+  return outRgb;
+}
+
+// Preset: Photo — very light touch for photos. CLAHE on luminance at a low
+// clip limit, no thresholding, full color preserved.
+function runPhotoPreset(src, pool) {
+  const rgb = pool.track(new cv.Mat());
+  cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+
+  const ycrcb = pool.track(new cv.Mat());
+  cv.cvtColor(rgb, ycrcb, cv.COLOR_RGB2YCrCb);
+  const channels = pool.track(new cv.MatVector());
+  cv.split(ycrcb, channels);
+  const y = pool.track(channels.get(0).clone());
+  const cr = pool.track(channels.get(1).clone());
+  const cb = pool.track(channels.get(2).clone());
+
+  const clahe = new cv.CLAHE(1.2, new cv.Size(16, 16));
+  try {
+    clahe.apply(y, y);
+  } finally {
+    clahe.delete();
+  }
+
+  const merged = pool.track(new cv.MatVector());
+  merged.push_back(y);
+  merged.push_back(cr);
+  merged.push_back(cb);
+  const mergedMat = pool.track(new cv.Mat());
+  cv.merge(merged, mergedMat);
+
+  const outRgb = pool.track(new cv.Mat());
+  cv.cvtColor(mergedMat, outRgb, cv.COLOR_YCrCb2RGB);
+  return outRgb;
+}
+
+// Preset: None — just strip alpha. Useful if user only wants to use the
+// slider adjustments / crop / rotate without any auto-enhancement.
+function runNonePreset(src, pool) {
+  const rgb = pool.track(new cv.Mat());
+  cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+  return rgb;
+}
+
 function selectPreset(name) {
   switch (name) {
+    case 'document-color': return runDocumentColorPreset;
+    case 'photo':          return runPhotoPreset;
+    case 'none':           return runNonePreset;
     case 'auto':
     default:
       return runAutoPreset;

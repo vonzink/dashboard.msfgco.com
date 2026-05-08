@@ -19,6 +19,14 @@
     },
 
     // ========================================
+    // LOAN FOLDER CREATOR (msfg-dbfolder popout)
+    // TODO: replace with production URL once deployed
+    // ========================================
+    loanFolderCreator: {
+      url: 'http://localhost:5173/',
+    },
+
+    // ========================================
     // AWS COGNITO (token refresh)
     // ========================================
     cognito: {
@@ -166,6 +174,7 @@
 
   // Freeze everything (deep enough for this structure)
   Object.freeze(CONFIG.api);
+  Object.freeze(CONFIG.loanFolderCreator);
   Object.freeze(CONFIG.cognito);
   Object.freeze(CONFIG.refresh);
   Object.freeze(CONFIG.dateFormat);
