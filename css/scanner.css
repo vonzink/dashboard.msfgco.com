@@ -88,7 +88,6 @@
   cursor: pointer;
   background: var(--sc-surface);
   transition: border-color 0.15s, background 0.15s;
-  outline: none;
 }
 
 .sc-dropzone:hover,

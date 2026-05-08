@@ -76,10 +76,6 @@ button {
     font-size: inherit;
 }
 
-button:focus {
-    outline: none;
-}
-
 /* ========================================
    FORM ELEMENTS (Reset)
 ======================================== */
@@ -88,8 +84,35 @@ input, select, textarea {
     font-size: inherit;
 }
 
-input:focus, select:focus, textarea:focus {
+/* ========================================
+   FOCUS MANAGEMENT
+   Use :focus-visible so mouse clicks don't show
+   outlines, but keyboard navigation does.
+======================================== */
+*:focus {
     outline: none;
+}
+
+*:focus-visible {
+    outline: 2px solid var(--green-bright);
+    outline-offset: 2px;
+}
+
+/* Form elements get a box-shadow ring instead of outline
+   (outline clips rounded corners) */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: none;
+    border-color: var(--green-bright);
+    box-shadow: var(--focus-ring);
+}
+
+/* Buttons with backgrounds get a ring that wraps the shape */
+.btn:focus-visible,
+button:focus-visible {
+    outline: 2px solid var(--green-bright);
+    outline-offset: 2px;
 }
 
 /* ========================================

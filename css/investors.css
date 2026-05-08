@@ -423,9 +423,8 @@ button.dropdown-item {
 }
 
 .form-input:focus {
-    outline: none;
     border-color: var(--green-bright);
-    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.2);
+    box-shadow: var(--focus-ring);
 }
 
 .form-input::placeholder {

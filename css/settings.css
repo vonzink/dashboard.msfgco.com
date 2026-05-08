@@ -370,8 +370,7 @@
 .settings-form .form-field input:focus,
 .settings-form .form-field textarea:focus {
     border-color: var(--green-bright);
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(140, 198, 62, 0.15);
+    box-shadow: var(--focus-ring);
 }
 
 .settings-form-actions {
@@ -664,7 +663,6 @@
     font-size: 0.82rem;
     font-weight: 500;
     cursor: pointer;
-    outline: none;
 }
 
 .settings-goals-period-select:focus {
@@ -798,7 +796,6 @@
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-primary);
-    outline: none;
     text-align: center;
     min-width: 60px;
 }

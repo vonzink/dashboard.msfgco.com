@@ -67,6 +67,20 @@
     --spacing-xl: 2rem;
     
     /* ========================================
+       TYPOGRAPHY SCALE
+    ======================================== */
+    --font-2xs: 0.65rem;   /* 10.4px — badges, micro-labels */
+    --font-xs:  0.75rem;   /* 12px   — meta, timestamps, tag labels */
+    --font-sm:  0.85rem;   /* 13.6px — body small, table cells, buttons */
+    --font-md:  0.9rem;    /* 14.4px — body default, form inputs */
+    --font-base: 0.95rem;  /* 15.2px — card titles, slightly emphasized text */
+    --font-lg:  1.1rem;    /* 17.6px — section titles */
+    --font-xl:  1.25rem;   /* 20px   — modal headers */
+    --font-2xl: 1.5rem;    /* 24px   — page titles */
+    --font-3xl: 1.75rem;   /* 28px   — hero values, investor names */
+    --font-4xl: 2rem;      /* 32px   — h1 */
+
+    /* ========================================
        BORDER RADIUS
     ======================================== */
     --radius-sm: 4px;
@@ -74,6 +88,31 @@
     --radius-lg: 12px;
     --radius-xl: 16px;
     --radius-full: 9999px;
+
+    /* ========================================
+       EXTENDED PALETTE (semantic aliases)
+    ======================================== */
+    /* Pace / performance indicator colors */
+    --color-pace-ahead: #4ade80;
+    --color-pace-on-track: #22d3ee;
+    --color-pace-behind: #fbbf24;
+
+    /* Chart / data visualization */
+    --color-chart-blue: #3b82f6;
+    --color-chart-purple: #a855f7;
+    --color-chart-cyan: #22d3ee;
+    --color-chart-orange: #f97316;
+    --color-chart-teal: #0891b2;
+
+    /* Dark panel backgrounds (briefing ribbon) */
+    --bg-panel-dark: #0a1628;
+    --bg-panel-dark-mid: #0f2436;
+    --bg-panel-dark-light: #122a3a;
+    --bg-panel-select: #1a2a3a;
+
+    /* Focus ring */
+    --focus-ring-color: rgba(140, 198, 62, 0.4);
+    --focus-ring: 0 0 0 3px var(--focus-ring-color);
 }
 
 /* ========================================
@@ -93,4 +132,5 @@
     --shadow-xl: 0 12px 48px rgba(0,0,0,0.5);
     --bg-hover: #1e2d40;
     --red: var(--status-danger);
+    --focus-ring-color: rgba(140, 198, 62, 0.5);
 }

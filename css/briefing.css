@@ -7,13 +7,13 @@
    PERFORMANCE RIBBON
 ======================================== */
 .briefing-ribbon {
-    background: linear-gradient(135deg, #0a1628 0%, #0f2436 35%, #122a3a 65%, #0d1f2d 100%);
+    background: linear-gradient(135deg, var(--bg-panel-dark) 0%, var(--bg-panel-dark-mid) 35%, var(--bg-panel-dark-light) 65%, #0d1f2d 100%);
     border-radius: var(--radius-xl);
     padding: 0;
     margin-bottom: var(--spacing-lg);
     overflow: hidden;
     position: relative;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-lg);
 }
 
 /* Subtle grid pattern overlay */
@@ -79,11 +79,10 @@
 .ribbon-select:focus {
     background: rgba(255, 255, 255, 0.14);
     border-color: var(--green-bright);
-    outline: none;
 }
 
 .ribbon-select option {
-    background: #1a2a3a;
+    background: var(--bg-panel-select);
     color: #fff;
 }
 
@@ -101,17 +100,17 @@
 
 .ribbon-pace.pace-ahead {
     background: rgba(74, 222, 128, 0.15);
-    color: #4ade80;
+    color: var(--color-pace-ahead);
 }
 
 .ribbon-pace.pace-on-track {
     background: rgba(34, 211, 238, 0.15);
-    color: #22d3ee;
+    color: var(--color-pace-on-track);
 }
 
 .ribbon-pace.pace-behind {
     background: rgba(251, 191, 36, 0.15);
-    color: #fbbf24;
+    color: var(--color-pace-behind);
 }
 
 /* ── Tiles row ── */
@@ -322,7 +321,7 @@
 }
 
 .ribbon-ytd-pt strong {
-    color: #22d3ee;
+    color: var(--color-pace-on-track);
 }
 
 /* ========================================
@@ -557,22 +556,22 @@
 
 .news-card-category[data-cat="rates"] {
     background: rgba(59, 130, 246, 0.12);
-    color: #3b82f6;
+    color: var(--color-chart-blue);
 }
 
 .news-card-category[data-cat="events"] {
     background: rgba(168, 85, 247, 0.12);
-    color: #a855f7;
+    color: var(--color-chart-purple);
 }
 
 .news-card-category[data-cat="training"] {
     background: rgba(34, 211, 238, 0.12);
-    color: #22d3ee;
+    color: var(--color-chart-cyan);
 }
 
 .news-card-category[data-cat="alerts"] {
     background: rgba(239, 68, 68, 0.12);
-    color: #ef4444;
+    color: var(--status-danger);
 }
 
 /* Empty state */

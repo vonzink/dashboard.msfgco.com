@@ -56,7 +56,7 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    font-size: 1.1rem;
+    font-size: var(--font-lg);
     color: var(--text-primary);
 }
 
@@ -69,7 +69,7 @@
     background: var(--gradient-brand);
     color: white;
     border-radius: 10px;
-    font-size: 0.95rem;
+    font-size: var(--font-base);
 }
 
 .section-actions {
@@ -138,7 +138,7 @@
     gap: var(--spacing-sm);
     padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--radius-md);
-    font-size: 0.85rem;
+    font-size: var(--font-sm);
     font-weight: 500;
     transition: all var(--transition-fast);
     cursor: pointer;
@@ -179,12 +179,49 @@
 
 .btn-sm {
     padding: 0.35rem 0.75rem;
-    font-size: 0.8rem;
+    font-size: var(--font-xs);
 }
 
 .btn-lg {
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
+}
+
+/* Disabled State */
+.btn:disabled,
+.btn[disabled],
+.btn.btn-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Loading State */
+.btn.btn-loading {
+    position: relative;
+    color: transparent;
+    pointer-events: none;
+}
+
+.btn.btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin: -8px 0 0 -8px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+    color: white;
+}
+
+.btn-secondary.btn-loading::after {
+    color: var(--text-secondary);
 }
 
 /* ========================================
@@ -196,7 +233,7 @@
     gap: 0.35rem;
     padding: 0.25rem 0.75rem;
     border-radius: var(--radius-full);
-    font-size: 0.75rem;
+    font-size: var(--font-xs);
     font-weight: 500;
 }
 
@@ -244,8 +281,50 @@
 }
 
 /* ========================================
-   FORM INPUTS
+   UNIFIED FORM SYSTEM
+   Single source of truth for all form
+   controls. Feature-specific selectors
+   inherit from these base patterns.
 ======================================== */
+
+/* ── Form Layout ── */
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md);
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-group.full-width {
+    grid-column: 1 / -1;
+}
+
+/* ── Labels ── */
+.form-label {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.form-label--uppercase {
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    font-size: var(--font-xs);
+}
+
+.form-label .form-optional {
+    font-weight: 400;
+    color: var(--text-muted);
+    font-size: var(--font-xs);
+}
+
+/* ── Inputs, Selects, Textareas ── */
+.form-input,
 .filter-select,
 .filter-input {
     padding: var(--spacing-sm) 0.75rem;
@@ -253,16 +332,69 @@
     border-radius: var(--radius-md);
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 0.85rem;
-    transition: all var(--transition-fast);
+    font-size: var(--font-sm);
+    font-family: inherit;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    width: 100%;
 }
 
+.form-input:focus,
 .filter-select:focus,
 .filter-input:focus {
     border-color: var(--green-bright);
-    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.2);
+    box-shadow: var(--focus-ring);
 }
 
+.form-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Textarea variant */
+.form-input--textarea {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+}
+
+/* Small variant (for inline filters, header controls) */
+.form-input--sm {
+    padding: 0.35rem 0.65rem;
+    font-size: var(--font-xs);
+}
+
+/* ── Validation States ── */
+.form-input--error {
+    border-color: var(--status-danger);
+}
+
+.form-input--error:focus {
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
+.form-error {
+    font-size: var(--font-xs);
+    color: var(--status-danger);
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 2px;
+}
+
+.form-input--success {
+    border-color: var(--status-success);
+}
+
+/* ── Form Actions (footer bar) ── */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+}
+
+/* ── Filter Group ── */
 .filter-group {
     display: flex;
     align-items: center;
@@ -270,11 +402,11 @@
 }
 
 .filter-group label {
-    font-size: 0.8rem;
+    font-size: var(--font-xs);
     color: var(--text-muted);
 }
 
-/* Search Input */
+/* ── Search Input with icon ── */
 .table-search {
     position: relative;
     flex: 1;
@@ -288,13 +420,13 @@
     border-radius: var(--radius-md);
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-size: 0.85rem;
-    transition: all var(--transition-fast);
+    font-size: var(--font-sm);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .table-search input:focus {
     border-color: var(--green-bright);
-    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.2);
+    box-shadow: var(--focus-ring);
 }
 
 .table-search i {
@@ -303,7 +435,13 @@
     top: 50%;
     transform: translateY(-50%);
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-size: var(--font-sm);
+}
+
+@media (max-width: 600px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* ========================================
@@ -451,9 +589,8 @@
 .pa-form-field input:focus,
 .pa-form-field select:focus,
 .pa-form-field textarea:focus {
-    outline: none;
     border-color: var(--green-bright);
-    box-shadow: 0 0 0 2px rgba(140, 198, 62, 0.15);
+    box-shadow: var(--focus-ring);
 }
 
 .pa-form-actions {
@@ -738,7 +875,6 @@
     padding: 2px 0.5rem;
     border-radius: var(--radius-full, 999px);
     width: 110px;
-    outline: none;
     transition: all var(--transition-fast, 0.15s);
 }
 
