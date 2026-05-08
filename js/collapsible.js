@@ -12,15 +12,19 @@ const CollapsibleSections = {
     const savedState = this._loadState();
     const isFirstVisit = (savedState === null);
 
-    document.querySelectorAll('.section-card[data-collapsible]').forEach(section => {
-      const header = section.querySelector('.section-header');
+    const sections = document.querySelectorAll('.section-card[data-collapsible]');
+
+    // Phase 1: Restore state WITHOUT transitions so nothing flashes on load
+    sections.forEach(section => {
       const body = section.querySelector('.section-body');
       const btn = section.querySelector('.section-collapse-btn');
       const sectionId = section.id;
 
-      if (!header || !body) return;
+      if (!body) return;
 
-      // Restore or apply default collapse state
+      // Suppress transition during initial state restore
+      body.style.transition = 'none';
+
       if (sectionId) {
         let shouldCollapse = false;
 
@@ -36,6 +40,25 @@ const CollapsibleSections = {
           if (btn) btn.setAttribute('aria-expanded', 'false');
         }
       }
+    });
+
+    // Phase 2: Re-enable transitions after a frame so the browser paints
+    // the collapsed state first, then future toggles animate smoothly
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        sections.forEach(section => {
+          const body = section.querySelector('.section-body');
+          if (body) body.style.transition = '';
+        });
+      });
+    });
+
+    // Phase 3: Bind event listeners
+    sections.forEach(section => {
+      const header = section.querySelector('.section-header');
+      const btn = section.querySelector('.section-collapse-btn');
+
+      if (!header) return;
 
       // Header click toggles (but not clicks on other interactive elements)
       header.addEventListener('click', (e) => {

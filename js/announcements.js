@@ -134,15 +134,18 @@ const Announcements = {
     const attachmentFiles = window.AnnouncementEditor?.getAttachmentFiles ? window.AnnouncementEditor.getAttachmentFiles() : [];
     const graphicFile = window.AnnouncementEditor?.getGraphicFile ? window.AnnouncementEditor.getGraphicFile() : null;
 
-    // Check if editor is truly empty (strip tags for validation)
+    // Inline validation
     const plainText = contentEl ? contentEl.innerText.trim() : '';
-    if (!title || !plainText) {
-      alert('Please provide a title and content.');
-      return;
+    let valid = true;
+    if (!title) { Utils.setFieldError(titleEl, 'Title is required'); valid = false; } else { Utils.setFieldError(titleEl, null); }
+    if (!plainText) {
+      Utils.showToast('Please add content to your announcement.', 'error');
+      valid = false;
     }
+    if (!valid) return;
 
     if (plainText.length > 5000) {
-      alert('Content exceeds 5,000 character limit. Please shorten your announcement.');
+      Utils.showToast('Content exceeds 5,000 character limit.', 'error');
       return;
     }
 
@@ -150,10 +153,7 @@ const Announcements = {
     const authorName = cfg?.currentUser?.name || 'User';
 
     try {
-      if (publishBtn) {
-        publishBtn.disabled = true;
-        publishBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Publishing';
-      }
+      Utils.btnLoading(publishBtn, true);
 
       const content = window.AnnouncementEditor?.prepareContentForPublish
         ? await window.AnnouncementEditor.prepareContentForPublish(this.uploadAnnouncementFile.bind(this))
@@ -179,12 +179,9 @@ const Announcements = {
       await this.saveAnnouncement(announcement);
     } catch (error) {
       console.error('Failed to publish announcement:', error);
-      alert(error.message || 'Failed to publish announcement. Please try again.');
+      Utils.showToast(error.message || 'Failed to publish announcement.', 'error');
     } finally {
-      if (publishBtn) {
-        publishBtn.disabled = false;
-        publishBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Publish';
-      }
+      Utils.btnLoading(publishBtn, false);
     }
   },
 
@@ -520,7 +517,7 @@ const Announcements = {
   },
 
   async deleteAnnouncement(announcementId) {
-    if (!confirm('Are you sure you want to delete this announcement?')) return;
+    if (!await Utils.confirm('Are you sure you want to delete this announcement?', { title: 'Delete Announcement' })) return;
 
     try {
       await ServerAPI.deleteAnnouncement(announcementId);

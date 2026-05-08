@@ -160,8 +160,7 @@ const ContentStudio = {
     const resultsContainer = document.getElementById('csResults');
 
     // Loading state
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    Utils.btnLoading(btn, true);
     resultsContainer.innerHTML = '<div class="cs-loading"><i class="fas fa-magic fa-spin"></i> AI is crafting your posts...</div>';
 
     try {
@@ -178,8 +177,7 @@ const ContentStudio = {
     } catch (err) {
       resultsContainer.innerHTML = `<div class="cs-error"><i class="fas fa-exclamation-triangle"></i> ${Utils.escapeHtml(err.message)}</div>`;
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-magic"></i> Generate Posts';
+      Utils.btnLoading(btn, false);
     }
   },
 

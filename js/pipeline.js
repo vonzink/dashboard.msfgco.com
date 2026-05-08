@@ -495,7 +495,7 @@ const Pipeline = {
   },
 
   async _deleteNote(pipelineId, noteId) {
-    if (!confirm('Delete this note?')) return;
+    if (!await Utils.confirm('Delete this note?', { title: 'Delete Note' })) return;
     try {
       await ServerAPI.deletePipelineNote(pipelineId, noteId);
       this._loadNotes(pipelineId);

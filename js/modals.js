@@ -243,7 +243,7 @@ const ModalsManager = {
       // Bind delete buttons (optimistic UI — remove from DOM immediately)
       container.querySelectorAll('.notif-delete').forEach(btn => {
         btn.addEventListener('click', async () => {
-          if (!confirm('Delete this reminder?')) return;
+          if (!await Utils.confirm('Delete this reminder?', { title: 'Delete Reminder' })) return;
           const item = btn.closest('.notif-item');
           if (item) { item.style.opacity = '0'; item.style.transition = 'opacity 0.2s'; }
           try {
@@ -277,13 +277,17 @@ const ModalsManager = {
     const delivery = deliveryEl?.value || 'email';
     const recurrence = recurrenceEl?.value || 'none';
 
-    if (!date || !time || !note) {
-      Utils.showToast('Please complete date, time, and note.', 'error');
-      return;
-    }
+    // Inline validation
+    let valid = true;
+    if (!date) { Utils.setFieldError(dateEl, 'Date is required'); valid = false; } else { Utils.setFieldError(dateEl, null); }
+    if (!time) { Utils.setFieldError(timeEl, 'Time is required'); valid = false; } else { Utils.setFieldError(timeEl, null); }
+    if (!note) { Utils.setFieldError(noteEl, 'Note is required'); valid = false; } else { Utils.setFieldError(noteEl, null); }
+    if (!valid) return;
 
     const userId = CONFIG?.currentUser?.id || 1;
+    const saveBtn = document.querySelector('#notificationForm .btn-primary, #notificationForm [type="submit"]');
 
+    Utils.btnLoading(saveBtn, true);
     try {
       await ServerAPI.post('/notifications', {
         user_id: userId,
@@ -302,6 +306,8 @@ const ModalsManager = {
       this.loadNotificationsList();
     } catch (err) {
       Utils.showToast('Failed to save: ' + err.message, 'error');
+    } finally {
+      Utils.btnLoading(saveBtn, false);
     }
   },
 

@@ -553,14 +553,14 @@ const FundedLoans = {
     });
   },
 
-  _deleteNote(loanId, noteId) {
-    if (!confirm('Delete this note?')) return;
-    var self = this;
-    ServerAPI.deleteFundedLoanNote(loanId, noteId).then(function() {
-      self._loadNotes(loanId);
-    }).catch(function(err) {
+  async _deleteNote(loanId, noteId) {
+    if (!await Utils.confirm('Delete this note?', { title: 'Delete Note' })) return;
+    try {
+      await ServerAPI.deleteFundedLoanNote(loanId, noteId);
+      this._loadNotes(loanId);
+    } catch (err) {
       alert('Failed to delete note: ' + (err.message || 'Unknown error'));
-    });
+    }
   },
 };
 

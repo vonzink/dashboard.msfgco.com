@@ -139,6 +139,7 @@ const App = {
             }, 500)],
             ['Collapsible',    () => typeof CollapsibleSections !== 'undefined' && CollapsibleSections.init()],
             ['MobileNav',      () => App.initMobileNav()],
+            ['LiveValidation', () => Utils.initLiveValidation()],
         ];
 
         for (const [name, initFn] of modules) {

@@ -184,7 +184,7 @@ const HRResources = {
   },
 
   async _deleteLink(id) {
-    if (!confirm('Delete this link?')) return;
+    if (!await Utils.confirm('Delete this link?', { title: 'Delete Link' })) return;
     try {
       await ServerAPI.deleteHRLink(id);
       Utils.showToast('Link deleted');
@@ -293,7 +293,7 @@ const HRResources = {
   },
 
   async _deleteNote(id) {
-    if (!confirm('Delete this note?')) return;
+    if (!await Utils.confirm('Delete this note?', { title: 'Delete Note' })) return;
     try {
       await ServerAPI.deleteHRNote(id);
       Utils.showToast('Note deleted');

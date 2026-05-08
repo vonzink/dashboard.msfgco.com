@@ -161,7 +161,7 @@ const InvestorNotes = {
         e.stopPropagation();
         const tid = parseInt(btn.dataset.removeTag);
         const tag = Investors._investorTags.find(t => t.id === tid);
-        if (!confirm('Delete custom tag "' + (tag?.name || '') + '"?')) return;
+        if (!await Utils.confirm('Delete custom tag "' + (tag?.name || '') + '"?', { title: 'Delete Tag' })) return;
         try {
           await ServerAPI.deleteInvestorTag(tid);
           Investors._investorTags = Investors._investorTags.filter(t => t.id !== tid);
@@ -365,7 +365,7 @@ const InvestorNotes = {
   },
 
   async _deleteNote(investorId, noteId) {
-    if (!confirm('Delete this note?')) return;
+    if (!await Utils.confirm('Delete this note?', { title: 'Delete Note' })) return;
     try {
       await ServerAPI.deleteInvestorNote(investorId, noteId);
       this.loadNotes(investorId);

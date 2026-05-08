@@ -380,7 +380,7 @@ const Chat = {
         const tagId = parseInt(btn.dataset.tagId);
         const tag = this.tags.find(t => t.id === tagId);
         if (!tag) return;
-        if (!confirm('Delete tag "' + tag.name + '"? It will be removed from all messages.')) return;
+        if (!await Utils.confirm('Delete tag "' + tag.name + '"? It will be removed from all messages.', { title: 'Delete Tag' })) return;
 
         try {
           await ServerAPI.deleteChatTag(tagId);
@@ -708,7 +708,7 @@ const Chat = {
   // DELETE MESSAGE
   // ========================================
   async _deleteMessage(msgId) {
-    if (!confirm('Delete this message?')) return;
+    if (!await Utils.confirm('Delete this message?', { title: 'Delete Message' })) return;
     try {
       await ServerAPI.deleteChatMessage(msgId);
       // If WebSocket is connected, broadcast will handle removal.
@@ -801,7 +801,7 @@ const Chat = {
   },
 
   async _deleteAttachment(attachId) {
-    if (!confirm('Delete this file?')) return;
+    if (!await Utils.confirm('Delete this file?', { title: 'Delete File' })) return;
     try {
       await ServerAPI.deleteChatAttachment(attachId);
       if (!this.isConnected) {

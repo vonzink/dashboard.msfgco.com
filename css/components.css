@@ -445,6 +445,79 @@
 }
 
 /* ========================================
+   CONFIRM DIALOG (styled replacement for
+   native confirm())
+======================================== */
+.confirm-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.confirm-overlay.active {
+    opacity: 1;
+}
+
+.confirm-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-xl);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+    width: 380px;
+    max-width: calc(100vw - 2rem);
+    padding: 1.5rem;
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.2s ease;
+}
+
+.confirm-overlay.active .confirm-dialog {
+    transform: scale(1) translateY(0);
+}
+
+.confirm-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.confirm-header h3 {
+    font-size: var(--font-lg);
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.confirm-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.confirm-icon--danger { color: var(--status-danger); }
+.confirm-icon--warning { color: var(--status-warning); }
+.confirm-icon--default { color: var(--status-info); }
+
+.confirm-message {
+    font-size: var(--font-sm);
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 1.25rem;
+}
+
+.confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+}
+
+/* ========================================
    PROGRESS BARS
 ======================================== */
 .progress-bar {

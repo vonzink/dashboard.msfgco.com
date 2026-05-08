@@ -418,7 +418,7 @@ const PreApprovals = {
   async deleteItem(id) {
     const item = this.data?.find(pa => pa.id === id);
     const name = item?.client_name || 'this pre-approval';
-    if (!confirm(`Delete "${name}"? This will also archive it on Monday.com.`)) return;
+    if (!await Utils.confirm(`Delete "${name}"? This will also archive it on Monday.com.`, { title: 'Delete Pre-Approval' })) return;
     try {
       await ServerAPI.deletePreApproval(id);
       await this.load();
@@ -625,7 +625,7 @@ const PreApprovals = {
   },
 
   async _deleteNote(paId, noteId) {
-    if (!confirm('Delete this note?')) return;
+    if (!await Utils.confirm('Delete this note?', { title: 'Delete Note' })) return;
     try {
       await ServerAPI.deletePreApprovalNote(paId, noteId);
       this._loadNotes(paId);

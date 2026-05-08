@@ -172,7 +172,7 @@ const Programs = {
   },
 
   async _deleteLink(id) {
-    if (!confirm('Delete this link?')) return;
+    if (!await Utils.confirm('Delete this link?', { title: 'Delete Link' })) return;
     try {
       await ServerAPI.deleteProgramLink(id);
       Utils.showToast('Link deleted');

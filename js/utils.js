@@ -400,6 +400,177 @@ const Utils = {
         return map[ext] || 'fa-file';
     },
 
+    // ========================================
+    // CONFIRM DIALOG (replaces native confirm())
+    // ========================================
+
+    /**
+     * Show a styled confirmation dialog. Returns a Promise<boolean>.
+     * @param {string} message - Main message text
+     * @param {Object} opts - Options
+     * @param {string} opts.title         - Dialog header (default: 'Confirm')
+     * @param {string} opts.confirmText   - Confirm button label (default: 'Delete')
+     * @param {string} opts.cancelText    - Cancel button label (default: 'Cancel')
+     * @param {string} opts.variant       - 'danger' | 'warning' | 'default'
+     */
+    confirm(message, opts = {}) {
+        const {
+            title = 'Confirm',
+            confirmText = 'Delete',
+            cancelText = 'Cancel',
+            variant = 'danger'
+        } = opts;
+
+        return new Promise(resolve => {
+            // Remove any existing confirm dialog
+            const existing = document.getElementById('msfgConfirmOverlay');
+            if (existing) existing.remove();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'msfgConfirmOverlay';
+            overlay.className = 'confirm-overlay';
+            overlay.setAttribute('role', 'alertdialog');
+            overlay.setAttribute('aria-modal', 'true');
+            overlay.setAttribute('aria-labelledby', 'confirmTitle');
+            overlay.setAttribute('aria-describedby', 'confirmMessage');
+
+            const variantClass = variant === 'danger' ? 'btn-danger' : variant === 'warning' ? 'btn-primary' : 'btn-primary';
+
+            overlay.innerHTML = `
+                <div class="confirm-dialog">
+                    <div class="confirm-header">
+                        <i class="fas ${variant === 'danger' ? 'fa-exclamation-triangle' : 'fa-question-circle'} confirm-icon confirm-icon--${variant}"></i>
+                        <h3 id="confirmTitle">${this.escapeHtml(title)}</h3>
+                    </div>
+                    <p id="confirmMessage" class="confirm-message">${this.escapeHtml(message)}</p>
+                    <div class="confirm-actions">
+                        <button type="button" class="btn btn-secondary confirm-cancel">${this.escapeHtml(cancelText)}</button>
+                        <button type="button" class="btn ${variantClass} confirm-ok">${this.escapeHtml(confirmText)}</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            // Animate in
+            requestAnimationFrame(() => overlay.classList.add('active'));
+
+            const close = (result) => {
+                overlay.classList.remove('active');
+                setTimeout(() => overlay.remove(), 200);
+                resolve(result);
+            };
+
+            overlay.querySelector('.confirm-cancel').addEventListener('click', () => close(false));
+            overlay.querySelector('.confirm-ok').addEventListener('click', () => close(true));
+            overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+
+            // ESC to cancel, Enter to confirm
+            const onKey = (e) => {
+                if (e.key === 'Escape') { close(false); document.removeEventListener('keydown', onKey); }
+                if (e.key === 'Enter') { close(true); document.removeEventListener('keydown', onKey); }
+            };
+            document.addEventListener('keydown', onKey);
+
+            // Focus the cancel button (safer default)
+            overlay.querySelector('.confirm-cancel').focus();
+        });
+    },
+
+    // ========================================
+    // BUTTON LOADING STATE
+    // ========================================
+
+    /**
+     * Toggle loading spinner on a button.
+     * @param {HTMLElement} btn - The button element
+     * @param {boolean} loading - true to show spinner, false to restore
+     */
+    btnLoading(btn, loading) {
+        if (!btn) return;
+        if (loading) {
+            btn._origText = btn.innerHTML;
+            btn.classList.add('btn-loading');
+            btn.disabled = true;
+        } else {
+            btn.classList.remove('btn-loading');
+            btn.disabled = false;
+            if (btn._origText !== undefined) {
+                btn.innerHTML = btn._origText;
+                delete btn._origText;
+            }
+        }
+    },
+
+    // ========================================
+    // INLINE FORM VALIDATION
+    // ========================================
+
+    /**
+     * Validate a form field and show/clear error state.
+     * @param {HTMLElement} input - The input element
+     * @param {string|null} errorMsg - Error message (null = clear)
+     * @returns {boolean} true if valid (errorMsg is null)
+     */
+    setFieldError(input, errorMsg) {
+        if (!input) return true;
+        const group = input.closest('.form-group') || input.closest('.pa-form-field') || input.parentElement;
+
+        // Clear previous error
+        input.classList.remove('form-input--error');
+        const prev = group?.querySelector('.form-error');
+        if (prev) prev.remove();
+
+        if (errorMsg) {
+            input.classList.add('form-input--error');
+            const err = document.createElement('span');
+            err.className = 'form-error';
+            err.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + this.escapeHtml(errorMsg);
+            if (group) group.appendChild(err);
+            return false;
+        }
+        return true;
+    },
+
+    /**
+     * Validate required fields in a container. Returns true if all pass.
+     * @param {HTMLElement} container - Parent element containing [required] inputs
+     * @returns {boolean}
+     */
+    validateRequired(container) {
+        let valid = true;
+        container.querySelectorAll('[required]').forEach(input => {
+            const val = input.value?.trim();
+            if (!val) {
+                const label = input.closest('.form-group')?.querySelector('.form-label, label')?.textContent?.replace(/\*|optional/gi, '').trim() || 'This field';
+                this.setFieldError(input, `${label} is required`);
+                valid = false;
+            } else {
+                this.setFieldError(input, null);
+            }
+        });
+        return valid;
+    },
+
+    /**
+     * Auto-clear error state when user starts typing.
+     * Call once at app init to enable globally.
+     */
+    initLiveValidation() {
+        document.addEventListener('input', (e) => {
+            if (e.target.classList.contains('form-input--error')) {
+                this.setFieldError(e.target, null);
+            }
+        });
+    },
+
+    // ========================================
+    // NOTIFICATION UTILITIES
+    // ========================================
+
+    /**
+     * Show a brief toast notification
+     */
     showToast(message, type = 'info') {
         const colors = { info: '#104547', error: '#c0392b', success: '#27ae60' };
         const bg = colors[type] || colors.info;
