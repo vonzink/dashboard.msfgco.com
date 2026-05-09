@@ -1,0 +1,149 @@
+/* ========================================
+   FUNDED LOANS & PERFORMANCE GAUGES
+   Summary bar, stat cards, SVG gauges
+======================================== */
+
+/* ── Funded Loans ── */
+.funded-summary-bar {
+    display: flex;
+    gap: var(--spacing-lg);
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    margin-bottom: var(--spacing-md);
+}
+
+.funded-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.funded-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.funded-stat-value {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--green-forest);
+}
+
+/* ── Performance Snapshot Gauges ── */
+.gauges-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-lg);
+    padding: var(--spacing-md) 0;
+}
+
+.gauge-card {
+    text-align: center;
+    padding: var(--spacing-lg) var(--spacing-md);
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    position: relative;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gauge-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.gauge-label {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-sm);
+}
+
+.gauge-svg-container {
+    width: 160px;
+    height: 90px;
+    margin: 0 auto;
+}
+
+.gauge-svg {
+    overflow: visible;
+}
+
+.gauge-arc {
+    transition: stroke 0.3s ease;
+}
+
+.gauge-arc.gauge-exceeded {
+    stroke: var(--green-forest, #16a34a);
+}
+
+.gauge-arc.gauge-on-track {
+    stroke: var(--primary, #0d7377);
+}
+
+.gauge-arc.gauge-warning {
+    stroke: var(--amber, #f59e0b);
+}
+
+.gauge-arc.gauge-behind {
+    stroke: var(--red, #ef4444);
+}
+
+.gauge-center-value {
+    font-size: 28px;
+    font-weight: 700;
+    fill: var(--text-primary);
+    font-family: 'Inter', sans-serif;
+}
+
+.gauge-center-label {
+    font-size: 11px;
+    fill: var(--text-muted);
+    font-family: 'Inter', sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.gauge-stats {
+    margin-top: var(--spacing-sm);
+}
+
+.gauge-units {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: block;
+}
+
+.gauge-volume {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+}
+
+.gauge-pull-through {
+    font-size: 0.8rem;
+    color: var(--primary, #0d7377);
+    display: block;
+    margin-top: 4px;
+    font-weight: 600;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1200px) {
+    .gauges-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .gauges-grid {
+        grid-template-columns: 1fr;
+    }
+}

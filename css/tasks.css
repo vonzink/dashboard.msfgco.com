@@ -1,0 +1,107 @@
+/* ========================================
+   TASKS SECTION
+   Task board columns, cards, priorities
+======================================== */
+.tasks-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-md);
+}
+
+.task-column {
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-md);
+}
+
+.task-column-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.task-column-title {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.task-count {
+    background: var(--green-bright);
+    color: white;
+    padding: 0.15rem var(--spacing-sm);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.task-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.task-item {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    border-left: 3px solid var(--green-medium);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.task-item:hover {
+    transform: translateX(4px);
+    box-shadow: var(--shadow-sm);
+}
+
+.task-item.priority-high {
+    border-left-color: var(--status-danger);
+}
+
+.task-item.priority-medium {
+    border-left-color: var(--status-warning);
+}
+
+.task-item.priority-low {
+    border-left-color: var(--status-success);
+}
+
+.task-title {
+    font-size: 0.85rem;
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+    color: var(--text-primary);
+}
+
+.task-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.task-due {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.task-due.overdue {
+    color: var(--status-danger);
+}
+
+/* ── Responsive ── */
+@media (max-width: 1200px) {
+    .tasks-container {
+        grid-template-columns: 1fr;
+    }
+}
