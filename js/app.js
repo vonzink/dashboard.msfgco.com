@@ -14,26 +14,27 @@
      9. tables.js             — TableManager (sorting, search, pagination)
     10. chat.js               — Chat (messages, tags, WebSocket, polling)
     11. pre-approvals.js      — PreApprovals (data, filters, CRUD modal, detail, notes)
-    12. pipeline.js           — Pipeline (columns, data, filters, detail, notes)
-    13. api.js                — API (orchestrator — delegates to PreApprovals/Pipeline)
-    14. sync-manager.js       — SyncManager (data sync orchestration)
-    15. investor-notes.js     — InvestorNotes (tags, notes CRUD, Manage Tags modal)
-    16. investor-dropdown.js  — InvestorDropdown (nav dropdown, All Investors directory)
-    17. investors.js          — Investors (data, modal, contact cards — delegates to InvestorNotes/Dropdown)
-    18. funded-loans.js       — FundedLoans — depends on API._displayPrefs, ServerAPI
-    19. goals.js              — GoalsManager — depends on API (pipeline/funded data)
-    20. announcements.js      — Announcements carousel
-    21. modals.js             — ModalsManager (support ticket, notifications, announcements)
-    22. settings-goals.js     — Goal settings panel
-    23. user-settings.js      — UserSettings (profile, display prefs, documents)
-    24. programs.js           — Programs directory
-    25. hr-resources.js       — HR Resources
-    26. content-studio.js     — Content Studio (AI social media generation)
-    27. collapsible.js        — CollapsibleSections (toggle sections with persistence)
-    28. a11y.js               — Accessibility helpers
-    29. progress-init.js      — Progress bar animation
-    30. announcement-editor.js — Announcement editor modal
-    31. app.js                — THIS FILE — orchestrates init of all modules above
+    12. applications.js       — Applications (stub for MSFG Apps integration)
+    13. pipeline.js           — Pipeline (columns, data, filters, detail, notes)
+    14. api.js                — API (orchestrator — delegates to PreApprovals/Pipeline)
+    15. sync-manager.js       — SyncManager (data sync orchestration)
+    16. investor-notes.js     — InvestorNotes (tags, notes CRUD, Manage Tags modal)
+    17. investor-dropdown.js  — InvestorDropdown (nav dropdown, All Investors directory)
+    18. investors.js          — Investors (data, modal, contact cards — delegates to InvestorNotes/Dropdown)
+    19. funded-loans.js       — FundedLoans — depends on API._displayPrefs, ServerAPI
+    20. goals.js              — GoalsManager — depends on API (pipeline/funded data)
+    21. announcements.js      — Announcements carousel
+    22. modals.js             — ModalsManager (support ticket, notifications, announcements)
+    23. settings-goals.js     — Goal settings panel
+    24. user-settings.js      — UserSettings (profile, display prefs, documents)
+    25. programs.js           — Programs directory
+    26. hr-resources.js       — HR Resources
+    27. content-studio.js     — Content Studio (AI social media generation)
+    28. collapsible.js        — CollapsibleSections (toggle sections with persistence)
+    29. a11y.js               — Accessibility helpers
+    30. progress-init.js      — Progress bar animation
+    31. announcement-editor.js — Announcement editor modal
+    32. app.js                — THIS FILE — orchestrates init of all modules above
    ============================================ */
 
 const App = {
@@ -125,6 +126,7 @@ const App = {
             ['Tables',         () => TableManager.init()],
             ['Chat',           () => Chat.init()],
             ['Investors',      () => Investors.init()],
+            ['Applications',   () => typeof Applications !== 'undefined' && Applications.init()],
             ['Funded Loans',   () => typeof FundedLoans !== 'undefined' && FundedLoans.init()],
             ['Modals',         () => ModalsManager.init()],
             ['User Settings',  () => typeof UserSettings !== 'undefined' && UserSettings.init()],
@@ -241,7 +243,7 @@ const App = {
         // External: hide everything except news/announcements and calendar
         if (role === 'external') {
             const hiddenSections = [
-                'preApprovalsSection', 'pipelineSection', 'fundedLoansSection',
+                'preApprovalsSection', 'applicationsSection', 'pipelineSection', 'fundedLoansSection',
                 'goalsSection', 'chatSection', 'investorsSection',
                 'processingSection', 'contentSection',
             ];
