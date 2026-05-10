@@ -74,7 +74,13 @@
 
 .section-actions {
     display: flex;
+    align-items: center;
     gap: var(--spacing-sm);
+}
+
+.section-actions .filter-select,
+.section-actions .search-input {
+    width: auto;
 }
 
 .section-body {

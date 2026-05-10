@@ -329,7 +329,6 @@
     display: flex;
     gap: 0.5rem;
     align-items: center;
-    flex-wrap: wrap;
 }
 
 #pipelineSection .search-input {
@@ -340,6 +339,11 @@
     background: var(--bg-secondary);
     color: var(--text-primary);
     width: 180px;
+}
+
+#pipelineSection .filter-select {
+    width: auto;
+    min-width: 160px;
 }
 
 #pipelineSection .search-input::placeholder {
