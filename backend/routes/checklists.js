@@ -17,6 +17,7 @@ const {
   loanChecklistItemCreate: itemCreateSchema,
   loanChecklistSubitemCreate: subitemCreateSchema,
   loanChecklistImport: importSchema,
+  loanChecklistReorder: reorderSchema,
   validate,
 } = require('../validation/schemas');
 
@@ -88,6 +89,15 @@ router.post('/loan/:sourceType/:sourceItemId/items', validate(itemCreateSchema),
       getUserId(req), req.params.sourceType, req.params.sourceItemId, req.body,
     );
     created(res, item);
+  } catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+router.put('/loan/:sourceType/:sourceItemId/reorder', validate(reorderSchema), async (req, res, next) => {
+  try {
+    const result = await loanChecklists.reorderItems(
+      getUserId(req), req.params.sourceType, req.params.sourceItemId, req.body.items,
+    );
+    ok(res, result);
   } catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
 

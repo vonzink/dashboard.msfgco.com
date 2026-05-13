@@ -33,13 +33,22 @@
 .cl-badge-none:hover { opacity: 1; }
 .cl-badge-count { font-weight: 600; font-size: 0.65rem; }
 
-/* ── Modal ─────────────────────────────────── */
-/* Uses the global .modal-overlay (components.css) for visibility — only the
-   checklist-specific overrides (overflow + top-aligned content) live here. */
+/* ── Floating Panel (replaces traditional modal) ──────────────
+   The checklist is a draggable floating panel, not a blocking modal:
+   - No backdrop dimming (background transparent)
+   - Click-through outside the panel (pointer-events: none on the overlay)
+   - The panel itself re-enables pointer-events
+   - Page behind continues to scroll normally */
 .cl-modal-overlay {
   align-items: flex-start;
-  overflow-y: auto;
+  justify-content: flex-end;
+  padding: 1rem;
+  background: transparent;
+  backdrop-filter: none;
+  pointer-events: none;
 }
+.cl-modal-overlay.active { opacity: 1; visibility: visible; }
+.cl-modal-overlay .cl-modal { pointer-events: auto; }
 
 .cl-modal {
   background: var(--bg-secondary);
@@ -190,6 +199,29 @@
 .cl-item.cl-status-in-progress .cl-item-name { color: var(--status-warning); }
 .cl-item.cl-status-issue      .cl-item-name { color: var(--status-danger); }
 .cl-item.cl-status-na         .cl-item-name { color: var(--text-muted); }
+
+/* Importance — border color + slight left-edge emphasis.
+   Urgent items also sort to the top of the list (server-side). */
+.cl-item.cl-imp-important {
+  border-color: var(--status-warning);
+  border-left: 3px solid var(--status-warning);
+}
+.cl-item.cl-imp-urgent {
+  border-color: var(--status-danger);
+  border-left: 3px solid var(--status-danger);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.12);
+}
+.cl-imp-icon-urgent { color: var(--status-danger); }
+.cl-imp-icon-important { color: var(--status-warning); }
+
+/* Currently-set importance row in the ⋮ menu */
+.cl-menu-active { background: var(--bg-hover); font-weight: 600; }
+
+/* Drag-to-reorder visual states */
+.cl-item { cursor: grab; }
+.cl-item:active { cursor: grabbing; }
+.cl-item.cl-item-dragging { opacity: 0.4; }
+.cl-item.cl-item-drag-over { outline: 2px dashed var(--green-bright); outline-offset: -2px; }
 
 .cl-item-main {
   display: flex;

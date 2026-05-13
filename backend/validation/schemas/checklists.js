@@ -11,6 +11,7 @@ const optionalString = (max) => z.string().trim().max(max).optional().nullable()
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD format');
 
 const checklistStatus = z.enum(['not_started', 'in_progress', 'done', 'issue', 'na']);
+const checklistImportance = z.enum(['normal', 'important', 'urgent']);
 
 const checklistSubitemInput = z.object({
   name: trimmedString(500),
@@ -51,12 +52,21 @@ const loanChecklistAssign = z.object({
 const loanChecklistItemUpdate = z.object({
   name: trimmedString(500).optional(),
   status: checklistStatus.optional(),
+  importance: checklistImportance.optional(),
   date: dateString.optional().nullable(),
   sort_order: z.number().int().nonnegative().optional(),
 }).refine(
   data => Object.keys(data).length > 0,
   { message: 'At least one field is required' },
 );
+
+// Batch reorder (drag-to-reorder applies to multiple items at once)
+const loanChecklistReorder = z.object({
+  items: z.array(z.object({
+    id: z.number().int().positive(),
+    sort_order: z.number().int().nonnegative(),
+  })).min(1).max(500),
+});
 
 const loanChecklistItemCreate = z.object({
   name: trimmedString(500),
@@ -81,6 +91,7 @@ const loanChecklistImport = z.object({
 
 module.exports = {
   checklistStatus,
+  checklistImportance,
   checklistTemplate,
   checklistTemplateUpdate,
   loanChecklistAssign,
@@ -88,4 +99,5 @@ module.exports = {
   loanChecklistItemCreate,
   loanChecklistSubitemCreate,
   loanChecklistImport,
+  loanChecklistReorder,
 };

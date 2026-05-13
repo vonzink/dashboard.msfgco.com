@@ -138,7 +138,7 @@ async function addItem(userId, sourceType, sourceItemId, body) {
 
 async function updateItem(userId, itemId, body) {
   const parent = await authz.requireChecklistItemAccess(userId, itemId);
-  const allowed = ['name', 'status', 'date', 'sort_order'];
+  const allowed = ['name', 'status', 'importance', 'date', 'sort_order'];
   const update = buildDynamicUpdate('loan_checklist_items', itemId, allowed, body);
   if (!update) return _readItem(itemId);
 
@@ -146,6 +146,51 @@ async function updateItem(userId, itemId, body) {
   // Touch parent checklist for cache-busting / freshness
   await db.query('UPDATE loan_checklists SET updated_at = NOW() WHERE id = ?', [parent.id]);
   return _readItem(itemId);
+}
+
+/**
+ * Batch reorder: accepts [{ id, sort_order }, ...]. Verifies every item
+ * belongs to a checklist the user can edit before writing.
+ */
+async function reorderItems(userId, sourceType, sourceItemId, items) {
+  await authz.requireLoanAccess(sourceType, sourceItemId);
+
+  return withTransaction(async (conn) => {
+    // Ensure every incoming id belongs to a checklist on THIS loan
+    const ids = items.map(i => i.id);
+    if (!ids.length) return { updated: 0 };
+
+    const [rows] = await conn.query(
+      `SELECT lci.id FROM loan_checklist_items lci
+       JOIN loan_checklists lc ON lc.id = lci.checklist_id
+       WHERE lc.source_type = ? AND lc.source_item_id = ?
+         AND lci.id IN (${ids.map(() => '?').join(',')})`,
+      [sourceType, sourceItemId, ...ids],
+    );
+    const owned = new Set(rows.map(r => r.id));
+    for (const id of ids) {
+      if (!owned.has(id)) {
+        const err = new Error('One or more items do not belong to this loan');
+        err.status = 403;
+        throw err;
+      }
+    }
+
+    for (const { id, sort_order } of items) {
+      await conn.query(
+        'UPDATE loan_checklist_items SET sort_order = ?, updated_at = NOW() WHERE id = ?',
+        [sort_order, id],
+      );
+    }
+    // Touch every affected parent checklist
+    await conn.query(
+      `UPDATE loan_checklists SET updated_at = NOW()
+       WHERE id IN (SELECT checklist_id FROM loan_checklist_items WHERE id IN (${ids.map(() => '?').join(',')}))`,
+      ids,
+    );
+
+    return { updated: ids.length };
+  });
 }
 
 async function deleteItem(userId, itemId) {
@@ -324,8 +369,11 @@ async function _hydrateById(conn, checklistId) {
 }
 
 async function _hydrateInternal(queryRunner, cl) {
+  // Urgent items float to the top; relative order within each importance
+  // group respects user-defined sort_order.
   const [items] = await queryRunner.query(
-    'SELECT * FROM loan_checklist_items WHERE checklist_id = ? ORDER BY sort_order, id',
+    `SELECT * FROM loan_checklist_items WHERE checklist_id = ?
+     ORDER BY (importance = 'urgent') DESC, sort_order ASC, id ASC`,
     [cl.id],
   );
 
@@ -358,6 +406,7 @@ module.exports = {
   addItem,
   updateItem,
   deleteItem,
+  reorderItems,
   addSubitem,
   updateSubitem,
   deleteSubitem,

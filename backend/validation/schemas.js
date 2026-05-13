@@ -390,6 +390,7 @@ const handbookSectionCreate = z.object({
 const checklistSchemas = require('./schemas/checklists');
 const {
   checklistStatus,
+  checklistImportance,
   checklistTemplate,
   checklistTemplateUpdate,
   loanChecklistAssign,
@@ -397,6 +398,7 @@ const {
   loanChecklistItemCreate,
   loanChecklistSubitemCreate,
   loanChecklistImport,
+  loanChecklistReorder,
 } = checklistSchemas;
 
 // ── Validate helper ─────────────────────────────
@@ -466,7 +468,9 @@ module.exports = {
   checklistTemplate,
   checklistTemplateUpdate,
   checklistStatus,
+  checklistImportance,
   loanChecklistAssign,
+  loanChecklistReorder,
   loanChecklistItemUpdate,
   loanChecklistItemCreate,
   loanChecklistSubitemCreate,

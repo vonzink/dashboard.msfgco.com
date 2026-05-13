@@ -109,7 +109,8 @@ const Checklists = {
 
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
+    // Floating panel — do NOT lock body scroll, the user should be able to
+    // interact with the page behind it.
 
     document.getElementById('clModalTitle').textContent = clientName ? `Checklist — ${clientName}` : 'Loan Checklist';
     document.getElementById('clContent').innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
@@ -133,7 +134,6 @@ const Checklists = {
       modal.classList.remove('active');
       modal.setAttribute('aria-hidden', 'true');
     }
-    document.body.style.overflow = '';
     this._currentSource = null;
     this._currentChecklist = null;
     // Reset drag offset for next open
@@ -147,7 +147,8 @@ const Checklists = {
     if (!modal) return;
 
     modal.querySelector('.cl-modal-close')?.addEventListener('click', () => this.close());
-    modal.addEventListener('click', (e) => { if (e.target === modal) this.close(); });
+    // Floating panel: outside click DOES NOT close — the overlay is
+    // pointer-events: none anyway, but be explicit for clarity.
 
     // Delegate clicks inside modal content
     modal.addEventListener('click', (e) => {
@@ -331,6 +332,20 @@ const Checklists = {
         } catch (err) { Utils.showToast('Failed to update', 'error'); }
         break;
       }
+      case 'set-importance': {
+        const itemId = parseInt(id);
+        const newImp = btn.dataset.clImportance;
+        const item = this._findItem(itemId);
+        if (!item) return;
+        try {
+          await ServerAPI.updateChecklistItem(itemId, { importance: newImp });
+          item.importance = newImp;
+          // Re-sort: urgent first, then by stored sort_order
+          this._reorderClientSide();
+          this._renderChecklist();
+        } catch (err) { Utils.showToast('Failed to set importance', 'error'); }
+        break;
+      }
       case 'set-date': {
         const itemId = parseInt(id);
         const item = this._findItem(itemId);
@@ -392,9 +407,11 @@ const Checklists = {
     for (const item of items) {
       const statusInfo = this.STATUS_OPTIONS.find(s => s.value === item.status) || this.STATUS_OPTIONS[0];
       const dateStr = item.date ? this._fmtDate(item.date) : '';
+      const importance = item.importance || 'normal';
+      const importanceCls = `cl-imp-${importance}`;
 
       html += `
-        <div class="cl-item ${statusInfo.cls}" data-item-id="${item.id}">
+        <div class="cl-item ${statusInfo.cls} ${importanceCls}" data-item-id="${item.id}" data-importance="${importance}" draggable="true">
           <div class="cl-item-main">
             <button type="button" class="cl-status-btn ${statusInfo.cls}" data-cl-action="toggle-status" data-cl-id="${item.id}" title="${statusInfo.label}">
               <i class="fas ${statusInfo.icon}"></i>
@@ -406,6 +423,10 @@ const Checklists = {
                 <button type="button" class="cl-menu-trigger" title="Actions"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="cl-menu-dropdown">
                   ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
+                  <hr>
+                  <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Mark Urgent</button>
+                  <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Mark Important</button>
+                  <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Mark Normal</button>
                   <hr>
                   <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-alt"></i> Set Date</button>
                   <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
@@ -453,6 +474,88 @@ const Checklists = {
     document.addEventListener('click', () => {
       container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
     }, { once: true });
+
+    // Drag-to-reorder
+    this._bindItemDrag(container);
+  },
+
+  /**
+   * HTML5 drag-and-drop for reordering items within the active checklist.
+   * Disallows dragging across the urgent/non-urgent boundary — urgent items
+   * are sticky at the top.
+   */
+  _bindItemDrag(container) {
+    let dragId = null;
+    container.querySelectorAll('.cl-item').forEach((el) => {
+      el.addEventListener('dragstart', (e) => {
+        // Don't initiate drag from interactive controls
+        if (e.target.closest('button, input, .cl-menu-dropdown')) {
+          e.preventDefault();
+          return;
+        }
+        dragId = parseInt(el.dataset.itemId);
+        el.classList.add('cl-item-dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', String(dragId)); } catch {}
+      });
+      el.addEventListener('dragend', () => {
+        el.classList.remove('cl-item-dragging');
+        container.querySelectorAll('.cl-item-drag-over').forEach(n => n.classList.remove('cl-item-drag-over'));
+      });
+      el.addEventListener('dragover', (e) => {
+        if (dragId == null) return;
+        const dragged = this._findItem(dragId);
+        const target = this._findItem(parseInt(el.dataset.itemId));
+        // Block cross-boundary drops: urgent must stay above non-urgent
+        if (!dragged || !target) return;
+        const draggedUrgent = (dragged.importance === 'urgent');
+        const targetUrgent = (target.importance === 'urgent');
+        if (draggedUrgent !== targetUrgent) return;
+        e.preventDefault();
+        el.classList.add('cl-item-drag-over');
+      });
+      el.addEventListener('dragleave', () => el.classList.remove('cl-item-drag-over'));
+      el.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        el.classList.remove('cl-item-drag-over');
+        if (dragId == null) return;
+        const dropTargetId = parseInt(el.dataset.itemId);
+        if (dragId === dropTargetId) { dragId = null; return; }
+
+        const items = this._currentChecklist?.items || [];
+        const fromIdx = items.findIndex(i => i.id === dragId);
+        const toIdx = items.findIndex(i => i.id === dropTargetId);
+        if (fromIdx < 0 || toIdx < 0) { dragId = null; return; }
+
+        // Reorder in memory
+        const [moved] = items.splice(fromIdx, 1);
+        items.splice(toIdx, 0, moved);
+        // Re-stamp sort_order based on new array position (urgents keep
+        // their own contiguous indexes; service-side sort handles the rest)
+        for (let i = 0; i < items.length; i++) items[i].sort_order = i;
+        this._renderChecklist();
+
+        // Persist
+        try {
+          const src = this._currentSource;
+          await ServerAPI.reorderChecklistItems(src.type, src.itemId, items.map(i => ({ id: i.id, sort_order: i.sort_order })));
+        } catch (err) {
+          Utils.showToast('Failed to save order: ' + err.message, 'error');
+        }
+        dragId = null;
+      });
+    });
+  },
+
+  /** Sort the in-memory items array urgent-first, then by sort_order. */
+  _reorderClientSide() {
+    const items = this._currentChecklist?.items || [];
+    items.sort((a, b) => {
+      const au = (a.importance === 'urgent') ? 1 : 0;
+      const bu = (b.importance === 'urgent') ? 1 : 0;
+      if (au !== bu) return bu - au;
+      return (a.sort_order || 0) - (b.sort_order || 0);
+    });
   },
 
   // ════════════════════════════════════════════════
@@ -875,7 +978,7 @@ const Checklists = {
 
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
+    // Floating panel — no body scroll lock.
 
     document.getElementById('clModalTitle').textContent = 'Checklist Templates';
     this._tmContainerId = 'clContent';

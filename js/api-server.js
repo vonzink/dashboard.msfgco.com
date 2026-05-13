@@ -872,6 +872,9 @@ const ServerAPI = {
     importLoanChecklist(sourceType, sourceItemId, data) {
         return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/import`, data);
     },
+    reorderChecklistItems(sourceType, sourceItemId, items) {
+        return this.put(`/checklists/loan/${sourceType}/${sourceItemId}/reorder`, { items });
+    },
     exportLoanChecklist(sourceType, sourceItemId) {
         return this.get(`/checklists/loan/${sourceType}/${sourceItemId}/export`);
     },
