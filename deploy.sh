@@ -103,6 +103,10 @@ if [ "$DEPLOY_BACKEND" = true ]; then
     set -e
     cd /home/ubuntu/msfg-backend
     echo "  Pulling latest from git..."
+    # npm install --production rewrites backend/package-lock.json on EC2,
+    # which conflicts with the lockfile committed from a dev machine on the
+    # next pull. Discard the EC2-local lockfile changes first.
+    git checkout -- backend/package-lock.json 2>/dev/null || true
     git pull origin main
     echo "  Restarting backend with PM2..."
     cd backend
