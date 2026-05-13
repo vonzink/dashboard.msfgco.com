@@ -70,6 +70,7 @@ const PreApprovals = {
       } else {
         this.data = Array.isArray(result) ? result : [];
       }
+      if (typeof Checklists !== 'undefined') await Checklists.loadStatusBadges('pre_approval');
       this.render(this.data);
       this._populateFilters();
       this._initModal();
@@ -172,7 +173,10 @@ const PreApprovals = {
   _renderCell(item, field) {
     const val = item[field];
     if (field === 'client_name') {
-      return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
+      const clBadge = typeof Checklists !== 'undefined'
+        ? (Checklists.getStatusBadge('pre_approval', item.id) || Checklists.getEmptyBadge('pre_approval', item.id))
+        : '';
+      return `<td><div class="client-name-cell"><strong>${Utils.escapeHtml(val || '')}</strong>${clBadge}</div></td>`;
     }
     if (field === 'status') {
       const cls = this._statusBadgeClass(val);
@@ -236,8 +240,21 @@ const PreApprovals = {
     ).join('');
 
     tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.cl-icon-btn')) return;
         this._openDetail(parseInt(row.dataset.id));
+      });
+    });
+
+    // Checklist badge clicks
+    tbody.querySelectorAll('.cl-icon-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sourceType = btn.dataset.clSource;
+        const itemId = parseInt(btn.dataset.clItem);
+        const row = btn.closest('tr');
+        const clientName = row?.querySelector('strong')?.textContent || '';
+        if (typeof Checklists !== 'undefined') Checklists.open(sourceType, itemId, clientName);
       });
     });
   },

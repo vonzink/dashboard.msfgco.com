@@ -375,8 +375,8 @@ const GoalsManager = {
             const volEl = document.getElementById('ytdVolume');
             const ptEl = document.getElementById('ytdPullThrough');
 
-            if (unitsEl) unitsEl.textContent = ytdUnits;
-            if (volEl) volEl.textContent = this._formatDollar(ytdVolume);
+            if (unitsEl) unitsEl.textContent = Number.isFinite(ytdUnits) ? ytdUnits : 0;
+            if (volEl) volEl.textContent = this._formatDollar(ytdVolume || 0);
             if (ptEl) {
                 const pt = pipelineUnits > 0 ? Math.round((ytdUnits / pipelineUnits) * 100) : 0;
                 ptEl.textContent = pt + '%';
@@ -557,6 +557,7 @@ const GoalsManager = {
         }
 
         const targetEl = document.getElementById(this.getTargetId(goalId));
+        const targetRow = targetEl?.closest('.ribbon-tile-target');
         if (targetEl) {
             if (goal.target > 0) {
                 if (goal.type === 'currency') {
@@ -564,8 +565,16 @@ const GoalsManager = {
                 } else {
                     targetEl.textContent = Math.round(goal.target);
                 }
+                if (targetRow) {
+                    targetRow.textContent = '';
+                    targetRow.append('of ');
+                    if (goal.type === 'currency') targetRow.append('$');
+                    targetRow.appendChild(targetEl);
+                    targetRow.append(goal.type === 'currency' ? 'M target' : ' target');
+                }
             } else {
-                targetEl.textContent = '--';
+                targetEl.textContent = '';
+                if (targetRow) targetRow.textContent = 'No target set';
             }
         }
 

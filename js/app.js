@@ -133,6 +133,7 @@ const App = {
             ['Programs',       () => typeof Programs !== 'undefined' && Programs.init()],
             ['HRResources',    () => typeof HRResources !== 'undefined' && HRResources.init()],
             ['ContentStudio',  () => typeof ContentStudio !== 'undefined' && ContentStudio.init()],
+            ['Checklists',     () => typeof Checklists !== 'undefined' && Checklists.init()],
             ['Monday',         () => typeof MondaySettings !== 'undefined' && MondaySettings.init()],
             ['Progress Bars',  () => setTimeout(() => {
                 document.querySelectorAll('.progress-fill').forEach(bar => {

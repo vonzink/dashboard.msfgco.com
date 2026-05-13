@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="css/chat.css?v=20260410" />
   <link rel="stylesheet" href="css/programs.css?v=20260410" />
   <link rel="stylesheet" href="css/animations.css?v=20260410" />
+  <link rel="stylesheet" href="css/checklists.css?v=20260512" />
 </head>
 
 <body>
@@ -293,6 +294,7 @@
             <button type="button" class="dropdown-item" data-action="open-time-calculator"><i class="fas fa-calendar-alt"></i> Time Calculator</button>
 
             <div class="dropdown-divider"></div>
+            <button type="button" class="dropdown-item" data-action="open-checklist-templates"><i class="fas fa-tasks"></i> Checklist Templates</button>
             <button type="button" class="dropdown-item" data-action="open-processing" data-type="title"><i class="fas fa-clipboard-check"></i> Processing</button>
             <a data-link-key="scanner" class="dropdown-item"><i class="fas fa-qrcode"></i> Scanner</a>
           </div>
@@ -649,6 +651,17 @@
           <button class="btn btn-secondary" id="goalEditCancel">Cancel</button>
           <button class="btn btn-primary" id="goalEditSave"><i class="fas fa-check"></i> Save Target</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Checklist Modal -->
+    <div id="checklistModal" aria-hidden="true">
+      <div class="cl-modal">
+        <div class="cl-modal-header">
+          <h3 id="clModalTitle"><i class="fas fa-tasks"></i> Loan Checklist</h3>
+          <button class="cl-modal-close">&times;</button>
+        </div>
+        <div class="cl-modal-body" id="clContent"></div>
       </div>
     </div>
 
@@ -1460,6 +1473,7 @@
   <script src="js/programs.js?v=20260410"></script>
   <script src="js/hr-resources.js?v=20260410"></script>
   <script src="js/content-studio.js?v=20260410"></script>
+  <script src="js/checklists.js?v=20260512"></script>
   <script src="js/collapsible.js?v=20260410"></script>
 
   <!-- Accessibility -->

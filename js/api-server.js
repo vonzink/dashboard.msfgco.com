@@ -826,6 +826,58 @@ const ServerAPI = {
     deleteHandbookSection(id) {
         return this.delete(`/handbook/sections/${id}`);
     },
+
+    // ========================================
+    // CHECKLISTS
+    // ========================================
+    getChecklistTemplates() {
+        return this.get('/checklists/templates');
+    },
+    getChecklistTemplate(id) {
+        return this.get(`/checklists/templates/${id}`);
+    },
+    createChecklistTemplate(data) {
+        return this.post('/checklists/templates', data);
+    },
+    updateChecklistTemplate(id, data) {
+        return this.put(`/checklists/templates/${id}`, data);
+    },
+    deleteChecklistTemplate(id) {
+        return this.delete(`/checklists/templates/${id}`);
+    },
+    getLoanChecklist(sourceType, sourceItemId) {
+        return this.get(`/checklists/loan/${sourceType}/${sourceItemId}`);
+    },
+    assignChecklistTemplate(sourceType, sourceItemId, templateId) {
+        return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/assign`, { template_id: templateId });
+    },
+    addChecklistItem(sourceType, sourceItemId, data) {
+        return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/items`, data);
+    },
+    updateChecklistItem(itemId, data) {
+        return this.put(`/checklists/loan-items/${itemId}`, data);
+    },
+    deleteChecklistItem(itemId) {
+        return this.delete(`/checklists/loan-items/${itemId}`);
+    },
+    addChecklistSubitem(itemId, data) {
+        return this.post(`/checklists/loan-items/${itemId}/subitems`, data);
+    },
+    updateChecklistSubitem(subitemId, data) {
+        return this.put(`/checklists/loan-subitems/${subitemId}`, data);
+    },
+    deleteChecklistSubitem(subitemId) {
+        return this.delete(`/checklists/loan-subitems/${subitemId}`);
+    },
+    importLoanChecklist(sourceType, sourceItemId, data) {
+        return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/import`, data);
+    },
+    exportLoanChecklist(sourceType, sourceItemId) {
+        return this.get(`/checklists/loan/${sourceType}/${sourceItemId}/export`);
+    },
+    getChecklistStatus(sourceType) {
+        return this.get(`/checklists/status/${sourceType}`);
+    },
 };
 
 window.ServerAPI = ServerAPI;

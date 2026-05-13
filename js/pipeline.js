@@ -113,6 +113,7 @@ const Pipeline = {
 
       const data = await ServerAPI.getPipeline();
       this.data = data || [];
+      if (typeof Checklists !== 'undefined') await Checklists.loadStatusBadges('pipeline');
       this.render(data);
       this.populateFilters(data);
       this.updateSummary(data);
@@ -196,7 +197,10 @@ const Pipeline = {
       const cells = cols.map(col => {
         const val = item[col.field];
         if (col.field === 'client_name') {
-          return `<td><strong>${Utils.escapeHtml(val || '')}</strong></td>`;
+          const clBadge = typeof Checklists !== 'undefined'
+            ? (Checklists.getStatusBadge('pipeline', item.id) || Checklists.getEmptyBadge('pipeline', item.id))
+            : '';
+          return `<td><div class="client-name-cell"><strong>${Utils.escapeHtml(val || '')}</strong>${clBadge}</div></td>`;
         }
         if (col.field === 'assigned_lo_name') {
           return `<td><div class="lo-cell"><span class="lo-avatar">${Utils.getInitials(val)}</span> ${Utils.escapeHtml(val || 'Unassigned')}</div></td>`;
@@ -221,8 +225,21 @@ const Pipeline = {
     }).join('');
 
     tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.cl-icon-btn')) return;
         this._openDetail(parseInt(row.dataset.id));
+      });
+    });
+
+    // Checklist badge clicks
+    tbody.querySelectorAll('.cl-icon-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const sourceType = btn.dataset.clSource;
+        const itemId = parseInt(btn.dataset.clItem);
+        const row = btn.closest('tr');
+        const clientName = row?.querySelector('strong')?.textContent || '';
+        if (typeof Checklists !== 'undefined') Checklists.open(sourceType, itemId, clientName);
       });
     });
   },
