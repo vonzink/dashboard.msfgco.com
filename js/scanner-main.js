@@ -16,11 +16,12 @@ import {
   clearImgSrc,
   escapeHtml,
   canvasToBlob,
+  canvasesToPdfBlob,
   downscaleBitmapToBudget,
 } from './scanner-util.js';
 import {
   detectFormat,
-  decodePdfFirstPage,
+  decodePdfPages,
   decodeHeic,
   decodeSvg,
 } from './scanner-decoders.js';
@@ -42,14 +43,29 @@ const MAX_MEGAPIXELS = 4_000_000;          // 4 MP processing budget
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('file-input');
 const controls = document.getElementById('controls');
+const documentTools = document.getElementById('document-tools');
+const documentSummary = document.getElementById('document-summary');
+const documentProfileStatus = document.getElementById('document-profile-status');
+const pageStrip = document.getElementById('page-strip');
+const pagePrevBtn = document.getElementById('page-prev-btn');
+const pageNextBtn = document.getElementById('page-next-btn');
+const applyAllBtn = document.getElementById('apply-all-btn');
+const exportProfile = document.getElementById('export-profile');
+const targetMb = document.getElementById('target-mb');
+const filenameInput = document.getElementById('filename-input');
+const searchText = document.getElementById('search-text');
+const qualityPanel = document.getElementById('quality-panel');
+const qualityList = document.getElementById('quality-list');
 const preview = document.getElementById('preview');
 const beforeImg = document.getElementById('before-img');
 const afterImg = document.getElementById('after-img');
 const afterViewport = document.getElementById('after-viewport');
 const presetSelect = document.getElementById('preset-select');
 const downloadBtn = document.getElementById('download-btn');
+const pdfBtn = document.getElementById('pdf-btn');
 const copyBtn = document.getElementById('copy-btn');
 const printBtn = document.getElementById('print-btn');
+const dashboardSaveBtn = document.getElementById('dashboard-save-btn');
 const cropBtn = document.getElementById('crop-btn');
 const cropApplyBtn = document.getElementById('crop-apply-btn');
 const cropCancelBtn = document.getElementById('crop-cancel-btn');
@@ -60,11 +76,18 @@ const rotateLeftBtn = document.getElementById('rotate-left-btn');
 const rotateRightBtn = document.getElementById('rotate-right-btn');
 const upscaleBtn = document.getElementById('upscale-btn');
 const denoiseBtn = document.getElementById('denoise-btn');
+const flattenLightBtn = document.getElementById('flatten-light-btn');
 const autoLevelsBtn = document.getElementById('auto-levels-btn');
+const cornersBtn = document.getElementById('corners-btn');
+const cornersApplyBtn = document.getElementById('corners-apply-btn');
+const cornersCancelBtn = document.getElementById('corners-cancel-btn');
 const resetImgBtn = document.getElementById('reset-img-btn');
+const undoBtn = document.getElementById('undo-btn');
+const redoBtn = document.getElementById('redo-btn');
 const clearBtn = document.getElementById('clear-btn');
 const actionsFooter = document.getElementById('actions-footer');
 const reprocessBtn = document.getElementById('reprocess-btn');
+const cornerOverlay = document.getElementById('corner-overlay');
 
 // State
 let worker = null;
@@ -74,6 +97,195 @@ let originalResultBlob = null;    // first worker output for this file (Reset Im
 let originalSourceFile = null;    // decoded image File (post PDF/HEIC); used by Re-apply Preset
 let currentFileName = null;
 let pendingJobId = 0;
+let documentPages = [];
+let activePageIndex = -1;
+let workerJobs = new Map();
+let pageIdCounter = 0;
+
+function makePage({ sourceFile, label, baseName, sourceText = '', pageNumber = 1, pageCount = 1 }) {
+  return {
+    id: ++pageIdCounter,
+    sourceFile,
+    label,
+    baseName,
+    pageNumber,
+    pageCount,
+    sourceText,
+    resultBlob: null,
+    originalResultBlob: null,
+    processed: false,
+    processing: false,
+    history: [],
+    future: [],
+    warnings: [],
+  };
+}
+
+function activePage() {
+  return documentPages[activePageIndex] || null;
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function setPageResult(page, blob, options = {}) {
+  if (!page) return;
+  page.resultBlob = blob;
+  page.processed = true;
+  page.processing = false;
+  if (options.setOriginal !== false) page.originalResultBlob = page.originalResultBlob || blob;
+  page.warnings = [];
+  if (page === activePage()) {
+    currentResultBlob = blob;
+    originalResultBlob = page.originalResultBlob;
+    setImgSrc(afterImg, blob);
+    setActionsEnabled(true);
+    refreshQualityChecks();
+  }
+  renderPageStrip();
+}
+
+function pushHistory(label = 'Edit') {
+  const page = activePage();
+  if (!page || !currentResultBlob) return;
+  page.history.push({ blob: currentResultBlob, label });
+  if (page.history.length > 20) page.history.shift();
+  page.future.length = 0;
+  updateUndoRedoButtons();
+}
+
+function replaceActiveResult(blob, statusText, options = {}) {
+  const page = activePage();
+  if (!page) return replaceResult(blob, statusText);
+  setPageResult(page, blob, { setOriginal: false });
+  setStatus(statusText || 'Image updated.', options.variant || 'is-success');
+  updateUndoRedoButtons();
+}
+
+function updateUndoRedoButtons() {
+  const page = activePage();
+  undoBtn.disabled = !page || !page.history.length;
+  redoBtn.disabled = !page || !page.future.length;
+}
+
+function renderPageStrip() {
+  pageStrip.innerHTML = '';
+  documentPages.forEach((page, index) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'page-chip';
+    if (index === activePageIndex) btn.classList.add('is-active');
+    if (page.processing) btn.classList.add('is-processing');
+    if (page.warnings?.some((w) => w.level === 'warn')) btn.classList.add('is-warning');
+    btn.textContent = page.label;
+    btn.addEventListener('click', () => setActivePage(index));
+    pageStrip.appendChild(btn);
+  });
+  const count = documentPages.length;
+  documentSummary.textContent = count ? `${count} page${count === 1 ? '' : 's'} loaded` : 'No pages loaded';
+  pagePrevBtn.disabled = activePageIndex <= 0;
+  pageNextBtn.disabled = activePageIndex < 0 || activePageIndex >= count - 1;
+  applyAllBtn.disabled = !count || !workerReady;
+  documentTools.hidden = !count;
+}
+
+function setActivePage(index) {
+  if (index < 0 || index >= documentPages.length) return;
+  if (cropState.active) exitCropMode();
+  if (cornerState.active) exitCornerMode();
+  const oldPage = activePage();
+  if (oldPage) oldPage.sourceText = searchText.value || oldPage.sourceText || '';
+  activePageIndex = index;
+  const page = activePage();
+  originalSourceFile = page.sourceFile;
+  currentFileName = page.baseName;
+  originalResultBlob = page.originalResultBlob;
+  currentResultBlob = page.resultBlob;
+  setImgSrc(beforeImg, page.sourceFile);
+  if (page.resultBlob) {
+    setImgSrc(afterImg, page.resultBlob);
+    setActionsEnabled(true);
+  } else {
+    clearImgSrc(afterImg);
+    setActionsEnabled(false);
+  }
+  searchText.value = page.sourceText || '';
+  documentProfileStatus.textContent = `Page ${index + 1} of ${documentPages.length}`;
+  preview.hidden = false;
+  controls.hidden = false;
+  documentTools.hidden = false;
+  actionsFooter.hidden = false;
+  renderPageStrip();
+  updateUndoRedoButtons();
+  refreshQualityChecks();
+}
+
+function suggestedFilename(ext = 'pdf') {
+  const raw = filenameInput.value.trim() || `${baseFilename()}_cleaned`;
+  return raw.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim() + `.${ext}`;
+}
+
+function statementTargetMb() {
+  if (exportProfile.value !== 'compact' && exportProfile.value !== 'statement') return 0;
+  const value = Number(targetMb.value);
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+searchText.addEventListener('input', () => {
+  const page = activePage();
+  if (page) page.sourceText = searchText.value;
+});
+
+pagePrevBtn.addEventListener('click', () => setActivePage(activePageIndex - 1));
+pageNextBtn.addEventListener('click', () => setActivePage(activePageIndex + 1));
+applyAllBtn.addEventListener('click', async () => {
+  if (!documentPages.length || !workerReady) return;
+  applyAllBtn.disabled = true;
+  for (let i = 0; i < documentPages.length; i++) {
+    const page = documentPages[i];
+    page.processing = true;
+    renderPageStrip();
+    setStatus(`Applying preset to page ${i + 1} of ${documentPages.length}…`, 'is-working');
+    try {
+      const result = await processImageFile(page.sourceFile, presetSelect.value);
+      if (page.resultBlob) page.history.push({ blob: page.resultBlob, label: 'apply all' });
+      page.future.length = 0;
+      page.originalResultBlob = result.blob;
+      setPageResult(page, result.blob);
+    } catch (err) {
+      page.processing = false;
+      setStatus(`Apply All failed on page ${i + 1}: ${err.message}`, 'is-error');
+      renderPageStrip();
+      return;
+    }
+  }
+  setActivePage(activePageIndex < 0 ? 0 : activePageIndex);
+  setStatus('Applied preset to all pages.', 'is-success');
+});
+
+undoBtn.addEventListener('click', async () => {
+  const page = activePage();
+  if (!page || !page.history.length || !currentResultBlob) return;
+  page.future.push({ blob: currentResultBlob, label: 'Redo' });
+  const prior = page.history.pop();
+  await replaceActiveResult(prior.blob, `Undid ${prior.label}.`);
+});
+
+redoBtn.addEventListener('click', async () => {
+  const page = activePage();
+  if (!page || !page.future.length || !currentResultBlob) return;
+  page.history.push({ blob: currentResultBlob, label: 'Undo' });
+  const next = page.future.pop();
+  await replaceActiveResult(next.blob, 'Redid change.');
+});
 
 // --- Image-op helpers (Rotate, Upscale, Denoise, Auto Levels) -------------
 
@@ -92,6 +304,10 @@ async function decodeCurrentToCanvas() {
 // Replace the current After image with a new blob. Before stays as the
 // original source. natW/natH update via the afterImg load handler.
 async function replaceResult(blob, statusText) {
+  if (activePage()) {
+    replaceActiveResult(blob, statusText);
+    return;
+  }
   currentResultBlob = blob;
   setImgSrc(afterImg, blob);
   setActionsEnabled(true);
@@ -100,6 +316,7 @@ async function replaceResult(blob, statusText) {
 
 // Rotate 90° in the given direction (+1 = CW, -1 = CCW).
 async function rotate(dir) {
+  pushHistory('rotate');
   const src = await decodeCurrentToCanvas();
   if (!src) return;
   const out = document.createElement('canvas');
@@ -118,6 +335,7 @@ rotateRightBtn.addEventListener('click', () => rotate(1));
 // 2× upscale using two-pass bilinear (good enough for document photos;
 // browser's built-in resampling handles quality well).
 async function upscale() {
+  pushHistory('upscale');
   const src = await decodeCurrentToCanvas();
   if (!src) return;
   if (src.width * src.height * 4 > 64_000_000) {  // would produce > 64 MP
@@ -139,6 +357,7 @@ upscaleBtn.addEventListener('click', upscale);
 // Denoise: light 3x3 box blur averaged with the original (preserves edges
 // better than a straight blur).
 async function denoise() {
+  pushHistory('denoise');
   const src = await decodeCurrentToCanvas();
   if (!src) return;
   const w = src.width, h = src.height;
@@ -176,9 +395,53 @@ async function denoise() {
 }
 denoiseBtn.addEventListener('click', denoise);
 
+async function flattenLighting() {
+  pushHistory('flatten lighting');
+  const src = await decodeCurrentToCanvas();
+  if (!src) return;
+  const w = src.width, h = src.height;
+  const ctx = src.getContext('2d');
+  const original = ctx.getImageData(0, 0, w, h);
+
+  const blurCanvas = document.createElement('canvas');
+  const scale = Math.max(8, Math.round(Math.max(w, h) / 140));
+  blurCanvas.width = Math.max(1, Math.round(w / scale));
+  blurCanvas.height = Math.max(1, Math.round(h / scale));
+  const bctx = blurCanvas.getContext('2d');
+  bctx.imageSmoothingEnabled = true;
+  bctx.imageSmoothingQuality = 'high';
+  bctx.drawImage(src, 0, 0, blurCanvas.width, blurCanvas.height);
+  bctx.filter = 'blur(18px)';
+  bctx.drawImage(blurCanvas, 0, 0);
+
+  const bgCanvas = document.createElement('canvas');
+  bgCanvas.width = w;
+  bgCanvas.height = h;
+  const bgCtx = bgCanvas.getContext('2d');
+  bgCtx.imageSmoothingEnabled = true;
+  bgCtx.imageSmoothingQuality = 'high';
+  bgCtx.drawImage(blurCanvas, 0, 0, w, h);
+  const bg = bgCtx.getImageData(0, 0, w, h);
+
+  const o = original.data;
+  const b = bg.data;
+  for (let i = 0; i < o.length; i += 4) {
+    for (let c = 0; c < 3; c++) {
+      const background = Math.max(80, b[i + c]);
+      const corrected = (o[i + c] / background) * 232;
+      o[i + c] = Math.max(0, Math.min(255, corrected));
+    }
+  }
+  ctx.putImageData(original, 0, 0);
+  const blob = await canvasToBlob(src);
+  await replaceResult(blob, 'Flattened shadows and folds.');
+}
+flattenLightBtn.addEventListener('click', flattenLighting);
+
 // Auto Levels: stretch each RGB channel so its min→0 and max→255. Great for
 // washed-out or low-contrast scans.
 async function autoLevels() {
+  pushHistory('auto levels');
   const src = await decodeCurrentToCanvas();
   if (!src) return;
   const w = src.width, h = src.height;
@@ -209,6 +472,7 @@ autoLevelsBtn.addEventListener('click', autoLevels);
 // pre-rotate, pre-upscale, etc.). Doesn't touch slider adjustments.
 resetImgBtn.addEventListener('click', async () => {
   if (!originalResultBlob) return;
+  pushHistory('reset image');
   await replaceResult(originalResultBlob, 'Reverted to original result.');
 });
 
@@ -219,6 +483,9 @@ function clearAll() {
   originalResultBlob = null;
   originalSourceFile = null;
   currentFileName = null;
+  documentPages = [];
+  activePageIndex = -1;
+  workerJobs.clear();
   pendingJobId++;  // invalidate any in-flight worker job
   clearImgSrc(beforeImg);
   clearImgSrc(afterImg);
@@ -226,8 +493,10 @@ function clearAll() {
   view.scale = 1; view.tx = 0; view.ty = 0;
   preview.hidden = true;
   controls.hidden = true;
+  documentTools.hidden = true;
   actionsFooter.hidden = true;
   setActionsEnabled(false);
+  renderPageStrip();
   resetAdjustmentsState();
   setStatus('Ready. Drop a file to get started.');
 }
@@ -248,23 +517,45 @@ presetSelect.addEventListener('change', async () => {
 
 async function reprocessWithPreset(presetName) {
   if (!originalSourceFile || !workerReady) return;
+  const page = activePage();
+  pushHistory('re-enhance');
   setStatus('Re-enhancing…', 'is-working');
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(originalSourceFile);
-  } catch (err) {
-    setStatus(`Couldn't decode image: ${err.message}`, 'is-error');
-    return;
-  }
-  const workBitmap = await downscaleBitmapToBudget(bitmap, MAX_MEGAPIXELS);
-  const jobId = ++pendingJobId;
   setActionsEnabled(false);
   currentResultBlob = null;
   clearImgSrc(afterImg);
-  worker.postMessage(
-    { type: 'process', id: jobId, bitmap: workBitmap, options: { preset: presetName } },
-    [workBitmap],
-  );
+  try {
+    const result = await processImageFile(originalSourceFile, presetName);
+    if (page) {
+      page.originalResultBlob = result.blob;
+      setPageResult(page, result.blob);
+    } else {
+      currentResultBlob = result.blob;
+      originalResultBlob = result.blob;
+      setImgSrc(afterImg, result.blob);
+      setActionsEnabled(true);
+    }
+    setStatus(`Done in ${result.elapsedMs} ms (${result.width}×${result.height})`, 'is-success');
+  } catch (err) {
+    setStatus(`Error: ${err.message}`, 'is-error');
+  }
+}
+
+async function processImageFile(imageFile, presetName) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(imageFile);
+  } catch (err) {
+    throw new Error(`Couldn't decode image: ${err.message}`);
+  }
+  const workBitmap = await downscaleBitmapToBudget(bitmap, MAX_MEGAPIXELS);
+  const jobId = ++pendingJobId;
+  return new Promise((resolve, reject) => {
+    workerJobs.set(jobId, { resolve, reject });
+    worker.postMessage(
+      { type: 'process', id: jobId, bitmap: workBitmap, options: { preset: presetName } },
+      [workBitmap],
+    );
+  });
 }
 
 // --- Status helpers --------------------------------------------------------
@@ -302,6 +593,12 @@ function onWorkerMessage(e) {
       break;
 
     case 'result':
+      if (workerJobs.has(msg.id)) {
+        const job = workerJobs.get(msg.id);
+        workerJobs.delete(msg.id);
+        job.resolve(msg);
+        return;
+      }
       if (msg.id !== pendingJobId) return;
       currentResultBlob = msg.blob;
       originalResultBlob = msg.blob;  // anchor for "Reset Image"
@@ -311,6 +608,12 @@ function onWorkerMessage(e) {
       break;
 
     case 'error':
+      if (workerJobs.has(msg.id)) {
+        const job = workerJobs.get(msg.id);
+        workerJobs.delete(msg.id);
+        job.reject(new Error(msg.message));
+        return;
+      }
       if (msg.id !== pendingJobId) return;
       console.error('Worker error:', msg);
       setStatus(`Error: ${msg.message}`, 'is-error');
@@ -324,81 +627,104 @@ function onWorkerMessage(e) {
 // --- File intake -----------------------------------------------------------
 
 async function handleFile(file) {
+  return handleFiles([file]);
+}
+
+async function decodeFileToPages(file) {
+  const format = await detectFormat(file);
+  if (!format) throw new Error('Unsupported file type. Use JPG, PNG, PDF, HEIC, or SVG.');
+  const baseName = file.name.replace(/\.[^.]+$/, '');
+  if (format === 'pdf') {
+    setStatus(`Rendering ${file.name}…`, 'is-working');
+    const pages = await decodePdfPages(file);
+    return pages.map((page) => makePage({
+      sourceFile: page.imageFile,
+      sourceText: page.text,
+      baseName,
+      pageNumber: page.pageNumber,
+      pageCount: page.pageCount,
+      label: page.pageCount > 1 ? `${baseName} p${page.pageNumber}` : baseName,
+    }));
+  }
+
+  let imageFile = file;
+  if (format === 'heic') {
+    setStatus(`Converting ${file.name}…`, 'is-working');
+    imageFile = await decodeHeic(file);
+  } else if (format === 'svg') {
+    setStatus(`Rasterizing ${file.name}…`, 'is-working');
+    imageFile = await decodeSvg(file);
+  }
+  return [makePage({ sourceFile: imageFile, baseName, label: baseName })];
+}
+
+async function handleFiles(files) {
   if (!workerReady) {
     setStatus('Scanner still loading, please wait…', 'is-working');
     return;
   }
-  if (file.size > MAX_FILE_BYTES) {
-    setStatus(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB, max 50 MB).`, 'is-error');
-    return;
-  }
-
-  const format = await detectFormat(file);
-  if (!format) {
-    setStatus('Unsupported file type. Use JPG, PNG, PDF, HEIC, or SVG.', 'is-error');
-    return;
+  const selectedFiles = Array.from(files || []);
+  if (!selectedFiles.length) return;
+  for (const file of selectedFiles) {
+    if (file.size > MAX_FILE_BYTES) {
+      setStatus(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB, max 50 MB).`, 'is-error');
+      return;
+    }
   }
 
   // Cancel any in-progress crop from a prior file.
   if (cropState.active) exitCropMode();
+  if (cornerState.active) exitCornerMode();
 
-  currentFileName = file.name.replace(/\.[^.]+$/, '');
+  pendingJobId++;
+  documentPages = [];
+  activePageIndex = -1;
+  workerJobs.clear();
+  setActionsEnabled(false);
+  clearImgSrc(beforeImg);
+  clearImgSrc(afterImg);
+  renderPageStrip();
 
-  // Convert PDF/HEIC to an image File first, then proceed through the
-  // standard JPEG/PNG pipeline.
-  let imageFile = file;
+  let pages = [];
   try {
-    if (format === 'pdf') {
-      setStatus('Rendering PDF page 1…', 'is-working');
-      imageFile = await decodePdfFirstPage(file);
-    } else if (format === 'heic') {
-      setStatus('Converting HEIC…', 'is-working');
-      imageFile = await decodeHeic(file);
-    } else if (format === 'svg') {
-      setStatus('Rasterizing SVG…', 'is-working');
-      imageFile = await decodeSvg(file);
+    for (const file of selectedFiles) {
+      pages.push(...await decodeFileToPages(file));
     }
   } catch (err) {
-    setStatus(`Couldn't decode ${format.toUpperCase()}: ${err.message}`, 'is-error');
+    setStatus(`Couldn't decode file: ${err.message}`, 'is-error');
     return;
   }
 
-  setStatus('Decoding…', 'is-working');
-  let bitmap;
-  try {
-    bitmap = await createImageBitmap(imageFile);
-  } catch (err) {
-    setStatus(`Couldn't decode image: ${err.message}`, 'is-error');
-    return;
-  }
-
-  // Stash the decoded source so "Apply preset" can re-run the worker.
-  originalSourceFile = imageFile;
-
-  // Show source preview
-  setImgSrc(beforeImg, imageFile);
+  documentPages = pages;
+  if (pages[0]) filenameInput.value = `${pages[0].baseName}_cleaned`;
   preview.hidden = false;
   controls.hidden = false;
+  documentTools.hidden = false;
   actionsFooter.hidden = false;
-
-  // Reset adjustments for each new file.
   resetAdjustmentsState();
+  setActivePage(0);
 
-  // Downscale if over megapixel budget
-  const workBitmap = await downscaleBitmapToBudget(bitmap, MAX_MEGAPIXELS);
-
-  const jobId = ++pendingJobId;
-  setActionsEnabled(false);
-  currentResultBlob = null;
-  clearImgSrc(afterImg);
-
-  const options = { preset: presetSelect.value };
-
-  setStatus('Enhancing…', 'is-working');
-  worker.postMessage(
-    { type: 'process', id: jobId, bitmap: workBitmap, options },
-    [workBitmap],
-  );
+  for (let i = 0; i < documentPages.length; i++) {
+    const page = documentPages[i];
+    page.processing = true;
+    renderPageStrip();
+    setStatus(`Enhancing page ${i + 1} of ${documentPages.length}…`, 'is-working');
+    try {
+      const result = await processImageFile(page.sourceFile, presetSelect.value);
+      page.originalResultBlob = result.blob;
+      setPageResult(page, result.blob);
+      if (i === activePageIndex) {
+        setStatus(`Done in ${result.elapsedMs} ms (${result.width}×${result.height})`, 'is-success');
+      }
+    } catch (err) {
+      page.processing = false;
+      setStatus(`Error on page ${i + 1}: ${err.message}`, 'is-error');
+      renderPageStrip();
+      return;
+    }
+  }
+  setActivePage(0);
+  setStatus(`Processed ${documentPages.length} page${documentPages.length === 1 ? '' : 's'}.`, 'is-success');
 }
 
 // --- Dropzone + file input wiring ------------------------------------------
@@ -412,8 +738,8 @@ dropzone.addEventListener('keydown', (e) => {
 });
 
 fileInput.addEventListener('change', (e) => {
-  const file = e.target.files?.[0];
-  if (file) handleFile(file);
+  const files = e.target.files;
+  if (files?.length) handleFiles(files);
   fileInput.value = '';
 });
 
@@ -432,8 +758,8 @@ fileInput.addEventListener('change', (e) => {
 });
 
 dropzone.addEventListener('drop', (e) => {
-  const file = e.dataTransfer.files?.[0];
-  if (file) handleFile(file);
+  const files = e.dataTransfer.files;
+  if (files?.length) handleFiles(files);
 });
 
 // --- Crop mode ------------------------------------------------------------
@@ -447,9 +773,22 @@ const cropState = {
   curX: 0, curY: 0,
 };
 
-// Block viewport panning on the After viewport while crop is active —
-// crop owns that viewport's pointer events.
-setPanGuard((vp) => cropState.active && vp === afterViewport);
+const cornerState = {
+  active: false,
+  dragging: false,
+  pointerId: null,
+  activeCorner: null,
+  points: {
+    tl: { x: 0, y: 0 },
+    tr: { x: 0, y: 0 },
+    br: { x: 0, y: 0 },
+    bl: { x: 0, y: 0 },
+  },
+};
+
+// Block viewport panning on the After viewport while crop/corner editing owns
+// that viewport's pointer events.
+setPanGuard((vp) => (cropState.active || cornerState.active) && vp === afterViewport);
 
 function enterCropMode() {
   if (!currentResultBlob || cropState.active) return;
@@ -533,17 +872,142 @@ cropApplyBtn.addEventListener('click', async () => {
     setStatus('Applying crop…', 'is-working');
     const croppedCanvas = await renderCropCanvas();
     if (!croppedCanvas) { setStatus('Crop region empty.', 'is-error'); return; }
+    pushHistory('crop');
     const blob = await new Promise((resolve, reject) => {
       croppedCanvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encode failed'))), 'image/png');
     });
-    currentResultBlob = blob;
-    // Replace After only — Before stays as the original source.
-    setImgSrc(afterImg, blob);
+    await replaceActiveResult(blob, `Cropped to ${croppedCanvas.width}×${croppedCanvas.height}`);
     exitCropMode();
-    setStatus(`Cropped to ${croppedCanvas.width}×${croppedCanvas.height}`, 'is-success');
   } catch (err) {
     console.error('Crop failed:', err);
     setStatus(`Crop failed: ${err.message}`, 'is-error');
+  }
+});
+
+function initCornerPoints() {
+  const rect = afterViewport.getBoundingClientRect();
+  const x1 = Math.max(0, Math.min(rect.width, view.tx));
+  const y1 = Math.max(0, Math.min(rect.height, view.ty));
+  const x2 = Math.max(0, Math.min(rect.width, view.tx + view.natW * view.scale));
+  const y2 = Math.max(0, Math.min(rect.height, view.ty + view.natH * view.scale));
+  cornerState.points = {
+    tl: { x: x1, y: y1 },
+    tr: { x: x2, y: y1 },
+    br: { x: x2, y: y2 },
+    bl: { x: x1, y: y2 },
+  };
+}
+
+function updateCornerHandles() {
+  const rect = afterViewport.getBoundingClientRect();
+  const points = Object.values(cornerState.points);
+  const left = Math.min(...points.map((point) => point.x));
+  const right = Math.max(...points.map((point) => point.x));
+  const top = Math.min(...points.map((point) => point.y));
+  const bottom = Math.max(...points.map((point) => point.y));
+  cornerOverlay.style.setProperty('--sc-corner-left', `${left}px`);
+  cornerOverlay.style.setProperty('--sc-corner-right', `${Math.max(0, rect.width - right)}px`);
+  cornerOverlay.style.setProperty('--sc-corner-top', `${top}px`);
+  cornerOverlay.style.setProperty('--sc-corner-bottom', `${Math.max(0, rect.height - bottom)}px`);
+
+  cornerOverlay.querySelectorAll('.corner-handle').forEach((handle) => {
+    const point = cornerState.points[handle.dataset.corner];
+    handle.style.left = `${point.x}px`;
+    handle.style.top = `${point.y}px`;
+  });
+}
+
+function enterCornerMode() {
+  if (!currentResultBlob || cornerState.active) return;
+  if (cropState.active) exitCropMode();
+  cornerState.active = true;
+  initCornerPoints();
+  updateCornerHandles();
+  cornerOverlay.hidden = false;
+  cornersBtn.hidden = true;
+  cornersApplyBtn.hidden = false;
+  cornersCancelBtn.hidden = false;
+  setStatus('Drag the four handles to the page corners, then apply.', 'is-working');
+}
+
+function exitCornerMode() {
+  cornerState.active = false;
+  cornerState.dragging = false;
+  cornerState.pointerId = null;
+  cornerState.activeCorner = null;
+  cornerOverlay.hidden = true;
+  cornersBtn.hidden = false;
+  cornersApplyBtn.hidden = true;
+  cornersCancelBtn.hidden = true;
+}
+
+function cornerCssToBlobPoint(point, bmp) {
+  const sx = (point.x - view.tx) / view.scale;
+  const sy = (point.y - view.ty) / view.scale;
+  const kx = bmp.width / view.natW;
+  const ky = bmp.height / view.natH;
+  return {
+    x: Math.max(0, Math.min(bmp.width - 1, sx * kx)),
+    y: Math.max(0, Math.min(bmp.height - 1, sy * ky)),
+  };
+}
+
+function sendWarpJob(bitmap, points) {
+  const jobId = ++pendingJobId;
+  return new Promise((resolve, reject) => {
+    workerJobs.set(jobId, { resolve, reject });
+    worker.postMessage({ type: 'warp', id: jobId, bitmap, points }, [bitmap]);
+  });
+}
+
+cornerOverlay.addEventListener('pointerdown', (e) => {
+  const handle = e.target.closest('.corner-handle');
+  if (!cornerState.active || !handle || e.button !== 0) return;
+  cornerState.dragging = true;
+  cornerState.pointerId = e.pointerId;
+  cornerState.activeCorner = handle.dataset.corner;
+  handle.classList.add('is-dragging');
+  cornerOverlay.setPointerCapture(e.pointerId);
+});
+
+cornerOverlay.addEventListener('pointermove', (e) => {
+  if (!cornerState.dragging || e.pointerId !== cornerState.pointerId) return;
+  const rect = afterViewport.getBoundingClientRect();
+  const point = cornerState.points[cornerState.activeCorner];
+  point.x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+  point.y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+  updateCornerHandles();
+});
+
+const endCornerDrag = (e) => {
+  if (e.pointerId !== cornerState.pointerId) return;
+  cornerOverlay.querySelectorAll('.corner-handle').forEach((handle) => handle.classList.remove('is-dragging'));
+  try { cornerOverlay.releasePointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+  cornerState.dragging = false;
+  cornerState.pointerId = null;
+  cornerState.activeCorner = null;
+};
+cornerOverlay.addEventListener('pointerup', endCornerDrag);
+cornerOverlay.addEventListener('pointercancel', endCornerDrag);
+
+cornersBtn.addEventListener('click', enterCornerMode);
+cornersCancelBtn.addEventListener('click', () => {
+  exitCornerMode();
+  setStatus('Corner correction cancelled.');
+});
+
+cornersApplyBtn.addEventListener('click', async () => {
+  if (!cornerState.active || !currentResultBlob) return;
+  try {
+    setStatus('Applying corner correction…', 'is-working');
+    pushHistory('corner correction');
+    const bmp = await createImageBitmap(currentResultBlob);
+    const points = ['tl', 'tr', 'br', 'bl'].map((key) => cornerCssToBlobPoint(cornerState.points[key], bmp));
+    const result = await sendWarpJob(bmp, points);
+    await replaceActiveResult(result.blob, `Corner corrected to ${result.width}×${result.height}.`);
+    exitCornerMode();
+  } catch (err) {
+    setStatus(`Corner correction failed: ${err.message}`, 'is-error');
   }
 });
 
@@ -612,19 +1076,24 @@ async function renderCropCanvas() {
   return canvas;
 }
 
-// --- Output actions (Download / Print) ------------------------------------
+// --- Output actions (Download / PDF / Print) ------------------------------
 
 function setActionsEnabled(enabled) {
   downloadBtn.disabled = !enabled;
+  pdfBtn.disabled = !enabled;
   copyBtn.disabled = !enabled;
   printBtn.disabled = !enabled;
+  dashboardSaveBtn.disabled = !enabled || !canSaveToDashboard();
   cropBtn.disabled = !enabled;
   rotateLeftBtn.disabled = !enabled;
   rotateRightBtn.disabled = !enabled;
   upscaleBtn.disabled = !enabled;
   denoiseBtn.disabled = !enabled;
+  flattenLightBtn.disabled = !enabled;
   autoLevelsBtn.disabled = !enabled;
+  cornersBtn.disabled = !enabled;
   resetImgBtn.disabled = !enabled || !originalResultBlob;
+  updateUndoRedoButtons();
 }
 
 function baseFilename() {
@@ -633,6 +1102,21 @@ function baseFilename() {
 
 function defaultFilename(ext = 'png') {
   return `${baseFilename()}_cleaned.${ext}`;
+}
+
+async function renderBlobExportCanvas(blob) {
+  if (!blob) return null;
+  const bmp = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  const ctx = canvas.getContext('2d');
+  ctx.filter = cssFilterString();
+  ctx.drawImage(bmp, 0, 0);
+  ctx.filter = 'none';
+  bmp.close();
+  applySharpness(canvas);
+  return canvas;
 }
 
 // Render the current After view to a canvas at the result's native pixel
@@ -667,6 +1151,101 @@ async function renderExportCanvas() {
   return canvas;
 }
 
+async function renderFullResultCanvas(blob = currentResultBlob) {
+  if (!blob) return null;
+  const bmp = await createImageBitmap(blob);
+  const canvas = document.createElement('canvas');
+  canvas.width = bmp.width;
+  canvas.height = bmp.height;
+  canvas.getContext('2d').drawImage(bmp, 0, 0);
+  bmp.close();
+  return canvas;
+}
+
+function analyzeCanvasQuality(canvas) {
+  const w = canvas.width;
+  const h = canvas.height;
+  const sampleW = Math.min(360, w);
+  const sampleH = Math.max(1, Math.round(h * (sampleW / w)));
+  const sample = document.createElement('canvas');
+  sample.width = sampleW;
+  sample.height = sampleH;
+  const sctx = sample.getContext('2d');
+  sctx.drawImage(canvas, 0, 0, sampleW, sampleH);
+  const data = sctx.getImageData(0, 0, sampleW, sampleH).data;
+  const luma = new Float32Array(sampleW * sampleH);
+  let min = 255, max = 0, darkBorder = 0, borderCount = 0, saturatedBorder = 0;
+  for (let y = 0; y < sampleH; y++) {
+    for (let x = 0; x < sampleW; x++) {
+      const i = (y * sampleW + x) * 4;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const v = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      luma[y * sampleW + x] = v;
+      min = Math.min(min, v);
+      max = Math.max(max, v);
+      if (x < 8 || y < 8 || x >= sampleW - 8 || y >= sampleH - 8) {
+        borderCount++;
+        if (v < 130) darkBorder++;
+        const channelMax = Math.max(r, g, b);
+        const channelMin = Math.min(r, g, b);
+        if (channelMax - channelMin > 50) saturatedBorder++;
+      }
+    }
+  }
+
+  let lapSum = 0;
+  let lapSq = 0;
+  let lapCount = 0;
+  for (let y = 1; y < sampleH - 1; y++) {
+    for (let x = 1; x < sampleW - 1; x++) {
+      const i = y * sampleW + x;
+      const lap = luma[i - 1] + luma[i + 1] + luma[i - sampleW] + luma[i + sampleW] - 4 * luma[i];
+      lapSum += lap;
+      lapSq += lap * lap;
+      lapCount++;
+    }
+  }
+  const lapMean = lapSum / Math.max(1, lapCount);
+  const sharpness = lapSq / Math.max(1, lapCount) - lapMean * lapMean;
+  const contrast = max - min;
+  const aspect = w / Math.max(1, h);
+  const warnings = [];
+
+  if (Math.min(w, h) < 1200) warnings.push({ level: 'warn', text: 'Resolution is low for a statement upload.' });
+  if (contrast < 95) warnings.push({ level: 'warn', text: 'Contrast looks low; try Auto Levels or Statement Restore.' });
+  if (sharpness < 60) warnings.push({ level: 'warn', text: 'Text may be blurry; try 2x Upscale or Sharpness.' });
+  if (darkBorder / Math.max(1, borderCount) > 0.25 || saturatedBorder / Math.max(1, borderCount) > 0.25) {
+    warnings.push({ level: 'warn', text: 'Background or objects are visible near the page edge; try Crop or Corner Fix.' });
+  }
+  if (aspect < 0.55 || aspect > 0.9) warnings.push({ level: 'warn', text: 'Page shape is unusual for a letter statement.' });
+  if (!warnings.length) warnings.push({ level: 'pass', text: 'Looks ready: readable contrast, normal page shape, and no obvious border issue.' });
+  return warnings;
+}
+
+async function refreshQualityChecks() {
+  const page = activePage();
+  if (!page || !page.resultBlob) {
+    qualityPanel.hidden = true;
+    qualityList.innerHTML = '';
+    return;
+  }
+  try {
+    const canvas = await renderFullResultCanvas(page.resultBlob);
+    page.warnings = analyzeCanvasQuality(canvas);
+    qualityList.innerHTML = '';
+    for (const warning of page.warnings) {
+      const li = document.createElement('li');
+      li.className = warning.level === 'warn' ? 'is-warning' : 'is-pass';
+      li.textContent = warning.text;
+      qualityList.appendChild(li);
+    }
+    qualityPanel.hidden = false;
+    renderPageStrip();
+  } catch (err) {
+    console.warn('Quality check failed:', err);
+  }
+}
+
 downloadBtn.addEventListener('click', async () => {
   if (!currentResultBlob) return;
   try {
@@ -689,6 +1268,36 @@ downloadBtn.addEventListener('click', async () => {
   }
 });
 
+pdfBtn.addEventListener('click', async () => {
+  if (!currentResultBlob) return;
+  try {
+    setStatus('Building PDF…', 'is-working');
+    const pages = documentPages.filter((page) => page.resultBlob);
+    const searchableTexts = pages.map((page) => page.sourceText || '');
+    let canvases;
+    if (pages.length > 1) {
+      canvases = [];
+      for (const page of pages) canvases.push(await renderBlobExportCanvas(page.resultBlob));
+    } else {
+      const canvas = await renderExportCanvas();
+      if (!canvas) { setStatus('Nothing visible to export.', 'is-error'); return; }
+      canvases = [canvas];
+      if (activePage()) searchableTexts[0] = activePage().sourceText || searchText.value || '';
+    }
+    const filename = suggestedFilename('pdf');
+    const blob = await canvasesToPdfBlob(canvases, {
+      title: filename,
+      texts: searchableTexts,
+      targetSizeMb: statementTargetMb(),
+    });
+    downloadBlob(blob, filename);
+    setStatus(`Downloaded ${filename} (${canvases.length} page${canvases.length === 1 ? '' : 's'})`, 'is-success');
+  } catch (err) {
+    console.error('PDF export failed:', err);
+    setStatus(`PDF export failed: ${err.message}`, 'is-error');
+  }
+});
+
 copyBtn.addEventListener('click', async () => {
   if (!currentResultBlob) return;
   if (!navigator.clipboard || !window.ClipboardItem) {
@@ -705,6 +1314,38 @@ copyBtn.addEventListener('click', async () => {
   } catch (err) {
     console.error('Copy failed:', err);
     setStatus(`Copy failed: ${err.message}`, 'is-error');
+  }
+});
+
+function canSaveToDashboard() {
+  return Boolean(window.parent && window.parent !== window && window.MSFG_SCANNER_SAVE_TARGET);
+}
+
+dashboardSaveBtn.addEventListener('click', async () => {
+  if (!canSaveToDashboard()) {
+    setStatus('Loan-folder save is available when this scanner is mounted inside the dashboard.', 'is-error');
+    return;
+  }
+  try {
+    setStatus('Preparing dashboard save payload…', 'is-working');
+    const pages = documentPages.filter((page) => page.resultBlob);
+    const canvases = [];
+    for (const page of pages) canvases.push(await renderBlobExportCanvas(page.resultBlob));
+    const filename = suggestedFilename('pdf');
+    const blob = await canvasesToPdfBlob(canvases, {
+      title: filename,
+      texts: pages.map((page) => page.sourceText || ''),
+      targetSizeMb: statementTargetMb(),
+    });
+    window.parent.postMessage({
+      type: 'MSFG_SCANNER_SAVE_DOCUMENT',
+      filename,
+      mimeType: 'application/pdf',
+      blob,
+    }, window.MSFG_SCANNER_SAVE_TARGET);
+    setStatus(`Sent ${filename} to dashboard save handler.`, 'is-success');
+  } catch (err) {
+    setStatus(`Dashboard save failed: ${err.message}`, 'is-error');
   }
 });
 

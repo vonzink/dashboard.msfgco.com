@@ -72,22 +72,58 @@ function loadPdfjs() {
   return pdfjsPromise;
 }
 
-// Render the first page of a PDF blob to a File containing PNG bytes.
-// Use 2× device scale for readable output at typical screen sizes.
-export async function decodePdfFirstPage(file) {
-  const pdfjs = await loadPdfjs();
-  const buf = await file.arrayBuffer();
-  const doc = await pdfjs.getDocument({ data: buf }).promise;
-  const page = await doc.getPage(1);
+async function renderPdfPageToFile(page, file, pageNumber) {
   const viewport = page.getViewport({ scale: 2 });
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(viewport.width);
   canvas.height = Math.round(viewport.height);
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
-  try { doc.destroy(); } catch (_) { /* ignore */ }
   const blob = await canvasToBlob(canvas);
-  return new File([blob], file.name.replace(/\.pdf$/i, '.png'), { type: 'image/png' });
+  const suffix = pageNumber > 1 ? `_page-${String(pageNumber).padStart(2, '0')}` : '';
+  return new File([blob], file.name.replace(/\.pdf$/i, `${suffix}.png`), { type: 'image/png' });
+}
+
+async function extractPdfPageText(page) {
+  try {
+    const content = await page.getTextContent();
+    return content.items
+      .map((item) => item.str || '')
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+// Render every page of a PDF blob to image Files. Text extraction is best-effort
+// and only works for PDFs that already contain text; image-only scans return
+// blank text and can still use the manual searchable-text box.
+export async function decodePdfPages(file) {
+  const pdfjs = await loadPdfjs();
+  const buf = await file.arrayBuffer();
+  const doc = await pdfjs.getDocument({ data: buf }).promise;
+  const pages = [];
+  try {
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const [imageFile, text] = await Promise.all([
+        renderPdfPageToFile(page, file, i),
+        extractPdfPageText(page),
+      ]);
+      pages.push({ imageFile, text, pageNumber: i, pageCount: doc.numPages });
+    }
+  } finally {
+    try { doc.destroy(); } catch (_) { /* ignore */ }
+  }
+  return pages;
+}
+
+// Back-compat wrapper used by older call sites.
+export async function decodePdfFirstPage(file) {
+  const pages = await decodePdfPages(file);
+  return pages[0]?.imageFile;
 }
 
 // --- HEIC decoder (heic2any, lazy) ----------------------------------------

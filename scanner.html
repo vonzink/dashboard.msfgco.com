@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="css/base.css?v=20260302-1" />
   <link rel="stylesheet" href="css/layout.css?v=20260302-1" />
   <link rel="stylesheet" href="css/components.css?v=20260302-1" />
-  <link rel="stylesheet" href="css/scanner.css?v=20260417-4" />
+  <link rel="stylesheet" href="css/scanner.css?v=20260512-1" />
 </head>
 
 <body>
@@ -36,7 +36,7 @@
         <div>
           <p class="sc-dropzone-primary">Drop a file here, or click to browse</p>
           <p class="sc-dropzone-secondary">Accepts JPG, JPEG, PNG, PDF, HEIC, SVG &mdash; up to 50 MB</p>
-          <input type="file" id="file-input" accept="image/jpeg,image/png,image/heic,image/heif,image/svg+xml,application/pdf,.jpg,.jpeg,.png,.pdf,.heic,.heif,.svg" hidden />
+          <input type="file" id="file-input" accept="image/jpeg,image/png,image/heic,image/heif,image/svg+xml,application/pdf,.jpg,.jpeg,.png,.pdf,.heic,.heif,.svg" multiple hidden />
         </div>
       </div>
     </section>
@@ -45,7 +45,8 @@
       <div class="sc-control-row" title="Choose how the scanner cleans up the image when you drop it in.">
         <label for="preset-select">Preset</label>
         <select id="preset-select">
-          <option value="none" selected>Original (no enhancement)</option>
+          <option value="none">Original (no enhancement)</option>
+          <option value="statement" selected>Statement Restore (AI Enhanced)</option>
           <option value="document-color">Document (Color)</option>
           <option value="auto">Document B&amp;W (Auto)</option>
           <option value="photo">Photo</option>
@@ -75,6 +76,47 @@
       <button type="button" id="adj-reset" class="sc-btn">Reset</button>
     </section>
 
+    <section class="sc-document-section" id="document-tools" hidden>
+      <div class="sc-page-strip-header">
+        <div>
+          <strong id="document-summary">No pages loaded</strong>
+          <span id="document-profile-status"></span>
+        </div>
+        <div class="sc-page-actions">
+          <button type="button" id="page-prev-btn" class="sc-btn" disabled>Prev</button>
+          <button type="button" id="page-next-btn" class="sc-btn" disabled>Next</button>
+          <button type="button" id="apply-all-btn" class="sc-btn" disabled>Apply All</button>
+        </div>
+      </div>
+      <div class="sc-page-strip" id="page-strip" aria-label="Document pages"></div>
+      <div class="sc-profile-grid">
+        <div class="sc-control-row">
+          <label for="export-profile">Export</label>
+          <select id="export-profile">
+            <option value="standard">Standard PDF</option>
+            <option value="statement" selected>Statement upload profile</option>
+            <option value="compact">Compact under target MB</option>
+          </select>
+        </div>
+        <div class="sc-control-row">
+          <label for="target-mb">Target MB</label>
+          <input type="number" id="target-mb" min="0.5" max="25" step="0.5" value="8" />
+        </div>
+        <div class="sc-control-row">
+          <label for="filename-input">File name</label>
+          <input type="text" id="filename-input" placeholder="Borrower - Lender Month Statement" />
+        </div>
+      </div>
+      <details class="sc-text-layer-panel">
+        <summary>Search text layer</summary>
+        <textarea id="search-text" rows="3" placeholder="Optional: paste OCR/search text here. If the uploaded PDF already contains text, it will appear here."></textarea>
+      </details>
+      <div class="sc-quality-panel" id="quality-panel" hidden>
+        <strong>Quality checks</strong>
+        <ul id="quality-list"></ul>
+      </div>
+    </section>
+
     <!-- Inline SVG filter for live sharpness preview (unsharp mask via feConvolveMatrix). -->
     <svg width="0" height="0" style="position:absolute">
       <defs>
@@ -98,10 +140,16 @@
           <button id="rotate-right-btn" class="sc-btn" disabled title="Rotate 90° right"><i class="fas fa-rotate-right"></i></button>
           <button id="upscale-btn" class="sc-btn" disabled title="Upscale 2× for low-res images">2&times; Upscale</button>
           <button id="denoise-btn" class="sc-btn" disabled title="Reduce noise + soften JPEG artifacts">Denoise</button>
+          <button id="flatten-light-btn" class="sc-btn" disabled title="Flatten shadows and paper folds">Flatten Light</button>
           <button id="auto-levels-btn" class="sc-btn" disabled title="Auto-stretch histogram (fixes dull/washed-out contrast)">Auto Levels</button>
+          <button id="corners-btn" class="sc-btn" disabled>Corner Fix</button>
+          <button id="corners-apply-btn" class="sc-btn sc-btn-primary" hidden>Apply Corners</button>
+          <button id="corners-cancel-btn" class="sc-btn" hidden>Cancel</button>
           <button id="crop-btn" class="sc-btn" disabled>Crop</button>
           <button id="crop-apply-btn" class="sc-btn sc-btn-primary" hidden>Apply</button>
           <button id="crop-cancel-btn" class="sc-btn" hidden>Cancel</button>
+          <button id="undo-btn" class="sc-btn" disabled>Undo</button>
+          <button id="redo-btn" class="sc-btn" disabled>Redo</button>
           <button id="reset-img-btn" class="sc-btn" disabled title="Revert the After image to the original result">Reset Image</button>
         </div>
       </div>
@@ -120,6 +168,12 @@
             <div id="crop-overlay" class="sc-crop-overlay" hidden>
               <div id="crop-rect" class="sc-crop-rect"></div>
             </div>
+            <div id="corner-overlay" class="sc-corner-overlay" hidden>
+              <div class="corner-handle sc-corner-handle" data-corner="tl"></div>
+              <div class="corner-handle sc-corner-handle" data-corner="tr"></div>
+              <div class="corner-handle sc-corner-handle" data-corner="br"></div>
+              <div class="corner-handle sc-corner-handle" data-corner="bl"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -129,12 +183,14 @@
 
     <div class="sc-actions-footer" id="actions-footer" hidden>
       <button id="download-btn" class="sc-btn sc-btn-primary" disabled><i class="fas fa-download"></i> Download</button>
+      <button id="pdf-btn" class="sc-btn sc-btn-primary" disabled><i class="fas fa-file-pdf"></i> PDF</button>
       <button id="copy-btn" class="sc-btn" disabled title="Copy image to clipboard"><i class="fas fa-copy"></i> Copy</button>
       <button id="print-btn" class="sc-btn" disabled><i class="fas fa-print"></i> Print</button>
+      <button id="dashboard-save-btn" class="sc-btn" disabled title="Available when mounted inside dashboard"><i class="fas fa-folder-plus"></i> Save to Loan Folder</button>
       <button type="button" id="clear-btn" class="sc-btn"><i class="fas fa-times"></i> Clear</button>
     </div>
   </div>
 
-  <script type="module" src="js/scanner-main.js?v=20260417-5"></script>
+  <script type="module" src="js/scanner-main.js?v=20260512-1"></script>
 </body>
 </html>
