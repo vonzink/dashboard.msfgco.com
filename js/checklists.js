@@ -359,6 +359,19 @@ const Checklists = {
         });
         break;
       }
+      case 'set-due-date': {
+        const itemId = parseInt(id);
+        const item = this._findItem(itemId);
+        if (!item) return;
+        this._pickDate(btn, item.due_date || '', async (newDate) => {
+          try {
+            await ServerAPI.updateChecklistItem(itemId, { due_date: newDate || null });
+            item.due_date = newDate || null;
+            this._renderChecklist();
+          } catch (err) { Utils.showToast('Failed to update due date', 'error'); }
+        });
+        break;
+      }
       case 'export-checklist': {
         this._exportCurrentChecklist();
         break;
@@ -407,6 +420,8 @@ const Checklists = {
     for (const item of items) {
       const statusInfo = this.STATUS_OPTIONS.find(s => s.value === item.status) || this.STATUS_OPTIONS[0];
       const dateStr = item.date ? this._fmtDate(item.date) : '';
+      const dueDateStr = item.due_date ? this._fmtDate(item.due_date) : '';
+      const overdue = item.due_date && item.status !== 'done' && this._isOverdue(item.due_date);
       const importance = item.importance || 'normal';
       const importanceCls = `cl-imp-${importance}`;
 
@@ -418,7 +433,8 @@ const Checklists = {
             </button>
             <div class="cl-item-name">${Utils.escapeHtml(item.name)}</div>
             <div class="cl-item-actions">
-              ${dateStr ? `<span class="cl-item-date">${dateStr}</span>` : ''}
+              ${dueDateStr ? `<span class="cl-item-due-date${overdue ? ' cl-item-due-date-overdue' : ''}" title="Due ${dueDateStr}${overdue ? ' (overdue)' : ''}"><i class="fas fa-hourglass-half"></i> ${dueDateStr}</span>` : ''}
+              ${dateStr ? `<span class="cl-item-date" title="Completed ${dateStr}">${dateStr}</span>` : ''}
               <div class="cl-item-menu">
                 <button type="button" class="cl-menu-trigger" title="Actions"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="cl-menu-dropdown">
@@ -428,7 +444,8 @@ const Checklists = {
                   <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Mark Important</button>
                   <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Mark Normal</button>
                   <hr>
-                  <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-alt"></i> Set Date</button>
+                  <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-check"></i> Set Date</button>
+                  <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Set Due Date</button>
                   <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
                   <button type="button" data-cl-action="add-subitem" data-cl-id="${item.id}"><i class="fas fa-indent"></i> Add Subitem</button>
                   <button type="button" data-cl-action="delete-item" data-cl-id="${item.id}" class="cl-menu-danger"><i class="fas fa-trash"></i> Delete</button>
@@ -892,16 +909,23 @@ const Checklists = {
     return `${d.getFullYear()}-${m}-${day}`;
   },
 
-  /** Display dates as DD-MM-YY. Input is YYYY-MM-DD (DB shape). */
+  /** Display dates as MM/DD/YY. Input is YYYY-MM-DD (DB shape). */
   _fmtDate(dateStr) {
     if (!dateStr) return '';
-    // Accept "YYYY-MM-DD" or a Date string. Avoid timezone shift by parsing parts.
+    // Parse the YYYY-MM-DD parts directly to avoid timezone shift.
     const parts = String(dateStr).slice(0, 10).split('-');
     if (parts.length === 3) {
       const [y, m, d] = parts;
-      return `${d}-${m}-${y.slice(2)}`;
+      return `${m}/${d}/${y.slice(2)}`;
     }
     return dateStr;
+  },
+
+  /** True if a due_date is in the past (not including today). */
+  _isOverdue(dueDateStr) {
+    if (!dueDateStr) return false;
+    const today = this._todayISO();
+    return String(dueDateStr).slice(0, 10) < today;
   },
 
   /**

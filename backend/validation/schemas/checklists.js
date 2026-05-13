@@ -54,6 +54,7 @@ const loanChecklistItemUpdate = z.object({
   status: checklistStatus.optional(),
   importance: checklistImportance.optional(),
   date: dateString.optional().nullable(),
+  due_date: dateString.optional().nullable(),
   sort_order: z.number().int().nonnegative().optional(),
 }).refine(
   data => Object.keys(data).length > 0,
@@ -72,6 +73,7 @@ const loanChecklistItemCreate = z.object({
   name: trimmedString(500),
   status: checklistStatus.optional().default('not_started'),
   date: dateString.optional().nullable(),
+  due_date: dateString.optional().nullable(),
   sort_order: z.number().int().nonnegative().optional().default(0),
   subitems: z.array(checklistSubitemInput).max(100).optional().default([]),
 });

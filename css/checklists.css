@@ -272,6 +272,26 @@
 }
 [data-theme="dark"] .cl-item-date { color: var(--green-bright); }
 
+/* Due-date pill — grey by default, red when overdue (today > due_date and not done) */
+.cl-item-due-date {
+  font-size: var(--font-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cl-item-due-date.cl-item-due-date-overdue {
+  color: #fff;
+  background: var(--status-danger);
+  border-color: var(--status-danger);
+}
+
 /* Native date picker popover (transient input element from JS) */
 .cl-date-popover {
   padding: 6px 10px;
