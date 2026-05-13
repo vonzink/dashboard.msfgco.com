@@ -2,12 +2,23 @@
    Loan Checklists - Styles
 ============================================ */
 
-/* ── Client name cell with checklist badge ─── */
+/* ── Client name cell with checklist badge(s) ─── */
 .client-name-cell {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
+.cl-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.cl-icon-btn.cl-badge-add {
+  opacity: 0.45;
+  background: transparent;
+  border: 1px dashed var(--border-color);
+}
+.cl-icon-btn.cl-badge-add:hover { opacity: 1; background: var(--bg-hover); border-style: solid; }
 
 /* ── Inline badge on table rows ────────────── */
 .cl-icon-btn {

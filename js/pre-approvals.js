@@ -246,15 +246,21 @@ const PreApprovals = {
       });
     });
 
-    // Checklist badge clicks
+    // Checklist badge clicks — supports multiple checklists per loan.
     tbody.querySelectorAll('.cl-icon-btn').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (typeof Checklists === 'undefined') return;
         const sourceType = btn.dataset.clSource;
         const itemId = parseInt(btn.dataset.clItem);
         const row = btn.closest('tr');
         const clientName = row?.querySelector('strong')?.textContent || '';
-        if (typeof Checklists !== 'undefined') Checklists.open(sourceType, itemId, clientName);
+        const checklistId = btn.dataset.clChecklist ? parseInt(btn.dataset.clChecklist) : null;
+        if (checklistId) {
+          Checklists.openById(checklistId, sourceType, itemId, clientName);
+        } else {
+          Checklists.openForNew(sourceType, itemId, clientName);
+        }
       });
     });
   },

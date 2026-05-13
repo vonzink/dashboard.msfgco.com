@@ -82,50 +82,89 @@ const Checklists = {
     } catch { this._statusMap[sourceType] = {}; }
   },
 
+  MAX_CHECKLISTS_PER_LOAN: 3,
+
+  /**
+   * Render the inline icon row for a loan: up to 3 existing-checklist badges
+   * plus a "+" button to add another (if under the cap). The status map now
+   * holds an ARRAY per source_item_id, one entry per checklist.
+   */
   getStatusBadge(sourceType, itemId) {
-    const map = this._statusMap[sourceType] || {};
-    const info = map[itemId];
-    if (!info || info.total === 0) return '';
-    const pct = Math.round((info.done / info.total) * 100);
-    const cls = pct === 100 ? 'cl-badge-done' : pct > 0 ? 'cl-badge-partial' : 'cl-badge-empty';
-    return `<button type="button" class="cl-icon-btn ${cls}" data-cl-source="${sourceType}" data-cl-item="${itemId}" title="Checklist: ${info.done}/${info.total}">
-      <i class="fas fa-tasks"></i><span class="cl-badge-count">${info.done}/${info.total}</span>
-    </button>`;
+    const list = (this._statusMap[sourceType] || {})[itemId] || [];
+    let html = '<span class="cl-badges">';
+    for (const info of list) {
+      const pct = info.total > 0 ? Math.round((info.done / info.total) * 100) : 0;
+      const cls = pct === 100 ? 'cl-badge-done' : info.done > 0 ? 'cl-badge-partial' : 'cl-badge-empty';
+      const title = `${Utils.escapeHtml(info.name)}: ${info.done}/${info.total}`;
+      html += `<button type="button" class="cl-icon-btn ${cls}" data-cl-checklist="${info.id}" data-cl-source="${sourceType}" data-cl-item="${itemId}" title="${title}">
+        <i class="fas fa-tasks"></i><span class="cl-badge-count">${info.done}/${info.total}</span>
+      </button>`;
+    }
+    if (list.length < this.MAX_CHECKLISTS_PER_LOAN) {
+      const tip = list.length ? 'Add another checklist' : 'Add a checklist';
+      html += `<button type="button" class="cl-icon-btn cl-badge-add" data-cl-add="1" data-cl-source="${sourceType}" data-cl-item="${itemId}" title="${tip}">
+        <i class="fas fa-plus"></i>
+      </button>`;
+    }
+    html += '</span>';
+    return html;
   },
 
-  getEmptyBadge(sourceType, itemId) {
-    return `<button type="button" class="cl-icon-btn cl-badge-none" data-cl-source="${sourceType}" data-cl-item="${itemId}" title="Add checklist">
-      <i class="fas fa-tasks"></i>
-    </button>`;
-  },
+  /** Legacy no-op kept for back-compat with existing call sites in pipeline.js
+   *  and pre-approvals.js. getStatusBadge now always renders the full row. */
+  getEmptyBadge() { return ''; },
 
   // ════════════════════════════════════════════════
   //  MODAL OPEN / CLOSE
   // ════════════════════════════════════════════════
-  async open(sourceType, sourceItemId, clientName) {
+  /** Open a specific checklist by id. */
+  async openById(checklistId, sourceType, sourceItemId, clientName) {
     this._currentSource = { type: sourceType, itemId: sourceItemId, clientName: clientName || '' };
-    const modal = document.getElementById('checklistModal');
-    if (!modal) return;
-
-    modal.classList.add('active');
-    modal.setAttribute('aria-hidden', 'false');
-    // Floating panel — do NOT lock body scroll, the user should be able to
-    // interact with the page behind it.
-
-    document.getElementById('clModalTitle').textContent = clientName ? `Checklist — ${clientName}` : 'Loan Checklist';
-    document.getElementById('clContent').innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-
+    this._openModalChrome(clientName);
     try {
-      this._currentChecklist = await ServerAPI.getLoanChecklist(sourceType, sourceItemId);
+      this._currentChecklist = await ServerAPI.getLoanChecklist(checklistId);
     } catch (err) {
       this._currentChecklist = null;
     }
-
-    if (this._currentChecklist && this._currentChecklist.items?.length > 0) {
+    if (this._currentChecklist) {
       this._renderChecklist();
     } else {
       await this._renderTemplateSelector();
     }
+  },
+
+  /** Open the template picker to add a new checklist on this loan. */
+  async openForNew(sourceType, sourceItemId, clientName) {
+    this._currentSource = { type: sourceType, itemId: sourceItemId, clientName: clientName || '' };
+    this._currentChecklist = null;
+    this._openModalChrome(clientName);
+    await this._renderTemplateSelector();
+  },
+
+  /** Back-compat: open the first checklist on this loan (or template picker
+   *  if none exist). Prefer openById / openForNew for new code. */
+  async open(sourceType, sourceItemId, clientName) {
+    this._currentSource = { type: sourceType, itemId: sourceItemId, clientName: clientName || '' };
+    this._openModalChrome(clientName);
+    try {
+      const list = await ServerAPI.getLoanChecklists(sourceType, sourceItemId);
+      if (Array.isArray(list) && list.length > 0) {
+        this._currentChecklist = list[0];
+        this._renderChecklist();
+        return;
+      }
+    } catch {}
+    this._currentChecklist = null;
+    await this._renderTemplateSelector();
+  },
+
+  _openModalChrome(clientName) {
+    const modal = document.getElementById('checklistModal');
+    if (!modal) return;
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    document.getElementById('clModalTitle').textContent = clientName ? `Checklist — ${clientName}` : 'Loan Checklist';
+    document.getElementById('clContent').innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
   },
 
   close() {
@@ -211,9 +250,35 @@ const Checklists = {
         try {
           this._currentChecklist = await ServerAPI.assignChecklistTemplate(src.type, src.itemId, templateId);
           this._renderChecklist();
-          Utils.showToast('Template applied!', 'success');
+          Utils.showToast('Checklist added!', 'success');
           this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
         } catch (err) { Utils.showToast('Failed: ' + err.message, 'error'); }
+        break;
+      }
+      case 'rename-checklist': {
+        if (!this._currentChecklist) return;
+        const newName = prompt('Rename this checklist:', this._currentChecklist.name || '');
+        if (newName === null) return;
+        const name = newName.trim();
+        if (!name) return;
+        try {
+          await ServerAPI.renameLoanChecklist(this._currentChecklist.id, name);
+          this._currentChecklist.name = name;
+          this._renderChecklist();
+          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+        } catch (err) { Utils.showToast('Rename failed: ' + err.message, 'error'); }
+        break;
+      }
+      case 'delete-checklist': {
+        if (!this._currentChecklist) return;
+        if (!confirm(`Delete the checklist "${this._currentChecklist.name || 'this checklist'}"? This cannot be undone.`)) return;
+        try {
+          await ServerAPI.deleteLoanChecklist(this._currentChecklist.id);
+          this._currentChecklist = null;
+          this.close();
+          Utils.showToast('Checklist deleted', 'success');
+          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+        } catch (err) { Utils.showToast('Delete failed: ' + err.message, 'error'); }
         break;
       }
       case 'toggle-status': {
@@ -287,18 +352,18 @@ const Checklists = {
         break;
       }
       case 'add-item': {
+        if (!this._currentChecklist) {
+          Utils.showToast('Open or create a checklist first', 'error');
+          return;
+        }
         const name = prompt('New checklist item name:');
         if (!name?.trim()) return;
         try {
-          const maxSort = (this._currentChecklist?.items || []).reduce((m, i) => Math.max(m, i.sort_order || 0), 0);
-          const newItem = await ServerAPI.addChecklistItem(src.type, src.itemId, {
+          const maxSort = (this._currentChecklist.items || []).reduce((m, i) => Math.max(m, i.sort_order || 0), 0);
+          const newItem = await ServerAPI.addChecklistItem(this._currentChecklist.id, {
             name: name.trim(), status: 'not_started', sort_order: maxSort + 1,
           });
-          if (!this._currentChecklist) {
-            this._currentChecklist = await ServerAPI.getLoanChecklist(src.type, src.itemId);
-          } else {
-            this._currentChecklist.items.push({ ...newItem, subitems: [] });
-          }
+          this._currentChecklist.items.push({ ...newItem, subitems: [] });
           this._renderChecklist();
           this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
         } catch (err) { Utils.showToast('Failed to add item', 'error'); }
@@ -400,6 +465,15 @@ const Checklists = {
     const done = items.filter(i => i.status === 'done').length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
+    // Show "<Client> — <Checklist Name>" in the modal title so the user knows
+    // which of the (up to 3) checklists is currently open.
+    const titleEl = document.getElementById('clModalTitle');
+    if (titleEl) {
+      const client = this._currentSource?.clientName || '';
+      const clName = cl.name || 'Checklist';
+      titleEl.innerHTML = `<i class="fas fa-tasks"></i> ${Utils.escapeHtml(clName)}${client ? ` — ${Utils.escapeHtml(client)}` : ''}`;
+    }
+
     let html = `
       <div class="cl-toolbar">
         <div class="cl-progress-summary">
@@ -410,8 +484,9 @@ const Checklists = {
         </div>
         <div class="cl-toolbar-actions">
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item" title="Add item"><i class="fas fa-plus"></i> Add</button>
-          <button type="button" class="btn btn-sm btn-outline" data-cl-action="show-template-selector" title="Apply a template"><i class="fas fa-clipboard-list"></i> Templates</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="export-checklist" title="Export as .md"><i class="fas fa-file-export"></i> Export</button>
+          <button type="button" class="btn btn-sm btn-outline" data-cl-action="rename-checklist" title="Rename this checklist"><i class="fas fa-pen"></i></button>
+          <button type="button" class="btn btn-sm btn-outline btn-danger-outline" data-cl-action="delete-checklist" title="Delete this checklist"><i class="fas fa-trash"></i></button>
         </div>
       </div>
       <div class="cl-items-list">
@@ -977,16 +1052,36 @@ const Checklists = {
     return null;
   },
 
+  /**
+   * Re-render the whole .cl-badges row for a single loan row in any table
+   * (pipeline / pre-approvals) after the status map has been reloaded.
+   * Rebuilds the row from getStatusBadge() and re-wires the click handlers
+   * via a fresh dispatch on the row's table.
+   */
   _refreshBadgeInTable(sourceType, itemId) {
-    document.querySelectorAll(`[data-cl-source="${sourceType}"][data-cl-item="${itemId}"]`).forEach(el => {
-      const info = (this._statusMap[sourceType] || {})[itemId];
-      if (info && info.total > 0) {
-        const pct = Math.round((info.done / info.total) * 100);
-        el.className = `cl-icon-btn ${pct === 100 ? 'cl-badge-done' : pct > 0 ? 'cl-badge-partial' : 'cl-badge-empty'}`;
-        const countEl = el.querySelector('.cl-badge-count');
-        if (countEl) countEl.textContent = `${info.done}/${info.total}`;
-        el.title = `Checklist: ${info.done}/${info.total}`;
-      }
+    document.querySelectorAll(`.cl-badges`).forEach(wrap => {
+      // Any badge inside identifies this wrapper's loan
+      const probe = wrap.querySelector('[data-cl-item]');
+      if (!probe) return;
+      if (probe.dataset.clSource !== sourceType) return;
+      if (parseInt(probe.dataset.clItem) !== itemId) return;
+      // Re-render and bind clicks
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = this.getStatusBadge(sourceType, itemId);
+      const fresh = wrapper.firstElementChild;
+      if (!fresh) return;
+      // Wire new badge buttons to the same handler the table uses
+      fresh.querySelectorAll('.cl-icon-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const checklistId = btn.dataset.clChecklist ? parseInt(btn.dataset.clChecklist) : null;
+          const row = btn.closest('tr');
+          const clientName = row?.querySelector('strong')?.textContent || '';
+          if (checklistId) this.openById(checklistId, sourceType, itemId, clientName);
+          else this.openForNew(sourceType, itemId, clientName);
+        });
+      });
+      wrap.replaceWith(fresh);
     });
   },
 

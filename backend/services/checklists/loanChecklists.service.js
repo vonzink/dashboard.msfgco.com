@@ -10,33 +10,51 @@ const { getClientName, buildDynamicUpdate, withTransaction } = require('./helper
 //  READ
 // ──────────────────────────────────────────
 
+/** Returns array of up to MAX_CHECKLISTS_PER_LOAN checklists. */
 async function getForLoan(sourceType, sourceItemId) {
   await authz.requireLoanAccess(sourceType, sourceItemId);
   const [checklists] = await db.query(
-    'SELECT * FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+    'SELECT * FROM loan_checklists WHERE source_type = ? AND source_item_id = ? ORDER BY sort_order, id',
     [sourceType, sourceItemId],
   );
-  if (!checklists.length) return null;
-  return _hydrate(checklists[0]);
+  const hydrated = [];
+  for (const cl of checklists) hydrated.push(await _hydrate(cl));
+  return hydrated;
 }
 
+/** Returns one checklist by id (loan-access checked via item lookup). */
+async function getById(checklistId) {
+  const [rows] = await db.query('SELECT * FROM loan_checklists WHERE id = ?', [checklistId]);
+  if (!rows.length) return null;
+  return _hydrate(rows[0]);
+}
+
+const MAX_CHECKLISTS_PER_LOAN = 3;
+
+/**
+ * Per-checklist progress, grouped by source_item_id:
+ *   { 123: [{ id, name, total, done }, { id, name, total, done }], ... }
+ */
 async function getStatusMap(sourceType) {
   const [rows] = await db.query(
-    `SELECT lc.source_item_id,
+    `SELECT lc.id, lc.source_item_id, lc.name, lc.sort_order,
             COUNT(lci.id) AS total,
             SUM(CASE WHEN lci.status = 'done' THEN 1 ELSE 0 END) AS done
      FROM loan_checklists lc
      LEFT JOIN loan_checklist_items lci ON lci.checklist_id = lc.id
      WHERE lc.source_type = ?
-     GROUP BY lc.source_item_id`,
+     GROUP BY lc.id, lc.source_item_id, lc.name, lc.sort_order
+     ORDER BY lc.source_item_id, lc.sort_order, lc.id`,
     [sourceType],
   );
   const map = {};
   for (const r of rows) {
-    map[r.source_item_id] = {
+    (map[r.source_item_id] = map[r.source_item_id] || []).push({
+      id: r.id,
+      name: r.name || 'Checklist',
       total: Number(r.total) || 0,
       done: Number(r.done) || 0,
-    };
+    });
   }
   return map;
 }
@@ -45,7 +63,7 @@ async function getStatusMap(sourceType) {
 //  ASSIGN TEMPLATE
 // ──────────────────────────────────────────
 
-async function assignTemplate(userId, sourceType, sourceItemId, templateId) {
+async function assignTemplate(userId, sourceType, sourceItemId, templateId, name) {
   await authz.requireLoanAccess(sourceType, sourceItemId);
 
   return withTransaction(async (conn) => {
@@ -60,18 +78,28 @@ async function assignTemplate(userId, sourceType, sourceItemId, templateId) {
       throw err;
     }
 
-    // Replace any existing checklist on this loan (1:1 for now)
-    await conn.query(
-      'DELETE FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+    // Enforce max 3 per loan
+    const [count] = await conn.query(
+      'SELECT COUNT(*) AS c FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
       [sourceType, sourceItemId],
     );
+    if ((count[0]?.c || 0) >= MAX_CHECKLISTS_PER_LOAN) {
+      const err = new Error(`Maximum of ${MAX_CHECKLISTS_PER_LOAN} checklists per loan reached — delete one first`);
+      err.status = 400;
+      throw err;
+    }
 
+    const [nextSort] = await conn.query(
+      'SELECT COALESCE(MAX(sort_order), -1) + 1 AS s FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+      [sourceType, sourceItemId],
+    );
     const clientName = await getClientName(conn, sourceType, sourceItemId);
+    const checklistName = (name && name.trim()) || tpl[0].name;
     const [clResult] = await conn.query(
       `INSERT INTO loan_checklists
-         (source_type, source_item_id, source_template_id, assigned_by_user_id, client_name)
-       VALUES (?, ?, ?, ?, ?)`,
-      [sourceType, sourceItemId, templateId, userId, clientName],
+         (source_type, source_item_id, name, sort_order, source_template_id, assigned_by_user_id, client_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [sourceType, sourceItemId, checklistName, nextSort[0].s, templateId, userId, clientName],
     );
     const checklistId = clResult.insertId;
 
@@ -108,16 +136,24 @@ async function assignTemplate(userId, sourceType, sourceItemId, templateId) {
 //  ITEM CRUD
 // ──────────────────────────────────────────
 
-async function addItem(userId, sourceType, sourceItemId, body) {
-  await authz.requireLoanAccess(sourceType, sourceItemId);
+async function addItemToChecklist(userId, checklistId, body) {
+  // Authorize via the checklist's parent loan
+  const [parents] = await db.query(
+    'SELECT source_type, source_item_id FROM loan_checklists WHERE id = ?',
+    [checklistId],
+  );
+  if (!parents.length) {
+    const err = new Error('Checklist not found');
+    err.status = 404;
+    throw err;
+  }
+  await authz.requireLoanAccess(parents[0].source_type, parents[0].source_item_id);
 
   return withTransaction(async (conn) => {
-    const checklist = await _ensureChecklist(conn, sourceType, sourceItemId, userId);
     const { name, status, date, sort_order, subitems } = body;
-
     const [ir] = await conn.query(
       'INSERT INTO loan_checklist_items (checklist_id, name, status, date, sort_order) VALUES (?, ?, ?, ?, ?)',
-      [checklist.id, name, status, date || null, sort_order],
+      [checklistId, name, status, date || null, sort_order],
     );
     const itemId = ir.insertId;
 
@@ -130,10 +166,28 @@ async function addItem(userId, sourceType, sourceItemId, body) {
       }
     }
 
-    await conn.query('UPDATE loan_checklists SET updated_at = NOW() WHERE id = ?', [checklist.id]);
+    await conn.query('UPDATE loan_checklists SET updated_at = NOW() WHERE id = ?', [checklistId]);
     const [items] = await conn.query('SELECT * FROM loan_checklist_items WHERE id = ?', [itemId]);
     return items[0];
   });
+}
+
+async function renameChecklist(userId, checklistId, name) {
+  const [parents] = await db.query(
+    'SELECT source_type, source_item_id FROM loan_checklists WHERE id = ?', [checklistId],
+  );
+  if (!parents.length) { const e = new Error('Checklist not found'); e.status = 404; throw e; }
+  await authz.requireLoanAccess(parents[0].source_type, parents[0].source_item_id);
+  await db.query('UPDATE loan_checklists SET name = ?, updated_at = NOW() WHERE id = ?', [name, checklistId]);
+}
+
+async function deleteChecklist(userId, checklistId) {
+  const [parents] = await db.query(
+    'SELECT source_type, source_item_id FROM loan_checklists WHERE id = ?', [checklistId],
+  );
+  if (!parents.length) { const e = new Error('Checklist not found'); e.status = 404; throw e; }
+  await authz.requireLoanAccess(parents[0].source_type, parents[0].source_item_id);
+  await db.query('DELETE FROM loan_checklists WHERE id = ?', [checklistId]);
 }
 
 async function updateItem(userId, itemId, body) {
@@ -231,84 +285,41 @@ async function deleteSubitem(userId, subitemId) {
 }
 
 // ──────────────────────────────────────────
-//  IMPORT (replace | merge)
+//  IMPORT — always creates a new checklist on the loan (max 3)
 // ──────────────────────────────────────────
 
-async function importItems(userId, sourceType, sourceItemId, { items, mode, name }) {
+async function importItems(userId, sourceType, sourceItemId, { items, name }) {
   await authz.requireLoanAccess(sourceType, sourceItemId);
 
   return withTransaction(async (conn) => {
-    const [existing] = await conn.query(
-      'SELECT id FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+    const [count] = await conn.query(
+      'SELECT COUNT(*) AS c FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
       [sourceType, sourceItemId],
     );
-
-    if (existing.length && mode === 'merge') {
-      await _mergeItems(conn, existing[0].id, items);
-    } else {
-      // Replace or create
-      if (existing.length) {
-        await conn.query(
-          'DELETE FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
-          [sourceType, sourceItemId],
-        );
-      }
-      const clientName = await getClientName(conn, sourceType, sourceItemId);
-      const [clResult] = await conn.query(
-        'INSERT INTO loan_checklists (source_type, source_item_id, assigned_by_user_id, client_name) VALUES (?, ?, ?, ?)',
-        [sourceType, sourceItemId, userId, clientName],
-      );
-      await _insertLoanItems(conn, clResult.insertId, items);
+    if ((count[0]?.c || 0) >= MAX_CHECKLISTS_PER_LOAN) {
+      const err = new Error(`Maximum of ${MAX_CHECKLISTS_PER_LOAN} checklists per loan reached — delete one first`);
+      err.status = 400;
+      throw err;
     }
 
-    const [rows] = await conn.query(
-      'SELECT * FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+    const [nextSort] = await conn.query(
+      'SELECT COALESCE(MAX(sort_order), -1) + 1 AS s FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
       [sourceType, sourceItemId],
     );
-    return _hydrateById(conn, rows[0].id);
+    const clientName = await getClientName(conn, sourceType, sourceItemId);
+    const [clResult] = await conn.query(
+      `INSERT INTO loan_checklists (source_type, source_item_id, name, sort_order, assigned_by_user_id, client_name)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [sourceType, sourceItemId, (name && name.trim()) || 'Imported', nextSort[0].s, userId, clientName],
+    );
+    await _insertLoanItems(conn, clResult.insertId, items);
+    return _hydrateById(conn, clResult.insertId);
   });
 }
 
 // ──────────────────────────────────────────
 //  PRIVATE HELPERS
 // ──────────────────────────────────────────
-
-const STATUS_ORDER = { not_started: 0, in_progress: 1, done: 2, issue: 3, na: 4 };
-
-async function _mergeItems(conn, checklistId, items) {
-  const [currentItems] = await conn.query(
-    'SELECT * FROM loan_checklist_items WHERE checklist_id = ? ORDER BY sort_order',
-    [checklistId],
-  );
-  const nameMap = {};
-  for (const ci of currentItems) nameMap[ci.name.toLowerCase()] = ci;
-
-  let maxSort = currentItems.reduce((m, i) => Math.max(m, i.sort_order), 0);
-  for (const incoming of items) {
-    const key = incoming.name.toLowerCase();
-    const existing = nameMap[key];
-    if (existing) {
-      const incomingOrder = STATUS_ORDER[incoming.status] ?? 0;
-      const currentOrder = STATUS_ORDER[existing.status] ?? 0;
-      if (incomingOrder > currentOrder) {
-        await conn.query(
-          'UPDATE loan_checklist_items SET status = ?, updated_at = NOW() WHERE id = ?',
-          [incoming.status, existing.id],
-        );
-      }
-      if (incoming.date && !existing.date) {
-        await conn.query(
-          'UPDATE loan_checklist_items SET date = ?, updated_at = NOW() WHERE id = ?',
-          [incoming.date, existing.id],
-        );
-      }
-    } else {
-      maxSort++;
-      await _insertOneLoanItem(conn, checklistId, incoming, maxSort);
-    }
-  }
-  await conn.query('UPDATE loan_checklists SET updated_at = NOW() WHERE id = ?', [checklistId]);
-}
 
 async function _insertLoanItems(conn, checklistId, items) {
   for (let i = 0; i < items.length; i++) {
@@ -330,21 +341,6 @@ async function _insertOneLoanItem(conn, checklistId, item, sortOrder) {
       );
     }
   }
-}
-
-async function _ensureChecklist(conn, sourceType, sourceItemId, userId) {
-  const [existing] = await conn.query(
-    'SELECT * FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
-    [sourceType, sourceItemId],
-  );
-  if (existing.length) return existing[0];
-
-  const clientName = await getClientName(conn, sourceType, sourceItemId);
-  const [result] = await conn.query(
-    'INSERT INTO loan_checklists (source_type, source_item_id, assigned_by_user_id, client_name) VALUES (?, ?, ?, ?)',
-    [sourceType, sourceItemId, userId, clientName],
-  );
-  return { id: result.insertId, source_type: sourceType, source_item_id: sourceItemId };
 }
 
 async function _readItem(itemId) {
@@ -401,9 +397,12 @@ async function _hydrateInternal(queryRunner, cl) {
 
 module.exports = {
   getForLoan,
+  getById,
   getStatusMap,
   assignTemplate,
-  addItem,
+  renameChecklist,
+  deleteChecklist,
+  addItemToChecklist,
   updateItem,
   deleteItem,
   reorderItems,
@@ -411,4 +410,5 @@ module.exports = {
   updateSubitem,
   deleteSubitem,
   importItems,
+  MAX_CHECKLISTS_PER_LOAN,
 };

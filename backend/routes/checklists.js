@@ -13,6 +13,7 @@ const {
   checklistTemplate: templateSchema,
   checklistTemplateUpdate: templateUpdateSchema,
   loanChecklistAssign: assignSchema,
+  loanChecklistRename: renameSchema,
   loanChecklistItemUpdate: itemUpdateSchema,
   loanChecklistItemCreate: itemCreateSchema,
   loanChecklistSubitemCreate: subitemCreateSchema,
@@ -77,17 +78,38 @@ router.get('/loan/:sourceType/:sourceItemId', async (req, res, next) => {
 router.post('/loan/:sourceType/:sourceItemId/assign', validate(assignSchema), async (req, res, next) => {
   try {
     const result = await loanChecklists.assignTemplate(
-      getUserId(req), req.params.sourceType, req.params.sourceItemId, req.body.template_id,
+      getUserId(req), req.params.sourceType, req.params.sourceItemId,
+      req.body.template_id, req.body.name,
     );
     created(res, result);
   } catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
 
-router.post('/loan/:sourceType/:sourceItemId/items', validate(itemCreateSchema), async (req, res, next) => {
+router.get('/loan-checklist/:checklistId', async (req, res, next) => {
   try {
-    const item = await loanChecklists.addItem(
-      getUserId(req), req.params.sourceType, req.params.sourceItemId, req.body,
-    );
+    const cl = await loanChecklists.getById(req.params.checklistId);
+    if (!cl) return fail(res, 'Checklist not found', 404);
+    ok(res, cl);
+  } catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+router.put('/loan-checklist/:checklistId', validate(renameSchema), async (req, res, next) => {
+  try {
+    await loanChecklists.renameChecklist(getUserId(req), req.params.checklistId, req.body.name);
+    ok(res, { success: true });
+  } catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+router.delete('/loan-checklist/:checklistId', async (req, res, next) => {
+  try {
+    await loanChecklists.deleteChecklist(getUserId(req), req.params.checklistId);
+    deleted(res);
+  } catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+router.post('/loan-checklist/:checklistId/items', validate(itemCreateSchema), async (req, res, next) => {
+  try {
+    const item = await loanChecklists.addItemToChecklist(getUserId(req), req.params.checklistId, req.body);
     created(res, item);
   } catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
@@ -110,13 +132,12 @@ router.post('/loan/:sourceType/:sourceItemId/import', validate(importSchema), as
   } catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
 
-// Export is just the read endpoint with a friendlier verb — the frontend
-// generates the .md text client-side from the JSON response.
-router.get('/loan/:sourceType/:sourceItemId/export', async (req, res, next) => {
+// Export a SINGLE checklist as JSON (frontend renders .md client-side).
+router.get('/loan-checklist/:checklistId/export', async (req, res, next) => {
   try {
-    const result = await loanChecklists.getForLoan(req.params.sourceType, req.params.sourceItemId);
-    if (!result) return fail(res, 'No checklist found', 404);
-    ok(res, result);
+    const cl = await loanChecklists.getById(req.params.checklistId);
+    if (!cl) return fail(res, 'Checklist not found', 404);
+    ok(res, cl);
   } catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
 

@@ -47,6 +47,11 @@ const checklistTemplateUpdate = z.object({
 
 const loanChecklistAssign = z.object({
   template_id: z.number().int().positive(),
+  name: optionalString(200),
+});
+
+const loanChecklistRename = z.object({
+  name: trimmedString(200),
 });
 
 const loanChecklistItemUpdate = z.object({
@@ -97,6 +102,7 @@ module.exports = {
   checklistTemplate,
   checklistTemplateUpdate,
   loanChecklistAssign,
+  loanChecklistRename,
   loanChecklistItemUpdate,
   loanChecklistItemCreate,
   loanChecklistSubitemCreate,

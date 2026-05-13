@@ -845,14 +845,24 @@ const ServerAPI = {
     deleteChecklistTemplate(id) {
         return this.delete(`/checklists/templates/${id}`);
     },
-    getLoanChecklist(sourceType, sourceItemId) {
+    /** Returns ARRAY of checklists for the loan (up to 3). */
+    getLoanChecklists(sourceType, sourceItemId) {
         return this.get(`/checklists/loan/${sourceType}/${sourceItemId}`);
     },
-    assignChecklistTemplate(sourceType, sourceItemId, templateId) {
-        return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/assign`, { template_id: templateId });
+    getLoanChecklist(checklistId) {
+        return this.get(`/checklists/loan-checklist/${checklistId}`);
     },
-    addChecklistItem(sourceType, sourceItemId, data) {
-        return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/items`, data);
+    renameLoanChecklist(checklistId, name) {
+        return this.put(`/checklists/loan-checklist/${checklistId}`, { name });
+    },
+    deleteLoanChecklist(checklistId) {
+        return this.delete(`/checklists/loan-checklist/${checklistId}`);
+    },
+    assignChecklistTemplate(sourceType, sourceItemId, templateId, name) {
+        return this.post(`/checklists/loan/${sourceType}/${sourceItemId}/assign`, { template_id: templateId, name });
+    },
+    addChecklistItem(checklistId, data) {
+        return this.post(`/checklists/loan-checklist/${checklistId}/items`, data);
     },
     updateChecklistItem(itemId, data) {
         return this.put(`/checklists/loan-items/${itemId}`, data);
@@ -875,8 +885,8 @@ const ServerAPI = {
     reorderChecklistItems(sourceType, sourceItemId, items) {
         return this.put(`/checklists/loan/${sourceType}/${sourceItemId}/reorder`, { items });
     },
-    exportLoanChecklist(sourceType, sourceItemId) {
-        return this.get(`/checklists/loan/${sourceType}/${sourceItemId}/export`);
+    exportLoanChecklist(checklistId) {
+        return this.get(`/checklists/loan-checklist/${checklistId}/export`);
     },
     getChecklistStatus(sourceType) {
         return this.get(`/checklists/status/${sourceType}`);
