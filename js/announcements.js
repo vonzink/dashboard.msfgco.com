@@ -328,7 +328,10 @@ const Announcements = {
 
   buildAnnouncementCard(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
-    const relativeTime = Utils.getRelativeTime(announcement.createdAt);
+    const postedAt = new Date(announcement.createdAt).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
     const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
     const links = this._getLinks(announcement);
     const attachments = this._getAttachments(announcement);
@@ -382,7 +385,7 @@ const Announcements = {
 
           <div class="news-meta">
             <span><i class="fas fa-user"></i> ${Utils.escapeHtml(announcement.author)}</span>
-            <span><i class="fas fa-clock"></i> ${relativeTime}</span>
+            <span><i class="fas fa-clock"></i> ${postedAt}</span>
           </div>
         </div>
       </div>
@@ -405,7 +408,10 @@ const Announcements = {
 
   buildCardPreview(announcement) {
     const iconClass = announcement.icon || 'fa-bullhorn';
-    const relativeTime = Utils.getRelativeTime(announcement.createdAt);
+    const postedAt = new Date(announcement.createdAt).toLocaleString('en-US', {
+      month: 'short', day: 'numeric', year: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
     const category = this._detectCategory(announcement);
     const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
 
@@ -419,7 +425,7 @@ const Announcements = {
         <p class="news-card-excerpt">${Utils.escapeHtml(this._stripHtml(announcement.content))}</p>
         <div class="news-card-meta">
           <span><i class="fas fa-user"></i> ${Utils.escapeHtml(announcement.author)}</span>
-          <span><i class="fas fa-clock"></i> ${relativeTime}</span>
+          <span><i class="fas fa-clock"></i> ${postedAt}</span>
         </div>
       </div>
     `;
