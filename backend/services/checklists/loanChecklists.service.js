@@ -37,13 +37,13 @@ const MAX_CHECKLISTS_PER_LOAN = 3;
  */
 async function getStatusMap(sourceType) {
   const [rows] = await db.query(
-    `SELECT lc.id, lc.source_item_id, lc.name, lc.sort_order,
+    `SELECT lc.id, lc.source_item_id, lc.name, lc.sort_order, lc.is_file_local,
             COUNT(lci.id) AS total,
             SUM(CASE WHEN lci.status = 'done' THEN 1 ELSE 0 END) AS done
      FROM loan_checklists lc
      LEFT JOIN loan_checklist_items lci ON lci.checklist_id = lc.id
      WHERE lc.source_type = ?
-     GROUP BY lc.id, lc.source_item_id, lc.name, lc.sort_order
+     GROUP BY lc.id, lc.source_item_id, lc.name, lc.sort_order, lc.is_file_local
      ORDER BY lc.source_item_id, lc.sort_order, lc.id`,
     [sourceType],
   );
@@ -54,6 +54,7 @@ async function getStatusMap(sourceType) {
       name: r.name || 'Checklist',
       total: Number(r.total) || 0,
       done: Number(r.done) || 0,
+      is_file_local: !!r.is_file_local,
     });
   }
   return map;
@@ -169,6 +170,68 @@ async function addItemToChecklist(userId, checklistId, body) {
     await conn.query('UPDATE loan_checklists SET updated_at = NOW() WHERE id = ?', [checklistId]);
     const [items] = await conn.query('SELECT * FROM loan_checklist_items WHERE id = ?', [itemId]);
     return items[0];
+  });
+}
+
+/**
+ * Build a new file-local checklist on a loan from an uploaded PDF buffer.
+ * The PDF is parsed by the vendored conditions extractor; resulting items
+ * are inserted into a fresh loan_checklists row flagged is_file_local=TRUE.
+ *
+ * Subject to the same 3-per-loan cap as the other create paths.
+ */
+async function createFromPdf(userId, sourceType, sourceItemId, pdfBuffer, opts = {}) {
+  await authz.requireLoanAccess(sourceType, sourceItemId);
+
+  const { convertPdfToMarkdown, DEFAULT_STATUS } = require('./conditionsExtractor');
+  const baseName = (opts.filename || 'PDF').replace(/\.pdf$/i, '');
+  const parsed = await convertPdfToMarkdown(pdfBuffer, {
+    title: `${baseName} Checklist`,
+    description: `Conditions extracted from ${opts.filename || 'uploaded PDF'}`,
+  });
+
+  if (!parsed.conditions || !parsed.conditions.length) {
+    const err = new Error('No conditions could be extracted from this PDF. Check the file format and try again.');
+    err.status = 422;
+    throw err;
+  }
+
+  return withTransaction(async (conn) => {
+    const [count] = await conn.query(
+      'SELECT COUNT(*) AS c FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+      [sourceType, sourceItemId],
+    );
+    if ((count[0]?.c || 0) >= MAX_CHECKLISTS_PER_LOAN) {
+      const err = new Error(`Maximum of ${MAX_CHECKLISTS_PER_LOAN} checklists per loan reached — delete one first`);
+      err.status = 400;
+      throw err;
+    }
+
+    const [nextSort] = await conn.query(
+      'SELECT COALESCE(MAX(sort_order), -1) + 1 AS s FROM loan_checklists WHERE source_type = ? AND source_item_id = ?',
+      [sourceType, sourceItemId],
+    );
+    const clientName = await getClientName(conn, sourceType, sourceItemId);
+    const [clResult] = await conn.query(
+      `INSERT INTO loan_checklists
+         (source_type, source_item_id, name, sort_order, is_file_local, assigned_by_user_id, client_name)
+       VALUES (?, ?, ?, ?, TRUE, ?, ?)`,
+      [sourceType, sourceItemId, `${baseName} Conditions`, nextSort[0].s, userId, clientName],
+    );
+    const checklistId = clResult.insertId;
+
+    // Each extractor condition is { name: "Stage - Category: Body" } — write
+    // it straight into the checklist item, truncating to the column limit.
+    for (let i = 0; i < parsed.conditions.length; i++) {
+      const itemName = String(parsed.conditions[i].name || '').slice(0, 500);
+      if (!itemName) continue;
+      await conn.query(
+        'INSERT INTO loan_checklist_items (checklist_id, name, status, sort_order) VALUES (?, ?, ?, ?)',
+        [checklistId, itemName, 'not_started', i],
+      );
+    }
+
+    return _hydrateById(conn, checklistId);
   });
 }
 
@@ -400,6 +463,7 @@ module.exports = {
   getById,
   getStatusMap,
   assignTemplate,
+  createFromPdf,
   renameChecklist,
   deleteChecklist,
   addItemToChecklist,

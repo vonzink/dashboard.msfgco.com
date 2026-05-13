@@ -95,9 +95,12 @@ const Checklists = {
     for (const info of list) {
       const pct = info.total > 0 ? Math.round((info.done / info.total) * 100) : 0;
       const cls = pct === 100 ? 'cl-badge-done' : info.done > 0 ? 'cl-badge-partial' : 'cl-badge-empty';
-      const title = `${Utils.escapeHtml(info.name)}: ${info.done}/${info.total}`;
-      html += `<button type="button" class="cl-icon-btn ${cls}" data-cl-checklist="${info.id}" data-cl-source="${sourceType}" data-cl-item="${itemId}" title="${title}">
-        <i class="fas fa-tasks"></i><span class="cl-badge-count">${info.done}/${info.total}</span>
+      const localCls = info.is_file_local ? ' cl-badge-filelocal' : '';
+      const tipExtra = info.is_file_local ? ' (file-local, from PDF)' : '';
+      const title = `${Utils.escapeHtml(info.name)}: ${info.done}/${info.total}${tipExtra}`;
+      const icon = info.is_file_local ? 'fa-file-pdf' : 'fa-tasks';
+      html += `<button type="button" class="cl-icon-btn ${cls}${localCls}" data-cl-checklist="${info.id}" data-cl-source="${sourceType}" data-cl-item="${itemId}" title="${title}">
+        <i class="fas ${icon}"></i><span class="cl-badge-count">${info.done}/${info.total}</span>
       </button>`;
     }
     if (list.length < this.MAX_CHECKLISTS_PER_LOAN) {
@@ -352,9 +355,22 @@ const Checklists = {
         break;
       }
       case 'add-item': {
+        // If no checklist is open yet (e.g. from the template selector's "Start Blank"),
+        // create an empty one first, then add the typed item to it.
         if (!this._currentChecklist) {
-          Utils.showToast('Open or create a checklist first', 'error');
-          return;
+          const clName = prompt('Name this new checklist:', 'Custom Checklist');
+          if (clName === null) return;
+          const itemName = prompt('First item name:');
+          if (!itemName?.trim()) return;
+          try {
+            this._currentChecklist = await ServerAPI.importLoanChecklist(src.type, src.itemId, {
+              items: [{ name: itemName.trim(), status: 'not_started', sort_order: 0 }],
+              name: clName.trim() || 'Custom Checklist',
+            });
+            this._renderChecklist();
+            this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+          } catch (err) { Utils.showToast('Failed: ' + err.message, 'error'); }
+          break;
         }
         const name = prompt('New checklist item name:');
         if (!name?.trim()) return;
@@ -367,6 +383,22 @@ const Checklists = {
           this._renderChecklist();
           this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
         } catch (err) { Utils.showToast('Failed to add item', 'error'); }
+        break;
+      }
+      case 'make-from-pdf': {
+        // File picker → upload → create file-local checklist
+        const file = await this._pickFile('.pdf,application/pdf');
+        if (!file) return;
+        const toast = Utils.showToast('Parsing PDF…');
+        try {
+          const created = await ServerAPI.createChecklistFromPdf(src.type, src.itemId, file);
+          this._currentChecklist = created;
+          this._renderChecklist();
+          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+          Utils.showToast(`Created "${created.name}" from ${file.name}`, 'success');
+        } catch (err) {
+          Utils.showToast('PDF conversion failed: ' + err.message, 'error');
+        }
         break;
       }
       case 'add-subitem': {
@@ -671,6 +703,7 @@ const Checklists = {
         <div class="cl-template-header">
           <h4>Choose a template to get started</h4>
           <div class="cl-template-actions">
+            <button type="button" class="btn btn-sm btn-outline" data-cl-action="make-from-pdf" title="Upload a PDF (lender conditions, DU findings, etc.) and convert it into a checklist for this file"><i class="fas fa-file-pdf"></i> Make Checklist from PDF</button>
             <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item"><i class="fas fa-plus"></i> Start Blank</button>
           </div>
         </div>

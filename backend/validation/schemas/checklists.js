@@ -91,7 +91,9 @@ const loanChecklistSubitemCreate = z.object({
 });
 
 const loanChecklistImport = z.object({
-  items: z.array(checklistItemInput).min(1).max(200),
+  // Allow an empty items array so the frontend can use this endpoint to
+  // create a blank checklist (Start Blank flow).
+  items: z.array(checklistItemInput).min(0).max(200),
   mode: z.enum(['replace', 'merge']).optional().default('replace'),
   name: optionalString(200),
 });

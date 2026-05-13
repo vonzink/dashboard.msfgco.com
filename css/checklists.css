@@ -20,6 +20,17 @@
 }
 .cl-icon-btn.cl-badge-add:hover { opacity: 1; background: var(--bg-hover); border-style: solid; }
 
+/* File-local checklists (created from a per-loan PDF) — distinct tint so the
+   user can tell them apart from template-derived checklists at a glance. */
+.cl-icon-btn.cl-badge-filelocal {
+  color: var(--color-chart-cyan);
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+}
+.cl-icon-btn.cl-badge-filelocal:hover {
+  background: rgba(34, 211, 238, 0.16);
+}
+
 /* ── Inline badge on table rows ────────────── */
 .cl-icon-btn {
   display: inline-flex;

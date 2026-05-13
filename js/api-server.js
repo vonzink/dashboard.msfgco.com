@@ -849,6 +849,23 @@ const ServerAPI = {
     getLoanChecklists(sourceType, sourceItemId) {
         return this.get(`/checklists/loan/${sourceType}/${sourceItemId}`);
     },
+    /** Upload a PDF and have the backend convert it into a file-local checklist. */
+    async createChecklistFromPdf(sourceType, sourceItemId, file) {
+        const fd = new FormData();
+        fd.append('pdf', file);
+        const url = `${CONFIG.api.baseUrl}/checklists/loan/${sourceType}/${sourceItemId}/from-pdf`;
+        await this._ensureFreshToken();
+        const token = this.getAuthToken();
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: fd,
+        });
+        const text = await res.text();
+        const body = text ? JSON.parse(text) : null;
+        if (!res.ok) throw new Error(body?.error || `Upload failed (${res.status})`);
+        return body;
+    },
     getLoanChecklist(checklistId) {
         return this.get(`/checklists/loan-checklist/${checklistId}`);
     },

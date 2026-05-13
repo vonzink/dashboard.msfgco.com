@@ -5,7 +5,18 @@
 // stay as short orchestrators: validate → service call → response.
 
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
+
+// In-memory upload for PDF conversion — 10 MB cap. We never persist the file.
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname)) cb(null, true);
+    else cb(new Error('Only PDF files are accepted'));
+  },
+});
 
 const { getUserId, requireDbUser } = require('../middleware/userContext');
 const { ok, created, deleted, fail } = require('../utils/response');
@@ -120,6 +131,21 @@ router.put('/loan/:sourceType/:sourceItemId/reorder', validate(reorderSchema), a
       getUserId(req), req.params.sourceType, req.params.sourceItemId, req.body.items,
     );
     ok(res, result);
+  } catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+// Make Checklist from a PDF (file-local — stays on this loan only)
+router.post('/loan/:sourceType/:sourceItemId/from-pdf', pdfUpload.single('pdf'), async (req, res, next) => {
+  try {
+    if (!req.file) return fail(res, 'No PDF uploaded', 400);
+    const result = await loanChecklists.createFromPdf(
+      getUserId(req),
+      req.params.sourceType,
+      req.params.sourceItemId,
+      req.file.buffer,
+      { filename: req.file.originalname },
+    );
+    created(res, result);
   } catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
 
