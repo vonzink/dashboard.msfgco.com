@@ -125,13 +125,6 @@
     },
 
     // =====================
-    // Checklists
-    // =====================
-    'open-checklist-templates': () => {
-      if (typeof Checklists !== 'undefined') Checklists.openTemplateManager();
-    },
-
-    // =====================
     // Processing
     // =====================
     'open-processing': (el) => {

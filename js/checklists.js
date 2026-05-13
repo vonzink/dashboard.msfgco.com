@@ -136,6 +136,10 @@ const Checklists = {
     document.body.style.overflow = '';
     this._currentSource = null;
     this._currentChecklist = null;
+    // Reset drag offset for next open
+    this._dragOffset = { x: 0, y: 0 };
+    const modalBox = document.querySelector('#checklistModal .cl-modal');
+    if (modalBox) modalBox.style.transform = '';
   },
 
   _bindModalEvents() {
@@ -154,6 +158,45 @@ const Checklists = {
       const id = btn.dataset.clId;
       this._handleAction(action, id, btn);
     });
+
+    this._bindDragHandle();
+  },
+
+  /** Click-and-drag the modal by its header. Persists offset across renders. */
+  _dragOffset: { x: 0, y: 0 },
+  _bindDragHandle() {
+    const header = document.querySelector('#checklistModal .cl-modal-header');
+    const modalBox = document.querySelector('#checklistModal .cl-modal');
+    if (!header || !modalBox) return;
+
+    let startX = 0, startY = 0, originX = 0, originY = 0, dragging = false;
+
+    const onDown = (e) => {
+      // Don't start drag on close button
+      if (e.target.closest('.cl-modal-close')) return;
+      dragging = true;
+      const pt = e.touches ? e.touches[0] : e;
+      startX = pt.clientX;
+      startY = pt.clientY;
+      originX = this._dragOffset.x;
+      originY = this._dragOffset.y;
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const pt = e.touches ? e.touches[0] : e;
+      this._dragOffset.x = originX + (pt.clientX - startX);
+      this._dragOffset.y = originY + (pt.clientY - startY);
+      modalBox.style.transform = `translate(${this._dragOffset.x}px, ${this._dragOffset.y}px)`;
+    };
+    const onUp = () => { dragging = false; };
+
+    header.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    header.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
   },
 
   async _handleAction(action, id, btn) {
@@ -177,9 +220,15 @@ const Checklists = {
         const item = this._findItem(itemId);
         if (!item) return;
         const next = this._nextStatus(item.status);
+        // Auto-stamp completion date when transitioning to done.
+        const payload = { status: next };
+        if (next === 'done' && !item.date) payload.date = this._todayISO();
+        // Clear date when status goes back from done to in-progress/not_started.
+        if (next !== 'done' && item.status === 'done' && item.date) payload.date = null;
         try {
-          await ServerAPI.updateChecklistItem(itemId, { status: next });
+          await ServerAPI.updateChecklistItem(itemId, payload);
           item.status = next;
+          if (payload.date !== undefined) item.date = payload.date;
           this._renderChecklist();
           this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
         } catch (err) { Utils.showToast('Failed to update status', 'error'); }
@@ -188,10 +237,16 @@ const Checklists = {
       case 'set-status': {
         const itemId = parseInt(btn.dataset.clItemId);
         const newStatus = btn.dataset.clStatus;
+        const item = this._findItem(itemId);
+        const payload = { status: newStatus };
+        if (newStatus === 'done' && item && !item.date) payload.date = this._todayISO();
+        if (newStatus !== 'done' && item?.status === 'done' && item.date) payload.date = null;
         try {
-          await ServerAPI.updateChecklistItem(itemId, { status: newStatus });
-          const item = this._findItem(itemId);
-          if (item) item.status = newStatus;
+          await ServerAPI.updateChecklistItem(itemId, payload);
+          if (item) {
+            item.status = newStatus;
+            if (payload.date !== undefined) item.date = payload.date;
+          }
           this._renderChecklist();
           this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
         } catch (err) { Utils.showToast('Failed to update', 'error'); }
@@ -280,13 +335,13 @@ const Checklists = {
         const itemId = parseInt(id);
         const item = this._findItem(itemId);
         if (!item) return;
-        const date = prompt('Set date (YYYY-MM-DD):', item.date || '');
-        if (date === null) return;
-        try {
-          await ServerAPI.updateChecklistItem(itemId, { date: date || null });
-          item.date = date || null;
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to update date', 'error'); }
+        this._pickDate(btn, item.date || '', async (newDate) => {
+          try {
+            await ServerAPI.updateChecklistItem(itemId, { date: newDate || null });
+            item.date = newDate || null;
+            this._renderChecklist();
+          } catch (err) { Utils.showToast('Failed to update date', 'error'); }
+        });
         break;
       }
       case 'export-checklist': {
@@ -327,9 +382,8 @@ const Checklists = {
         </div>
         <div class="cl-toolbar-actions">
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item" title="Add item"><i class="fas fa-plus"></i> Add</button>
-          <button type="button" class="btn btn-sm btn-outline" data-cl-action="import-checklist" title="Import from .md"><i class="fas fa-file-import"></i> Import</button>
+          <button type="button" class="btn btn-sm btn-outline" data-cl-action="show-template-selector" title="Apply a template"><i class="fas fa-clipboard-list"></i> Templates</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="export-checklist" title="Export as .md"><i class="fas fa-file-export"></i> Export</button>
-          <button type="button" class="btn btn-sm btn-outline" data-cl-action="show-template-selector" title="Apply template"><i class="fas fa-clipboard-list"></i> Templates</button>
         </div>
       </div>
       <div class="cl-items-list">
@@ -337,7 +391,7 @@ const Checklists = {
 
     for (const item of items) {
       const statusInfo = this.STATUS_OPTIONS.find(s => s.value === item.status) || this.STATUS_OPTIONS[0];
-      const dateStr = item.date ? Utils.formatDate(item.date) : '';
+      const dateStr = item.date ? this._fmtDate(item.date) : '';
 
       html += `
         <div class="cl-item ${statusInfo.cls}" data-item-id="${item.id}">
@@ -372,7 +426,7 @@ const Checklists = {
                 <i class="fas ${subStatus.icon}"></i>
               </button>
               <span class="cl-subitem-name">${Utils.escapeHtml(sub.name)}</span>
-              ${sub.date ? `<span class="cl-subitem-date">${Utils.formatDate(sub.date)}</span>` : ''}
+              ${sub.date ? `<span class="cl-subitem-date">${this._fmtDate(sub.date)}</span>` : ''}
               <button type="button" class="cl-subitem-del" data-cl-action="delete-subitem" data-cl-id="${sub.id}" title="Delete"><i class="fas fa-times"></i></button>
             </div>`;
         }
@@ -414,12 +468,14 @@ const Checklists = {
       this._templates = await ServerAPI.getChecklistTemplates();
     } catch { this._templates = []; }
 
+    const globals = this._templates.filter(t => t.is_global);
+    const personals = this._templates.filter(t => !t.is_global);
+
     let html = `
       <div class="cl-template-selector">
         <div class="cl-template-header">
           <h4>Choose a template to get started</h4>
           <div class="cl-template-actions">
-            <button type="button" class="btn btn-sm btn-outline" data-cl-action="import-checklist"><i class="fas fa-file-import"></i> Import from File</button>
             <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item"><i class="fas fa-plus"></i> Start Blank</button>
           </div>
         </div>
@@ -429,19 +485,35 @@ const Checklists = {
       html += `
         <div class="cl-empty">
           <i class="fas fa-clipboard-list cl-empty-icon"></i>
-          <p>No templates yet. Create one in <strong>Settings → Checklist Templates</strong>, import from a file, or start with a blank checklist.</p>
+          <p>No templates yet. Create or import one in <strong>Settings → Checklists</strong>, or start with a blank checklist.</p>
         </div>`;
     } else {
-      html += '<div class="cl-template-grid">';
-      for (const tpl of this._templates) {
-        html += `
-          <button type="button" class="cl-template-card" data-cl-action="assign-template" data-cl-id="${tpl.id}">
-            <i class="fas fa-clipboard-list"></i>
-            <strong>${Utils.escapeHtml(tpl.name)}</strong>
-            ${tpl.description ? `<small>${Utils.escapeHtml(tpl.description)}</small>` : ''}
-          </button>`;
+      if (globals.length) {
+        html += `<div class="cl-tpl-section-header"><i class="fas fa-globe"></i> General Templates</div>`;
+        html += '<div class="cl-template-grid">';
+        for (const tpl of globals) {
+          html += `
+            <button type="button" class="cl-template-card cl-template-global" data-cl-action="assign-template" data-cl-id="${tpl.id}">
+              <i class="fas fa-globe"></i>
+              <strong>${Utils.escapeHtml(tpl.name)}</strong>
+              ${tpl.description ? `<small>${Utils.escapeHtml(tpl.description)}</small>` : ''}
+            </button>`;
+        }
+        html += '</div>';
       }
-      html += '</div>';
+      if (personals.length) {
+        html += `<div class="cl-tpl-section-header"><i class="fas fa-user"></i> Your Templates</div>`;
+        html += '<div class="cl-template-grid">';
+        for (const tpl of personals) {
+          html += `
+            <button type="button" class="cl-template-card" data-cl-action="assign-template" data-cl-id="${tpl.id}">
+              <i class="fas fa-clipboard-list"></i>
+              <strong>${Utils.escapeHtml(tpl.name)}</strong>
+              ${tpl.description ? `<small>${Utils.escapeHtml(tpl.description)}</small>` : ''}
+            </button>`;
+        }
+        html += '</div>';
+      }
     }
 
     html += '</div>';
@@ -709,6 +781,63 @@ const Checklists = {
     return order[(idx + 1) % order.length];
   },
 
+  /** Today's date in YYYY-MM-DD (local time). */
+  _todayISO() {
+    const d = new Date();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${m}-${day}`;
+  },
+
+  /** Display dates as DD-MM-YY. Input is YYYY-MM-DD (DB shape). */
+  _fmtDate(dateStr) {
+    if (!dateStr) return '';
+    // Accept "YYYY-MM-DD" or a Date string. Avoid timezone shift by parsing parts.
+    const parts = String(dateStr).slice(0, 10).split('-');
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      return `${d}-${m}-${y.slice(2)}`;
+    }
+    return dateStr;
+  },
+
+  /**
+   * Show a native date picker positioned near a trigger element, then
+   * call cb(isoDate) when the user picks a date. Pass empty string to clear.
+   */
+  _pickDate(anchorEl, currentISO, cb) {
+    // Create a transient <input type="date"> positioned over the anchor.
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.value = currentISO || '';
+    input.className = 'cl-date-popover';
+    const rect = anchorEl.getBoundingClientRect();
+    input.style.position = 'fixed';
+    input.style.top = `${rect.bottom + 4}px`;
+    input.style.left = `${rect.left}px`;
+    input.style.zIndex = '11000';
+
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      input.removeEventListener('change', onChange);
+      input.removeEventListener('blur', onBlur);
+      input.remove();
+      cb(value);
+    };
+    const onChange = () => finish(input.value || '');
+    const onBlur = () => setTimeout(() => finish(input.value || currentISO || ''), 100);
+
+    input.addEventListener('change', onChange);
+    input.addEventListener('blur', onBlur);
+    document.body.appendChild(input);
+    input.focus();
+    if (input.showPicker) {
+      try { input.showPicker(); } catch { /* showPicker requires user gesture */ }
+    }
+  },
+
   _findItem(id) {
     return (this._currentChecklist?.items || []).find(i => i.id === id);
   },
@@ -749,11 +878,19 @@ const Checklists = {
     document.body.style.overflow = 'hidden';
 
     document.getElementById('clModalTitle').textContent = 'Checklist Templates';
+    this._tmContainerId = 'clContent';
+    await this._renderTemplateManager();
+  },
+
+  /** Public entry point used by user-settings.js to render the template
+   *  manager inline inside the Settings → Checklists tab. */
+  async renderTemplateManagerInto(containerId) {
+    this._tmContainerId = containerId;
     await this._renderTemplateManager();
   },
 
   async _renderTemplateManager() {
-    const container = document.getElementById('clContent');
+    const container = document.getElementById(this._tmContainerId || 'clContent');
     if (!container) return;
 
     container.innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading templates...</div>';
@@ -762,25 +899,47 @@ const Checklists = {
       this._templates = await ServerAPI.getChecklistTemplates();
     } catch { this._templates = []; }
 
+    const globals = this._templates.filter(t => t.is_global);
+    const personals = this._templates.filter(t => !t.is_global);
+
     let html = `
       <div class="cl-toolbar">
         <div class="cl-toolbar-actions">
           <button type="button" class="btn btn-sm btn-primary" onclick="Checklists._createTemplate()"><i class="fas fa-plus"></i> New Template</button>
-          <button type="button" class="btn btn-sm btn-outline" onclick="Checklists._importTemplateFlow()"><i class="fas fa-file-import"></i> Import from File</button>
+          <button type="button" class="btn btn-sm btn-outline" onclick="Checklists._importTemplateFlow()"><i class="fas fa-file-import"></i> Import .md File</button>
         </div>
       </div>
     `;
 
-    if (this._templates.length === 0) {
+    if (globals.length) {
+      html += `<div class="cl-tpl-section-header"><i class="fas fa-globe"></i> General Templates <small>(shared, read-only)</small></div>`;
+      html += '<div class="cl-template-manager-list">';
+      for (const tpl of globals) {
+        html += `
+          <div class="cl-tpl-row cl-tpl-global">
+            <div class="cl-tpl-info">
+              <strong><i class="fas fa-lock cl-tpl-lock"></i> ${Utils.escapeHtml(tpl.name)}</strong>
+              ${tpl.description ? `<small>${Utils.escapeHtml(tpl.description)}</small>` : ''}
+            </div>
+            <div class="cl-tpl-actions">
+              <button type="button" class="btn btn-sm btn-outline" onclick="Checklists._copyGlobalTemplate(${tpl.id})" title="Copy to your library"><i class="fas fa-copy"></i> Copy</button>
+              <button type="button" class="btn btn-sm btn-outline" onclick="Checklists._exportTemplate(${tpl.id})" title="Export as .md"><i class="fas fa-file-export"></i></button>
+            </div>
+          </div>`;
+      }
+      html += '</div>';
+    }
+
+    html += `<div class="cl-tpl-section-header"><i class="fas fa-user"></i> Your Templates</div>`;
+    if (personals.length === 0) {
       html += `
         <div class="cl-empty">
           <i class="fas fa-clipboard-list cl-empty-icon"></i>
-          <p>No templates yet. Create one, import from a .md file, or start with the sample template below.</p>
-          <button type="button" class="btn btn-sm btn-primary" onclick="Checklists._seedSampleTemplate()"><i class="fas fa-magic"></i> Use Sample Loan Processing Checklist</button>
+          <p>No personal templates yet. Create one, import from a .md file, or copy one of the General Templates above.</p>
         </div>`;
     } else {
       html += '<div class="cl-template-manager-list">';
-      for (const tpl of this._templates) {
+      for (const tpl of personals) {
         html += `
           <div class="cl-tpl-row">
             <div class="cl-tpl-info">
@@ -800,6 +959,33 @@ const Checklists = {
     container.innerHTML = html;
   },
 
+  /** Copy a global template into the user's personal library so they can edit it. */
+  async _copyGlobalTemplate(id) {
+    try {
+      const source = await ServerAPI.getChecklistTemplate(id);
+      const newName = prompt('Name for your copy:', source.name + ' (copy)');
+      if (!newName?.trim()) return;
+      await ServerAPI.createChecklistTemplate({
+        name: newName.trim(),
+        description: source.description || '',
+        items: (source.items || []).map((it, i) => ({
+          name: it.name,
+          default_status: it.default_status || 'not_started',
+          sort_order: i,
+          subitems: (it.subitems || []).map((s, j) => ({
+            name: s.name,
+            default_status: s.default_status || 'not_started',
+            sort_order: j,
+          })),
+        })),
+      });
+      Utils.showToast('Template copied to your library', 'success');
+      await this._renderTemplateManager();
+    } catch (err) {
+      Utils.showToast('Copy failed: ' + err.message, 'error');
+    }
+  },
+
   async _createTemplate() {
     const name = prompt('Template name:');
     if (!name?.trim()) return;
@@ -814,7 +1000,7 @@ const Checklists = {
   },
 
   async _editTemplate(id) {
-    const container = document.getElementById('clContent');
+    const container = document.getElementById(this._tmContainerId || 'clContent');
     if (!container) return;
 
     container.innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';

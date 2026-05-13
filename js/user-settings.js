@@ -54,6 +54,9 @@ const UserSettings = {
     if (tabId === 'display') this._loadDisplayPreferences();
     if (tabId === 'documents') this._loadDocuments();
     if (tabId === 'goals') SettingsGoals.loadGoalsTab();
+    if (tabId === 'checklists' && typeof Checklists !== 'undefined') {
+      Checklists.renderTemplateManagerInto('settingsChecklistsContent');
+    }
   },
 
   // ========================================

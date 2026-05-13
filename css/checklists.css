@@ -19,68 +19,71 @@
   border-radius: 4px;
   font-size: 0.7rem;
   cursor: pointer;
-  background: var(--card-bg, #2a2d35);
-  color: var(--text-muted, #888);
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
   transition: background 0.15s, color 0.15s;
   vertical-align: middle;
   line-height: 1;
 }
-.cl-icon-btn:hover { background: var(--hover-bg, #353840); color: var(--text-primary, #fff); }
-.cl-badge-done { color: var(--green-bright, #4caf50); }
-.cl-badge-partial { color: var(--text-warning, #ffb74d); }
-.cl-badge-empty { color: var(--text-muted, #888); }
+.cl-icon-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
+.cl-badge-done { color: var(--green-bright); }
+.cl-badge-partial { color: var(--status-warning); }
+.cl-badge-empty { color: var(--text-muted); }
 .cl-badge-none { opacity: 0.4; }
 .cl-badge-none:hover { opacity: 1; }
 .cl-badge-count { font-weight: 600; font-size: 0.65rem; }
 
 /* ── Modal ─────────────────────────────────── */
-#checklistModal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  z-index: 9000;
-  background: rgba(0, 0, 0, 0.6);
-  justify-content: center;
+/* Uses the global .modal-overlay (components.css) for visibility — only the
+   checklist-specific overrides (overflow + top-aligned content) live here. */
+.cl-modal-overlay {
   align-items: flex-start;
-  padding: 2rem;
   overflow-y: auto;
 }
-#checklistModal.active { display: flex; }
 
 .cl-modal {
-  background: var(--card-bg, #1e2128);
-  border: 1px solid var(--border-color, #333);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   width: 100%;
   max-width: 850px;
   max-height: 85vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-xl);
+  color: var(--text-primary);
+  /* Drag positioning — JS sets transform: translate(x, y) on drag */
+  position: relative;
 }
 
 .cl-modal-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-color, #333);
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  border-radius: 12px 12px 0 0;
+  cursor: grab;
+  user-select: none;
 }
+.cl-modal-header:active { cursor: grabbing; }
 .cl-modal-header h3 {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--font-base);
   font-weight: 600;
+  color: var(--text-primary);
 }
 .cl-modal-close {
   background: none;
   border: none;
   font-size: 1.4rem;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 0 0.25rem;
   line-height: 1;
 }
-.cl-modal-close:hover { color: var(--text-primary, #fff); }
+.cl-modal-close:hover { color: var(--text-primary); }
 
 .cl-modal-body {
   overflow-y: auto;
@@ -88,16 +91,33 @@
   flex: 1;
 }
 
+/* ── Template Manager Sections ────────────────── */
+.cl-tpl-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: var(--font-sm);
+  color: var(--text-primary);
+  margin: 1rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.cl-tpl-section-header small { font-weight: 400; color: var(--text-muted); }
+.cl-tpl-section-header i { color: var(--green-bright); }
+.cl-tpl-global { background: var(--bg-tertiary); }
+.cl-tpl-lock { color: var(--text-muted); font-size: 0.7rem; margin-right: 4px; }
+
 /* ── Loading / Empty ───────────────────────── */
 .cl-loading {
   padding: 2rem;
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 .cl-empty {
   text-align: center;
   padding: 2rem 1rem;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
 }
 .cl-empty-icon { font-size: 2.5rem; opacity: 0.3; display: block; margin-bottom: 0.75rem; }
 
@@ -116,37 +136,60 @@
   flex-wrap: wrap;
 }
 
+/* Local btn-outline that works in both light + dark themes —
+   global codebase only defines this for announcements.css. */
+.cl-toolbar .btn-outline,
+.cl-template-actions .btn-outline {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  font-weight: 500;
+}
+.cl-toolbar .btn-outline:hover,
+.cl-template-actions .btn-outline:hover {
+  background: var(--bg-hover);
+  border-color: var(--green-bright);
+  color: var(--green-forest);
+}
+[data-theme="dark"] .cl-toolbar .btn-outline:hover,
+[data-theme="dark"] .cl-template-actions .btn-outline:hover {
+  color: var(--green-bright);
+}
+
 /* ── Progress bar ──────────────────────────── */
 .cl-progress-summary { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 150px; }
 .cl-progress-bar-wrap {
   flex: 1;
   max-width: 200px;
   height: 6px;
-  background: var(--border-color, #333);
+  background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
 }
 .cl-progress-bar {
   height: 100%;
-  background: var(--green-bright, #4caf50);
+  background: var(--green-bright);
   border-radius: 3px;
   transition: width 0.3s;
 }
-.cl-progress-text { font-size: 0.75rem; color: var(--text-muted, #888); white-space: nowrap; }
+.cl-progress-text { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 
 /* ── Checklist Items ───────────────────────── */
 .cl-items-list { display: flex; flex-direction: column; gap: 2px; }
 
 .cl-item {
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: var(--card-bg, #1e2128);
+  background: var(--bg-secondary);
   transition: border-color 0.15s;
 }
-.cl-item:hover { border-color: var(--border-hover, #555); }
+.cl-item:hover { border-color: var(--green-bright); }
 
-.cl-item.cl-status-done { opacity: 0.7; }
-.cl-item.cl-status-done .cl-item-name { text-decoration: line-through; }
+/* Status-driven item text colors */
+.cl-item.cl-status-done       .cl-item-name { color: var(--green-bright); text-decoration: line-through; }
+.cl-item.cl-status-in-progress .cl-item-name { color: var(--status-warning); }
+.cl-item.cl-status-issue      .cl-item-name { color: var(--status-danger); }
+.cl-item.cl-status-na         .cl-item-name { color: var(--text-muted); }
 
 .cl-item-main {
   display: flex;
@@ -166,16 +209,17 @@
   transition: transform 0.15s;
 }
 .cl-status-btn:hover { transform: scale(1.2); }
-.cl-status-btn.cl-status-not-started { color: var(--text-muted, #888); }
-.cl-status-btn.cl-status-in-progress { color: var(--text-warning, #ffb74d); }
-.cl-status-btn.cl-status-done { color: var(--green-bright, #4caf50); }
-.cl-status-btn.cl-status-issue { color: var(--text-danger, #e57373); }
-.cl-status-btn.cl-status-na { color: var(--text-muted, #666); }
+.cl-status-btn.cl-status-not-started { color: var(--text-muted); }
+.cl-status-btn.cl-status-in-progress { color: var(--status-warning); }
+.cl-status-btn.cl-status-done { color: var(--green-bright); }
+.cl-status-btn.cl-status-issue { color: var(--status-danger); }
+.cl-status-btn.cl-status-na { color: var(--text-muted); }
 
 .cl-item-name {
   flex: 1;
-  font-size: 0.85rem;
+  font-size: var(--font-sm);
   line-height: 1.3;
+  color: var(--text-primary);
 }
 
 .cl-item-actions {
@@ -186,9 +230,26 @@
 }
 
 .cl-item-date {
-  font-size: 0.7rem;
-  color: var(--text-muted, #888);
+  font-size: var(--font-xs);
+  color: var(--green-forest);
+  font-weight: 500;
   white-space: nowrap;
+  background: rgba(140, 198, 62, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+[data-theme="dark"] .cl-item-date { color: var(--green-bright); }
+
+/* Native date picker popover (transient input element from JS) */
+.cl-date-popover {
+  padding: 6px 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--green-bright);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  font-size: var(--font-sm);
+  font-family: inherit;
 }
 
 /* ── Context menu ──────────────────────────── */
@@ -196,21 +257,21 @@
 .cl-menu-trigger {
   background: none;
   border: none;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px 6px;
   font-size: 0.8rem;
   border-radius: 4px;
 }
-.cl-menu-trigger:hover { background: var(--hover-bg, #353840); color: var(--text-primary, #fff); }
+.cl-menu-trigger:hover { background: var(--bg-hover); color: var(--text-primary); }
 
 .cl-menu-dropdown {
   display: none;
   position: absolute;
   right: 0;
   top: 100%;
-  background: var(--card-bg, #1e2128);
-  border: 1px solid var(--border-color, #444);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   min-width: 170px;
   padding: 4px 0;
@@ -226,18 +287,18 @@
   padding: 6px 12px;
   border: none;
   background: none;
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
   font-size: 0.8rem;
   cursor: pointer;
   text-align: left;
 }
-.cl-menu-dropdown button:hover { background: var(--hover-bg, #353840); }
+.cl-menu-dropdown button:hover { background: var(--bg-hover); }
 .cl-menu-dropdown hr {
   border: none;
-  border-top: 1px solid var(--border-color, #333);
+  border-top: 1px solid var(--border-color);
   margin: 4px 0;
 }
-.cl-menu-danger { color: var(--text-danger, #e57373) !important; }
+.cl-menu-danger { color: var(--status-danger) !important; }
 
 /* ── Subitems ──────────────────────────────── */
 .cl-subitems {
@@ -253,7 +314,10 @@
   padding: 3px 0;
   font-size: 0.8rem;
 }
-.cl-subitem.cl-status-done .cl-subitem-name { text-decoration: line-through; opacity: 0.6; }
+.cl-subitem.cl-status-done       .cl-subitem-name { color: var(--green-bright); text-decoration: line-through; }
+.cl-subitem.cl-status-in-progress .cl-subitem-name { color: var(--status-warning); }
+.cl-subitem.cl-status-issue      .cl-subitem-name { color: var(--status-danger); }
+.cl-subitem.cl-status-na         .cl-subitem-name { color: var(--text-muted); }
 .cl-status-btn-sm {
   border: none;
   background: none;
@@ -262,18 +326,18 @@
   padding: 1px;
   flex-shrink: 0;
 }
-.cl-status-btn-sm.cl-status-not-started { color: var(--text-muted, #888); }
-.cl-status-btn-sm.cl-status-in-progress { color: var(--text-warning, #ffb74d); }
-.cl-status-btn-sm.cl-status-done { color: var(--green-bright, #4caf50); }
-.cl-status-btn-sm.cl-status-issue { color: var(--text-danger, #e57373); }
-.cl-status-btn-sm.cl-status-na { color: var(--text-muted, #666); }
+.cl-status-btn-sm.cl-status-not-started { color: var(--text-muted); }
+.cl-status-btn-sm.cl-status-in-progress { color: var(--status-warning); }
+.cl-status-btn-sm.cl-status-done { color: var(--green-bright); }
+.cl-status-btn-sm.cl-status-issue { color: var(--status-danger); }
+.cl-status-btn-sm.cl-status-na { color: var(--text-muted); }
 
 .cl-subitem-name { flex: 1; }
-.cl-subitem-date { font-size: 0.7rem; color: var(--text-muted, #888); }
+.cl-subitem-date { font-size: 0.7rem; color: var(--text-muted); }
 .cl-subitem-del {
   border: none;
   background: none;
-  color: var(--text-muted, #666);
+  color: var(--text-muted);
   cursor: pointer;
   font-size: 0.7rem;
   padding: 2px;
@@ -281,7 +345,7 @@
   transition: opacity 0.15s;
 }
 .cl-subitem:hover .cl-subitem-del { opacity: 1; }
-.cl-subitem-del:hover { color: var(--text-danger, #e57373); }
+.cl-subitem-del:hover { color: var(--status-danger); }
 
 /* ── Template Selector ─────────────────────── */
 .cl-template-selector { padding: 0.5rem 0; }
@@ -303,18 +367,18 @@
   align-items: flex-start;
   gap: 0.25rem;
   padding: 0.75rem;
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  background: var(--card-bg, #1e2128);
+  background: var(--bg-secondary);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
   text-align: left;
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
 }
-.cl-template-card:hover { border-color: var(--green-bright, #4caf50); background: var(--hover-bg, #353840); }
-.cl-template-card i { font-size: 1.2rem; color: var(--green-bright, #4caf50); }
+.cl-template-card:hover { border-color: var(--green-bright); background: var(--bg-hover); }
+.cl-template-card i { font-size: 1.2rem; color: var(--green-bright); }
 .cl-template-card strong { font-size: 0.85rem; }
-.cl-template-card small { font-size: 0.75rem; color: var(--text-muted, #888); }
+.cl-template-card small { font-size: 0.75rem; color: var(--text-muted); }
 
 /* ── Template Manager ──────────────────────── */
 .cl-template-manager-list { display: flex; flex-direction: column; gap: 4px; }
@@ -323,38 +387,38 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 0.75rem;
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: var(--card-bg, #1e2128);
+  background: var(--bg-secondary);
 }
 .cl-tpl-info { flex: 1; }
 .cl-tpl-info strong { display: block; font-size: 0.85rem; }
-.cl-tpl-info small { font-size: 0.75rem; color: var(--text-muted, #888); }
+.cl-tpl-info small { font-size: 0.75rem; color: var(--text-muted); }
 .cl-tpl-actions { display: flex; gap: 0.25rem; }
 
 /* ── Template Editor ───────────────────────── */
 .cl-tpl-edit-header { margin-bottom: 1rem; }
 .cl-tpl-edit-header label { display: block; font-size: 0.8rem; font-weight: 500; margin-top: 0.5rem; }
-.cl-tpl-edit-header small { font-weight: 400; color: var(--text-muted, #888); }
+.cl-tpl-edit-header small { font-weight: 400; color: var(--text-muted); }
 
 .cl-input {
   width: 100%;
   padding: 6px 10px;
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--input-bg, #12141a);
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
   font-size: 0.85rem;
   margin-top: 4px;
 }
-.cl-input:focus { border-color: var(--green-bright, #4caf50); outline: none; }
+.cl-input:focus { border-color: var(--green-bright); outline: none; }
 
 .cl-select {
   padding: 4px 8px;
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   background: var(--input-bg, #12141a);
-  color: var(--text-primary, #fff);
+  color: var(--text-primary);
   font-size: 0.8rem;
 }
 
@@ -367,7 +431,7 @@
 .cl-tpl-items-header h4 { margin: 0; font-size: 0.9rem; }
 
 .cl-tpl-item-row {
-  border: 1px solid var(--border-color, #333);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   margin-bottom: 4px;
   padding: 0.5rem;
@@ -379,7 +443,7 @@
 }
 .cl-tpl-item-main .cl-input { flex: 1; }
 .cl-tpl-item-main .cl-select { width: 120px; flex-shrink: 0; }
-.cl-drag-handle { color: var(--text-muted, #666); cursor: grab; padding: 0 2px; }
+.cl-drag-handle { color: var(--text-muted); cursor: grab; padding: 0 2px; }
 
 .cl-tpl-subitems {
   padding-left: 1.75rem;
@@ -392,20 +456,20 @@
   margin-bottom: 2px;
 }
 .cl-tpl-subitem-row .cl-input { flex: 1; font-size: 0.8rem; padding: 4px 8px; }
-.cl-subitem-indent { width: 12px; border-left: 2px solid var(--border-color, #333); height: 16px; flex-shrink: 0; }
+.cl-subitem-indent { width: 12px; border-left: 2px solid var(--border-color); height: 16px; flex-shrink: 0; }
 
 .cl-tpl-add-subitem {
   font-size: 0.75rem;
-  color: var(--text-muted, #888);
+  color: var(--text-muted);
   padding: 2px 4px;
 }
 
-.btn-danger-outline { color: var(--text-danger, #e57373) !important; border-color: var(--text-danger, #e57373) !important; }
-.btn-danger-outline:hover { background: var(--text-danger, #e57373) !important; color: #fff !important; }
+.btn-danger-outline { color: var(--status-danger) !important; border-color: var(--status-danger) !important; }
+.btn-danger-outline:hover { background: var(--status-danger) !important; color: #fff !important; }
 
 /* ── Responsive ────────────────────────────── */
 @media (max-width: 768px) {
-  #checklistModal { padding: 0.5rem; }
+  .cl-modal-overlay { padding: 0.5rem; }
   .cl-modal { max-height: 95vh; }
   .cl-toolbar { flex-direction: column; align-items: stretch; }
   .cl-template-grid { grid-template-columns: 1fr; }

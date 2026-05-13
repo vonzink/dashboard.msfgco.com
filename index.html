@@ -38,7 +38,7 @@
   <link rel="stylesheet" href="css/chat.css?v=20260410" />
   <link rel="stylesheet" href="css/programs.css?v=20260410" />
   <link rel="stylesheet" href="css/animations.css?v=20260410" />
-  <link rel="stylesheet" href="css/checklists.css?v=20260512" />
+  <link rel="stylesheet" href="css/checklists.css?v=20260513" />
 </head>
 
 <body>
@@ -294,7 +294,6 @@
             <button type="button" class="dropdown-item" data-action="open-time-calculator"><i class="fas fa-calendar-alt"></i> Time Calculator</button>
 
             <div class="dropdown-divider"></div>
-            <button type="button" class="dropdown-item" data-action="open-checklist-templates"><i class="fas fa-tasks"></i> Checklist Templates</button>
             <button type="button" class="dropdown-item" data-action="open-processing" data-type="title"><i class="fas fa-clipboard-check"></i> Processing</button>
             <a data-link-key="scanner" class="dropdown-item"><i class="fas fa-qrcode"></i> Scanner</a>
           </div>
@@ -655,7 +654,7 @@
     </div>
 
     <!-- Checklist Modal -->
-    <div id="checklistModal" aria-hidden="true">
+    <div class="modal-overlay cl-modal-overlay" id="checklistModal" aria-hidden="true">
       <div class="cl-modal">
         <div class="cl-modal-header">
           <h3 id="clModalTitle"><i class="fas fa-tasks"></i> Loan Checklist</h3>
@@ -1396,6 +1395,9 @@
           <button type="button" class="settings-tab" data-tab="goals">
             <i class="fas fa-trophy"></i> Goals
           </button>
+          <button type="button" class="settings-tab" data-tab="checklists">
+            <i class="fas fa-tasks"></i> Checklists
+          </button>
         </div>
 
         <div class="settings-modal-body">
@@ -1424,6 +1426,13 @@
           <div class="settings-panel u-hidden" id="settingsPanel-goals">
             <div id="settingsGoalsContent">
               <div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading goals...</div>
+            </div>
+          </div>
+
+          <!-- Checklists Panel -->
+          <div class="settings-panel u-hidden" id="settingsPanel-checklists">
+            <div id="settingsChecklistsContent">
+              <div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading templates...</div>
             </div>
           </div>
         </div>
@@ -1473,7 +1482,7 @@
   <script src="js/programs.js?v=20260410"></script>
   <script src="js/hr-resources.js?v=20260410"></script>
   <script src="js/content-studio.js?v=20260410"></script>
-  <script src="js/checklists.js?v=20260512"></script>
+  <script src="js/checklists.js?v=20260513"></script>
   <script src="js/collapsible.js?v=20260410"></script>
 
   <!-- Accessibility -->

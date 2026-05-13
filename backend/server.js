@@ -238,6 +238,15 @@ async function startServer() {
     await migrations.runMigrations();
     logger.info('Database migrations completed');
 
+    // Seed bundled "general" checklist templates as is_global=TRUE.
+    // No-op if templates already present, safe on every boot.
+    try {
+      const { seedGlobalTemplates } = require('./services/checklists/seedGlobalTemplates');
+      await seedGlobalTemplates();
+    } catch (err) {
+      logger.warn({ err: err.message }, 'Global checklist template seed failed (non-fatal)');
+    }
+
     const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info({ port: PORT, env: process.env.NODE_ENV || 'development', origins: allowedOrigins }, 'Server started');
     });
