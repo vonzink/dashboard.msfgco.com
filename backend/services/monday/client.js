@@ -1,5 +1,6 @@
 // Monday.com GraphQL client — read-only queries
-const MONDAY_API_URL = 'https://api.monday.com/v2';
+// Uses shared base for retry, rate limiting, and error handling
+const { MONDAY_API_URL, mondayRequest } = require('./api');
 
 /**
  * Execute a READ-ONLY GraphQL query against Monday.com.
@@ -10,29 +11,7 @@ async function mondayQuery(token, query, variables = {}) {
     throw new Error('SAFETY: Mutations are not allowed — this integration is read-only');
   }
 
-  const response = await fetch(MONDAY_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': token,
-      'API-Version': '2024-10',
-    },
-    body: JSON.stringify({ query, variables }),
-    signal: AbortSignal.timeout(30000),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Monday.com API error: HTTP ${response.status} — ${text.substring(0, 200)}`);
-  }
-
-  const data = await response.json();
-
-  if (data.errors && data.errors.length > 0) {
-    throw new Error(`Monday.com GraphQL error: ${data.errors[0].message}`);
-  }
-
-  return data.data;
+  return mondayRequest(token, query, variables);
 }
 
 /** Fetch all items from a single board (paginated). */

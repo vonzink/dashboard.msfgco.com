@@ -1,36 +1,13 @@
-// Monday.com GraphQL mutation client — for LendingPad → Monday.com sync
-// Separate from the read-only client to maintain safety boundaries
+// Monday.com GraphQL mutation client — for dashboard → Monday.com sync
+// Uses shared base for retry, rate limiting, and error handling
 const logger = require('../../lib/logger');
-
-const MONDAY_API_URL = 'https://api.monday.com/v2';
+const { mondayRequest } = require('./api');
 
 /**
  * Execute a GraphQL mutation against Monday.com.
  */
 async function mondayMutate(token, query, variables = {}) {
-  const response = await fetch(MONDAY_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': token,
-      'API-Version': '2024-10',
-    },
-    body: JSON.stringify({ query, variables }),
-    signal: AbortSignal.timeout(30000),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`Monday.com API error: HTTP ${response.status} — ${text.substring(0, 200)}`);
-  }
-
-  const data = await response.json();
-
-  if (data.errors && data.errors.length > 0) {
-    throw new Error(`Monday.com GraphQL error: ${data.errors[0].message}`);
-  }
-
-  return data.data;
+  return mondayRequest(token, query, variables);
 }
 
 /**
@@ -307,6 +284,103 @@ async function archivePreApproval(token, preApprovalRecord) {
   await archiveItem(token, monday_item_id);
 }
 
+// ── Pipeline write-through helpers ────────────────────────────────
+
+async function getUserPipelineBoardId(userId) {
+  const [rows] = await db.query(
+    `SELECT ba.board_id
+     FROM monday_board_access ba
+     JOIN monday_boards mb ON ba.board_id = mb.board_id
+     WHERE ba.user_id = ? AND mb.target_section = 'pipeline' AND mb.is_active = 1
+     LIMIT 1`,
+    [userId]
+  );
+  return rows.length > 0 ? rows[0].board_id : null;
+}
+
+async function createPipelineItem(token, userId, fields) {
+  const boardId = await getUserPipelineBoardId(userId);
+  if (!boardId) {
+    logger.warn({ userId }, 'No pipeline board found for user — skipping Monday write');
+    return null;
+  }
+
+  const reverseMap = await getReverseColumnMap(token, boardId);
+  const columnValues = buildColumnValues(fields, reverseMap);
+  const groupId = await getDefaultGroupId(token, boardId);
+
+  const itemName = fields.client_name || 'New Pipeline Item';
+
+  logger.info({ boardId, itemName, groupId }, 'Creating pipeline item on Monday.com');
+
+  const data = await mondayMutate(token, `mutation ($boardId: ID!, $itemName: String!, $colValues: JSON!${groupId ? ', $groupId: String!' : ''}) {
+    create_item(board_id: $boardId, item_name: $itemName, column_values: $colValues${groupId ? ', group_id: $groupId' : ''}) {
+      id
+    }
+  }`, {
+    boardId: String(boardId),
+    itemName,
+    colValues: JSON.stringify(columnValues),
+    ...(groupId ? { groupId } : {}),
+  });
+
+  const mondayItemId = data.create_item?.id;
+  return mondayItemId ? { mondayItemId, boardId } : null;
+}
+
+async function updatePipelineItem(token, pipelineRecord, updatedFields) {
+  const { monday_item_id, source_board_id } = pipelineRecord;
+
+  if (!monday_item_id || !source_board_id) {
+    logger.info({ id: pipelineRecord.id }, 'Pipeline item has no Monday link — skipping Monday write');
+    return;
+  }
+
+  const reverseMap = await getReverseColumnMap(token, source_board_id);
+  const columnValues = buildColumnValues(updatedFields, reverseMap);
+
+  if (updatedFields.client_name) {
+    await mondayMutate(token, `mutation ($boardId: ID!, $itemId: ID!, $value: String!) {
+      change_simple_column_value(board_id: $boardId, item_id: $itemId, column_id: "name", value: $value) {
+        id
+      }
+    }`, {
+      boardId: String(source_board_id),
+      itemId: String(monday_item_id),
+      value: updatedFields.client_name,
+    });
+  }
+
+  if (Object.keys(columnValues).length > 0) {
+    logger.info({ boardId: source_board_id, itemId: monday_item_id }, 'Updating pipeline item on Monday.com');
+    await updateItem(token, source_board_id, monday_item_id, columnValues);
+  }
+}
+
+async function archivePipelineItem(token, pipelineRecord) {
+  const { monday_item_id } = pipelineRecord;
+
+  if (!monday_item_id) {
+    logger.info({ id: pipelineRecord.id }, 'Pipeline item has no Monday link — skipping archive');
+    return;
+  }
+
+  await archiveItem(token, monday_item_id);
+}
+
+// ── Funded Loan write-through helpers ─────────────────────────────
+
+async function archiveFundedLoan(token, fundedLoanRecord) {
+  const { monday_item_id } = fundedLoanRecord;
+
+  if (!monday_item_id) {
+    logger.info({ id: fundedLoanRecord.id }, 'Funded loan has no Monday link — skipping archive');
+    return;
+  }
+
+  await archiveItem(token, monday_item_id);
+}
+
 module.exports = {
   mondayMutate,
   createItem,
@@ -317,8 +391,13 @@ module.exports = {
   formatColumnValue,
   buildColumnValues,
   getUserPreApprovalBoardId,
+  getUserPipelineBoardId,
   getDefaultGroupId,
   createPreApproval,
   updatePreApproval,
   archivePreApproval,
+  createPipelineItem,
+  updatePipelineItem,
+  archivePipelineItem,
+  archiveFundedLoan,
 };

@@ -36,21 +36,37 @@ function getTableName(section) {
   return map[section] || 'pipeline';
 }
 
-// ── Per-Section Upserts ─────────────────────────
+// ── Column Cache (TTL-based) ──────────────────────
 
-// Cache valid pipeline table columns to avoid inserting unmapped fields
-let _pipelineColumnsCache = null;
-async function _getPipelineColumns() {
-  if (!_pipelineColumnsCache) {
-    const [cols] = await db.query('SHOW COLUMNS FROM pipeline');
-    _pipelineColumnsCache = new Set(cols.map(c => c.Field));
+const COLUMN_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const _columnsCacheByTable = {};
+
+async function _getTableColumns(tableName) {
+  const cached = _columnsCacheByTable[tableName];
+  if (cached && (Date.now() - cached.ts < COLUMN_CACHE_TTL_MS)) {
+    return cached.columns;
   }
-  return _pipelineColumnsCache;
+  const [cols] = await db.query(`SHOW COLUMNS FROM \`${tableName}\``);
+  const columns = new Set(cols.map(c => c.Field));
+  _columnsCacheByTable[tableName] = { columns, ts: Date.now() };
+  return columns;
 }
 
-async function upsertPipelineRow(mondayItemId, row, boardId) {
-  const [existing] = await db.query('SELECT id FROM pipeline WHERE monday_item_id = ?', [mondayItemId]);
-  const validCols = await _getPipelineColumns();
+// ── Pre-fetch existing IDs (eliminates per-item SELECTs) ──
+
+async function prefetchExistingIds(section) {
+  const tableName = getTableName(section);
+  const [rows] = await db.query(
+    `SELECT id, monday_item_id FROM \`${tableName}\` WHERE source_system = 'monday' AND monday_item_id IS NOT NULL`
+  );
+  return new Map(rows.map(r => [String(r.monday_item_id), r.id]));
+}
+
+// ── Per-Section Upserts ─────────────────────────
+
+async function upsertPipelineRow(mondayItemId, row, boardId, existingIdMap) {
+  const existingDbId = existingIdMap?.get(String(mondayItemId));
+  const validCols = await _getTableColumns('pipeline');
 
   // Filter out internal fields and fields not in the pipeline table
   const dbRow = {};
@@ -59,7 +75,7 @@ async function upsertPipelineRow(mondayItemId, row, boardId) {
   }
   if (boardId && validCols.has('source_board_id')) dbRow.source_board_id = boardId;
 
-  if (existing.length > 0) {
+  if (existingDbId) {
     const sets = [];
     const vals = [];
     for (const [field, value] of Object.entries(dbRow)) {
@@ -68,7 +84,7 @@ async function upsertPipelineRow(mondayItemId, row, boardId) {
       vals.push(value);
     }
     sets.push('last_synced_at = NOW()', 'source_system = ?');
-    vals.push('monday', existing[0].id);
+    vals.push('monday', existingDbId);
     await db.query(`UPDATE pipeline SET ${sets.join(', ')} WHERE id = ?`, vals);
     return 'updated';
   } else {
@@ -81,7 +97,7 @@ async function upsertPipelineRow(mondayItemId, row, boardId) {
   }
 }
 
-async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
+async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId, existingIdMap) {
   const paRow = {
     monday_item_id: String(mondayItemId),
     client_name: row.client_name || 'Unnamed',
@@ -148,9 +164,9 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
     if (loId) paRow.assigned_lo_id = loId;
   }
 
-  const [existing] = await db.query('SELECT id FROM pre_approvals WHERE monday_item_id = ?', [mondayItemId]);
+  const existingDbId = existingIdMap?.get(String(mondayItemId));
 
-  if (existing.length > 0) {
+  if (existingDbId) {
     const sets = [];
     const vals = [];
     for (const [field, value] of Object.entries(paRow)) {
@@ -158,7 +174,7 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
       sets.push(`${field} = ?`);
       vals.push(value);
     }
-    vals.push(existing[0].id);
+    vals.push(existingDbId);
     await db.query(`UPDATE pre_approvals SET ${sets.join(', ')} WHERE id = ?`, vals);
     return 'updated';
   } else {
@@ -169,7 +185,7 @@ async function upsertPreApprovalRow(mondayItemId, row, userNameMap, boardId) {
   }
 }
 
-async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
+async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId, existingIdMap) {
   if (!row.funded_date) {
     logger.info({ mondayItemId }, 'Monday sync: skipping funded loan item — no funded_date');
     return 'skipped';
@@ -250,9 +266,9 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
     if (loId) flRow.assigned_lo_id = loId;
   }
 
-  const [existing] = await db.query('SELECT id FROM funded_loans WHERE monday_item_id = ?', [mondayItemId]);
+  const existingDbId = existingIdMap?.get(String(mondayItemId));
 
-  if (existing.length > 0) {
+  if (existingDbId) {
     const sets = [];
     const vals = [];
     for (const [field, value] of Object.entries(flRow)) {
@@ -260,7 +276,7 @@ async function upsertFundedLoanRow(mondayItemId, row, userNameMap, boardId) {
       sets.push(`${field} = ?`);
       vals.push(value);
     }
-    vals.push(existing[0].id);
+    vals.push(existingDbId);
     await db.query(`UPDATE funded_loans SET ${sets.join(', ')} WHERE id = ?`, vals);
     return 'updated';
   } else {
@@ -342,6 +358,12 @@ async function syncAllBoards(userId) {
     }
   }
 
+  // Pre-fetch existing monday_item_ids per section (one query per section instead of per item)
+  const existingIdMaps = {};
+  for (const section of ['pipeline', 'pre_approvals', 'funded_loans']) {
+    existingIdMaps[section] = await prefetchExistingIds(section);
+  }
+
   for (const board of activeBoards) {
     const boardId = board.board_id;
     const section = board.target_section || 'pipeline';
@@ -351,8 +373,10 @@ async function syncAllBoards(userId) {
       [boardId]
     );
 
-    // Always run autoMapColumns to discover any new Monday columns
-    const autoMappings = await autoMapColumns(token, boardId, section);
+    // Only call autoMapColumns when no saved mappings exist (avoids extra API call per board)
+    const autoMappings = savedMappings.length === 0
+      ? await autoMapColumns(token, boardId, section)
+      : [];
 
     if (savedMappings.length === 0 && autoMappings.length === 0) {
       logger.info({ boardId }, 'Monday sync: no mappings for board, skipping');
@@ -434,12 +458,13 @@ async function syncAllBoards(userId) {
 
         try {
           let result;
+          const idMap = existingIdMaps[section];
           if (section === 'pipeline') {
-            result = await upsertPipelineRow(item.id, row, boardId);
+            result = await upsertPipelineRow(item.id, row, boardId, idMap);
           } else if (section === 'pre_approvals') {
-            result = await upsertPreApprovalRow(item.id, row, userNameMap, boardId);
+            result = await upsertPreApprovalRow(item.id, row, userNameMap, boardId, idMap);
           } else if (section === 'funded_loans') {
-            result = await upsertFundedLoanRow(item.id, row, userNameMap, boardId);
+            result = await upsertFundedLoanRow(item.id, row, userNameMap, boardId, idMap);
           }
           if (result === 'created') created++;
           else if (result === 'updated') updated++;

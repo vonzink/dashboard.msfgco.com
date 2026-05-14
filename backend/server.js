@@ -27,6 +27,7 @@ const pipelineRoutes = require('./routes/pipeline');
 const fundedLoansRoutes = require('./routes/fundedLoans');
 const adminRoutes = require('./routes/admin');
 const webhooksRoutes = require('./routes/webhooks');
+const mondayWebhookRoutes = require('./routes/webhooks/monday');
 
 // Content Engine routes
 const integrationsRoutes = require('./routes/integrations');
@@ -143,6 +144,9 @@ app.get('/health', async (req, res) => {
 // ======================
 // API ROUTES
 // ======================
+
+// Monday.com webhooks use their own token auth (mounted before shared API key middleware)
+app.use('/api/webhooks/monday', mondayWebhookRoutes);
 
 // Webhooks use their own API key auth (defined in webhooks.js)
 app.use('/api/webhooks', webhooksRoutes);

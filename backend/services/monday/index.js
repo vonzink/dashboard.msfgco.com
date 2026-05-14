@@ -2,6 +2,7 @@
 const client = require('./client');
 const mapper = require('./mapper');
 const sync = require('./sync');
+const writer = require('./writer');
 
 module.exports = {
   // Client
@@ -20,4 +21,12 @@ module.exports = {
   getBoardSection: sync.getBoardSection,
   getTableName: sync.getTableName,
   syncAllBoards: sync.syncAllBoards,
+  // Writer
+  createPipelineItem: writer.createPipelineItem,
+  updatePipelineItem: writer.updatePipelineItem,
+  archivePipelineItem: writer.archivePipelineItem,
+  createPreApproval: writer.createPreApproval,
+  updatePreApproval: writer.updatePreApproval,
+  archivePreApproval: writer.archivePreApproval,
+  archiveFundedLoan: writer.archiveFundedLoan,
 };

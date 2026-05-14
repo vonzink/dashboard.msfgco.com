@@ -8,6 +8,8 @@ const { pipelineUpdate, validate } = require('../validation/schemas');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
 const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
+const { getMondayToken } = require('../services/monday/sync');
+const { createPipelineItem, updatePipelineItem, archivePipelineItem } = require('../services/monday/writer');
 
 router.use(requireDbUser);
 
@@ -274,23 +276,43 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { client_name, loan_amount, loan_type, stage, target_close_date, assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes } = req.body;
-    
+
     if (!client_name || !loan_amount || !stage) {
       return res.status(400).json({ error: 'client_name, loan_amount, and stage are required' });
     }
-    
+
     const dbUser = getDbUser(req);
     const currentUserId = getUserId(req);
     const finalAssignedLoId = isAdmin(req) ? (assigned_lo_id || currentUserId) : currentUserId;
     const finalAssignedLoName = isAdmin(req) ? (assigned_lo_name || dbUser?.name || null) : (dbUser?.name || null);
-    
+
+    // Write-through to Monday.com (non-blocking)
+    let mondayItemId = null;
+    let sourceBoardId = null;
+    try {
+      const token = await getMondayToken(currentUserId);
+      if (token) {
+        const mondayResult = await createPipelineItem(token, finalAssignedLoId, {
+          client_name, loan_amount, loan_type, stage,
+          target_close_date, assigned_lo_name: finalAssignedLoName,
+          investor, status: status || 'On Track', notes,
+        });
+        if (mondayResult) {
+          mondayItemId = mondayResult.mondayItemId;
+          sourceBoardId = mondayResult.boardId;
+        }
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message }, 'Monday.com write-through failed on pipeline create — saved to DB only');
+    }
+
     const [result] = await db.query(
-      `INSERT INTO pipeline 
-       (client_name, loan_amount, loan_type, stage, target_close_date, assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [client_name, loan_amount, loan_type || null, stage, target_close_date || null, finalAssignedLoId, finalAssignedLoName, investor || null, investor_id || null, status || 'On Track', notes || null]
+      `INSERT INTO pipeline
+       (client_name, loan_amount, loan_type, stage, target_close_date, assigned_lo_id, assigned_lo_name, investor, investor_id, status, notes, monday_item_id, source_board_id, source_system)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [client_name, loan_amount, loan_type || null, stage, target_close_date || null, finalAssignedLoId, finalAssignedLoName, investor || null, investor_id || null, status || 'On Track', notes || null, mondayItemId, sourceBoardId, mondayItemId ? 'monday' : 'manual']
     );
-    
+
     const [pipeline] = await db.query('SELECT * FROM pipeline WHERE id = ?', [result.insertId]);
     res.status(201).json(pipeline[0]);
   } catch (error) {
@@ -298,7 +320,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// PUT /api/pipeline/:id - Update pipeline item
+// PUT /api/pipeline/:id - Update pipeline item (+ write-through to Monday.com)
 router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
   try {
     const { assigned_lo_id } = req.body;
@@ -319,6 +341,12 @@ router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
       'prelims_status', 'mini_set_status', 'cd_status',
     ];
 
+    // Fetch current record before update (need monday_item_id + source_board_id)
+    const [existing] = await db.query('SELECT * FROM pipeline WHERE id = ?', [req.params.id]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: 'Pipeline item not found' });
+    }
+
     const update = buildUpdate('pipeline', PIPELINE_FIELDS, req.body, { clause: 'id = ?', values: [req.params.id] });
 
     if (!update) {
@@ -326,7 +354,17 @@ router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
     }
 
     await db.query(update.sql, update.values);
-    
+
+    // Write-through to Monday.com (non-blocking)
+    try {
+      const token = await getMondayToken(getUserId(req));
+      if (token) {
+        await updatePipelineItem(token, existing[0], req.body);
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message, id: req.params.id }, 'Monday.com write-through failed on pipeline update');
+    }
+
     const [pipeline] = await db.query('SELECT * FROM pipeline WHERE id = ?', [req.params.id]);
     res.json(pipeline[0]);
   } catch (error) {
@@ -334,25 +372,36 @@ router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
   }
 });
 
-// DELETE /api/pipeline/:id - Delete pipeline item
+// DELETE /api/pipeline/:id - Delete pipeline item (+ archive on Monday.com)
 router.delete('/:id', async (req, res, next) => {
   try {
-    const [existing] = await db.query('SELECT assigned_lo_id FROM pipeline WHERE id = ?', [req.params.id]);
-    
+    const [existing] = await db.query('SELECT * FROM pipeline WHERE id = ?', [req.params.id]);
+
     if (existing.length === 0) {
       return res.status(404).json({ error: 'Pipeline item not found' });
     }
-    
+
     if (!hasRole(req, 'admin', 'manager') && existing[0].assigned_lo_id !== getUserId(req)) {
       return res.status(403).json({ error: 'Access denied' });
     }
-    
+
+    // Archive on Monday.com before deleting from DB (non-blocking)
+    try {
+      const token = await getMondayToken(getUserId(req));
+      if (token && existing[0].monday_item_id) {
+        await archivePipelineItem(token, existing[0]);
+        logger.info({ id: req.params.id, mondayItemId: existing[0].monday_item_id }, 'Pipeline item archived on Monday.com');
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message, id: req.params.id, mondayItemId: existing[0].monday_item_id }, 'Monday.com archive failed on pipeline delete');
+    }
+
     const [result] = await db.query('DELETE FROM pipeline WHERE id = ?', [req.params.id]);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'Pipeline item not found' });
     }
-    
+
     deleted(res, 'Pipeline item deleted');
   } catch (error) {
     next(error);

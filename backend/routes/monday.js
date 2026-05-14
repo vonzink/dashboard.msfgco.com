@@ -487,6 +487,27 @@ router.post('/sync', requireNonExternal, async (req, res, next) => {
   try {
     const userId = getUserId(req);
 
+    // Prevent concurrent syncs — check if one is already running
+    const [running] = await db.query(
+      `SELECT id, triggered_by, started_at FROM monday_sync_log
+       WHERE status = 'running' AND started_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+       LIMIT 1`
+    );
+
+    if (running.length > 0) {
+      return res.status(409).json({
+        error: 'A sync is already in progress',
+        startedAt: running[0].started_at,
+        triggeredBy: running[0].triggered_by,
+      });
+    }
+
+    // Auto-expire stale "running" entries older than 10 minutes
+    await db.query(
+      `UPDATE monday_sync_log SET status = 'error', error_message = 'Timed out (stale)', finished_at = NOW()
+       WHERE status = 'running' AND started_at <= DATE_SUB(NOW(), INTERVAL 10 MINUTE)`
+    );
+
     // Create a sync log entry so the client knows a sync is in progress
     await db.query(
       "INSERT INTO monday_sync_log (board_id, triggered_by, target_section, status) VALUES ('0', ?, 'all', 'running')",
@@ -552,6 +573,103 @@ router.get('/sync/log', requireAdmin, async (req, res, next) => {
     );
 
     res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── POST /webhooks/register — register a webhook for a board ────
+router.post('/webhooks/register', requireAdmin, async (req, res, next) => {
+  try {
+    const { boardId } = req.body;
+    if (!boardId) {
+      return res.status(400).json({ error: 'boardId is required' });
+    }
+
+    const [boardRows] = await db.query('SELECT * FROM monday_boards WHERE board_id = ?', [boardId]);
+    if (boardRows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    if (boardRows[0].webhook_id) {
+      return res.status(409).json({ error: 'Webhook already registered for this board', webhookId: boardRows[0].webhook_id });
+    }
+
+    const token = await getMondayToken(getUserId(req));
+    if (!token) {
+      return res.status(400).json({ error: 'Monday.com API token not configured' });
+    }
+
+    // Build the webhook URL
+    const baseUrl = process.env.API_BASE_URL || `https://api.msfgco.com`;
+    const webhookToken = process.env.MONDAY_WEBHOOK_TOKEN || '';
+    const webhookUrl = `${baseUrl}/api/webhooks/monday${webhookToken ? '?token=' + webhookToken : ''}`;
+
+    const { mondayMutate } = require('../services/monday/writer');
+
+    const data = await mondayMutate(token, `mutation ($boardId: ID!, $url: String!, $event: WebhookEventType!) {
+      create_webhook(board_id: $boardId, url: $url, event: $event) {
+        id
+        board_id
+      }
+    }`, {
+      boardId: String(boardId),
+      url: webhookUrl,
+      event: 'change_column_value',
+    });
+
+    const webhookId = data.create_webhook?.id;
+
+    if (webhookId) {
+      await db.query(
+        'UPDATE monday_boards SET webhook_id = ?, webhook_url = ? WHERE board_id = ?',
+        [webhookId, webhookUrl, boardId]
+      );
+    }
+
+    res.json({ success: true, webhookId, webhookUrl });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ── DELETE /webhooks/:boardId — unregister a webhook ─────────────
+router.delete('/webhooks/:boardId', requireAdmin, async (req, res, next) => {
+  try {
+    const boardId = req.params.boardId;
+
+    const [boardRows] = await db.query('SELECT * FROM monday_boards WHERE board_id = ?', [boardId]);
+    if (boardRows.length === 0) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    const webhookId = boardRows[0].webhook_id;
+    if (!webhookId) {
+      return res.status(404).json({ error: 'No webhook registered for this board' });
+    }
+
+    const token = await getMondayToken(getUserId(req));
+    if (token) {
+      try {
+        const { mondayMutate } = require('../services/monday/writer');
+        await mondayMutate(token, `mutation ($webhookId: ID!) {
+          delete_webhook(id: $webhookId) {
+            id
+          }
+        }`, { webhookId: String(webhookId) });
+      } catch (mondayErr) {
+        // Monday.com may return error if webhook was already deleted — continue cleanup
+        const logger = require('../lib/logger');
+        logger.warn({ err: mondayErr.message, webhookId }, 'Monday.com webhook deletion failed — clearing local reference');
+      }
+    }
+
+    await db.query(
+      'UPDATE monday_boards SET webhook_id = NULL, webhook_url = NULL WHERE board_id = ?',
+      [boardId]
+    );
+
+    res.json({ success: true, message: 'Webhook unregistered' });
   } catch (error) {
     next(error);
   }

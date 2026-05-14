@@ -732,6 +732,14 @@ const ServerAPI = {
         return this.get('/monday/boards/my-boards');
     },
 
+    registerMondayWebhook(boardId) {
+        return this.post('/monday/webhooks/register', { boardId });
+    },
+
+    unregisterMondayWebhook(boardId) {
+        return this.delete(`/monday/webhooks/${boardId}`);
+    },
+
     // ========================================
     // EMPLOYEE PROFILES
     // ========================================

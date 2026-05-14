@@ -1078,6 +1078,31 @@
       </button>
     </div>
 
+    <!-- Webhooks -->
+    <div class="monday-section">
+      <div class="toolbar">
+        <h3 style="margin:0; font-size:16px; color:#104547;">
+          <i class="fas fa-bolt"></i> Real-Time Webhooks
+        </h3>
+      </div>
+      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+        Enable webhooks for real-time sync. When items change on Monday.com, the dashboard updates automatically.
+      </p>
+      <table class="admin-table" id="mondayWebhooksTable">
+        <thead>
+          <tr>
+            <th>Board</th>
+            <th>Section</th>
+            <th>Webhook Status</th>
+            <th style="width:140px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="mondayWebhooksBody">
+          <tr><td colspan="4" class="state-msg"><i class="fas fa-spinner fa-spin"></i><p>Loading...</p></td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- Sync Controls -->
     <div class="monday-section">
       <div class="toolbar">
@@ -3370,6 +3395,7 @@
       loadMondayTokenStatus();
       loadMondaySyncHistory();
       loadMondayDisplayConfig();
+      loadMondayWebhooks();
     }
 
     // ── Token Management ──
@@ -3859,6 +3885,67 @@
     }
 
     document.getElementById('mondayRunSyncBtn').addEventListener('click', runMondaySync);
+
+    // ── Webhook Management ──
+    async function loadMondayWebhooks() {
+      const tbody = document.getElementById('mondayWebhooksBody');
+      if (!tbody) return;
+
+      try {
+        const data = await api('/monday/boards');
+        if (!data || !data.boards) return;
+
+        const sectionLabels = { pipeline: 'Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Funded Loans' };
+
+        tbody.innerHTML = data.boards.map(b => {
+          const hasWebhook = !!b.webhook_id;
+          const statusHtml = hasWebhook
+            ? '<span style="color:#2e7d32; font-weight:600;"><i class="fas fa-check-circle"></i> Active</span>'
+            : '<span style="color:#888;"><i class="fas fa-minus-circle"></i> Not enabled</span>';
+          const actionHtml = hasWebhook
+            ? `<button class="btn btn-secondary btn-sm" onclick="unregisterWebhook('${b.board_id}')"><i class="fas fa-unlink"></i> Disable</button>`
+            : `<button class="btn btn-primary btn-sm" onclick="registerWebhook('${b.board_id}')"><i class="fas fa-bolt"></i> Enable</button>`;
+          return '<tr>' +
+            '<td>' + escHtml(b.board_name || b.board_id) + '</td>' +
+            '<td>' + (sectionLabels[b.target_section] || b.target_section) + '</td>' +
+            '<td>' + statusHtml + '</td>' +
+            '<td>' + actionHtml + '</td>' +
+            '</tr>';
+        }).join('');
+
+        if (data.boards.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#999;">No boards registered. Add a board first.</td></tr>';
+        }
+      } catch (e) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#e74c3c;">Could not load webhook status.</td></tr>';
+      }
+    }
+
+    window.registerWebhook = async function(boardId) {
+      try {
+        const result = await api('/monday/webhooks/register', {
+          method: 'POST',
+          body: JSON.stringify({ boardId }),
+        });
+        if (result) {
+          loadMondayWebhooks();
+        }
+      } catch (e) {
+        alert('Failed to enable webhook: ' + e.message);
+      }
+    };
+
+    window.unregisterWebhook = async function(boardId) {
+      if (!confirm('Disable real-time webhook for this board?')) return;
+      try {
+        const result = await api('/monday/webhooks/' + boardId, { method: 'DELETE' });
+        if (result) {
+          loadMondayWebhooks();
+        }
+      } catch (e) {
+        alert('Failed to disable webhook: ' + e.message);
+      }
+    };
 
     /* ═══════════════════════════════════════
        PROCESSORS TAB

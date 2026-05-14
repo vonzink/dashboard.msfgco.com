@@ -7,6 +7,8 @@ const db = require('../db/connection');
 const logger = require('../lib/logger');
 const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
 const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
+const { getMondayToken } = require('../services/monday/sync');
+const { archiveFundedLoan } = require('../services/monday/writer');
 
 router.use(requireDbUser);
 
@@ -485,11 +487,25 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Funded loan not found' });
     }
 
+    // Archive on Monday.com before deleting from DB (non-blocking)
+    let mondayArchived = false;
+    try {
+      const token = await getMondayToken(getUserId(req));
+      if (token && loans[0].monday_item_id) {
+        await archiveFundedLoan(token, loans[0]);
+        mondayArchived = true;
+        logger.info({ id: req.params.id, mondayItemId: loans[0].monday_item_id }, 'Funded loan archived on Monday.com');
+      }
+    } catch (mondayErr) {
+      logger.warn({ err: mondayErr.message, id: req.params.id, mondayItemId: loans[0].monday_item_id }, 'Monday.com archive failed on funded loan delete');
+    }
+
     await db.query('DELETE FROM funded_loans WHERE id = ?', [req.params.id]);
 
     res.json({
       success: true,
       message: 'Funded loan deleted',
+      mondayArchived,
       data: loans[0]
     });
 

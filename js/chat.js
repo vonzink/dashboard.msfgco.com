@@ -180,7 +180,38 @@ const Chat = {
         }
         break;
       }
+
+      case 'monday:item-updated': {
+        const { section } = msg.data || {};
+        this._refreshMondaySection(section);
+        Utils.showToast(`${this._mondaySectionLabel(section)} updated from Monday.com`, 'info');
+        break;
+      }
+
+      case 'monday:item-deleted': {
+        const { section } = msg.data || {};
+        this._refreshMondaySection(section);
+        Utils.showToast(`${this._mondaySectionLabel(section)} item removed via Monday.com`, 'info');
+        break;
+      }
     }
+  },
+
+  _refreshMondaySection(section) {
+    switch (section) {
+      case 'pipeline':       API.loadPipeline(); break;
+      case 'pre_approvals':  API.loadPreApprovals(); break;
+      case 'funded_loans':   if (typeof FundedLoans !== 'undefined') FundedLoans.load(); break;
+      default:
+        API.loadPipeline();
+        API.loadPreApprovals();
+        if (typeof FundedLoans !== 'undefined') FundedLoans.load();
+    }
+  },
+
+  _mondaySectionLabel(section) {
+    const labels = { pipeline: 'Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Funded Loans' };
+    return labels[section] || 'Monday.com';
   },
 
   bindEvents() {
