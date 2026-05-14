@@ -129,10 +129,11 @@ async function seedGlobalTemplates() {
     }
 
     const parsed = parseTemplateMarkdown(md);
-    if (!parsed.name || !parsed.items.length) {
-      logger.warn({ key }, 'Could not parse template — skipping');
+    if (!parsed.name) {
+      logger.warn({ key }, 'Template has no name — skipping');
       continue;
     }
+    // Zero-item templates ARE valid (e.g. an "Empty Checklist" starter).
 
     const [existing] = await db.query(
       'SELECT id FROM checklist_templates WHERE is_global = TRUE AND name = ?',

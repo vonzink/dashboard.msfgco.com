@@ -704,7 +704,6 @@ const Checklists = {
           <h4>Choose a template to get started</h4>
           <div class="cl-template-actions">
             <button type="button" class="btn btn-sm btn-outline" data-cl-action="make-from-pdf" title="Upload a PDF (lender conditions, DU findings, etc.) and convert it into a checklist for this file"><i class="fas fa-file-pdf"></i> Make Checklist from PDF</button>
-            <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item"><i class="fas fa-plus"></i> Start Blank</button>
           </div>
         </div>
     `;
