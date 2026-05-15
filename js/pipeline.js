@@ -360,15 +360,19 @@ const Pipeline = {
       : '';
 
     const statusSelect = (field, label, currentVal) => {
-      const options = this.STATUS_OPTIONS[field] || [];
-      const opts = options.map(o =>
+      const presets = this.STATUS_OPTIONS[field] || [];
+      const hasCurrentInPresets = !currentVal || presets.includes(currentVal);
+      const opts = presets.map(o =>
         `<option value="${esc(o)}" ${o === currentVal ? 'selected' : ''}>${esc(o)}</option>`
       ).join('');
+      const customOpt = (!hasCurrentInPresets && currentVal)
+        ? `<option value="${esc(currentVal)}" selected>${esc(currentVal)}</option>`
+        : '';
       return `<div class="pa-detail-row">
         <span class="pa-detail-label">${esc(label)}</span>
         <span class="pa-detail-value">
           <select class="pipeline-status-select" data-field="${field}" data-item-id="${item.id}">
-            <option value="">--</option>${opts}
+            <option value="">--</option>${customOpt}${opts}
           </select>
         </span>
       </div>`;
