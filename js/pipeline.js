@@ -561,7 +561,10 @@ const Pipeline = {
 
   _closeDetail() {
     // Re-render the table to reflect any edits made in the detail view
-    if (this.data?.length) this.render(this.data);
+    if (this.data?.length) {
+      this.render(this.data);
+      if (typeof MondaySettings !== 'undefined') MondaySettings.filterPipeline();
+    }
     const modal = document.getElementById('pipelineDetailModal');
     if (modal) modal.classList.remove('active');
   },
