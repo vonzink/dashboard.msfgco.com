@@ -428,7 +428,6 @@ const Pipeline = {
             ${statusSelect('closing_docs', 'Closing Docs', item.closing_docs || '')}
             ${statusSelect('closing_details', 'Closing Details', item.closing_details || '')}
             ${statusSelect('cd_info', 'CD Info', item.cd_info || '')}
-            ${statusSelect('send_to_compliance', 'Compliance', item.send_to_compliance || '')}
           </div>
         </div>
       </div>
