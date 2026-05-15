@@ -11,6 +11,25 @@ const Pipeline = {
 
   PRIORITY_FIELDS: ['client_name', 'assigned_lo_name', 'lender', 'loan_amount', 'stage', 'closing_date', 'loan_number', 'subject_property'],
 
+  STATUS_OPTIONS: {
+    stage: ['Prospect', 'Pre-Approved', 'Application', 'Processing', 'Submitted', 'Conditional', 'CTC', 'Clear to Close', 'Closing', 'Funded', 'On Hold', 'Cancelled'],
+    appraisal_status: ['Not Ordered', 'Ordered', 'Scheduled', 'Received', 'Approved', 'Pending', 'Waived', 'N/A'],
+    prelims_status: ['Not Ordered', 'Ordered', 'Received', 'Approved', 'Pending', 'Cleared', 'N/A'],
+    mini_set_status: ['Not Sent', 'Sent', 'Received', 'Approved', 'Pending', 'N/A'],
+    cd_status: ['Not Sent', 'Sent', 'Signed', 'Received', 'Approved', 'Pending', 'N/A'],
+    title_status: ['Not Ordered', 'Ordered', 'Received', 'Cleared', 'Pending', 'N/A'],
+    hoi_status: ['Not Ordered', 'Ordered', 'Received', 'Cleared', 'Pending', 'Waived', 'N/A'],
+    payoffs: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
+    wvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
+    vvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
+    hoa: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
+    dpa: ['Not Applied', 'Applied', 'Approved', 'Received', 'Pending', 'Denied', 'N/A'],
+    closing_docs: ['Not Sent', 'Sent', 'Signed', 'Received', 'Pending', 'N/A'],
+    closing_details: ['Not Sent', 'Sent', 'Confirmed', 'Pending', 'N/A'],
+    cd_info: ['Not Sent', 'Sent', 'Signed', 'Received', 'Pending', 'N/A'],
+    send_to_compliance: ['Not Sent', 'Sent', 'Approved', 'Pending', 'Returned', 'N/A'],
+  },
+
   FALLBACK_COLUMNS: [
     { field: 'client_name', label: 'Client Name' },
     { field: 'loan_number', label: 'Loan #' },
@@ -340,13 +359,28 @@ const Pipeline = {
       ? `<div class="pa-detail-row"><span class="pa-detail-label">${esc(label)}</span><span class="pa-detail-value">${value}</span></div>`
       : '';
 
+    const statusSelect = (field, label, currentVal) => {
+      const options = this.STATUS_OPTIONS[field] || [];
+      const opts = options.map(o =>
+        `<option value="${esc(o)}" ${o === currentVal ? 'selected' : ''}>${esc(o)}</option>`
+      ).join('');
+      return `<div class="pa-detail-row">
+        <span class="pa-detail-label">${esc(label)}</span>
+        <span class="pa-detail-value">
+          <select class="pipeline-status-select" data-field="${field}" data-item-id="${item.id}">
+            <option value="">--</option>${opts}
+          </select>
+        </span>
+      </div>`;
+    };
+
     body.innerHTML = `
       <div class="pa-detail-grid">
         <div class="pa-detail-section">
           <h3 class="pa-detail-section-title"><i class="fas fa-user"></i> Borrower Info</h3>
           ${detailRow('Client Name', esc(item.client_name || '--'))}
           ${detailRow('Loan Officer', esc(item.assigned_lo_name || '--'))}
-          ${item.stage ? detailRow('Stage', `<span class="pipeline-badge ${statusCls(item.stage)}">${esc(item.stage)}</span>`) : ''}
+          ${statusSelect('stage', 'Stage', item.stage || '')}
           ${item.loan_status ? detailRow('Loan Status', `<span class="pipeline-badge ${statusCls(item.loan_status)}">${esc(item.loan_status)}</span>`) : ''}
           ${detailRow('Loan Number', esc(item.loan_number || ''))}
           ${detailRow('Lender', esc(item.lender || ''))}
@@ -375,10 +409,21 @@ const Pipeline = {
         </div>
         <div class="pa-detail-section">
           <h3 class="pa-detail-section-title"><i class="fas fa-tasks"></i> Status Tracking</h3>
-          ${item.appraisal_status ? detailRow('Appraisal', `<span class="pipeline-badge ${statusCls(item.appraisal_status)}">${esc(item.appraisal_status)}</span>`) : ''}
-          ${item.prelims_status ? detailRow('Prelims', `<span class="pipeline-badge ${statusCls(item.prelims_status)}">${esc(item.prelims_status)}</span>`) : ''}
-          ${item.mini_set_status ? detailRow('Mini Set', `<span class="pipeline-badge ${statusCls(item.mini_set_status)}">${esc(item.mini_set_status)}</span>`) : ''}
-          ${item.cd_status ? detailRow('CD', `<span class="pipeline-badge ${statusCls(item.cd_status)}">${esc(item.cd_status)}</span>`) : ''}
+          ${statusSelect('appraisal_status', 'Appraisal', item.appraisal_status || '')}
+          ${statusSelect('prelims_status', 'Prelims', item.prelims_status || '')}
+          ${statusSelect('mini_set_status', 'Mini Set', item.mini_set_status || '')}
+          ${statusSelect('cd_status', 'CD', item.cd_status || '')}
+          ${statusSelect('title_status', 'Title', item.title_status || '')}
+          ${statusSelect('hoi_status', 'Insurance', item.hoi_status || '')}
+          ${statusSelect('payoffs', 'Payoffs', item.payoffs || '')}
+          ${statusSelect('wvoes', 'WVOEs', item.wvoes || '')}
+          ${statusSelect('vvoes', 'VVOEs', item.vvoes || '')}
+          ${statusSelect('hoa', 'HOA', item.hoa || '')}
+          ${statusSelect('dpa', 'DPA', item.dpa || '')}
+          ${statusSelect('closing_docs', 'Closing Docs', item.closing_docs || '')}
+          ${statusSelect('closing_details', 'Closing Details', item.closing_details || '')}
+          ${statusSelect('cd_info', 'CD Info', item.cd_info || '')}
+          ${statusSelect('send_to_compliance', 'Compliance', item.send_to_compliance || '')}
         </div>
         <div class="pa-detail-section">
           <h3 class="pa-detail-section-title"><i class="fas fa-user-tie"></i> Referring Agent</h3>
@@ -387,7 +432,16 @@ const Pipeline = {
           ${detailRow('Agent Phone', item.referring_agent_phone ? `<a href="tel:${esc(item.referring_agent_phone)}">${esc(item.referring_agent_phone)}</a>` : '')}
         </div>
       </div>
-      ${item.notes ? `<div class="pa-detail-section full-width"><h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Monday Notes</h3><div class="pa-detail-monday-notes">${esc(item.notes)}</div></div>` : ''}
+      <div class="pa-detail-section full-width">
+        <h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Monday Notes</h3>
+        <textarea id="pipelineMondayNotes" rows="3" class="form-input" placeholder="Add notes...">${esc(item.notes || '')}</textarea>
+        <button type="button" class="btn btn-primary btn-sm" id="pipelineSaveMondayNotes" style="margin-top:0.5rem;"><i class="fas fa-save"></i> Save Notes</button>
+      </div>
+      ${item.monday_item_id ? `<div class="pa-detail-section full-width">
+        <h3 class="pa-detail-section-title"><i class="fab fa-monday"></i> Post Comment to Monday.com</h3>
+        <textarea id="pipelineMondayComment" rows="2" class="form-input" placeholder="Write a comment — it will appear in the item's activity feed on Monday.com..."></textarea>
+        <button type="button" class="btn btn-secondary btn-sm" id="pipelinePostMondayComment" style="margin-top:0.5rem;"><i class="fab fa-monday"></i> Post to Monday</button>
+      </div>` : ''}
       <div class="pa-detail-section full-width">
         <h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>
         <div class="pa-notes-add">
@@ -405,6 +459,20 @@ const Pipeline = {
 
     modal.classList.add('active');
 
+    // Status field change handlers — save immediately on change
+    modal.querySelectorAll('.pipeline-status-select').forEach(select => {
+      select.addEventListener('change', () => this._saveField(id, select.dataset.field, select.value));
+    });
+
+    // Monday Notes save
+    document.getElementById('pipelineSaveMondayNotes')?.addEventListener('click', () => {
+      const val = document.getElementById('pipelineMondayNotes')?.value || '';
+      this._saveField(id, 'notes', val.trim());
+    });
+
+    // Post comment to Monday.com item
+    document.getElementById('pipelinePostMondayComment')?.addEventListener('click', () => this._postMondayComment(id));
+
     document.getElementById('pipelineAddNoteBtn')?.addEventListener('click', () => this._addNote(id));
     document.getElementById('pipelineNewNoteInput')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) this._addNote(id);
@@ -413,7 +481,41 @@ const Pipeline = {
     this._loadNotes(id);
   },
 
+  async _postMondayComment(itemId) {
+    const textarea = document.getElementById('pipelineMondayComment');
+    if (!textarea) return;
+    const body = textarea.value.trim();
+    if (!body) return;
+
+    const btn = document.getElementById('pipelinePostMondayComment');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Posting...'; }
+
+    try {
+      await ServerAPI.postMondayComment(itemId, body);
+      textarea.value = '';
+      Utils.showToast('Comment posted to Monday.com', 'success');
+    } catch (err) {
+      Utils.showToast('Failed to post: ' + (err.message || 'Unknown error'), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fab fa-monday"></i> Post to Monday'; }
+    }
+  },
+
+  async _saveField(itemId, field, value) {
+    try {
+      const updated = await ServerAPI.updatePipeline(itemId, { [field]: value });
+      // Update local data so the table reflects the change on close
+      const local = this.data?.find(p => p.id === itemId);
+      if (local) local[field] = value;
+      Utils.showToast('Saved', 'success');
+    } catch (err) {
+      Utils.showToast('Failed to save: ' + (err.message || 'Unknown error'), 'error');
+    }
+  },
+
   _closeDetail() {
+    // Re-render the table to reflect any edits made in the detail view
+    if (this.data?.length) this.render(this.data);
     const modal = document.getElementById('pipelineDetailModal');
     if (modal) modal.classList.remove('active');
   },

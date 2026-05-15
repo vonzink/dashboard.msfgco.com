@@ -9,7 +9,7 @@ const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
 const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
 const { getMondayToken } = require('../services/monday/sync');
-const { createPipelineItem, updatePipelineItem, archivePipelineItem } = require('../services/monday/writer');
+const { createPipelineItem, updatePipelineItem, archivePipelineItem, createItemUpdate } = require('../services/monday/writer');
 
 router.use(requireDbUser);
 
@@ -339,6 +339,8 @@ router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
       'appraisal_status', 'loan_purpose', 'occupancy', 'title_status', 'hoi_status',
       'loan_estimate', 'application_date', 'lock_expiration_date', 'closing_date', 'funding_date',
       'prelims_status', 'mini_set_status', 'cd_status',
+      'payoffs', 'wvoes', 'vvoes', 'hoa', 'dpa', 'cd_info',
+      'closing_details', 'closing_docs', 'send_to_compliance',
     ];
 
     // Fetch current record before update (need monday_item_id + source_board_id)
@@ -486,5 +488,26 @@ router.delete('/:id/notes/:noteId', async (req, res, next) => {
   }
 });
 
-module.exports = router;
+// POST /api/pipeline/:id/monday-comment - Post a comment to the Monday.com item
+router.post('/:id/monday-comment', async (req, res, next) => {
+  try {
+    const { body } = req.body;
+    if (!body || !body.trim()) {
+      return res.status(400).json({ error: 'Comment body is required' });
+    }
 
+    const [rows] = await db.query('SELECT monday_item_id FROM pipeline WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Pipeline item not found' });
+    if (!rows[0].monday_item_id) return res.status(400).json({ error: 'This item is not linked to Monday.com' });
+
+    const token = await getMondayToken(getUserId(req));
+    if (!token) return res.status(400).json({ error: 'No Monday.com API token configured' });
+
+    const updateId = await createItemUpdate(token, rows[0].monday_item_id, body.trim());
+    res.json({ success: true, updateId });
+  } catch (error) {
+    next(error);
+  }
+});
+
+module.exports = router;

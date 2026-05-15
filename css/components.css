@@ -873,6 +873,23 @@
     padding: var(--spacing-sm, 0.5rem) 0;
 }
 
+.pipeline-status-select {
+    background: var(--bg-card, #1e2a3a);
+    color: var(--text-primary, #e4e8ee);
+    border: 1px solid var(--border-color, #2a3a4a);
+    border-radius: 6px;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-width: 120px;
+}
+.pipeline-status-select:focus {
+    outline: none;
+    border-color: var(--green-bright, #8cc63e);
+    box-shadow: 0 0 0 2px rgba(140, 198, 62, 0.2);
+}
+
 .pa-detail-actions {
     display: flex;
     gap: var(--spacing-sm, 0.5rem);

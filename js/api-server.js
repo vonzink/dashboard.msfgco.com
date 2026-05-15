@@ -358,6 +358,10 @@ const ServerAPI = {
         return this.get(`/pipeline${query}`);
     },
 
+    updatePipeline(id, fields) {
+        return this.put(`/pipeline/${id}`, fields);
+    },
+
     getPipelineSummary(params = {}) {
         const qs = this.buildQuery(params);
         return this.get(`/pipeline/summary${qs}`);
@@ -375,6 +379,9 @@ const ServerAPI = {
     },
     deletePipelineNote(pipelineId, noteId) {
         return this.delete(`/pipeline/${pipelineId}/notes/${noteId}`);
+    },
+    postMondayComment(pipelineId, body) {
+        return this.post(`/pipeline/${pipelineId}/monday-comment`, { body });
     },
 
     getPreApprovalsSummary(params = {}) {

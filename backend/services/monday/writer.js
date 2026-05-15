@@ -381,12 +381,31 @@ async function archiveFundedLoan(token, fundedLoanRecord) {
   await archiveItem(token, monday_item_id);
 }
 
+/**
+ * Post a comment/update to a Monday.com item's activity feed.
+ */
+async function createItemUpdate(token, itemId, body) {
+  logger.info({ itemId }, 'Posting update to Monday.com item');
+
+  const data = await mondayMutate(token, `mutation ($itemId: ID!, $body: String!) {
+    create_update(item_id: $itemId, body: $body) {
+      id
+    }
+  }`, {
+    itemId: String(itemId),
+    body,
+  });
+
+  return data.create_update?.id;
+}
+
 module.exports = {
   mondayMutate,
   createItem,
   updateItem,
   findItemByColumnValue,
   archiveItem,
+  createItemUpdate,
   getReverseColumnMap,
   formatColumnValue,
   buildColumnValues,
