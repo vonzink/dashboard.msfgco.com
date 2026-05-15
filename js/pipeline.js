@@ -459,9 +459,9 @@ const Pipeline = {
 
     modal.classList.add('active');
 
-    // Status field change handlers — save immediately on change
+    // Status field change handlers — prompt for optional comment, then save
     modal.querySelectorAll('.pipeline-status-select').forEach(select => {
-      select.addEventListener('change', () => this._saveField(id, select.dataset.field, select.value));
+      select.addEventListener('change', () => this._onStatusChange(id, select));
     });
 
     // Monday Notes save
@@ -479,6 +479,53 @@ const Pipeline = {
     });
 
     this._loadNotes(id);
+  },
+
+  _onStatusChange(itemId, select) {
+    const field = select.dataset.field;
+    const newValue = select.value;
+    const label = select.closest('.pa-detail-row')?.querySelector('.pa-detail-label')?.textContent || field;
+
+    // Show inline comment prompt below the select
+    const existing = select.parentElement.querySelector('.status-comment-prompt');
+    if (existing) existing.remove();
+
+    const prompt = document.createElement('div');
+    prompt.className = 'status-comment-prompt';
+    prompt.innerHTML = `
+      <input type="text" class="form-input status-comment-input" placeholder="Add a comment (optional)..." />
+      <div class="status-comment-actions">
+        <button type="button" class="btn btn-primary btn-sm status-comment-save"><i class="fas fa-check"></i> Save</button>
+        <button type="button" class="btn btn-secondary btn-sm status-comment-skip">Skip Comment</button>
+      </div>
+    `;
+    select.parentElement.appendChild(prompt);
+
+    const input = prompt.querySelector('.status-comment-input');
+    input.focus();
+
+    const save = async (comment) => {
+      prompt.remove();
+      await this._saveField(itemId, field, newValue);
+      if (comment) {
+        const item = this.data?.find(p => p.id === itemId);
+        if (item?.monday_item_id) {
+          const body = `${label} changed to "${newValue}"${comment ? ' — ' + comment : ''}`;
+          try {
+            await ServerAPI.postMondayComment(itemId, body);
+          } catch (err) {
+            Utils.showToast('Status saved but comment failed: ' + err.message, 'error');
+          }
+        }
+      }
+    };
+
+    prompt.querySelector('.status-comment-save').addEventListener('click', () => save(input.value.trim()));
+    prompt.querySelector('.status-comment-skip').addEventListener('click', () => save(''));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') save(input.value.trim());
+      if (e.key === 'Escape') save('');
+    });
   },
 
   async _postMondayComment(itemId) {

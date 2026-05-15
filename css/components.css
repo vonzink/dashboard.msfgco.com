@@ -887,6 +887,24 @@
     border-top: none;
 }
 
+.status-comment-prompt {
+    margin-top: 0.4rem;
+}
+.status-comment-input {
+    font-size: 0.82rem !important;
+    padding: 0.3rem 0.5rem !important;
+    width: 100%;
+    margin-bottom: 0.3rem;
+}
+.status-comment-actions {
+    display: flex;
+    gap: 0.4rem;
+}
+.status-comment-actions .btn {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.6rem;
+}
+
 .pipeline-status-select {
     background: var(--bg-card, #1e2a3a);
     color: var(--text-primary, #e4e8ee);
