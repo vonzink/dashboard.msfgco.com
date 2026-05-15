@@ -873,6 +873,20 @@
     padding: var(--spacing-sm, 0.5rem) 0;
 }
 
+.pa-status-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+}
+.pa-status-grid .pa-detail-row {
+    border-bottom: 1px solid var(--border-color, #2a3a4a);
+    padding: 0.5rem 0.75rem;
+    margin: 0;
+}
+.pa-status-grid .pa-detail-row + .pa-detail-row {
+    border-top: none;
+}
+
 .pipeline-status-select {
     background: var(--bg-card, #1e2a3a);
     color: var(--text-primary, #e4e8ee);

@@ -411,29 +411,25 @@ const Pipeline = {
           ${detailRow('Funding Date', fmtDate(item.funding_date))}
           ${detailRow('Lock Expiration', fmtDate(item.lock_expiration_date))}
         </div>
-        <div class="pa-detail-section">
+        <div class="pa-detail-section full-width">
           <h3 class="pa-detail-section-title"><i class="fas fa-tasks"></i> Status Tracking</h3>
-          ${statusSelect('appraisal_status', 'Appraisal', item.appraisal_status || '')}
-          ${statusSelect('prelims_status', 'Prelims', item.prelims_status || '')}
-          ${statusSelect('mini_set_status', 'Mini Set', item.mini_set_status || '')}
-          ${statusSelect('cd_status', 'CD', item.cd_status || '')}
-          ${statusSelect('title_status', 'Title', item.title_status || '')}
-          ${statusSelect('hoi_status', 'Insurance', item.hoi_status || '')}
-          ${statusSelect('payoffs', 'Payoffs', item.payoffs || '')}
-          ${statusSelect('wvoes', 'WVOEs', item.wvoes || '')}
-          ${statusSelect('vvoes', 'VVOEs', item.vvoes || '')}
-          ${statusSelect('hoa', 'HOA', item.hoa || '')}
-          ${statusSelect('dpa', 'DPA', item.dpa || '')}
-          ${statusSelect('closing_docs', 'Closing Docs', item.closing_docs || '')}
-          ${statusSelect('closing_details', 'Closing Details', item.closing_details || '')}
-          ${statusSelect('cd_info', 'CD Info', item.cd_info || '')}
-          ${statusSelect('send_to_compliance', 'Compliance', item.send_to_compliance || '')}
-        </div>
-        <div class="pa-detail-section">
-          <h3 class="pa-detail-section-title"><i class="fas fa-user-tie"></i> Referring Agent</h3>
-          ${detailRow('Agent Name', esc(item.referring_agent || ''))}
-          ${detailRow('Agent Email', item.referring_agent_email ? `<a href="mailto:${esc(item.referring_agent_email)}">${esc(item.referring_agent_email)}</a>` : '')}
-          ${detailRow('Agent Phone', item.referring_agent_phone ? `<a href="tel:${esc(item.referring_agent_phone)}">${esc(item.referring_agent_phone)}</a>` : '')}
+          <div class="pa-status-grid">
+            ${statusSelect('appraisal_status', 'Appraisal', item.appraisal_status || '')}
+            ${statusSelect('prelims_status', 'Prelims', item.prelims_status || '')}
+            ${statusSelect('mini_set_status', 'Mini Set', item.mini_set_status || '')}
+            ${statusSelect('cd_status', 'CD', item.cd_status || '')}
+            ${statusSelect('title_status', 'Title', item.title_status || '')}
+            ${statusSelect('hoi_status', 'Insurance', item.hoi_status || '')}
+            ${statusSelect('payoffs', 'Payoffs', item.payoffs || '')}
+            ${statusSelect('wvoes', 'WVOEs', item.wvoes || '')}
+            ${statusSelect('vvoes', 'VVOEs', item.vvoes || '')}
+            ${statusSelect('hoa', 'HOA', item.hoa || '')}
+            ${statusSelect('dpa', 'DPA', item.dpa || '')}
+            ${statusSelect('closing_docs', 'Closing Docs', item.closing_docs || '')}
+            ${statusSelect('closing_details', 'Closing Details', item.closing_details || '')}
+            ${statusSelect('cd_info', 'CD Info', item.cd_info || '')}
+            ${statusSelect('send_to_compliance', 'Compliance', item.send_to_compliance || '')}
+          </div>
         </div>
       </div>
       <div class="pa-detail-section full-width">
