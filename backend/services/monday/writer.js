@@ -140,8 +140,9 @@ function formatColumnValue(field, value, columnType) {
       return { date: String(value).substring(0, 10) };
     case 'status':
       return { label: String(value) };
-    case 'text':
     case 'long_text':
+      return { text: String(value) };
+    case 'text':
     default:
       return String(value);
   }
@@ -286,6 +287,48 @@ async function archivePreApproval(token, preApprovalRecord) {
 
 // ── Pipeline write-through helpers ────────────────────────────────
 
+/**
+ * Find the Monday.com group ID whose title matches (case-insensitive).
+ */
+async function findGroupIdByTitle(token, boardId, title) {
+  const { mondayQuery } = require('./client');
+  const data = await mondayQuery(token, `query {
+    boards(ids: [${boardId}]) {
+      groups { id title }
+    }
+  }`);
+
+  const groups = data.boards?.[0]?.groups || [];
+  const target = groups.find(g => g.title.toLowerCase() === title.toLowerCase());
+
+  if (!target) {
+    logger.warn({ boardId, title, availableGroups: groups.map(g => g.title) },
+      'No matching Monday.com group for title');
+    return null;
+  }
+  return target.id;
+}
+
+/**
+ * Move an item to the Monday.com group matching the given stage name.
+ * Stage on Monday.com = the group the item belongs to (not a column).
+ */
+async function moveItemToStageGroup(token, boardId, itemId, stageName) {
+  const groupId = await findGroupIdByTitle(token, boardId, stageName);
+  if (!groupId) return;
+
+  logger.info({ boardId, itemId, groupId, stageName }, 'Moving item to stage group on Monday.com');
+
+  await mondayMutate(token, `mutation ($itemId: ID!, $groupId: String!) {
+    move_item_to_group(item_id: $itemId, group_id: $groupId) {
+      id
+    }
+  }`, {
+    itemId: String(itemId),
+    groupId,
+  });
+}
+
 async function getUserPipelineBoardId(userId) {
   const [rows] = await db.query(
     `SELECT ba.board_id
@@ -307,7 +350,15 @@ async function createPipelineItem(token, userId, fields) {
 
   const reverseMap = await getReverseColumnMap(token, boardId);
   const columnValues = buildColumnValues(fields, reverseMap);
-  const groupId = await getDefaultGroupId(token, boardId);
+
+  // Place item in the group matching the stage name, fall back to default
+  let groupId = null;
+  if (fields.stage) {
+    groupId = await findGroupIdByTitle(token, boardId, fields.stage);
+  }
+  if (!groupId) {
+    groupId = await getDefaultGroupId(token, boardId);
+  }
 
   const itemName = fields.client_name || 'New Pipeline Item';
 
@@ -337,6 +388,23 @@ async function updatePipelineItem(token, pipelineRecord, updatedFields) {
   }
 
   const reverseMap = await getReverseColumnMap(token, source_board_id);
+
+  logger.info({
+    boardId: source_board_id,
+    itemId: monday_item_id,
+    updatedFields: Object.keys(updatedFields),
+    mappedFields: Object.keys(reverseMap),
+  }, 'Pipeline write-through: checking field mappings');
+
+  // Stage = Monday.com group (not a column) — move item to matching group
+  if (updatedFields.stage) {
+    try {
+      await moveItemToStageGroup(token, source_board_id, monday_item_id, updatedFields.stage);
+    } catch (err) {
+      logger.warn({ err: err.message, stage: updatedFields.stage }, 'Failed to move item to stage group on Monday.com');
+    }
+  }
+
   const columnValues = buildColumnValues(updatedFields, reverseMap);
 
   if (updatedFields.client_name) {
@@ -352,8 +420,17 @@ async function updatePipelineItem(token, pipelineRecord, updatedFields) {
   }
 
   if (Object.keys(columnValues).length > 0) {
-    logger.info({ boardId: source_board_id, itemId: monday_item_id }, 'Updating pipeline item on Monday.com');
+    logger.info({
+      boardId: source_board_id,
+      itemId: monday_item_id,
+      columnValues,
+    }, 'Updating pipeline item columns on Monday.com');
     await updateItem(token, source_board_id, monday_item_id, columnValues);
+  } else {
+    const unmapped = Object.keys(updatedFields).filter(f => f !== 'client_name' && f !== 'stage' && !reverseMap[f]);
+    if (unmapped.length > 0) {
+      logger.info({ unmapped }, 'Pipeline write-through: these fields have no Monday.com column mapping');
+    }
   }
 }
 
@@ -418,5 +495,6 @@ module.exports = {
   createPipelineItem,
   updatePipelineItem,
   archivePipelineItem,
+  moveItemToStageGroup,
   archiveFundedLoan,
 };
