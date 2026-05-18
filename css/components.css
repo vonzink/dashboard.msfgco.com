@@ -906,9 +906,11 @@
 }
 
 .pipeline-status-select {
-    background: var(--bg-card, #1e2a3a);
-    color: var(--text-primary, #e4e8ee);
-    border: 1px solid var(--border-color, #2a3a4a);
+    /* Use real theme tokens — --bg-card doesn't exist, so the bad fallback
+       was forcing a dark navy background in light mode (black-on-black). */
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 0.3rem 0.5rem;
     font-size: 0.82rem;
@@ -918,8 +920,14 @@
 }
 .pipeline-status-select:focus {
     outline: none;
-    border-color: var(--green-bright, #8cc63e);
+    border-color: var(--green-bright);
     box-shadow: 0 0 0 2px rgba(140, 198, 62, 0.2);
+}
+/* Native <option>s inherit poorly across browsers — force a sane bg/fg so
+   open dropdowns are legible in light mode. */
+.pipeline-status-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 .pa-detail-actions {
