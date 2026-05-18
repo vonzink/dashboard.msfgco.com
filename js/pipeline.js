@@ -12,14 +12,53 @@ const Pipeline = {
   PRIORITY_FIELDS: ['client_name', 'assigned_lo_name', 'lender', 'loan_amount', 'stage', 'closing_date', 'loan_number', 'subject_property'],
 
   STATUS_OPTIONS: {
-    stage: ['Prospect', 'Pre-Approved', 'Application', 'Processing', 'Submitted', 'Conditional', 'CTC', 'Clear to Close', 'Closing', 'Funded', 'On Hold', 'Cancelled'],
-    appraisal_status: ['Not Ordered', 'Ordered', 'Scheduled', 'Received', 'Approved', 'Pending', 'Waived', 'N/A'],
+    // ── Synced to Monday.com column labels ───────────────────────
+    //   stage             ← status2  (Loan Status)
+    //   title_status      ← status80 (Title)
+    //   hoi_status        ← status8  (HOI)
+    //   payoffs           ← status_1 (Payoffs)
+    //   appraisal_status  ← status4  (Appraisal Status)
+    // Order preserved from the Monday board (visual reading order).
+    // If a label is ever updated on the Monday board, update it here too
+    // so the dashboard dropdown shows the same option as a preset.
+    stage: [
+      'NEW LOAN', 'Registered', 'Submitted', 'Re-Submitted', 'Conditions Pending',
+      'Conditions Sent to Borrower', 'Ready To Submit', 'Not Ready To Submit',
+      'CTC', 'Balanced For Closing', 'Closing Docs Out', 'Closed', 'Funded',
+      'Hold', 'Hold On Collection', 'Suspended', 'Waiting for B1 Reimbursement',
+      'Not Active Loan',
+      'DL - Denied', 'DL - Rescinded', 'DL - Not Accepted', 'DL - Withdrawn', 'DL - Incomplete',
+    ],
+    title_status: [
+      'Please order', 'Ordered', 'Order Default Title', 'TRAC +',
+      'Have Partial Title', 'Need Info', 'Title Issues', 'Hold',
+      'Complete', 'Cancelled', 'Not Ordered Yet',
+    ],
+    hoi_status: [
+      'Please order Binder', 'Wait to order', 'Requested', 'Quote provided',
+      'HOI info provided', 'Need Policy #', 'Need Contact Info',
+      'Contact Info in KSPs', 'Borrower needs to get quote', 'Borrower Shopping',
+      'Insurance update needed', 'Insurance update received',
+      'Going with MSI', 'Processor Assist', 'Complete', 'Not Ordered Yet',
+    ],
+    payoffs: [
+      'Please order payoff', 'Ordered', 'Received', 'Borrower to obtain',
+      'Missing Info', 'Processor Assist', 'TRAC', 'Expired',
+      'Not Ordered Yet', 'NA',
+    ],
+    appraisal_status: [
+      'Need To Order', 'Ordered', '1004D Ordered', 'Ordered 1007', 'Ordered CIR',
+      'Ordered ACE+PDR', 'LP ACE+PDR', 'ACE+PDR Received', 'CDA Ordered', 'CDA Received',
+      'CIR Received', '1004D Received', 'Inspection Scheduled',
+      'PIW', 'FHA/VA Streamline', 'UWM Easy Valuation', 'DESKTOP REVIEW',
+      'As Is', 'Subject To', 'Requested Revisions', 'Lender Ordered Field Review',
+      'Requested Transfer', 'Transferred', 'Dispute', 'Waiting For Refund',
+      'Hold', 'Hold Until Loan Approval', 'Hold Until Inspection', 'Canceled- No Fee',
+    ],
+    // ── Local dashboard fields (no Monday equivalent yet) ────────
     prelims_status: ['Not Ordered', 'Ordered', 'Received', 'Approved', 'Pending', 'Cleared', 'N/A'],
     mini_set_status: ['Not Sent', 'Sent', 'Received', 'Approved', 'Pending', 'N/A'],
     cd_status: ['Not Sent', 'Sent', 'Signed', 'Received', 'Approved', 'Pending', 'N/A'],
-    title_status: ['Not Ordered', 'Ordered', 'Received', 'Cleared', 'Pending', 'N/A'],
-    hoi_status: ['Not Ordered', 'Ordered', 'Received', 'Cleared', 'Pending', 'Waived', 'N/A'],
-    payoffs: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
     wvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
     vvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
     hoa: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
