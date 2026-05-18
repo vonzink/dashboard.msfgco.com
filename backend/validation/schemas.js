@@ -400,6 +400,7 @@ const {
   loanChecklistSubitemCreate,
   loanChecklistImport,
   loanChecklistReorder,
+  checklistNoteCreate,
 } = checklistSchemas;
 
 // ── Validate helper ─────────────────────────────
