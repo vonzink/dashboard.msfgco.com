@@ -421,6 +421,93 @@
 .cl-subitem:hover .cl-subitem-del { opacity: 1; }
 .cl-subitem-del:hover { color: var(--status-danger); }
 
+/* ── Call Notes (time-stamped log entries under an item) ── */
+.cl-notes {
+  padding: 0.25rem 0.75rem 0.75rem 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cl-note {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--green-bright);
+  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  font-size: var(--font-xs);
+}
+.cl-note-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+.cl-note-icon { color: var(--green-bright); }
+.cl-note-stamp { font-variant-numeric: tabular-nums; }
+.cl-note-author { font-style: italic; }
+.cl-note-author::before { content: '· '; }
+.cl-note-del {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.cl-note:hover .cl-note-del { opacity: 1; }
+.cl-note-del:hover { color: var(--status-danger); }
+.cl-note-body {
+  color: var(--text-primary);
+  font-size: var(--font-sm);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Inline note-entry overlay (used by _promptNoteBody) */
+.cl-note-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 11500;
+  padding: 1rem;
+}
+.cl-note-prompt {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 460px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.cl-note-prompt-header { display: flex; align-items: baseline; gap: 0.5rem; }
+.cl-note-prompt-header small { color: var(--text-muted); font-weight: 400; }
+.cl-note-prompt-input {
+  width: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.5rem;
+  font: inherit;
+  font-size: var(--font-sm);
+  resize: vertical;
+  min-height: 90px;
+}
+.cl-note-prompt-input:focus { outline: none; border-color: var(--green-bright); box-shadow: var(--focus-ring); }
+.cl-note-prompt-actions { display: flex; justify-content: flex-end; gap: 0.35rem; }
+
 /* ── Template Selector ─────────────────────── */
 .cl-template-selector { padding: 0.5rem 0; }
 .cl-template-header {

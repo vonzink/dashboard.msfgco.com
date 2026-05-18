@@ -416,6 +416,35 @@ const Checklists = {
         } catch (err) { Utils.showToast('Failed to add subitem', 'error'); }
         break;
       }
+      case 'add-note': {
+        const itemId = parseInt(id);
+        const item = this._findItem(itemId);
+        if (!item) return;
+        const body = await this._promptNoteBody(item);
+        if (!body) return;
+        try {
+          const newNote = await ServerAPI.addChecklistItemNote(itemId, body);
+          if (newNote) {
+            if (!item.notes) item.notes = [];
+            // Newest first to match server hydration order
+            item.notes.unshift(newNote);
+          }
+          this._renderChecklist();
+        } catch (err) { Utils.showToast('Failed to add note: ' + (err.message || ''), 'error'); }
+        break;
+      }
+      case 'delete-note': {
+        const noteId = parseInt(id);
+        if (!confirm('Delete this note? This cannot be undone.')) return;
+        try {
+          await ServerAPI.deleteChecklistItemNote(noteId);
+          for (const it of (this._currentChecklist?.items || [])) {
+            if (it.notes) it.notes = it.notes.filter(n => n.id !== noteId);
+          }
+          this._renderChecklist();
+        } catch (err) { Utils.showToast('Failed to delete note', 'error'); }
+        break;
+      }
       case 'edit-item': {
         const itemId = parseInt(id);
         const item = this._findItem(itemId);
@@ -555,6 +584,7 @@ const Checklists = {
                   <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Set Due Date</button>
                   <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
                   <button type="button" data-cl-action="add-subitem" data-cl-id="${item.id}"><i class="fas fa-indent"></i> Add Subitem</button>
+                  <button type="button" data-cl-action="add-note" data-cl-id="${item.id}"><i class="fas fa-comment-medical"></i> Add Call Note</button>
                   <button type="button" data-cl-action="delete-item" data-cl-id="${item.id}" class="cl-menu-danger"><i class="fas fa-trash"></i> Delete</button>
                 </div>
               </div>
@@ -573,6 +603,24 @@ const Checklists = {
               <span class="cl-subitem-name">${Utils.escapeHtml(sub.name)}</span>
               ${sub.date ? `<span class="cl-subitem-date">${this._fmtDate(sub.date)}</span>` : ''}
               <button type="button" class="cl-subitem-del" data-cl-action="delete-subitem" data-cl-id="${sub.id}" title="Delete"><i class="fas fa-times"></i></button>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      // Call notes — time-stamped log entries
+      if (item.notes?.length) {
+        html += '<div class="cl-notes">';
+        for (const n of item.notes) {
+          html += `
+            <div class="cl-note" data-note-id="${n.id}">
+              <div class="cl-note-meta">
+                <i class="fas fa-phone-alt cl-note-icon"></i>
+                <span class="cl-note-stamp">${this._fmtDateTime(n.created_at)}</span>
+                <span class="cl-note-author">${Utils.escapeHtml(n.author_name || '')}</span>
+                <button type="button" class="cl-note-del" data-cl-action="delete-note" data-cl-id="${n.id}" title="Delete note"><i class="fas fa-times"></i></button>
+              </div>
+              <div class="cl-note-body">${Utils.escapeHtml(n.body)}</div>
             </div>`;
         }
         html += '</div>';
@@ -1014,6 +1062,55 @@ const Checklists = {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${d.getFullYear()}-${m}-${day}`;
+  },
+
+  /**
+   * Show a small floating textarea anchored over the checklist panel for
+   * multi-line note entry. Resolves with the trimmed body, or '' on cancel.
+   */
+  _promptNoteBody(item) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'cl-note-prompt-overlay';
+      wrap.innerHTML = `
+        <div class="cl-note-prompt">
+          <div class="cl-note-prompt-header">
+            <strong><i class="fas fa-phone-alt"></i> Add Call Note</strong>
+            <small>${Utils.escapeHtml(item.name || '')}</small>
+          </div>
+          <textarea class="cl-note-prompt-input" rows="4" placeholder="What happened on the call? (timestamp + author logged automatically)"></textarea>
+          <div class="cl-note-prompt-actions">
+            <button type="button" class="btn btn-sm btn-outline" data-cl-cancel>Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" data-cl-save>Save Note</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const ta = wrap.querySelector('textarea');
+      ta.focus();
+      const cleanup = (val) => { wrap.remove(); resolve(val); };
+      wrap.querySelector('[data-cl-cancel]').addEventListener('click', () => cleanup(''));
+      wrap.querySelector('[data-cl-save]').addEventListener('click', () => cleanup(ta.value.trim()));
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) cleanup(''); });
+      ta.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cleanup('');
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) cleanup(ta.value.trim());
+      });
+    });
+  },
+
+  /** Display a timestamp as MM/DD/YY h:mm AM/PM (local). Input is a Date or ISO string. */
+  _fmtDateTime(value) {
+    if (!value) return '';
+    const d = (value instanceof Date) ? value : new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(2);
+    let h = d.getHours();
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const am = h < 12 ? 'AM' : 'PM';
+    h = h % 12 || 12;
+    return `${mm}/${dd}/${yy} ${h}:${min} ${am}`;
   },
 
   /** Display dates as MM/DD/YY. Input is YYYY-MM-DD (DB shape). */

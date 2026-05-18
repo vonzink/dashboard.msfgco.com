@@ -98,6 +98,10 @@ const loanChecklistImport = z.object({
   name: optionalString(200),
 });
 
+const checklistNoteCreate = z.object({
+  body: trimmedString(2000),
+});
+
 module.exports = {
   checklistStatus,
   checklistImportance,
@@ -110,4 +114,5 @@ module.exports = {
   loanChecklistSubitemCreate,
   loanChecklistImport,
   loanChecklistReorder,
+  checklistNoteCreate,
 };

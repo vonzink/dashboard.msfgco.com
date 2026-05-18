@@ -342,6 +342,56 @@ async function updateSubitem(userId, subitemId, body) {
   return _readSubitem(subitemId);
 }
 
+// ──────────────────────────────────────────
+//  ITEM NOTES (time-stamped log entries)
+// ──────────────────────────────────────────
+
+async function addItemNote(userId, itemId, body) {
+  await authz.requireChecklistItemAccess(userId, itemId);
+  const [r] = await db.query(
+    'INSERT INTO loan_checklist_item_notes (item_id, body, created_by_user_id) VALUES (?, ?, ?)',
+    [itemId, body, userId],
+  );
+  // Touch parent checklist
+  await db.query(
+    `UPDATE loan_checklists SET updated_at = NOW()
+     WHERE id = (SELECT checklist_id FROM loan_checklist_items WHERE id = ?)`,
+    [itemId],
+  );
+  const [rows] = await db.query(
+    `SELECT n.id, n.body, n.created_at, n.created_by_user_id,
+            u.first_name, u.last_name, u.email
+     FROM loan_checklist_item_notes n
+     LEFT JOIN users u ON u.id = n.created_by_user_id
+     WHERE n.id = ?`,
+    [r.insertId],
+  );
+  const n = rows[0];
+  if (!n) return null;
+  return {
+    id: n.id,
+    body: n.body,
+    created_at: n.created_at,
+    created_by_user_id: n.created_by_user_id,
+    author_name: [n.first_name, n.last_name].filter(Boolean).join(' ').trim() || n.email || 'Unknown',
+  };
+}
+
+async function deleteItemNote(userId, noteId) {
+  // Find owning item, then authorize via loan access
+  const [rows] = await db.query(
+    `SELECT n.id, n.created_by_user_id, lci.id AS item_id, lc.source_type, lc.source_item_id
+     FROM loan_checklist_item_notes n
+     JOIN loan_checklist_items lci ON lci.id = n.item_id
+     JOIN loan_checklists lc ON lc.id = lci.checklist_id
+     WHERE n.id = ?`,
+    [noteId],
+  );
+  if (!rows.length) { const e = new Error('Note not found'); e.status = 404; throw e; }
+  await authz.requireLoanAccess(rows[0].source_type, rows[0].source_item_id);
+  await db.query('DELETE FROM loan_checklist_item_notes WHERE id = ?', [noteId]);
+}
+
 async function deleteSubitem(userId, subitemId) {
   await authz.requireChecklistSubitemAccess(userId, subitemId);
   await db.query('DELETE FROM loan_checklist_subitems WHERE id = ?', [subitemId]);
@@ -437,10 +487,20 @@ async function _hydrateInternal(queryRunner, cl) {
   );
 
   let subitems = [];
+  let notes = [];
   if (items.length) {
     const itemIds = items.map(i => i.id);
     [subitems] = await queryRunner.query(
       `SELECT * FROM loan_checklist_subitems WHERE item_id IN (${itemIds.map(() => '?').join(',')}) ORDER BY sort_order, id`,
+      itemIds,
+    );
+    [notes] = await queryRunner.query(
+      `SELECT n.id, n.item_id, n.body, n.created_at, n.created_by_user_id,
+              u.first_name, u.last_name, u.email
+       FROM loan_checklist_item_notes n
+       LEFT JOIN users u ON u.id = n.created_by_user_id
+       WHERE n.item_id IN (${itemIds.map(() => '?').join(',')})
+       ORDER BY n.created_at DESC, n.id DESC`,
       itemIds,
     );
   }
@@ -448,8 +508,23 @@ async function _hydrateInternal(queryRunner, cl) {
   for (const si of subitems) {
     (subitemsByItem[si.item_id] = subitemsByItem[si.item_id] || []).push(si);
   }
+  const notesByItem = {};
+  for (const n of notes) {
+    const authorName = [n.first_name, n.last_name].filter(Boolean).join(' ').trim() || n.email || 'Unknown';
+    (notesByItem[n.item_id] = notesByItem[n.item_id] || []).push({
+      id: n.id,
+      body: n.body,
+      created_at: n.created_at,
+      created_by_user_id: n.created_by_user_id,
+      author_name: authorName,
+    });
+  }
 
-  cl.items = items.map(item => ({ ...item, subitems: subitemsByItem[item.id] || [] }));
+  cl.items = items.map(item => ({
+    ...item,
+    subitems: subitemsByItem[item.id] || [],
+    notes: notesByItem[item.id] || [],
+  }));
 
   if (cl.source_template_id) {
     const [tpl] = await queryRunner.query('SELECT name FROM checklist_templates WHERE id = ?', [cl.source_template_id]);
@@ -473,6 +548,8 @@ module.exports = {
   addSubitem,
   updateSubitem,
   deleteSubitem,
+  addItemNote,
+  deleteItemNote,
   importItems,
   MAX_CHECKLISTS_PER_LOAN,
 };

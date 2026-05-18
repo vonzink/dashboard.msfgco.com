@@ -905,6 +905,12 @@ const ServerAPI = {
     addChecklistSubitem(itemId, data) {
         return this.post(`/checklists/loan-items/${itemId}/subitems`, data);
     },
+    addChecklistItemNote(itemId, body) {
+        return this.post(`/checklists/loan-items/${itemId}/notes`, { body });
+    },
+    deleteChecklistItemNote(noteId) {
+        return this.delete(`/checklists/loan-item-notes/${noteId}`);
+    },
     updateChecklistSubitem(subitemId, data) {
         return this.put(`/checklists/loan-subitems/${subitemId}`, data);
     },

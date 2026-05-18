@@ -473,6 +473,7 @@ module.exports = {
   loanChecklistAssign,
   loanChecklistRename,
   loanChecklistReorder,
+  checklistNoteCreate,
   loanChecklistItemUpdate,
   loanChecklistItemCreate,
   loanChecklistSubitemCreate,

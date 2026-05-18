@@ -30,6 +30,7 @@ const {
   loanChecklistSubitemCreate: subitemCreateSchema,
   loanChecklistImport: importSchema,
   loanChecklistReorder: reorderSchema,
+  checklistNoteCreate: noteCreateSchema,
   validate,
 } = require('../validation/schemas');
 
@@ -181,6 +182,18 @@ router.delete('/loan-items/:itemId', async (req, res, next) => {
 
 router.post('/loan-items/:itemId/subitems', validate(subitemCreateSchema), async (req, res, next) => {
   try { created(res, await loanChecklists.addSubitem(getUserId(req), req.params.itemId, req.body)); }
+  catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+// ── Item notes (time-stamped call log) ──────────
+
+router.post('/loan-items/:itemId/notes', validate(noteCreateSchema), async (req, res, next) => {
+  try { created(res, await loanChecklists.addItemNote(getUserId(req), req.params.itemId, req.body.body)); }
+  catch (err) { if (!handleServiceError(res, err)) next(err); }
+});
+
+router.delete('/loan-item-notes/:noteId', async (req, res, next) => {
+  try { await loanChecklists.deleteItemNote(getUserId(req), req.params.noteId); deleted(res); }
   catch (err) { if (!handleServiceError(res, err)) next(err); }
 });
 
