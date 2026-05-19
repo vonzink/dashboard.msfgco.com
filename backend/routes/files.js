@@ -36,8 +36,10 @@ const ALLOWED_LIBRARIES = {
   },
   logos: {
     bucket: 'msfg-media',
-    prefix: 'Assets/LOGOS/',
-    label: 'Logos & Brand Assets',
+    // Browse all asset folders (LOGOS, HEADSHOTS, PICTURES, partners, sigs, etc.)
+    // — users navigate into the subfolder they need.
+    prefix: 'Assets/',
+    label: 'Media & Brand Assets',
     region: 'us-west-2',
   },
 };
