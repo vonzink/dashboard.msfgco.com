@@ -378,6 +378,20 @@ async function syncAllBoards(userId) {
       ? await autoMapColumns(token, boardId, section)
       : [];
 
+    // Persist auto-discovered mappings so write-through (getReverseColumnMap) can use them
+    if (autoMappings.length > 0 && savedMappings.length === 0) {
+      try {
+        const insertValues = autoMappings.map(m => [boardId, m.monday_column_id, m.pipeline_field]);
+        await db.query(
+          'INSERT IGNORE INTO monday_column_mappings (board_id, monday_column_id, pipeline_field) VALUES ?',
+          [insertValues]
+        );
+        logger.info({ boardId, count: autoMappings.length }, 'Persisted auto-discovered column mappings');
+      } catch (err) {
+        logger.warn({ err: err.message, boardId }, 'Failed to persist auto column mappings — write-through may not work');
+      }
+    }
+
     if (savedMappings.length === 0 && autoMappings.length === 0) {
       logger.info({ boardId }, 'Monday sync: no mappings for board, skipping');
       continue;
