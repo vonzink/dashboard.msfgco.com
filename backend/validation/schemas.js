@@ -222,6 +222,7 @@ const investor = z.object({
   epo: optionalString(500),
   in_house_servicing: optionalString(255),
   adverse_action_notice: optionalString(2000),
+  credit_providers: optionalString(2000),
   max_comp: optionalString(200),
   underwriting_fee: optionalString(200),
   servicing: z.union([z.boolean(), z.number()]).optional().nullable(),
@@ -247,6 +248,7 @@ const investor = z.object({
   doctor: z.union([z.boolean(), z.number()]).optional().nullable(),
   condo_non_warrantable: z.union([z.boolean(), z.number()]).optional().nullable(),
   heloc_second: z.union([z.boolean(), z.number()]).optional().nullable(),
+  vantage_credit: z.union([z.boolean(), z.number()]).optional().nullable(),
   scenario_desk: z.union([z.boolean(), z.number()]).optional().nullable(),
   condo_review: z.union([z.boolean(), z.number()]).optional().nullable(),
   exception_desk: z.union([z.boolean(), z.number()]).optional().nullable(),
@@ -386,22 +388,11 @@ const handbookSectionCreate = z.object({
 });
 
 // ── Checklists ────────────────────────────────
-// Moved to ./schemas/checklists.js — re-exported below.
+// Lives in ./schemas/checklists.js. Spread into module.exports below so new
+// schemas only need to be added in one place (the split file). Do NOT
+// re-destructure individual names here — adding a new schema must NOT
+// require touching this file.
 const checklistSchemas = require('./schemas/checklists');
-const {
-  checklistStatus,
-  checklistImportance,
-  checklistTemplate,
-  checklistTemplateUpdate,
-  loanChecklistAssign,
-  loanChecklistRename,
-  loanChecklistItemUpdate,
-  loanChecklistItemCreate,
-  loanChecklistSubitemCreate,
-  loanChecklistImport,
-  loanChecklistReorder,
-  checklistNoteCreate,
-} = checklistSchemas;
 
 // ── Validate helper ─────────────────────────────
 function validate(schema) {
@@ -467,18 +458,9 @@ module.exports = {
   handbookSearch,
   handbookSectionUpdate,
   handbookSectionCreate,
-  checklistTemplate,
-  checklistTemplateUpdate,
-  checklistStatus,
-  checklistImportance,
-  loanChecklistAssign,
-  loanChecklistRename,
-  loanChecklistReorder,
-  checklistNoteCreate,
-  loanChecklistItemUpdate,
-  loanChecklistItemCreate,
-  loanChecklistSubitemCreate,
-  loanChecklistImport,
+  // Checklist schemas — single source of truth in ./schemas/checklists.js.
+  // Any export from that file is automatically exposed here.
+  ...checklistSchemas,
   validate,
   validateQuery,
 };
