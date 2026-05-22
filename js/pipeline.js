@@ -417,14 +417,34 @@ const Pipeline = {
       </div>`;
     };
 
+    // Stage promoted to a prominent header pill above the grid
+    const stagePresets = this.STATUS_OPTIONS.stage || [];
+    const currentStage = item.stage || '';
+    const stageHasInPresets = !currentStage || stagePresets.includes(currentStage);
+    const stageOpts = stagePresets.map(o =>
+      `<option value="${esc(o)}" ${o === currentStage ? 'selected' : ''}>${esc(o)}</option>`
+    ).join('');
+    const stageCustomOpt = (!stageHasInPresets && currentStage)
+      ? `<option value="${esc(currentStage)}" selected>${esc(currentStage)}</option>`
+      : '';
+
     body.innerHTML = `
+      <div class="pa-detail-stage-bar">
+        <label class="pa-detail-stage-label" for="pipelineStageSelect_${item.id}">
+          <i class="fas fa-flag"></i> Current Stage
+        </label>
+        <select class="pipeline-status-select pa-detail-stage-pill"
+                id="pipelineStageSelect_${item.id}"
+                data-field="stage" data-item-id="${item.id}">
+          <option value="">-- not set --</option>${stageCustomOpt}${stageOpts}
+        </select>
+        ${item.loan_status ? `<span class="pipeline-badge ${statusCls(item.loan_status)} pa-detail-stage-loan-status">${esc(item.loan_status)}</span>` : ''}
+      </div>
       <div class="pa-detail-grid">
         <div class="pa-detail-section">
           <h3 class="pa-detail-section-title"><i class="fas fa-user"></i> Borrower Info</h3>
           ${detailRow('Client Name', esc(item.client_name || '--'))}
           ${detailRow('Loan Officer', esc(item.assigned_lo_name || '--'))}
-          ${statusSelect('stage', 'Stage', item.stage || '')}
-          ${item.loan_status ? detailRow('Loan Status', `<span class="pipeline-badge ${statusCls(item.loan_status)}">${esc(item.loan_status)}</span>`) : ''}
           ${detailRow('Loan Number', esc(item.loan_number || ''))}
           ${detailRow('Lender', esc(item.lender || ''))}
         </div>
@@ -471,9 +491,12 @@ const Pipeline = {
         </div>
       </div>
       <div class="pa-detail-section full-width">
-        <h3 class="pa-detail-section-title"><i class="fas fa-sticky-note"></i> Monday Notes</h3>
-        <textarea id="pipelineMondayNotes" rows="3" class="form-input" placeholder="Add notes...">${esc(item.notes || '')}</textarea>
-        <button type="button" class="btn btn-primary btn-sm" id="pipelineSaveMondayNotes" style="margin-top:0.5rem;"><i class="fas fa-save"></i> Save Notes</button>
+        <h3 class="pa-detail-section-title">
+          <i class="fas fa-sticky-note"></i> Loan Notes
+          <span class="pa-detail-section-hint">synced to Monday.com</span>
+        </h3>
+        <textarea id="pipelineMondayNotes" rows="3" class="form-input" placeholder="Add notes about this loan — these sync to Monday.com...">${esc(item.notes || '')}</textarea>
+        <button type="button" class="btn btn-primary btn-sm" id="pipelineSaveMondayNotes" style="margin-top:0.5rem;"><i class="fas fa-save"></i> Save Loan Notes</button>
       </div>
       ${item.monday_item_id ? `<div class="pa-detail-section full-width">
         <h3 class="pa-detail-section-title"><i class="fab fa-monday"></i> Post Comment to Monday.com</h3>
@@ -481,7 +504,10 @@ const Pipeline = {
         <button type="button" class="btn btn-secondary btn-sm" id="pipelinePostMondayComment" style="margin-top:0.5rem;"><i class="fab fa-monday"></i> Post to Monday</button>
       </div>` : ''}
       <div class="pa-detail-section full-width">
-        <h3 class="pa-detail-section-title"><i class="fas fa-comments"></i> Notes</h3>
+        <h3 class="pa-detail-section-title">
+          <i class="fas fa-comments"></i> Internal Notes
+          <span class="pa-detail-section-hint">team-only, not synced</span>
+        </h3>
         <div class="pa-notes-add">
           <textarea id="pipelineNewNoteInput" rows="2" placeholder="Add a note..." class="form-input"></textarea>
           <button type="button" class="btn btn-primary btn-sm" id="pipelineAddNoteBtn"><i class="fas fa-plus"></i> Add Note</button>

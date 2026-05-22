@@ -128,8 +128,8 @@
             </div>
             <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" />
             <p id="profileNameDisplay" style="font-size:16px; font-weight:700; margin:12px 0 0; color:#104547;"></p>
-            <p id="profileRoleDisplay" style="font-size:12px; color:#888; margin:2px 0;"></p>
-            <p id="profileEmailDisplay" style="font-size:12px; color:#888; margin:0;"></p>
+            <p id="profileRoleDisplay" style="font-size:12px; color:#666; margin:2px 0;"></p>
+            <p id="profileEmailDisplay" style="font-size:12px; color:#666; margin:0;"></p>
           </div>
           <!-- Business Card -->
           <div style="flex-shrink:0; text-align:center; min-width:200px;">
@@ -353,7 +353,7 @@
           <h4 style="margin:0 0 8px; font-size:14px; color:#104547;">
             <i class="fas fa-brain" style="color:#10a37f;"></i> ChatGPT (OpenAI) API Key
           </h4>
-          <p id="aiOpenaiStatus" style="font-size:13px; color:#888; margin:0 0 8px;">Checking...</p>
+          <p id="aiOpenaiStatus" style="font-size:13px; color:#666; margin:0 0 8px;">Checking...</p>
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="password" id="aiOpenaiInput" placeholder="sk-..." style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
             <button class="btn btn-primary btn-sm" id="aiOpenaiSaveBtn"><i class="fas fa-save"></i> Save</button>
@@ -364,7 +364,7 @@
           <h4 style="margin:0 0 8px; font-size:14px; color:#104547;">
             <i class="fas fa-robot" style="color:#d97706;"></i> Claude (Anthropic) API Key
           </h4>
-          <p id="aiAnthropicStatus" style="font-size:13px; color:#888; margin:0 0 8px;">Checking...</p>
+          <p id="aiAnthropicStatus" style="font-size:13px; color:#666; margin:0 0 8px;">Checking...</p>
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="password" id="aiAnthropicInput" placeholder="sk-ant-..." style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
             <button class="btn btn-primary btn-sm" id="aiAnthropicSaveBtn"><i class="fas fa-save"></i> Save</button>
@@ -563,7 +563,7 @@
                 <input type="checkbox" id="invActiveToggle" />
                 <span class="toggle-slider"></span>
               </label>
-              <span id="invActiveLabel" style="font-size:13px; font-weight:600; color:#888;">Inactive</span>
+              <span id="invActiveLabel" style="font-size:13px; font-weight:600; color:#666;">Inactive</span>
             </div>
           </div>
           <!-- Editable Fields -->
@@ -607,7 +607,7 @@
                     <button type="button" class="btn btn-sm btn-primary" id="invAesSaveBtn"><i class="fas fa-save"></i> Save AEs</button>
                   </div>
                 </div>
-                <div style="font-size:0.78rem; color:#888; margin-bottom:6px;">Use this for investors with multiple AEs. The primary AE above stays as the main contact.</div>
+                <div style="font-size:0.78rem; color:#666; margin-bottom:6px;">Use this for investors with multiple AEs. The primary AE above stays as the main contact.</div>
                 <div id="invAesRows"></div>
               </div>
               <div class="form-group">
@@ -655,7 +655,7 @@
                 <label style="margin-bottom:4px;">Product &amp; Service Toggles</label>
 
                 <div style="margin-bottom:8px;">
-                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Agency / Gov</div>
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#666;margin-bottom:4px;">Agency / Gov</div>
                   <div style="display:flex; flex-wrap:wrap; gap:14px;">
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleConventional" /> Conventional</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleFha" /> FHA</label>
@@ -666,7 +666,7 @@
                 </div>
 
                 <div style="margin-bottom:8px;">
-                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Non-Agency</div>
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#666;margin-bottom:4px;">Non-Agency</div>
                   <div style="display:flex; flex-wrap:wrap; gap:14px;">
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleNonQm" /> Non-QM</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleDscr" /> DSCR</label>
@@ -678,7 +678,7 @@
                 </div>
 
                 <div style="margin-bottom:8px;">
-                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Specialty</div>
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#666;margin-bottom:4px;">Specialty</div>
                   <div style="display:flex; flex-wrap:wrap; gap:14px;">
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleBridgeLoans" /> Bridge</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleLandLoans" /> Land</label>
@@ -694,7 +694,7 @@
                 </div>
 
                 <div style="margin-bottom:8px;">
-                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;margin-bottom:4px;">Services</div>
+                  <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#666;margin-bottom:4px;">Services</div>
                   <div style="display:flex; flex-wrap:wrap; gap:14px;">
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleManualUw" /> Manual UW</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleServicing" /> Servicing</label>
@@ -707,7 +707,7 @@
 
                 <div style="margin-top:12px; padding-top:12px; border-top:1px dashed #ddd;">
                   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
-                    <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#888;">Custom Toggles</div>
+                    <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:#666;">Custom Toggles</div>
                     <button type="button" class="btn btn-sm btn-secondary" id="invAddCustomToggleBtn"><i class="fas fa-plus"></i> Add Custom</button>
                   </div>
                   <div id="invCustomTogglesList" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
@@ -719,7 +719,7 @@
               <label for="invEditNotes" style="display:flex; align-items:center; gap:6px;">
                 <i class="fas fa-sticky-note"></i> Notes
               </label>
-              <p style="margin:4px 0 6px; font-size:12px; color:#888;">Same notes shown on the investor display. Useful for adding notes to non-active investors.</p>
+              <p style="margin:4px 0 6px; font-size:12px; color:#666;">Same notes shown on the investor display. Useful for adding notes to non-active investors.</p>
               <textarea id="invEditNotes" rows="5" style="width:100%;" placeholder="Notes about this investor..."></textarea>
             </div>
             <div class="form-actions">
@@ -732,7 +732,7 @@
       <!-- ── SUB-TAB: Team ── -->
       <div class="inv-profile-section" id="inv-team">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <p style="margin:0; font-size:13px; color:#888;">Manage team members for this investor. Click the avatar to upload a photo.</p>
+          <p style="margin:0; font-size:13px; color:#666;">Manage team members for this investor. Click the avatar to upload a photo.</p>
           <button class="btn btn-sm btn-primary" id="invAddTeamMemberBtn"><i class="fas fa-plus"></i> Add Member</button>
         </div>
         <div id="invTeamRows"></div>
@@ -767,7 +767,7 @@
       <!-- ── SUB-TAB: Mortgagee Clauses ── -->
       <div class="inv-profile-section" id="inv-clauses">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <p style="margin:0; font-size:13px; color:#888;">Manage mortgagee clauses for this investor. Use the label field to categorize (e.g. "FHA", "Conventional").</p>
+          <p style="margin:0; font-size:13px; color:#666;">Manage mortgagee clauses for this investor. Use the label field to categorize (e.g. "FHA", "Conventional").</p>
           <button class="btn btn-sm btn-primary" id="invAddClauseBtn"><i class="fas fa-plus"></i> Add Clause</button>
         </div>
         <div id="invClauseRows"></div>
@@ -779,7 +779,7 @@
       <!-- ── SUB-TAB: Links ── -->
       <div class="inv-profile-section" id="inv-links">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <p style="margin:0; font-size:13px; color:#888;">Manage links for this investor. Use the label to customize the display name.</p>
+          <p style="margin:0; font-size:13px; color:#666;">Manage links for this investor. Use the label to customize the display name.</p>
           <button class="btn btn-sm btn-primary" id="invAddLinkBtn"><i class="fas fa-plus"></i> Add Link</button>
         </div>
         <div id="invLinkRows"></div>
@@ -790,7 +790,7 @@
 
       <!-- ── SUB-TAB: Documents ── -->
       <div class="inv-profile-section" id="inv-documents">
-        <p style="margin:0 0 12px; font-size:13px; color:#888;">
+        <p style="margin:0 0 12px; font-size:13px; color:#666;">
           Upload investor-specific documents (rate sheets, guidelines, forms). Drag &amp; drop or click to browse.
           Tag editable forms with a <strong>Type</strong> so the document tool can prepopulate them from MISMO.
         </p>
@@ -804,11 +804,11 @@
             <option value="template">Editable Template (custom)</option>
             <option value="reference">Reference / static doc</option>
           </select>
-          <span style="color:#888; font-size:12px;">You can change a doc's type any time from its row below.</span>
+          <span style="color:#666; font-size:12px;">You can change a doc's type any time from its row below.</span>
         </div>
         <div id="invDocDropZone" style="border:2px dashed #ccc; border-radius:8px; padding:32px; text-align:center; cursor:pointer; transition:border-color 0.2s, background 0.2s; margin-bottom:16px;">
           <i class="fas fa-cloud-upload-alt" style="font-size:28px; color:#aaa; margin-bottom:8px; display:block;"></i>
-          <p style="margin:0; font-size:14px; color:#888;">Drop files here or click to browse</p>
+          <p style="margin:0; font-size:14px; color:#666;">Drop files here or click to browse</p>
           <span style="font-size:12px; color:#aaa;">PDF, DOC, XLSX, images — up to 25 MB each</span>
         </div>
         <input type="file" id="invDocFileInput" multiple style="display:none;" />
@@ -857,7 +857,7 @@
 
     <div id="uploadResults"></div>
 
-    <p style="color:#888; font-size:13px; margin-top:16px;">
+    <p style="color:#666; font-size:13px; margin-top:16px;">
       <i class="fas fa-info-circle"></i>
       Files are uploaded directly to the <strong>msfg-mortgage-documents-prod</strong> S3 bucket.
       They will appear in the Forms Library file browser immediately.
@@ -873,7 +873,7 @@
         <i class="fas fa-user-cog"></i> Processor — Loan Officer Assignments
       </h3>
     </div>
-    <p style="font-size:13px; color:#888; margin:8px 0 16px;">
+    <p style="font-size:13px; color:#666; margin:8px 0 16px;">
       Assign which Loan Officers each Processor can see in their pipeline, funded loans, and pre-approvals.
     </p>
     <div id="processorAssignmentsContainer">
@@ -931,6 +931,20 @@
   ================================================ -->
   <div class="admin-panel" id="panel-monday">
 
+    <!-- Sticky header: Setup checklist + quick sync access -->
+    <div class="monday-header-strip" id="mondayHeaderStrip">
+      <div class="monday-setup-flow" id="mondaySetupFlow" aria-label="Monday.com setup progress">
+        <div class="monday-setup-step" data-step="token"><span class="monday-step-num">1</span> API Token</div>
+        <div class="monday-setup-step" data-step="boards"><span class="monday-step-num">2</span> Boards</div>
+        <div class="monday-setup-step" data-step="mappings"><span class="monday-step-num">3</span> Mappings</div>
+        <div class="monday-setup-step" data-step="webhooks"><span class="monday-step-num">4</span> Webhooks</div>
+      </div>
+      <div class="monday-header-sync">
+        <span id="mondayHeaderSyncStatus" class="monday-header-sync-status">Last sync: <em>checking…</em></span>
+        <button class="btn btn-primary btn-sm" id="mondayHeaderSyncBtn"><i class="fas fa-play"></i> Run Sync Now</button>
+      </div>
+    </div>
+
     <!-- API Token -->
     <div class="monday-section">
       <div class="toolbar">
@@ -938,7 +952,7 @@
           <i class="fas fa-key"></i> API Token
         </h3>
       </div>
-      <p id="mondayTokenStatus" style="font-size:13px; color:#888; margin:0 0 8px;">Checking...</p>
+      <p id="mondayTokenStatus" style="font-size:13px; color:#666; margin:0 0 8px;">Checking...</p>
       <div style="display:flex; gap:8px; align-items:center;">
         <input type="password" id="mondayTokenInput" placeholder="Paste your Monday.com API token" style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:13px;" />
         <button class="btn btn-primary btn-sm" id="mondaySaveTokenBtn"><i class="fas fa-save"></i> Save</button>
@@ -1014,7 +1028,7 @@
           <i class="fas fa-arrows-alt-h"></i> Column Mappings
         </h3>
       </div>
-      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+      <p style="font-size:13px; color:#666; margin:0 0 8px;">
         Select a board, load its columns from Monday.com, and map them to dashboard fields.
       </p>
       <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
@@ -1029,58 +1043,38 @@
       </button>
     </div>
 
-    <!-- Display Config — Pipeline -->
+    <!-- Display Config — unified for Pipeline / Pre-Approvals / Funded Loans -->
     <div class="monday-section">
       <div class="toolbar">
         <h3 style="margin:0; font-size:16px; color:#104547;">
-          <i class="fas fa-tasks"></i> Pipeline Table Columns
+          <i class="fas fa-table"></i> Table Display Settings
         </h3>
       </div>
-      <p style="font-size:13px; color:#888; margin:0 0 8px;">
-        Choose which columns appear in the pipeline table, set custom labels, and reorder them.
+      <p style="font-size:13px; color:#666; margin:0 0 8px;">
+        Pick a section, then choose which columns appear in its table, set custom labels, and reorder them.
       </p>
-      <div id="mondayDisplayConfig">
-        <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
+        <label for="mondayDisplaySectionSelect" style="font-size:13px; color:#666; font-weight:500;">Section:</label>
+        <select id="mondayDisplaySectionSelect" style="padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-size:13px; min-width:200px;">
+          <option value="pipeline">Loan Pipeline</option>
+          <option value="pre_approvals">Pre-Approvals</option>
+          <option value="funded_loans">Funded Loans</option>
+        </select>
       </div>
-      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtn" style="display:none; margin-top:8px;">
-        <i class="fas fa-save"></i> Save Pipeline Display Settings
+      <div id="mondayDisplayConfigUnified">
+        <p style="font-size:13px; color:#666;">Save column mappings first, then configure display here.</p>
+      </div>
+      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtnUnified" style="display:none; margin-top:8px;">
+        <i class="fas fa-save"></i> Save Display Settings
       </button>
-    </div>
 
-    <!-- Display Config — Pre-Approvals -->
-    <div class="monday-section">
-      <div class="toolbar">
-        <h3 style="margin:0; font-size:16px; color:#104547;">
-          <i class="fas fa-clipboard-check"></i> Pre-Approvals Table Columns
-        </h3>
-      </div>
-      <p style="font-size:13px; color:#888; margin:0 0 8px;">
-        Choose which columns appear in the pre-approvals table, set custom labels, and reorder them.
-      </p>
-      <div id="mondayDisplayConfigPA">
-        <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
-      </div>
-      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtnPA" style="display:none; margin-top:8px;">
-        <i class="fas fa-save"></i> Save Pre-Approvals Display Settings
-      </button>
-    </div>
-
-    <!-- Display Config — Funded Loans -->
-    <div class="monday-section">
-      <div class="toolbar">
-        <h3 style="margin:0; font-size:16px; color:#104547;">
-          <i class="fas fa-check-circle"></i> Funded Loans Table Columns
-        </h3>
-      </div>
-      <p style="font-size:13px; color:#888; margin:0 0 8px;">
-        Choose which columns appear in the funded loans table, set custom labels, and reorder them.
-      </p>
-      <div id="mondayDisplayConfigFL">
-        <p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>
-      </div>
-      <button class="btn btn-primary btn-sm" id="mondaySaveDisplayBtnFL" style="display:none; margin-top:8px;">
-        <i class="fas fa-save"></i> Save Funded Loans Display Settings
-      </button>
+      <!-- Hidden legacy containers for backward-compat with existing JS -->
+      <div id="mondayDisplayConfig" style="display:none;"></div>
+      <button id="mondaySaveDisplayBtn" style="display:none;"></button>
+      <div id="mondayDisplayConfigPA" style="display:none;"></div>
+      <button id="mondaySaveDisplayBtnPA" style="display:none;"></button>
+      <div id="mondayDisplayConfigFL" style="display:none;"></div>
+      <button id="mondaySaveDisplayBtnFL" style="display:none;"></button>
     </div>
 
     <!-- Webhooks -->
@@ -1090,7 +1084,7 @@
           <i class="fas fa-bolt"></i> Real-Time Webhooks
         </h3>
       </div>
-      <p style="font-size:13px; color:#888; margin:0 0 8px;">
+      <p style="font-size:13px; color:#666; margin:0 0 8px;">
         Enable webhooks for real-time sync. When items change on Monday.com, the dashboard updates automatically.
       </p>
       <table class="admin-table" id="mondayWebhooksTable">
@@ -1118,10 +1112,10 @@
           <button class="btn btn-primary btn-sm" id="mondayRunSyncBtn"><i class="fas fa-play"></i> Run Sync Now</button>
         </div>
       </div>
-      <div id="mondaySyncInfo" style="font-size:13px; color:#888; margin-bottom:8px;">No syncs have been run yet.</div>
+      <div id="mondaySyncInfo" style="font-size:13px; color:#666; margin-bottom:8px;">No syncs have been run yet.</div>
 
       <h4 style="font-size:14px; margin:16px 0 8px; color:#104547;"><i class="fas fa-history"></i> Sync History</h4>
-      <div id="mondaySyncHistory" style="font-size:13px; color:#888;">Loading...</div>
+      <div id="mondaySyncHistory" style="font-size:13px; color:#666;">Loading...</div>
     </div>
   </div>
 
@@ -2163,7 +2157,7 @@
           return (
             '<tr>' +
               '<td><strong>' + escHtml(d.file_name) + '</strong>' +
-                (d.description ? '<br><small style="color:#888;">' + escHtml(d.description) + '</small>' : '') +
+                (d.description ? '<br><small style="color:#666;">' + escHtml(d.description) + '</small>' : '') +
               '</td>' +
               '<td>' + cat + '</td>' +
               '<td>' + escHtml(size) + '</td>' +
@@ -3218,8 +3212,8 @@
           html += '<tr style="border-bottom:1px solid #f0f0f0;">';
           html += '<td style="padding:6px 8px;"><i class="fas ' + icon + '" style="color:#104547; margin-right:6px;"></i>' + escHtml(doc.file_name) + '</td>';
           html += '<td style="padding:6px 8px;">' + renderDocTypeSelect(doc.id, doc.doc_type) + '</td>';
-          html += '<td style="padding:6px 8px; color:#888;">' + size + '</td>';
-          html += '<td style="padding:6px 8px; color:#888;">' + date + '</td>';
+          html += '<td style="padding:6px 8px; color:#666;">' + size + '</td>';
+          html += '<td style="padding:6px 8px; color:#666;">' + date + '</td>';
           html += '<td style="padding:6px 8px; text-align:right;">';
           if (doc.download_url) html += '<a href="' + doc.download_url + '" target="_blank" style="color:#104547; margin-right:8px;" title="Download"><i class="fas fa-download"></i></a>';
           html += '<button onclick="deleteInvestorDoc(' + doc.id + ')" style="border:none; background:none; color:#c0392b; cursor:pointer;" title="Delete"><i class="fas fa-trash"></i></button>';
@@ -3558,7 +3552,7 @@
             '<label style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer; font-size:13px;">' +
               '<input type="checkbox" class="board-user-cb" value="' + u.id + '"' + (assignedIds.includes(u.id) ? ' checked' : '') + '> ' +
               escHtml(u.name || u.email) +
-              (u.role ? ' <span style="color:#888; font-size:11px;">(' + escHtml(u.role) + ')</span>' : '') +
+              (u.role ? ' <span style="color:#666; font-size:11px;">(' + escHtml(u.role) + ')</span>' : '') +
             '</label>'
           ).join('');
         }
@@ -3619,7 +3613,7 @@
       mondayCurrentBoardId = boardId;
       const container = document.getElementById('mondayMappingsContainer');
       const saveBtn = document.getElementById('mondaySaveMappingsBtn');
-      container.innerHTML = '<p style="color:#888; font-size:13px;"><i class="fas fa-spinner fa-spin"></i> Loading columns from Monday.com...</p>';
+      container.innerHTML = '<p style="color:#666; font-size:13px;"><i class="fas fa-spinner fa-spin"></i> Loading columns from Monday.com...</p>';
 
       try {
         const data = await api('/monday/columns?board=' + boardId);
@@ -3638,14 +3632,14 @@
         } catch (e) { /* first time */ }
 
         if (mondayBoardColumns.length === 0) {
-          container.innerHTML = '<p style="color:#888; font-size:13px;">No columns found on this board.</p>';
+          container.innerHTML = '<p style="color:#666; font-size:13px;">No columns found on this board.</p>';
           return;
         }
 
         const sectionLabels = { pipeline: 'Pipeline', pre_approvals: 'Pre-Approvals', funded_loans: 'Funded Loans' };
 
         container.innerHTML =
-          '<p style="font-size:12px; color:#888; margin:0 0 6px;">Board: <strong>' + escHtml(data.boardName) + '</strong> — ' + mondayBoardColumns.length + ' columns — Section: <span class="badge ' + (section === 'pipeline' ? 'section-pipeline' : section === 'pre_approvals' ? 'section-preapprovals' : 'section-funded') + '">' + escHtml(sectionLabels[section] || section) + '</span></p>' +
+          '<p style="font-size:12px; color:#666; margin:0 0 6px;">Board: <strong>' + escHtml(data.boardName) + '</strong> — ' + mondayBoardColumns.length + ' columns — Section: <span class="badge ' + (section === 'pipeline' ? 'section-pipeline' : section === 'pre_approvals' ? 'section-preapprovals' : 'section-funded') + '">' + escHtml(sectionLabels[section] || section) + '</span></p>' +
           '<div style="max-height:350px; overflow-y:auto; border:1px solid #eee; border-radius:8px;">' +
             '<table class="admin-table" style="margin:0; font-size:12px;">' +
               '<thead><tr><th>Monday.com Column</th><th>Type</th><th>Maps To</th></tr></thead>' +
@@ -3704,17 +3698,26 @@
     document.getElementById('mondayLoadColumnsBtn').addEventListener('click', loadMondayColumns);
     document.getElementById('mondaySaveMappingsBtn').addEventListener('click', saveMondayMappings);
 
-    // ── Display Config (all sections) ──
+    // ── Display Config (unified: one container, switch via dropdown) ──
+    const UNIFIED_CONTAINER_ID = 'mondayDisplayConfigUnified';
+    const UNIFIED_SAVE_BTN_ID = 'mondaySaveDisplayBtnUnified';
+    const UNIFIED_TABLE_ID = 'displayConfigTableUnified';
+
     const DISPLAY_SECTIONS = [
-      { key: 'pipeline',       containerId: 'mondayDisplayConfig',   saveBtnId: 'mondaySaveDisplayBtn',   tableId: 'displayConfigTable' },
-      { key: 'pre_approvals',  containerId: 'mondayDisplayConfigPA', saveBtnId: 'mondaySaveDisplayBtnPA', tableId: 'displayConfigTablePA' },
-      { key: 'funded_loans',   containerId: 'mondayDisplayConfigFL', saveBtnId: 'mondaySaveDisplayBtnFL', tableId: 'displayConfigTableFL' },
+      { key: 'pipeline',       containerId: UNIFIED_CONTAINER_ID, saveBtnId: UNIFIED_SAVE_BTN_ID, tableId: UNIFIED_TABLE_ID },
+      { key: 'pre_approvals',  containerId: UNIFIED_CONTAINER_ID, saveBtnId: UNIFIED_SAVE_BTN_ID, tableId: UNIFIED_TABLE_ID },
+      { key: 'funded_loans',   containerId: UNIFIED_CONTAINER_ID, saveBtnId: UNIFIED_SAVE_BTN_ID, tableId: UNIFIED_TABLE_ID },
     ];
 
+    function getActiveDisplaySection() {
+      const sel = document.getElementById('mondayDisplaySectionSelect');
+      const key = sel ? sel.value : 'pipeline';
+      return DISPLAY_SECTIONS.find(s => s.key === key) || DISPLAY_SECTIONS[0];
+    }
+
     async function loadMondayDisplayConfig() {
-      for (const sec of DISPLAY_SECTIONS) {
-        await loadSectionDisplayConfig(sec);
-      }
+      // Only load the currently-selected section into the unified container
+      await loadSectionDisplayConfig(getActiveDisplaySection());
     }
 
     async function loadSectionDisplayConfig(sec) {
@@ -3728,7 +3731,7 @@
         const columns = config.columns || [];
 
         if (columns.length <= 1) {
-          container.innerHTML = '<p style="font-size:13px; color:#888;">Save column mappings first, then configure display here.</p>';
+          container.innerHTML = '<p style="font-size:13px; color:#666;">Save column mappings first, then configure display here.</p>';
           saveBtn.style.display = 'none';
           return;
         }
@@ -3755,6 +3758,13 @@
           '</div>';
 
         saveBtn.style.display = '';
+        // Reflect active section in the unified save button label
+        if (sec.saveBtnId === UNIFIED_SAVE_BTN_ID) {
+          const niceName = sec.key === 'pre_approvals' ? 'Pre-Approvals'
+            : sec.key === 'funded_loans' ? 'Funded Loans'
+            : 'Pipeline';
+          saveBtn.innerHTML = '<i class="fas fa-save"></i> Save ' + niceName + ' Display Settings';
+        }
 
         // Wire move buttons
         container.querySelectorAll('.dc-move-up').forEach(btn => {
@@ -3831,31 +3841,107 @@
       } catch (err) { alert('Failed to save display settings: ' + err.message); }
     }
 
-    // Wire save buttons for all sections
-    DISPLAY_SECTIONS.forEach(sec => {
-      document.getElementById(sec.saveBtnId).addEventListener('click', () => saveSectionDisplaySettings(sec));
-    });
+    // Wire single save button + section dropdown for unified Display Config UI
+    const unifiedSaveBtn = document.getElementById(UNIFIED_SAVE_BTN_ID);
+    if (unifiedSaveBtn) {
+      unifiedSaveBtn.addEventListener('click', () => saveSectionDisplaySettings(getActiveDisplaySection()));
+    }
+    const displaySectionSel = document.getElementById('mondayDisplaySectionSelect');
+    if (displaySectionSel) {
+      displaySectionSel.addEventListener('change', () => loadSectionDisplayConfig(getActiveDisplaySection()));
+    }
 
     // ── Sync Controls ──
     async function runMondaySync() {
-      const btn = document.getElementById('mondayRunSyncBtn');
+      const btns = [
+        document.getElementById('mondayRunSyncBtn'),
+        document.getElementById('mondayHeaderSyncBtn'),
+      ].filter(Boolean);
       const info = document.getElementById('mondaySyncInfo');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
-      info.textContent = 'Sync in progress...';
+      const headerStatus = document.getElementById('mondayHeaderSyncStatus');
+
+      btns.forEach(b => { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...'; });
+      if (info) info.textContent = 'Sync in progress...';
+      if (headerStatus) headerStatus.innerHTML = '<em>Syncing…</em>';
 
       try {
         const result = await api('/monday/sync', { method: 'POST', body: '{}' });
-        if (!result) { info.textContent = 'Sync failed.'; return; }
+        if (!result) {
+          if (info) info.textContent = 'Sync failed.';
+          if (headerStatus) headerStatus.innerHTML = '<span style="color:#e74c3c;">Last sync failed</span>';
+          return;
+        }
         const delMsg = result.deleted ? ', ' + result.deleted + ' removed' : '';
-        info.innerHTML = '<span style="color:#2e7d32;">Sync complete! ' + result.itemsFetched + ' items (' + result.created + ' new, ' + result.updated + ' updated' + delMsg + ')</span>';
+        const successMsg = 'Sync complete! ' + result.itemsFetched + ' items (' + result.created + ' new, ' + result.updated + ' updated' + delMsg + ')';
+        if (info) info.innerHTML = '<span style="color:#2e7d32;">' + successMsg + '</span>';
+        if (headerStatus) headerStatus.innerHTML = '<span style="color:#2e7d32;">Last sync: just now</span>';
         loadMondaySyncHistory();
       } catch (err) {
-        info.innerHTML = '<span style="color:#e74c3c;">Sync failed: ' + escHtml(err.message) + '</span>';
+        if (info) info.innerHTML = '<span style="color:#e74c3c;">Sync failed: ' + escHtml(err.message) + '</span>';
+        if (headerStatus) headerStatus.innerHTML = '<span style="color:#e74c3c;">Last sync failed</span>';
       } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fas fa-play"></i> Run Sync Now';
+        btns.forEach(b => { b.disabled = false; b.innerHTML = '<i class="fas fa-play"></i> Run Sync Now'; });
       }
+    }
+
+    /** Update the sticky header sync status from the most recent sync log entry. */
+    async function refreshHeaderSyncStatus() {
+      const headerStatus = document.getElementById('mondayHeaderSyncStatus');
+      if (!headerStatus) return;
+      try {
+        const logs = await api('/monday/sync/log');
+        if (!logs || logs.length === 0) {
+          headerStatus.textContent = 'Last sync: never';
+          return;
+        }
+        const latest = logs[0];
+        const when = latest.started_at ? new Date(latest.started_at) : null;
+        const ago = when ? timeAgo(when) : 'recent';
+        const color = latest.status === 'success' ? '#2e7d32'
+          : latest.status === 'error' ? '#e74c3c'
+          : latest.status === 'running' ? '#f39c12' : '#666';
+        headerStatus.innerHTML = 'Last sync: <span style="color:' + color + '; font-weight:600;">' + escHtml(latest.status) + '</span> · ' + ago;
+      } catch (e) {
+        headerStatus.textContent = 'Last sync: unknown';
+      }
+    }
+
+    function timeAgo(date) {
+      const s = Math.floor((Date.now() - date.getTime()) / 1000);
+      if (s < 60) return s + 's ago';
+      if (s < 3600) return Math.floor(s / 60) + 'm ago';
+      if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+      return Math.floor(s / 86400) + 'd ago';
+    }
+
+    /** Refresh setup-flow checklist in the sticky header (token / boards / mappings / webhooks). */
+    async function refreshSetupFlow() {
+      const flow = document.getElementById('mondaySetupFlow');
+      if (!flow) return;
+      const mark = (step, done) => {
+        const el = flow.querySelector('[data-step="' + step + '"]');
+        if (el) el.classList.toggle('done', !!done);
+      };
+      try {
+        const tokenStatus = document.getElementById('mondayTokenStatus');
+        const hasToken = tokenStatus && /connected|saved/i.test(tokenStatus.textContent || '');
+        mark('token', hasToken);
+        const data = await api('/monday/boards');
+        const boards = (data && data.boards) || [];
+        mark('boards', boards.length > 0);
+        // Mappings: check that at least one board has saved mappings
+        let hasMapping = false;
+        for (const b of boards.slice(0, 5)) {
+          try {
+            const m = await api('/monday/mappings?board=' + b.board_id);
+            if (m && m.length > 0) { hasMapping = true; break; }
+          } catch (e) {}
+        }
+        mark('mappings', hasMapping);
+        // Webhooks
+        const anyWebhook = boards.some(b => b.webhook_id);
+        mark('webhooks', anyWebhook);
+      } catch (e) { /* silent — best-effort indicator */ }
     }
 
     async function loadMondaySyncHistory() {
@@ -3894,6 +3980,16 @@
     }
 
     document.getElementById('mondayRunSyncBtn').addEventListener('click', runMondaySync);
+    const headerSyncBtn = document.getElementById('mondayHeaderSyncBtn');
+    if (headerSyncBtn) headerSyncBtn.addEventListener('click', runMondaySync);
+
+    // Initial population of header status + setup flow (fire-and-forget)
+    refreshHeaderSyncStatus();
+    refreshSetupFlow();
+    // Refresh setup flow whenever Monday tab is activated
+    document.querySelectorAll('.admin-tab[data-tab="monday"]').forEach(tab => {
+      tab.addEventListener('click', () => { refreshHeaderSyncStatus(); refreshSetupFlow(); });
+    });
 
     // ── Webhook Management ──
     async function loadMondayWebhooks() {
@@ -3910,7 +4006,7 @@
           const hasWebhook = !!b.webhook_id;
           const statusHtml = hasWebhook
             ? '<span style="color:#2e7d32; font-weight:600;"><i class="fas fa-check-circle"></i> Active</span>'
-            : '<span style="color:#888;"><i class="fas fa-minus-circle"></i> Not enabled</span>';
+            : '<span style="color:#666;"><i class="fas fa-minus-circle"></i> Not enabled</span>';
           const actionHtml = hasWebhook
             ? `<button class="btn btn-secondary btn-sm" onclick="unregisterWebhook('${b.board_id}')"><i class="fas fa-unlink"></i> Disable</button>`
             : `<button class="btn btn-primary btn-sm" onclick="registerWebhook('${b.board_id}')"><i class="fas fa-bolt"></i> Enable</button>`;

@@ -377,6 +377,89 @@ body {
   padding-bottom: 0;
 }
 
+/* ── Monday Tab: Sticky Header Strip (setup flow + quick sync) ── */
+.monday-header-strip {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #ffffff;
+  border: 1px solid #e0e4ea;
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: -4px 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.monday-setup-flow {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.monday-setup-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  background: #f5f7fa;
+  border: 1px solid #e0e4ea;
+  border-radius: 16px;
+  white-space: nowrap;
+}
+.monday-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d0d6de;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.monday-setup-step.done {
+  color: #2e7d32;
+  background: #e7f5ea;
+  border-color: #b8dcc0;
+}
+.monday-setup-step.done .monday-step-num {
+  background: #2e7d32;
+}
+.monday-setup-step.done::after {
+  content: '\f00c';
+  font-family: 'Font Awesome 6 Free', 'Font Awesome 5 Free';
+  font-weight: 900;
+  margin-left: 2px;
+  font-size: 10px;
+}
+.monday-header-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.monday-header-sync-status {
+  font-size: 12px;
+  color: #666;
+}
+.monday-header-sync-status em {
+  font-style: italic;
+  color: #888;
+}
+
+@media (max-width: 720px) {
+  .monday-header-strip { flex-direction: column; align-items: stretch; }
+  .monday-header-sync { justify-content: space-between; }
+}
+
 /* ── Profile Sub-Tabs ── */
 .profile-tabs {
   display: flex;

@@ -797,6 +797,56 @@
 }
 
 /* ── Pre-Approval Detail View ────────────── */
+/* ── Pipeline Detail: Stage Bar (promoted to header) ── */
+.pa-detail-stage-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md, 1rem);
+    background: linear-gradient(135deg,
+        rgba(140, 198, 62, 0.08),
+        rgba(140, 198, 62, 0.02));
+    border: 1px solid var(--border-color, rgba(140, 198, 62, 0.25));
+    border-left: 4px solid var(--green-bright, #8cc63e);
+    border-radius: var(--radius-lg, 12px);
+    padding: 0.75rem 1.25rem;
+    margin-bottom: var(--spacing-md, 1rem);
+    flex-wrap: wrap;
+}
+.pa-detail-stage-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--green-bright, #8cc63e);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: 0;
+}
+.pa-detail-stage-label i { opacity: 0.85; }
+.pa-detail-stage-pill {
+    /* extend pipeline-status-select with bigger emphasis */
+    font-size: 0.95rem !important;
+    min-width: 200px !important;
+    min-height: 44px !important;
+    padding: 0.6rem 1rem !important;
+    flex: 0 1 auto;
+}
+.pa-detail-stage-loan-status {
+    margin-left: auto;
+}
+
+/* Section title hint — clarifies what each notes section does */
+.pa-detail-section-hint {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-secondary, #a8b8c8);
+    text-transform: none;
+    letter-spacing: normal;
+    margin-left: 0.5rem;
+    font-style: italic;
+}
+
 .pa-detail-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -846,7 +896,8 @@
 
 .pa-detail-label {
     font-size: 0.82rem;
-    color: var(--text-secondary, #8899aa);
+    /* Fallback bumped from #8899aa (~4.3:1) → #a8b8c8 (~5.2:1) to clear WCAG AA */
+    color: var(--text-secondary, #a8b8c8);
     font-weight: 500;
     white-space: nowrap;
 }
@@ -912,11 +963,13 @@
     color: var(--text-primary);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 0.3rem 0.5rem;
-    font-size: 0.82rem;
+    /* WCAG 2.5.5: touch targets ≥44x44 — bumped from 0.3/0.5rem */
+    padding: 0.55rem 0.75rem;
+    font-size: 0.85rem;
     font-weight: 600;
     cursor: pointer;
-    min-width: 120px;
+    min-width: 140px;
+    min-height: 40px;
 }
 .pipeline-status-select:focus {
     outline: none;
