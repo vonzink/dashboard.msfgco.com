@@ -116,6 +116,12 @@ function detectFormat(text) {
     return 'du-findings';
   }
 
+  if (/UTRACK/i.test(text)
+    || (/\(PTD\)/i.test(text) && /\d{4}\s+\w+:/i.test(text))
+    || (/ease\.uwm\.com/i.test(text))) {
+    return 'uwm-ease';
+  }
+
   return 'generic';
 }
 
@@ -132,6 +138,10 @@ function parseConditionsFromText(text, options = {}) {
 
   if (format === 'du-findings') {
     return parseDuFindings(text);
+  }
+
+  if (format === 'uwm-ease') {
+    return parseUwmEase(text);
   }
 
   return parseGenericNumberedConditions(text);
@@ -197,6 +207,199 @@ function isConditionalApprovalNoiseLine(line) {
     || /^Section\s+2\s+[–-]\s+Underwriting Conditions/i.test(line)
     || /^Borrower:\s/i.test(line)
     || /^Co-borrower:\s/i.test(line);
+}
+
+const UWM_SECTION_RE = /^\d+\s*\/\s*\d+\s+(.+?)\s+\d+%$/;
+const UWM_SECTION_ALT_RE = /^\d+\s+(.+?)$/;
+const UWM_KNOWN_SECTIONS = new Set([
+  'SENIOR UNDERWRITER (PTD)',
+  'UNDERWRITER II (PTD)',
+  'UNDERWRITER TO OBTAIN AND CLEAR',
+  'CLOSING (PTF)',
+  'CLOSING (PTD)',
+  'PROJECT REVIEW (PTD)',
+  'DISCLOSURES/COMPLIANCE (PTD)',
+]);
+const UWM_ITEM_RE = /^(\d{4})\s+(.+)$/;
+
+function parseUwmEase(text) {
+  const lines = splitTextLines(text);
+  const conditions = [];
+
+  // Pass 1: identify sections and tagged lines. Each line becomes a record
+  // with its section context and, if it contains/is a 4-digit code, that code.
+  const tagged = [];
+  let section = '';
+  let active = false;
+
+  for (const rawLine of lines) {
+    const line = normalizeWhitespace(rawLine);
+    if (!line) continue;
+    if (isUwmNoiseLine(line)) continue;
+
+    const sectionMatch = line.match(UWM_SECTION_RE);
+    if (sectionMatch) {
+      section = normalizeHeading(sectionMatch[1]);
+      active = true;
+      continue;
+    }
+    if (!active) {
+      const altMatch = line.match(UWM_SECTION_ALT_RE);
+      if (altMatch && UWM_KNOWN_SECTIONS.has(altMatch[1].toUpperCase())) {
+        section = normalizeHeading(altMatch[1]);
+        active = true;
+        continue;
+      }
+    }
+    if (!active) continue;
+
+    if (/^EXPIRING DOCUMENTS/i.test(line)
+      || /^Comments$/i.test(line)
+      || /^About UWM$/i.test(line)
+      || /^Why UWM$/i.test(line)) {
+      active = false;
+      continue;
+    }
+
+    // Section header with count prefix: "0 CLOSING (PTF)", "0 UNDERWRITER TO OBTAIN AND CLEAR"
+    const altMatch2 = line.match(UWM_SECTION_ALT_RE);
+    if (altMatch2 && UWM_KNOWN_SECTIONS.has(altMatch2[1].toUpperCase())) {
+      section = normalizeHeading(altMatch2[1]);
+      continue;
+    }
+
+    // Inline code+text on same line
+    const itemMatch = line.match(UWM_ITEM_RE);
+    if (itemMatch) {
+      tagged.push({ section, code: itemMatch[1], text: itemMatch[2] });
+      continue;
+    }
+    // Standalone 4-digit code
+    if (/^\d{4}$/.test(line)) {
+      tagged.push({ section, code: line, text: '' });
+      continue;
+    }
+    // Plain text line (belongs to nearest code)
+    tagged.push({ section, code: null, text: line });
+  }
+
+  // Pass 2: walk the tagged array and assign plain-text lines to the correct
+  // code. For standalone codes, text lines immediately before the code (back
+  // to the previous code) are the condition's first portion, and text lines
+  // after it are the continuation.
+  let i = 0;
+  while (i < tagged.length) {
+    const rec = tagged[i];
+
+    // Inline code+text: collect following plain text as continuation, but
+    // stop if the next code after those lines is standalone (code-only) —
+    // that means the intervening text belongs to the standalone code, not
+    // this inline one.
+    if (rec.code && rec.text) {
+      const bodyLines = [rec.text];
+      rec._claimed = true;
+      let j = i + 1;
+      while (j < tagged.length && !tagged[j].code) {
+        j++;
+      }
+      const nextIsStandalone = j < tagged.length && tagged[j].code && !tagged[j].text;
+      if (!nextIsStandalone) {
+        // Safe to consume continuation lines
+        j = i + 1;
+        while (j < tagged.length && !tagged[j].code) {
+          bodyLines.push(tagged[j].text);
+          tagged[j]._claimed = true;
+          j++;
+        }
+      } else {
+        j = i + 1;
+      }
+      const ctx = [rec.section, `#${rec.code}`];
+      const cond = makeCondition(bodyLines, ctx);
+      if (cond) conditions.push(cond);
+      i = j;
+      continue;
+    }
+
+    // Standalone code: the PDF column layout puts the code on its own Y
+    // coordinate, with text lines above (before) and below (after) it.
+    // Look backward for unclaimed before-text and forward for after-text.
+    // When the NEXT code is also standalone, the plain-text lines between
+    // the two codes must be split: the first portion is after-text for
+    // THIS code, the trailing portion is before-text for the next.
+    if (rec.code && !rec.text) {
+      const beforeLines = [];
+      for (let b = i - 1; b >= 0; b--) {
+        if (tagged[b].code || tagged[b]._claimed) break;
+        beforeLines.unshift(tagged[b].text);
+        tagged[b]._claimed = true;
+      }
+
+      // Collect candidate after-lines up to the next code
+      const afterCandidates = [];
+      let j = i + 1;
+      while (j < tagged.length && !tagged[j].code) {
+        afterCandidates.push({ idx: j, text: tagged[j].text });
+        j++;
+      }
+
+      // If the next code is also standalone, leave trailing lines for
+      // its backward scan. Split at the last sentence-ending period.
+      let afterLines;
+      const nextIsStandalone = j < tagged.length && tagged[j].code && !tagged[j].text;
+      if (nextIsStandalone && afterCandidates.length > 1) {
+        let splitAt = afterCandidates.length;
+        for (let s = afterCandidates.length - 2; s >= 0; s--) {
+          if (/\.\s*$/.test(afterCandidates[s].text)) {
+            splitAt = s + 1;
+            break;
+          }
+        }
+        if (splitAt === afterCandidates.length) splitAt = 1;
+        afterLines = afterCandidates.slice(0, splitAt);
+        afterLines.forEach((a) => { tagged[a.idx]._claimed = true; });
+        j = i + 1 + splitAt;
+      } else {
+        afterLines = afterCandidates;
+        afterLines.forEach((a) => { tagged[a.idx]._claimed = true; });
+      }
+
+      const bodyLines = [...beforeLines, ...afterLines.map((a) => a.text)];
+      const ctx = [rec.section, `#${rec.code}`];
+      const cond = makeCondition(bodyLines, ctx);
+      if (cond) conditions.push(cond);
+      i = j;
+      continue;
+    }
+
+    // Unclaimed plain text — skip (happens before the first code in a section)
+    i++;
+  }
+
+  return dedupeConditions(conditions);
+}
+
+function isUwmNoiseLine(line) {
+  return isGlobalNoiseLine(line)
+    || /^CONDITIONS$/i.test(line)
+    || /^Loan Number:/i.test(line)
+    || /^Closing Date:/i.test(line)
+    || /^Account Executive:/i.test(line)
+    || /^Loan Product:/i.test(line)
+    || /^NOT CLEARED CONDITIONS/i.test(line)
+    || /^CLEARED CONDITIONS/i.test(line)
+    || /^ALL CONDITIONS/i.test(line)
+    || /^UTRACK$/i.test(line)
+    || /^Category \/ Document Type/i.test(line)
+    || /^-- SELECT ONE --$/i.test(line)
+    || /^NOTE:\s/i.test(line)
+    || /^By submitting an email/i.test(line)
+    || /^Email Address$/i.test(line)
+    || /^Please select an option/i.test(line)
+    || /^https?:\/\//i.test(line)
+    || /^\d+\/\d+\/\d+,\s+\d+:\d+/i.test(line)
+    || /^Expires$/i.test(line)
+    || /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(line);
 }
 
 function parseConditionsSheet(text) {
@@ -471,14 +674,24 @@ async function extractTextFromPdf(input) {
         if (Math.abs(key - y) <= 2) { bucket = key; break; }
       }
       if (!lines.has(bucket)) lines.set(bucket, []);
-      lines.get(bucket).push({ x: item.transform[4], str: item.str });
+      lines.get(bucket).push({ x: item.transform[4], w: item.width || 0, str: item.str });
     }
 
     // Sort lines top-to-bottom (descending Y), items left-to-right (ascending X)
     const sortedYs = [...lines.keys()].sort((a, b) => b - a);
     const pageLines = sortedYs.map((y) => {
       const items = lines.get(y).sort((a, b) => a.x - b.x);
-      return items.map((it) => it.str).join(' ').replace(/\s+/g, ' ').trim();
+      // Join items with a space, but omit the space when two items are
+      // adjacent with no gap — this rejoins broken PDF ligatures (fi, ff,
+      // fl, ffi) that pdfjs splits into separate text items.
+      let result = items[0].str;
+      for (let k = 1; k < items.length; k++) {
+        const prev = items[k - 1];
+        const cur = items[k];
+        const gap = cur.x - (prev.x + prev.w);
+        result += (gap < 1 ? '' : ' ') + cur.str;
+      }
+      return result.replace(/\s+/g, ' ').trim();
     }).filter((s) => s.length > 0);
 
     pageStrings.push(pageLines.join('\n'));
@@ -521,6 +734,7 @@ module.exports = {
   parseConditionsSheet,
   parseDuFindings,
   parseGenericNumberedConditions,
+  parseUwmEase,
   renderChecklistMarkdown,
   titleFromPdfPath,
   writeMarkdownFile

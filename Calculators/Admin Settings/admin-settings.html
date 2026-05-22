@@ -646,6 +646,10 @@
                 <label>Adverse Action Notice</label>
                 <input type="text" id="invEditAdverseActionNotice" />
               </div>
+              <div class="form-group">
+                <label>Credit Providers</label>
+                <input type="text" id="invEditCreditProviders" />
+              </div>
               <!-- Toggle fields — organized by category -->
               <div class="form-group" style="grid-column: 1 / -1;">
                 <label style="margin-bottom:4px;">Product &amp; Service Toggles</label>
@@ -685,6 +689,7 @@
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleCondoNonWarrantable" /> Condo / Non-Warrantable</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleSubFin" /> Subordinate Financing</label>
                     <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleHelocSecond" /> HELOC / 2nd</label>
+                    <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer;"><input type="checkbox" id="invToggleVantageCredit" /> Vantage Credit</label>
                   </div>
                 </div>
 
@@ -2492,6 +2497,7 @@
       document.getElementById('invEditUnderwritingFee').value = data.underwriting_fee || '';
       document.getElementById('invEditInHouseServicing').value = data.in_house_servicing || '';
       document.getElementById('invEditAdverseActionNotice').value = data.adverse_action_notice || '';
+      document.getElementById('invEditCreditProviders').value = data.credit_providers || '';
       document.getElementById('invEditNotes').value = data.notes || '';
       // Custom toggles
       loadCustomToggles();
@@ -2516,6 +2522,7 @@
       document.getElementById('invToggleCondoNonWarrantable').checked = !!data.condo_non_warrantable;
       document.getElementById('invToggleSubFin').checked = !!data.subordinate_financing;
       document.getElementById('invToggleHelocSecond').checked = !!data.heloc_second;
+      document.getElementById('invToggleVantageCredit').checked = !!data.vantage_credit;
       document.getElementById('invToggleManualUw').checked = !!data.manual_underwriting;
       document.getElementById('invToggleServicing').checked = !!data.servicing;
       document.getElementById('invToggleScenarioDesk').checked = !!data.scenario_desk;
@@ -2686,6 +2693,7 @@
             underwriting_fee: document.getElementById('invEditUnderwritingFee').value.trim() || null,
             in_house_servicing: document.getElementById('invEditInHouseServicing').value.trim() || null,
             adverse_action_notice: document.getElementById('invEditAdverseActionNotice').value.trim() || null,
+            credit_providers: document.getElementById('invEditCreditProviders').value.trim() || null,
             notes: document.getElementById('invEditNotes').value.trim() || null,
             // Agency/Gov
             conventional: document.getElementById('invToggleConventional').checked ? 1 : 0,
@@ -2710,6 +2718,7 @@
             condo_non_warrantable: document.getElementById('invToggleCondoNonWarrantable').checked ? 1 : 0,
             subordinate_financing: document.getElementById('invToggleSubFin').checked ? 1 : 0,
             heloc_second: document.getElementById('invToggleHelocSecond').checked ? 1 : 0,
+            vantage_credit: document.getElementById('invToggleVantageCredit').checked ? 1 : 0,
             // Services
             manual_underwriting: document.getElementById('invToggleManualUw').checked ? 1 : 0,
             servicing: document.getElementById('invToggleServicing').checked ? 1 : 0,

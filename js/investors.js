@@ -53,6 +53,8 @@ const Investors = {
           inHouseServicing:        row.in_house_servicing || null,
           maxComp:                 row.max_comp != null ? Number(row.max_comp) : null,
           underwritingFee:         row.underwriting_fee || null,
+          adverseActionNotice:     row.adverse_action_notice || null,
+          creditProviders:         row.credit_providers || null,
           // Toggle fields
           servicing:               row.servicing,
           manualUnderwriting:      row.manual_underwriting,
@@ -77,6 +79,7 @@ const Investors = {
           doctor:                  row.doctor,
           condoNonWarrantable:     row.condo_non_warrantable,
           helocSecond:             row.heloc_second,
+          vantageCredit:           row.vantage_credit,
           scenarioDesk:            row.scenario_desk,
           condoReview:             row.condo_review,
           exceptionDesk:           row.exception_desk,
@@ -251,6 +254,7 @@ const Investors = {
         { label: 'Condo / Non-Warr.',    val: investor.condoNonWarrantable ?? investor.condo_non_warrantable },
         { label: 'Sub. Financing',       val: investor.subordinateFinancing ?? investor.subordinate_financing },
         { label: 'HELOC / 2nd',          val: investor.helocSecond ?? investor.heloc_second },
+        { label: 'Vantage Credit',       val: investor.vantageCredit ?? investor.vantage_credit },
       ]},
       { name: 'Services', toggles: [
         { label: 'Manual UW',            val: investor.manualUnderwriting ?? investor.manual_underwriting },
@@ -420,6 +424,8 @@ const Investors = {
           detailRow('EPO', esc(investor.epo || '')) +
           detailRow('Max Comp', esc(maxComp)) +
           detailRow('Underwriting Fee', esc(uwFee)) +
+          detailRow('Adverse Action Notice', esc(investor.adverseActionNotice || investor.adverse_action_notice || '')) +
+          detailRow('Credit Providers', esc(investor.creditProviders || investor.credit_providers || '')) +
         '</div>' +
       '</div>' +
       // Team (full width, under AE)
