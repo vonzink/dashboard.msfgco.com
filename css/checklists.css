@@ -508,6 +508,70 @@
 .cl-note-prompt-input:focus { outline: none; border-color: var(--green-bright); box-shadow: var(--focus-ring); }
 .cl-note-prompt-actions { display: flex; justify-content: flex-end; gap: 0.35rem; }
 
+/* ── Inline Prompt Overlays (replaces native prompt/confirm) ── */
+.cl-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 11500;
+  padding: 1rem;
+}
+.cl-prompt {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 400px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.cl-prompt-header { font-size: var(--font-base); }
+.cl-prompt-message { font-size: var(--font-sm); color: var(--text-secondary); line-height: 1.4; }
+.cl-prompt-input {
+  width: 100%;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  font-size: var(--font-sm);
+}
+.cl-prompt-input:focus { outline: none; border-color: var(--green-bright); box-shadow: var(--focus-ring); }
+.cl-prompt-actions { display: flex; justify-content: flex-end; gap: 0.35rem; }
+
+.cl-choice-options { display: flex; flex-direction: column; gap: 0.35rem; }
+.cl-choice-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+.cl-choice-btn:hover { border-color: var(--green-bright); background: var(--bg-hover); }
+.cl-choice-btn i { font-size: 1.1rem; color: var(--green-bright); flex-shrink: 0; }
+.cl-choice-btn strong { display: block; font-size: var(--font-sm); }
+.cl-choice-btn small { display: block; font-size: var(--font-xs); color: var(--text-muted); margin-top: 2px; }
+
+.btn-danger {
+  background: var(--status-danger);
+  color: #fff;
+  border: 1px solid var(--status-danger);
+}
+.btn-danger:hover { background: #dc2626; border-color: #dc2626; }
+
 /* ── Template Selector ─────────────────────── */
 .cl-template-selector { padding: 0.5rem 0; }
 .cl-template-header {
@@ -567,7 +631,7 @@
   padding: 6px 10px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: var(--input-bg, #12141a);
+  background: var(--input-bg, var(--bg-primary));
   color: var(--text-primary);
   font-size: 0.85rem;
   margin-top: 4px;
@@ -578,7 +642,7 @@
   padding: 4px 8px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
-  background: var(--input-bg, #12141a);
+  background: var(--input-bg, var(--bg-primary));
   color: var(--text-primary);
   font-size: 0.8rem;
 }

@@ -84,11 +84,6 @@ const Checklists = {
 
   MAX_CHECKLISTS_PER_LOAN: 3,
 
-  /**
-   * Render the inline icon row for a loan: up to 3 existing-checklist badges
-   * plus a "+" button to add another (if under the cap). The status map now
-   * holds an ARRAY per source_item_id, one entry per checklist.
-   */
   getStatusBadge(sourceType, itemId) {
     const list = (this._statusMap[sourceType] || {})[itemId] || [];
     let html = '<span class="cl-badges">';
@@ -113,14 +108,11 @@ const Checklists = {
     return html;
   },
 
-  /** Legacy no-op kept for back-compat with existing call sites in pipeline.js
-   *  and pre-approvals.js. getStatusBadge now always renders the full row. */
   getEmptyBadge() { return ''; },
 
   // ════════════════════════════════════════════════
   //  MODAL OPEN / CLOSE
   // ════════════════════════════════════════════════
-  /** Open a specific checklist by id. */
   async openById(checklistId, sourceType, sourceItemId, clientName) {
     this._currentSource = { type: sourceType, itemId: sourceItemId, clientName: clientName || '' };
     this._openModalChrome(clientName);
@@ -136,7 +128,6 @@ const Checklists = {
     }
   },
 
-  /** Open the template picker to add a new checklist on this loan. */
   async openForNew(sourceType, sourceItemId, clientName) {
     this._currentSource = { type: sourceType, itemId: sourceItemId, clientName: clientName || '' };
     this._currentChecklist = null;
@@ -144,8 +135,6 @@ const Checklists = {
     await this._renderTemplateSelector();
   },
 
-  /** Back-compat: open the first checklist on this loan (or template picker
-   *  if none exist). Prefer openById / openForNew for new code. */
   async open(sourceType, sourceItemId, clientName) {
     this._currentSource = { type: sourceType, itemId: sourceItemId, clientName: clientName || '' };
     this._openModalChrome(clientName);
@@ -178,7 +167,6 @@ const Checklists = {
     }
     this._currentSource = null;
     this._currentChecklist = null;
-    // Reset drag offset for next open
     this._dragOffset = { x: 0, y: 0 };
     const modalBox = document.querySelector('#checklistModal .cl-modal');
     if (modalBox) modalBox.style.transform = '';
@@ -189,10 +177,7 @@ const Checklists = {
     if (!modal) return;
 
     modal.querySelector('.cl-modal-close')?.addEventListener('click', () => this.close());
-    // Floating panel: outside click DOES NOT close — the overlay is
-    // pointer-events: none anyway, but be explicit for clarity.
 
-    // Delegate clicks inside modal content
     modal.addEventListener('click', (e) => {
       const btn = e.target.closest('[data-cl-action]');
       if (!btn) return;
@@ -202,10 +187,16 @@ const Checklists = {
       this._handleAction(action, id, btn);
     });
 
+    // Persistent delegated handler for closing dropdown menus
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.cl-menu-trigger')) {
+        modal.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
+      }
+    });
+
     this._bindDragHandle();
   },
 
-  /** Click-and-drag the modal by its header. Persists offset across renders. */
   _dragOffset: { x: 0, y: 0 },
   _bindDragHandle() {
     const header = document.querySelector('#checklistModal .cl-modal-header');
@@ -215,7 +206,6 @@ const Checklists = {
     let startX = 0, startY = 0, originX = 0, originY = 0, dragging = false;
 
     const onDown = (e) => {
-      // Don't start drag on close button
       if (e.target.closest('.cl-modal-close')) return;
       dragging = true;
       const pt = e.touches ? e.touches[0] : e;
@@ -242,275 +232,435 @@ const Checklists = {
     document.addEventListener('touchend', onUp);
   },
 
+  // ════════════════════════════════════════════════
+  //  ACTION DISPATCHER — routes to discrete handlers
+  // ════════════════════════════════════════════════
   async _handleAction(action, id, btn) {
     const src = this._currentSource;
     if (!src) return;
 
-    switch (action) {
-      case 'assign-template': {
-        const templateId = parseInt(id);
-        if (!templateId) return;
-        try {
-          this._currentChecklist = await ServerAPI.assignChecklistTemplate(src.type, src.itemId, templateId);
-          this._renderChecklist();
-          Utils.showToast('Checklist added!', 'success');
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Failed: ' + err.message, 'error'); }
-        break;
+    const handler = {
+      'assign-template':       () => this._actionAssignTemplate(id, src),
+      'rename-checklist':      () => this._actionRenameChecklist(src),
+      'delete-checklist':      () => this._actionDeleteChecklist(src),
+      'toggle-status':         () => this._actionToggleStatus(id, src),
+      'set-status':            () => this._actionSetStatus(btn, src),
+      'set-subitem-status':    () => this._actionSetSubitemStatus(btn),
+      'delete-item':           () => this._actionDeleteItem(id, src),
+      'delete-subitem':        () => this._actionDeleteSubitem(id),
+      'add-item':              () => this._actionAddItem(src),
+      'make-from-pdf':         () => this._actionMakeFromPdf(src),
+      'add-subitem':           () => this._actionAddSubitem(id),
+      'add-note':              () => this._actionAddNote(id),
+      'delete-note':           () => this._actionDeleteNote(id),
+      'edit-item':             () => this._actionEditItem(id),
+      'set-importance':        () => this._actionSetImportance(id, btn),
+      'set-date':              () => this._actionSetDate(id, btn),
+      'set-due-date':          () => this._actionSetDueDate(id, btn),
+      'export-checklist':      () => this._exportCurrentChecklist(),
+      'import-checklist':      () => this._importChecklist(),
+      'show-template-selector':() => this._renderTemplateSelector(),
+    }[action];
+
+    if (!handler) return;
+
+    try {
+      await handler();
+    } catch (err) {
+      Utils.showToast('Something went wrong: ' + (err.message || 'Unknown error'), 'error');
+    }
+  },
+
+  // ════════════════════════════════════════════════
+  //  ACTION HANDLERS — each isolated with own error handling
+  // ════════════════════════════════════════════════
+  async _actionAssignTemplate(id, src) {
+    const templateId = parseInt(id);
+    if (!templateId) return;
+    try {
+      this._currentChecklist = await ServerAPI.assignChecklistTemplate(src.type, src.itemId, templateId);
+      this._renderChecklist();
+      Utils.showToast('Checklist added!', 'success');
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) { Utils.showToast('Failed: ' + err.message, 'error'); }
+  },
+
+  async _actionRenameChecklist(src) {
+    if (!this._currentChecklist) return;
+    const newName = await this._promptInput('Rename Checklist', 'Enter a new name', this._currentChecklist.name || '');
+    if (!newName) return;
+    try {
+      await ServerAPI.renameLoanChecklist(this._currentChecklist.id, newName);
+      this._currentChecklist.name = newName;
+      this._renderChecklist();
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) { Utils.showToast('Rename failed: ' + err.message, 'error'); }
+  },
+
+  async _actionDeleteChecklist(src) {
+    if (!this._currentChecklist) return;
+    const confirmed = await this._promptConfirm(
+      'Delete Checklist',
+      `Delete "${this._currentChecklist.name || 'this checklist'}"? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    try {
+      await ServerAPI.deleteLoanChecklist(this._currentChecklist.id);
+      this._currentChecklist = null;
+      this.close();
+      Utils.showToast('Checklist deleted', 'success');
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) { Utils.showToast('Delete failed: ' + err.message, 'error'); }
+  },
+
+  async _actionToggleStatus(id, src) {
+    const itemId = parseInt(id);
+    const item = this._findItem(itemId);
+    if (!item) return;
+    const next = this._nextStatus(item.status);
+    const payload = { status: next };
+    if (next === 'done' && !item.date) payload.date = this._todayISO();
+    if (next !== 'done' && item.status === 'done' && item.date) payload.date = null;
+
+    // Optimistic update
+    const prevStatus = item.status;
+    const prevDate = item.date;
+    item.status = next;
+    if (payload.date !== undefined) item.date = payload.date;
+    this._updateItemInPlace(itemId);
+    this._updateProgressBar();
+
+    try {
+      await ServerAPI.updateChecklistItem(itemId, payload);
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) {
+      item.status = prevStatus;
+      item.date = prevDate;
+      this._updateItemInPlace(itemId);
+      this._updateProgressBar();
+      Utils.showToast('Failed to update status', 'error');
+    }
+  },
+
+  async _actionSetStatus(btn, src) {
+    const itemId = parseInt(btn.dataset.clItemId);
+    const newStatus = btn.dataset.clStatus;
+    const item = this._findItem(itemId);
+    if (!item) return;
+    const payload = { status: newStatus };
+    if (newStatus === 'done' && !item.date) payload.date = this._todayISO();
+    if (newStatus !== 'done' && item.status === 'done' && item.date) payload.date = null;
+
+    const prevStatus = item.status;
+    const prevDate = item.date;
+    item.status = newStatus;
+    if (payload.date !== undefined) item.date = payload.date;
+    this._updateItemInPlace(itemId);
+    this._updateProgressBar();
+    // Close menu after selection
+    const container = document.getElementById('clContent');
+    if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
+
+    try {
+      await ServerAPI.updateChecklistItem(itemId, payload);
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) {
+      item.status = prevStatus;
+      item.date = prevDate;
+      this._updateItemInPlace(itemId);
+      this._updateProgressBar();
+      Utils.showToast('Failed to update', 'error');
+    }
+  },
+
+  async _actionSetSubitemStatus(btn) {
+    const subId = parseInt(btn.dataset.clSubId);
+    const newStatus = btn.dataset.clStatus;
+    const sub = this._findSubitem(subId);
+    if (!sub) return;
+
+    const prevStatus = sub.status;
+    sub.status = newStatus;
+    this._updateSubitemInPlace(subId);
+
+    try {
+      await ServerAPI.updateChecklistSubitem(subId, { status: newStatus });
+    } catch (err) {
+      sub.status = prevStatus;
+      this._updateSubitemInPlace(subId);
+      Utils.showToast('Failed to update', 'error');
+    }
+  },
+
+  async _actionDeleteItem(id, src) {
+    const itemId = parseInt(id);
+    const confirmed = await this._promptConfirm('Delete Item', 'Delete this checklist item?');
+    if (!confirmed) return;
+    try {
+      await ServerAPI.deleteChecklistItem(itemId);
+      this._currentChecklist.items = this._currentChecklist.items.filter(i => i.id !== itemId);
+      this._renderChecklist();
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) { Utils.showToast('Failed to delete', 'error'); }
+  },
+
+  async _actionDeleteSubitem(id) {
+    const subId = parseInt(id);
+    try {
+      await ServerAPI.deleteChecklistSubitem(subId);
+      for (const item of (this._currentChecklist?.items || [])) {
+        item.subitems = (item.subitems || []).filter(s => s.id !== subId);
       }
-      case 'rename-checklist': {
-        if (!this._currentChecklist) return;
-        const newName = prompt('Rename this checklist:', this._currentChecklist.name || '');
-        if (newName === null) return;
-        const name = newName.trim();
-        if (!name) return;
-        try {
-          await ServerAPI.renameLoanChecklist(this._currentChecklist.id, name);
-          this._currentChecklist.name = name;
-          this._renderChecklist();
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Rename failed: ' + err.message, 'error'); }
-        break;
-      }
-      case 'delete-checklist': {
-        if (!this._currentChecklist) return;
-        if (!confirm(`Delete the checklist "${this._currentChecklist.name || 'this checklist'}"? This cannot be undone.`)) return;
-        try {
-          await ServerAPI.deleteLoanChecklist(this._currentChecklist.id);
-          this._currentChecklist = null;
-          this.close();
-          Utils.showToast('Checklist deleted', 'success');
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Delete failed: ' + err.message, 'error'); }
-        break;
-      }
-      case 'toggle-status': {
-        const itemId = parseInt(id);
-        const item = this._findItem(itemId);
-        if (!item) return;
-        const next = this._nextStatus(item.status);
-        // Auto-stamp completion date when transitioning to done.
-        const payload = { status: next };
-        if (next === 'done' && !item.date) payload.date = this._todayISO();
-        // Clear date when status goes back from done to in-progress/not_started.
-        if (next !== 'done' && item.status === 'done' && item.date) payload.date = null;
-        try {
-          await ServerAPI.updateChecklistItem(itemId, payload);
-          item.status = next;
-          if (payload.date !== undefined) item.date = payload.date;
-          this._renderChecklist();
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Failed to update status', 'error'); }
-        break;
-      }
-      case 'set-status': {
-        const itemId = parseInt(btn.dataset.clItemId);
-        const newStatus = btn.dataset.clStatus;
-        const item = this._findItem(itemId);
-        const payload = { status: newStatus };
-        if (newStatus === 'done' && item && !item.date) payload.date = this._todayISO();
-        if (newStatus !== 'done' && item?.status === 'done' && item.date) payload.date = null;
-        try {
-          await ServerAPI.updateChecklistItem(itemId, payload);
-          if (item) {
-            item.status = newStatus;
-            if (payload.date !== undefined) item.date = payload.date;
-          }
-          this._renderChecklist();
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Failed to update', 'error'); }
-        break;
-      }
-      case 'set-subitem-status': {
-        const subId = parseInt(btn.dataset.clSubId);
-        const newStatus = btn.dataset.clStatus;
-        try {
-          await ServerAPI.updateChecklistSubitem(subId, { status: newStatus });
-          const sub = this._findSubitem(subId);
-          if (sub) sub.status = newStatus;
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to update', 'error'); }
-        break;
-      }
-      case 'delete-item': {
-        const itemId = parseInt(id);
-        if (!confirm('Delete this checklist item?')) return;
-        try {
-          await ServerAPI.deleteChecklistItem(itemId);
-          this._currentChecklist.items = this._currentChecklist.items.filter(i => i.id !== itemId);
-          this._renderChecklist();
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Failed to delete', 'error'); }
-        break;
-      }
-      case 'delete-subitem': {
-        const subId = parseInt(id);
-        try {
-          await ServerAPI.deleteChecklistSubitem(subId);
-          for (const item of (this._currentChecklist?.items || [])) {
-            item.subitems = (item.subitems || []).filter(s => s.id !== subId);
-          }
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to delete', 'error'); }
-        break;
-      }
-      case 'add-item': {
-        // If no checklist is open yet (e.g. from the template selector's "Start Blank"),
-        // create an empty one first, then add the typed item to it.
-        if (!this._currentChecklist) {
-          const clName = prompt('Name this new checklist:', 'Custom Checklist');
-          if (clName === null) return;
-          const itemName = prompt('First item name:');
-          if (!itemName?.trim()) return;
-          try {
-            this._currentChecklist = await ServerAPI.importLoanChecklist(src.type, src.itemId, {
-              items: [{ name: itemName.trim(), status: 'not_started', sort_order: 0 }],
-              name: clName.trim() || 'Custom Checklist',
-            });
-            this._renderChecklist();
-            this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-          } catch (err) { Utils.showToast('Failed: ' + err.message, 'error'); }
-          break;
-        }
-        const name = prompt('New checklist item name:');
-        if (!name?.trim()) return;
-        try {
-          const maxSort = (this._currentChecklist.items || []).reduce((m, i) => Math.max(m, i.sort_order || 0), 0);
-          const newItem = await ServerAPI.addChecklistItem(this._currentChecklist.id, {
-            name: name.trim(), status: 'not_started', sort_order: maxSort + 1,
-          });
-          this._currentChecklist.items.push({ ...newItem, subitems: [] });
-          this._renderChecklist();
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-        } catch (err) { Utils.showToast('Failed to add item', 'error'); }
-        break;
-      }
-      case 'make-from-pdf': {
-        // File picker → upload → create file-local checklist
-        const file = await this._pickFile('.pdf,application/pdf');
-        if (!file) return;
-        const toast = Utils.showToast('Parsing PDF…');
-        try {
-          const created = await ServerAPI.createChecklistFromPdf(src.type, src.itemId, file);
-          this._currentChecklist = created;
-          this._renderChecklist();
-          this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-          Utils.showToast(`Created "${created.name}" from ${file.name}`, 'success');
-        } catch (err) {
-          Utils.showToast('PDF conversion failed: ' + err.message, 'error');
-        }
-        break;
-      }
-      case 'add-subitem': {
-        const itemId = parseInt(id);
-        const name = prompt('New subitem name:');
-        if (!name?.trim()) return;
-        try {
-          const newSub = await ServerAPI.addChecklistSubitem(itemId, { name: name.trim() });
-          const item = this._findItem(itemId);
-          if (item) {
-            if (!item.subitems) item.subitems = [];
-            item.subitems.push(newSub);
-          }
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to add subitem', 'error'); }
-        break;
-      }
-      case 'add-note': {
-        const itemId = parseInt(id);
-        const item = this._findItem(itemId);
-        if (!item) return;
-        const body = await this._promptNoteBody(item);
-        if (!body) return;
-        try {
-          const newNote = await ServerAPI.addChecklistItemNote(itemId, body);
-          if (newNote) {
-            if (!item.notes) item.notes = [];
-            // Newest first to match server hydration order
-            item.notes.unshift(newNote);
-          }
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to add note: ' + (err.message || ''), 'error'); }
-        break;
-      }
-      case 'delete-note': {
-        const noteId = parseInt(id);
-        if (!confirm('Delete this note? This cannot be undone.')) return;
-        try {
-          await ServerAPI.deleteChecklistItemNote(noteId);
-          for (const it of (this._currentChecklist?.items || [])) {
-            if (it.notes) it.notes = it.notes.filter(n => n.id !== noteId);
-          }
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to delete note', 'error'); }
-        break;
-      }
-      case 'edit-item': {
-        const itemId = parseInt(id);
-        const item = this._findItem(itemId);
-        if (!item) return;
-        const name = prompt('Edit item name:', item.name);
-        if (!name?.trim() || name.trim() === item.name) return;
-        try {
-          await ServerAPI.updateChecklistItem(itemId, { name: name.trim() });
-          item.name = name.trim();
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to update', 'error'); }
-        break;
-      }
-      case 'set-importance': {
-        const itemId = parseInt(id);
-        const newImp = btn.dataset.clImportance;
-        const item = this._findItem(itemId);
-        if (!item) return;
-        try {
-          await ServerAPI.updateChecklistItem(itemId, { importance: newImp });
-          item.importance = newImp;
-          // Re-sort: urgent first, then by stored sort_order
-          this._reorderClientSide();
-          this._renderChecklist();
-        } catch (err) { Utils.showToast('Failed to set importance', 'error'); }
-        break;
-      }
-      case 'set-date': {
-        const itemId = parseInt(id);
-        const item = this._findItem(itemId);
-        if (!item) return;
-        this._pickDate(btn, item.date || '', async (newDate) => {
-          try {
-            await ServerAPI.updateChecklistItem(itemId, { date: newDate || null });
-            item.date = newDate || null;
-            this._renderChecklist();
-          } catch (err) { Utils.showToast('Failed to update date', 'error'); }
+      this._renderChecklist();
+    } catch (err) { Utils.showToast('Failed to delete', 'error'); }
+  },
+
+  async _actionAddItem(src) {
+    if (!this._currentChecklist) {
+      const clName = await this._promptInput('New Checklist', 'Name this checklist', 'Custom Checklist');
+      if (!clName) return;
+      const itemName = await this._promptInput('First Item', 'Enter the first item name');
+      if (!itemName) return;
+      try {
+        this._currentChecklist = await ServerAPI.importLoanChecklist(src.type, src.itemId, {
+          items: [{ name: itemName, status: 'not_started', sort_order: 0 }],
+          name: clName,
         });
-        break;
+        this._renderChecklist();
+        this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+      } catch (err) { Utils.showToast('Failed: ' + err.message, 'error'); }
+      return;
+    }
+    const name = await this._promptInput('Add Item', 'New checklist item name');
+    if (!name) return;
+    try {
+      const maxSort = (this._currentChecklist.items || []).reduce((m, i) => Math.max(m, i.sort_order || 0), 0);
+      const newItem = await ServerAPI.addChecklistItem(this._currentChecklist.id, {
+        name, status: 'not_started', sort_order: maxSort + 1,
+      });
+      this._currentChecklist.items.push({ ...newItem, subitems: [] });
+      this._renderChecklist();
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+    } catch (err) { Utils.showToast('Failed to add item', 'error'); }
+  },
+
+  async _actionMakeFromPdf(src) {
+    const file = await this._pickFile('.pdf,application/pdf');
+    if (!file) return;
+    const toast = Utils.showToast('Parsing PDF…');
+    try {
+      const created = await ServerAPI.createChecklistFromPdf(src.type, src.itemId, file);
+      this._currentChecklist = created;
+      this._renderChecklist();
+      this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
+      Utils.showToast(`Created "${created.name}" from ${file.name}`, 'success');
+    } catch (err) {
+      Utils.showToast('PDF conversion failed: ' + err.message, 'error');
+    }
+  },
+
+  async _actionAddSubitem(id) {
+    const itemId = parseInt(id);
+    const name = await this._promptInput('Add Subitem', 'New subitem name');
+    if (!name) return;
+    try {
+      const newSub = await ServerAPI.addChecklistSubitem(itemId, { name });
+      const item = this._findItem(itemId);
+      if (item) {
+        if (!item.subitems) item.subitems = [];
+        item.subitems.push(newSub);
       }
-      case 'set-due-date': {
-        const itemId = parseInt(id);
-        const item = this._findItem(itemId);
-        if (!item) return;
-        this._pickDate(btn, item.due_date || '', async (newDate) => {
-          try {
-            await ServerAPI.updateChecklistItem(itemId, { due_date: newDate || null });
-            item.due_date = newDate || null;
-            this._renderChecklist();
-          } catch (err) { Utils.showToast('Failed to update due date', 'error'); }
-        });
-        break;
+      this._renderChecklist();
+    } catch (err) { Utils.showToast('Failed to add subitem', 'error'); }
+  },
+
+  async _actionAddNote(id) {
+    const itemId = parseInt(id);
+    const item = this._findItem(itemId);
+    if (!item) return;
+    const body = await this._promptNoteBody(item);
+    if (!body) return;
+    try {
+      const newNote = await ServerAPI.addChecklistItemNote(itemId, body);
+      if (newNote) {
+        if (!item.notes) item.notes = [];
+        item.notes.unshift(newNote);
       }
-      case 'export-checklist': {
-        this._exportCurrentChecklist();
-        break;
+      this._renderChecklist();
+    } catch (err) { Utils.showToast('Failed to add note: ' + (err.message || ''), 'error'); }
+  },
+
+  async _actionDeleteNote(id) {
+    const noteId = parseInt(id);
+    const confirmed = await this._promptConfirm('Delete Note', 'Delete this note? This cannot be undone.');
+    if (!confirmed) return;
+    try {
+      await ServerAPI.deleteChecklistItemNote(noteId);
+      for (const it of (this._currentChecklist?.items || [])) {
+        if (it.notes) it.notes = it.notes.filter(n => n.id !== noteId);
       }
-      case 'import-checklist': {
-        this._importChecklist();
-        break;
+      this._renderChecklist();
+    } catch (err) { Utils.showToast('Failed to delete note', 'error'); }
+  },
+
+  async _actionEditItem(id) {
+    const itemId = parseInt(id);
+    const item = this._findItem(itemId);
+    if (!item) return;
+    const name = await this._promptInput('Edit Item', 'Item name', item.name);
+    if (!name || name === item.name) return;
+    try {
+      await ServerAPI.updateChecklistItem(itemId, { name });
+      item.name = name;
+      this._renderChecklist();
+    } catch (err) { Utils.showToast('Failed to update', 'error'); }
+  },
+
+  async _actionSetImportance(id, btn) {
+    const itemId = parseInt(id);
+    const newImp = btn.dataset.clImportance;
+    const item = this._findItem(itemId);
+    if (!item) return;
+    try {
+      await ServerAPI.updateChecklistItem(itemId, { importance: newImp });
+      item.importance = newImp;
+      this._reorderClientSide();
+      this._renderChecklist();
+    } catch (err) { Utils.showToast('Failed to set importance', 'error'); }
+  },
+
+  async _actionSetDate(id, btn) {
+    const itemId = parseInt(id);
+    const item = this._findItem(itemId);
+    if (!item) return;
+    this._pickDate(btn, item.date || '', async (newDate) => {
+      try {
+        await ServerAPI.updateChecklistItem(itemId, { date: newDate || null });
+        item.date = newDate || null;
+        this._updateItemInPlace(itemId);
+      } catch (err) { Utils.showToast('Failed to update date', 'error'); }
+    });
+  },
+
+  async _actionSetDueDate(id, btn) {
+    const itemId = parseInt(id);
+    const item = this._findItem(itemId);
+    if (!item) return;
+    this._pickDate(btn, item.due_date || '', async (newDate) => {
+      try {
+        await ServerAPI.updateChecklistItem(itemId, { due_date: newDate || null });
+        item.due_date = newDate || null;
+        this._updateItemInPlace(itemId);
+      } catch (err) { Utils.showToast('Failed to update due date', 'error'); }
+    });
+  },
+
+  // ════════════════════════════════════════════════
+  //  TARGETED DOM UPDATES (no full re-render needed)
+  // ════════════════════════════════════════════════
+  _updateItemInPlace(itemId) {
+    const item = this._findItem(itemId);
+    if (!item) return;
+    const container = document.getElementById('clContent');
+    if (!container) return;
+    const el = container.querySelector(`.cl-item[data-item-id="${itemId}"]`);
+    if (!el) return;
+
+    const statusInfo = this.STATUS_OPTIONS.find(s => s.value === item.status) || this.STATUS_OPTIONS[0];
+    const importance = item.importance || 'normal';
+
+    // Update item classes
+    el.className = `cl-item ${statusInfo.cls} cl-imp-${importance}`;
+    el.dataset.importance = importance;
+
+    // Update status button
+    const statusBtn = el.querySelector('.cl-status-btn');
+    if (statusBtn) {
+      statusBtn.className = `cl-status-btn ${statusInfo.cls}`;
+      statusBtn.title = statusInfo.label;
+      statusBtn.innerHTML = `<i class="fas ${statusInfo.icon}"></i>`;
+    }
+
+    // Update item name styling (strikethrough etc handled by CSS)
+    // Update date badges
+    const actionsEl = el.querySelector('.cl-item-actions');
+    if (actionsEl) {
+      const dateStr = item.date ? this._fmtDate(item.date) : '';
+      const dueDateStr = item.due_date ? this._fmtDate(item.due_date) : '';
+      const overdue = item.due_date && item.status !== 'done' && this._isOverdue(item.due_date);
+
+      const existingDate = actionsEl.querySelector('.cl-item-date');
+      const existingDue = actionsEl.querySelector('.cl-item-due-date');
+
+      if (dateStr) {
+        if (existingDate) {
+          existingDate.textContent = dateStr;
+          existingDate.title = `Completed ${dateStr}`;
+        } else {
+          const span = document.createElement('span');
+          span.className = 'cl-item-date';
+          span.title = `Completed ${dateStr}`;
+          span.textContent = dateStr;
+          actionsEl.insertBefore(span, actionsEl.firstChild);
+        }
+      } else if (existingDate) {
+        existingDate.remove();
       }
-      case 'show-template-selector': {
-        await this._renderTemplateSelector();
-        break;
+
+      if (dueDateStr) {
+        if (existingDue) {
+          existingDue.className = `cl-item-due-date${overdue ? ' cl-item-due-date-overdue' : ''}`;
+          existingDue.title = `Due ${dueDateStr}${overdue ? ' (overdue)' : ''}`;
+          existingDue.innerHTML = `<i class="fas fa-hourglass-half"></i> ${dueDateStr}`;
+        } else {
+          const span = document.createElement('span');
+          span.className = `cl-item-due-date${overdue ? ' cl-item-due-date-overdue' : ''}`;
+          span.title = `Due ${dueDateStr}${overdue ? ' (overdue)' : ''}`;
+          span.innerHTML = `<i class="fas fa-hourglass-half"></i> ${dueDateStr}`;
+          actionsEl.insertBefore(span, actionsEl.firstChild);
+        }
+      } else if (existingDue) {
+        existingDue.remove();
       }
     }
+  },
+
+  _updateSubitemInPlace(subId) {
+    const sub = this._findSubitem(subId);
+    if (!sub) return;
+    const container = document.getElementById('clContent');
+    if (!container) return;
+
+    // Find the subitem's status button
+    const btn = container.querySelector(`.cl-status-btn-sm[data-cl-sub-id="${subId}"]`);
+    if (!btn) return;
+
+    const statusInfo = this.STATUS_OPTIONS.find(s => s.value === sub.status) || this.STATUS_OPTIONS[0];
+    const subEl = btn.closest('.cl-subitem');
+    if (subEl) {
+      // Remove old status classes, add new one
+      this.STATUS_OPTIONS.forEach(s => subEl.classList.remove(s.cls));
+      subEl.classList.add(statusInfo.cls);
+    }
+
+    btn.className = `cl-status-btn-sm ${statusInfo.cls}`;
+    btn.dataset.clStatus = this._nextStatus(sub.status);
+    btn.title = statusInfo.label;
+    btn.innerHTML = `<i class="fas ${statusInfo.icon}"></i>`;
+  },
+
+  _updateProgressBar() {
+    const container = document.getElementById('clContent');
+    if (!container || !this._currentChecklist) return;
+    const items = this._currentChecklist.items || [];
+    const total = items.length;
+    const done = items.filter(i => i.status === 'done').length;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+    const bar = container.querySelector('.cl-progress-bar');
+    const text = container.querySelector('.cl-progress-text');
+    if (bar) bar.style.width = `${pct}%`;
+    if (text) text.textContent = `${done}/${total} complete (${pct}%)`;
   },
 
   // ════════════════════════════════════════════════
@@ -526,8 +676,6 @@ const Checklists = {
     const done = items.filter(i => i.status === 'done').length;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    // Show "<Client> — <Checklist Name>" in the modal title so the user knows
-    // which of the (up to 3) checklists is currently open.
     const titleEl = document.getElementById('clModalTitle');
     if (titleEl) {
       const client = this._currentSource?.clientName || '';
@@ -608,7 +756,6 @@ const Checklists = {
         html += '</div>';
       }
 
-      // Call notes — time-stamped log entries
       if (item.notes?.length) {
         html += '<div class="cl-notes">';
         for (const n of item.notes) {
@@ -632,35 +779,24 @@ const Checklists = {
     html += '</div>';
     container.innerHTML = html;
 
-    // Toggle menus
-    container.querySelectorAll('.cl-menu-trigger').forEach(trigger => {
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dd = trigger.nextElementSibling;
-        const wasOpen = dd.classList.contains('open');
-        container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
-        if (!wasOpen) dd.classList.add('open');
-      });
+    // Toggle menus — use event delegation, no per-trigger listeners
+    container.addEventListener('click', (e) => {
+      const trigger = e.target.closest('.cl-menu-trigger');
+      if (!trigger) return;
+      e.stopPropagation();
+      const dd = trigger.nextElementSibling;
+      const wasOpen = dd.classList.contains('open');
+      container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
+      if (!wasOpen) dd.classList.add('open');
     });
 
-    document.addEventListener('click', () => {
-      container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
-    }, { once: true });
-
-    // Drag-to-reorder
     this._bindItemDrag(container);
   },
 
-  /**
-   * HTML5 drag-and-drop for reordering items within the active checklist.
-   * Disallows dragging across the urgent/non-urgent boundary — urgent items
-   * are sticky at the top.
-   */
   _bindItemDrag(container) {
     let dragId = null;
     container.querySelectorAll('.cl-item').forEach((el) => {
       el.addEventListener('dragstart', (e) => {
-        // Don't initiate drag from interactive controls
         if (e.target.closest('button, input, .cl-menu-dropdown')) {
           e.preventDefault();
           return;
@@ -678,7 +814,6 @@ const Checklists = {
         if (dragId == null) return;
         const dragged = this._findItem(dragId);
         const target = this._findItem(parseInt(el.dataset.itemId));
-        // Block cross-boundary drops: urgent must stay above non-urgent
         if (!dragged || !target) return;
         const draggedUrgent = (dragged.importance === 'urgent');
         const targetUrgent = (target.importance === 'urgent');
@@ -699,15 +834,11 @@ const Checklists = {
         const toIdx = items.findIndex(i => i.id === dropTargetId);
         if (fromIdx < 0 || toIdx < 0) { dragId = null; return; }
 
-        // Reorder in memory
         const [moved] = items.splice(fromIdx, 1);
         items.splice(toIdx, 0, moved);
-        // Re-stamp sort_order based on new array position (urgents keep
-        // their own contiguous indexes; service-side sort handles the rest)
         for (let i = 0; i < items.length; i++) items[i].sort_order = i;
         this._renderChecklist();
 
-        // Persist
         try {
           const src = this._currentSource;
           await ServerAPI.reorderChecklistItems(src.type, src.itemId, items.map(i => ({ id: i.id, sort_order: i.sort_order })));
@@ -719,7 +850,6 @@ const Checklists = {
     });
   },
 
-  /** Sort the in-memory items array urgent-first, then by sort_order. */
   _reorderClientSide() {
     const items = this._currentChecklist?.items || [];
     items.sort((a, b) => {
@@ -793,7 +923,6 @@ const Checklists = {
 
     html += '</div>';
 
-    // If there's an existing checklist, add a back button
     if (this._currentChecklist?.items?.length) {
       html = `<div class="cl-toolbar"><button type="button" class="btn btn-sm btn-outline" onclick="Checklists._renderChecklist()"><i class="fas fa-arrow-left"></i> Back to Checklist</button></div>` + html;
     }
@@ -899,12 +1028,16 @@ const Checklists = {
 
       let mode = 'replace';
       if (this._currentChecklist?.items?.length) {
-        const choice = prompt(
-          `This loan already has ${this._currentChecklist.items.length} checklist items.\n\nType "merge" to merge, "replace" to replace, or cancel:`,
-          'merge'
+        const choice = await this._promptChoice(
+          'Import Checklist',
+          `This loan already has ${this._currentChecklist.items.length} checklist items. How would you like to import?`,
+          [
+            { value: 'merge', label: 'Merge', icon: 'fa-code-branch', desc: 'Add imported items alongside existing ones' },
+            { value: 'replace', label: 'Replace', icon: 'fa-exchange-alt', desc: 'Remove existing items and use imported ones' },
+          ]
         );
         if (!choice) return;
-        mode = choice.toLowerCase().includes('merge') ? 'merge' : 'replace';
+        mode = choice;
       }
 
       const src = this._currentSource;
@@ -953,7 +1086,6 @@ const Checklists = {
   _parseMarkdown(text) {
     const result = { name: '', items: [], subitems: {} };
 
-    // Parse YAML frontmatter
     const fmMatch = text.match(/^---\n([\s\S]*?)\n---/);
     if (fmMatch) {
       const fm = fmMatch[1];
@@ -961,7 +1093,6 @@ const Checklists = {
       if (nameMatch) result.name = nameMatch[1].trim();
     }
 
-    // Parse table rows
     const lines = text.split('\n');
     let inTable = false;
     let inSubitems = false;
@@ -970,13 +1101,11 @@ const Checklists = {
     for (const line of lines) {
       const trimmed = line.trim();
 
-      // Table header detection
       if (trimmed.startsWith('| Name') || trimmed.startsWith('|---')) {
         inTable = true;
         continue;
       }
 
-      // Subitems section
       if (trimmed === '## Subitems') {
         inTable = false;
         inSubitems = true;
@@ -1002,7 +1131,6 @@ const Checklists = {
         continue;
       }
 
-      // Table row
       if (inTable && trimmed.startsWith('|') && trimmed.endsWith('|')) {
         const cells = trimmed.split('|').filter((_, i, arr) => i > 0 && i < arr.length - 1).map(c => c.trim());
         const name = cells[0]?.replace(/\\\|/g, '|');
@@ -1018,11 +1146,9 @@ const Checklists = {
         continue;
       }
 
-      // Blank line ends table
       if (inTable && !trimmed) inTable = false;
     }
 
-    // Attach subitems to items
     for (const item of result.items) {
       const subs = result.subitems[item.name];
       if (subs) item.subitems = subs;
@@ -1048,6 +1174,100 @@ const Checklists = {
   },
 
   // ════════════════════════════════════════════════
+  //  INLINE PROMPT HELPERS (replace native prompt/confirm)
+  // ════════════════════════════════════════════════
+
+  _promptInput(title, placeholder, defaultValue) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'cl-prompt-overlay';
+      wrap.innerHTML = `
+        <div class="cl-prompt">
+          <div class="cl-prompt-header"><strong>${Utils.escapeHtml(title)}</strong></div>
+          <input type="text" class="cl-prompt-input" value="${Utils.escapeHtml(defaultValue || '')}" placeholder="${Utils.escapeHtml(placeholder || '')}" />
+          <div class="cl-prompt-actions">
+            <button type="button" class="btn btn-sm btn-outline" data-cl-cancel>Cancel</button>
+            <button type="button" class="btn btn-sm btn-primary" data-cl-save>OK</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const input = wrap.querySelector('input');
+      input.focus();
+      input.select();
+      const cleanup = (val) => { wrap.remove(); resolve(val); };
+      wrap.querySelector('[data-cl-cancel]').addEventListener('click', () => cleanup(null));
+      wrap.querySelector('[data-cl-save]').addEventListener('click', () => {
+        const v = input.value.trim();
+        cleanup(v || null);
+      });
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) cleanup(null); });
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cleanup(null);
+        if (e.key === 'Enter') {
+          const v = input.value.trim();
+          cleanup(v || null);
+        }
+      });
+    });
+  },
+
+  _promptConfirm(title, message) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'cl-prompt-overlay';
+      wrap.innerHTML = `
+        <div class="cl-prompt">
+          <div class="cl-prompt-header"><strong>${Utils.escapeHtml(title)}</strong></div>
+          <div class="cl-prompt-message">${Utils.escapeHtml(message)}</div>
+          <div class="cl-prompt-actions">
+            <button type="button" class="btn btn-sm btn-outline" data-cl-cancel>Cancel</button>
+            <button type="button" class="btn btn-sm btn-danger" data-cl-confirm>Delete</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const cleanup = (val) => { wrap.remove(); resolve(val); };
+      wrap.querySelector('[data-cl-cancel]').addEventListener('click', () => cleanup(false));
+      wrap.querySelector('[data-cl-confirm]').addEventListener('click', () => cleanup(true));
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) cleanup(false); });
+      wrap.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cleanup(false);
+      });
+      wrap.querySelector('[data-cl-cancel]').focus();
+    });
+  },
+
+  _promptChoice(title, message, options) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'cl-prompt-overlay';
+      const optionsHtml = options.map(o => `
+        <button type="button" class="cl-choice-btn" data-cl-choice="${o.value}">
+          <i class="fas ${o.icon}"></i>
+          <div><strong>${Utils.escapeHtml(o.label)}</strong>${o.desc ? `<small>${Utils.escapeHtml(o.desc)}</small>` : ''}</div>
+        </button>`).join('');
+      wrap.innerHTML = `
+        <div class="cl-prompt">
+          <div class="cl-prompt-header"><strong>${Utils.escapeHtml(title)}</strong></div>
+          <div class="cl-prompt-message">${Utils.escapeHtml(message)}</div>
+          <div class="cl-choice-options">${optionsHtml}</div>
+          <div class="cl-prompt-actions">
+            <button type="button" class="btn btn-sm btn-outline" data-cl-cancel>Cancel</button>
+          </div>
+        </div>`;
+      document.body.appendChild(wrap);
+      const cleanup = (val) => { wrap.remove(); resolve(val); };
+      wrap.querySelectorAll('.cl-choice-btn').forEach(btn => {
+        btn.addEventListener('click', () => cleanup(btn.dataset.clChoice));
+      });
+      wrap.querySelector('[data-cl-cancel]').addEventListener('click', () => cleanup(null));
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) cleanup(null); });
+      wrap.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') cleanup(null);
+      });
+    });
+  },
+
+  // ════════════════════════════════════════════════
   //  HELPERS
   // ════════════════════════════════════════════════
   _nextStatus(current) {
@@ -1056,7 +1276,6 @@ const Checklists = {
     return order[(idx + 1) % order.length];
   },
 
-  /** Today's date in YYYY-MM-DD (local time). */
   _todayISO() {
     const d = new Date();
     const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -1064,10 +1283,6 @@ const Checklists = {
     return `${d.getFullYear()}-${m}-${day}`;
   },
 
-  /**
-   * Show a small floating textarea anchored over the checklist panel for
-   * multi-line note entry. Resolves with the trimmed body, or '' on cancel.
-   */
   _promptNoteBody(item) {
     return new Promise((resolve) => {
       const wrap = document.createElement('div');
@@ -1098,7 +1313,6 @@ const Checklists = {
     });
   },
 
-  /** Display a timestamp as MM/DD/YY h:mm AM/PM (local). Input is a Date or ISO string. */
   _fmtDateTime(value) {
     if (!value) return '';
     const d = (value instanceof Date) ? value : new Date(value);
@@ -1113,10 +1327,8 @@ const Checklists = {
     return `${mm}/${dd}/${yy} ${h}:${min} ${am}`;
   },
 
-  /** Display dates as MM/DD/YY. Input is YYYY-MM-DD (DB shape). */
   _fmtDate(dateStr) {
     if (!dateStr) return '';
-    // Parse the YYYY-MM-DD parts directly to avoid timezone shift.
     const parts = String(dateStr).slice(0, 10).split('-');
     if (parts.length === 3) {
       const [y, m, d] = parts;
@@ -1125,19 +1337,13 @@ const Checklists = {
     return dateStr;
   },
 
-  /** True if a due_date is in the past (not including today). */
   _isOverdue(dueDateStr) {
     if (!dueDateStr) return false;
     const today = this._todayISO();
     return String(dueDateStr).slice(0, 10) < today;
   },
 
-  /**
-   * Show a native date picker positioned near a trigger element, then
-   * call cb(isoDate) when the user picks a date. Pass empty string to clear.
-   */
   _pickDate(anchorEl, currentISO, cb) {
-    // Create a transient <input type="date"> positioned over the anchor.
     const input = document.createElement('input');
     input.type = 'date';
     input.value = currentISO || '';
@@ -1165,7 +1371,7 @@ const Checklists = {
     document.body.appendChild(input);
     input.focus();
     if (input.showPicker) {
-      try { input.showPicker(); } catch { /* showPicker requires user gesture */ }
+      try { input.showPicker(); } catch {}
     }
   },
 
@@ -1181,25 +1387,16 @@ const Checklists = {
     return null;
   },
 
-  /**
-   * Re-render the whole .cl-badges row for a single loan row in any table
-   * (pipeline / pre-approvals) after the status map has been reloaded.
-   * Rebuilds the row from getStatusBadge() and re-wires the click handlers
-   * via a fresh dispatch on the row's table.
-   */
   _refreshBadgeInTable(sourceType, itemId) {
     document.querySelectorAll(`.cl-badges`).forEach(wrap => {
-      // Any badge inside identifies this wrapper's loan
       const probe = wrap.querySelector('[data-cl-item]');
       if (!probe) return;
       if (probe.dataset.clSource !== sourceType) return;
       if (parseInt(probe.dataset.clItem) !== itemId) return;
-      // Re-render and bind clicks
       const wrapper = document.createElement('div');
       wrapper.innerHTML = this.getStatusBadge(sourceType, itemId);
       const fresh = wrapper.firstElementChild;
       if (!fresh) return;
-      // Wire new badge buttons to the same handler the table uses
       fresh.querySelectorAll('.cl-icon-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -1226,15 +1423,12 @@ const Checklists = {
 
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
-    // Floating panel — no body scroll lock.
 
     document.getElementById('clModalTitle').textContent = 'Checklist Templates';
     this._tmContainerId = 'clContent';
     await this._renderTemplateManager();
   },
 
-  /** Public entry point used by user-settings.js to render the template
-   *  manager inline inside the Settings → Checklists tab. */
   async renderTemplateManagerInto(containerId) {
     this._tmContainerId = containerId;
     await this._renderTemplateManager();
@@ -1310,14 +1504,13 @@ const Checklists = {
     container.innerHTML = html;
   },
 
-  /** Copy a global template into the user's personal library so they can edit it. */
   async _copyGlobalTemplate(id) {
     try {
       const source = await ServerAPI.getChecklistTemplate(id);
-      const newName = prompt('Name for your copy:', source.name + ' (copy)');
-      if (!newName?.trim()) return;
+      const newName = await this._promptInput('Copy Template', 'Name for your copy', source.name + ' (copy)');
+      if (!newName) return;
       await ServerAPI.createChecklistTemplate({
-        name: newName.trim(),
+        name: newName,
         description: source.description || '',
         items: (source.items || []).map((it, i) => ({
           name: it.name,
@@ -1338,11 +1531,11 @@ const Checklists = {
   },
 
   async _createTemplate() {
-    const name = prompt('Template name:');
-    if (!name?.trim()) return;
+    const name = await this._promptInput('New Template', 'Template name');
+    if (!name) return;
 
     try {
-      const tpl = await ServerAPI.createChecklistTemplate({ name: name.trim(), items: [] });
+      const tpl = await ServerAPI.createChecklistTemplate({ name, items: [] });
       Utils.showToast('Template created!', 'success');
       await this._editTemplate(tpl.id);
     } catch (err) {
@@ -1394,7 +1587,6 @@ const Checklists = {
     html += '</div></div>';
     container.innerHTML = html;
 
-    // Bind save
     document.getElementById('clSaveTemplate').addEventListener('click', async () => {
       const itemRows = container.querySelectorAll('.cl-tpl-item-row');
       const newItems = [];
@@ -1431,7 +1623,6 @@ const Checklists = {
       }
     });
 
-    // Bind add item
     document.getElementById('clTplAddItem').addEventListener('click', () => {
       const list = document.getElementById('clTplItemsList');
       const idx = list.querySelectorAll('.cl-tpl-item-row').length;
@@ -1443,7 +1634,6 @@ const Checklists = {
       row.querySelector('.cl-tpl-item-name')?.focus();
     });
 
-    // Bind existing rows
     container.querySelectorAll('.cl-tpl-item-row').forEach(row => this._bindTemplateItemRow(row));
   },
 
@@ -1504,7 +1694,11 @@ const Checklists = {
   },
 
   async _deleteTemplate(id) {
-    if (!confirm('Delete this template? This cannot be undone. Existing loan checklists using this template will not be affected.')) return;
+    const confirmed = await this._promptConfirm(
+      'Delete Template',
+      'Delete this template? This cannot be undone. Existing loan checklists using this template will not be affected.'
+    );
+    if (!confirmed) return;
     try {
       await ServerAPI.deleteChecklistTemplate(id);
       Utils.showToast('Template deleted', 'success');
@@ -1547,12 +1741,12 @@ const Checklists = {
     const parsed = await this.importTemplate();
     if (!parsed) return;
 
-    const name = prompt('Template name:', parsed.name || 'Imported Template');
-    if (!name?.trim()) return;
+    const name = await this._promptInput('Import Template', 'Template name', parsed.name || 'Imported Template');
+    if (!name) return;
 
     try {
       await ServerAPI.createChecklistTemplate({
-        name: name.trim(),
+        name,
         items: parsed.items.map((item, i) => ({
           name: item.name,
           default_status: item.status || 'not_started',
