@@ -217,10 +217,12 @@
 .cl-item:hover { border-color: var(--green-bright); }
 
 /* Status-driven item text colors */
-.cl-item.cl-status-done       .cl-item-name { color: var(--green-bright); text-decoration: line-through; }
+.cl-item.cl-status-done        .cl-item-name { color: var(--green-bright); text-decoration: line-through; }
 .cl-item.cl-status-in-progress .cl-item-name { color: var(--status-warning); }
-.cl-item.cl-status-issue      .cl-item-name { color: var(--status-danger); }
-.cl-item.cl-status-na         .cl-item-name { color: var(--text-muted); }
+.cl-item.cl-status-submitted   .cl-item-name { color: #38bdf8; }
+.cl-item.cl-status-incomplete  .cl-item-name { color: #f97316; }
+.cl-item.cl-status-issue       .cl-item-name { color: var(--status-danger); }
+.cl-item.cl-status-na          .cl-item-name { color: var(--text-muted); }
 
 /* Importance — border color + slight left-edge emphasis.
    Urgent items also sort to the top of the list (server-side). */
@@ -252,9 +254,21 @@
   border-left: 3px solid #a78bfa;
   background: rgba(167, 139, 250, 0.06);
 }
+.cl-item.cl-assigned-borrower {
+  border-color: #f59e0b;
+  border-left: 3px solid #f59e0b;
+  background: rgba(245, 158, 11, 0.06);
+}
+.cl-item.cl-assigned-processor {
+  border-color: #10b981;
+  border-left: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.06);
+}
 .cl-assign-icon-investor { color: #3b82f6; }
 .cl-assign-icon-underwriter { color: #60a5fa; }
 .cl-assign-icon-title { color: #a78bfa; }
+.cl-assign-icon-borrower { color: #f59e0b; }
+.cl-assign-icon-processor { color: #10b981; }
 
 /* Currently-set importance/assignment row in the ⋮ menu */
 .cl-menu-active { background: var(--bg-hover); font-weight: 600; }
@@ -285,7 +299,9 @@
 .cl-status-btn:hover { transform: scale(1.2); }
 .cl-status-btn.cl-status-not-started { color: var(--text-muted); }
 .cl-status-btn.cl-status-in-progress { color: var(--status-warning); }
+.cl-status-btn.cl-status-submitted { color: #38bdf8; }
 .cl-status-btn.cl-status-done { color: var(--green-bright); }
+.cl-status-btn.cl-status-incomplete { color: #f97316; }
 .cl-status-btn.cl-status-issue { color: var(--status-danger); }
 .cl-status-btn.cl-status-na { color: var(--text-muted); }
 
@@ -404,6 +420,28 @@
 }
 .cl-menu-danger { color: var(--status-danger) !important; }
 
+/* Two-column menu layout */
+.cl-menu-cols {
+  display: flex;
+  gap: 0;
+}
+.cl-menu-col {
+  flex: 1;
+  min-width: 0;
+}
+.cl-menu-col + .cl-menu-col {
+  border-left: 1px solid var(--border-color);
+}
+.cl-menu-section-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 6px 12px 2px;
+  user-select: none;
+}
+
 /* ── Subitems ──────────────────────────────── */
 .cl-subitems {
   padding: 0 0.75rem 0.5rem 2.25rem;
@@ -420,6 +458,8 @@
 }
 .cl-subitem.cl-status-done       .cl-subitem-name { color: var(--green-bright); text-decoration: line-through; }
 .cl-subitem.cl-status-in-progress .cl-subitem-name { color: var(--status-warning); }
+.cl-subitem.cl-status-submitted  .cl-subitem-name { color: #38bdf8; }
+.cl-subitem.cl-status-incomplete .cl-subitem-name { color: #f97316; }
 .cl-subitem.cl-status-issue      .cl-subitem-name { color: var(--status-danger); }
 .cl-subitem.cl-status-na         .cl-subitem-name { color: var(--text-muted); }
 .cl-status-btn-sm {
@@ -433,6 +473,8 @@
 .cl-status-btn-sm.cl-status-not-started { color: var(--text-muted); }
 .cl-status-btn-sm.cl-status-in-progress { color: var(--status-warning); }
 .cl-status-btn-sm.cl-status-done { color: var(--green-bright); }
+.cl-status-btn-sm.cl-status-submitted { color: #38bdf8; }
+.cl-status-btn-sm.cl-status-incomplete { color: #f97316; }
 .cl-status-btn-sm.cl-status-issue { color: var(--status-danger); }
 .cl-status-btn-sm.cl-status-na { color: var(--text-muted); }
 

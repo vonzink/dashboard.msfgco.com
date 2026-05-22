@@ -10,9 +10,9 @@ const trimmedString = (max) => z.string().trim().min(1).max(max);
 const optionalString = (max) => z.string().trim().max(max).optional().nullable();
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD format');
 
-const checklistStatus = z.enum(['not_started', 'in_progress', 'done', 'issue', 'na']);
+const checklistStatus = z.enum(['not_started', 'in_progress', 'submitted', 'done', 'incomplete', 'issue', 'na']);
 const checklistImportance = z.enum(['normal', 'important', 'urgent']);
-const checklistAssignedTo = z.enum(['underwriter', 'investor', 'title']);
+const checklistAssignedTo = z.enum(['underwriter', 'investor', 'title', 'borrower', 'processor']);
 
 const checklistSubitemInput = z.object({
   name: trimmedString(500),

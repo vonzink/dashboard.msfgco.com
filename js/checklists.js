@@ -14,7 +14,9 @@ const Checklists = {
   STATUS_OPTIONS: [
     { value: 'not_started', label: 'Not Started', icon: 'fa-circle', cls: 'cl-status-not-started' },
     { value: 'in_progress', label: 'In Progress', icon: 'fa-spinner', cls: 'cl-status-in-progress' },
+    { value: 'submitted',   label: 'Submitted',   icon: 'fa-paper-plane', cls: 'cl-status-submitted' },
     { value: 'done',        label: 'Done',        icon: 'fa-check-circle', cls: 'cl-status-done' },
+    { value: 'incomplete',  label: 'Incomplete',  icon: 'fa-exclamation-circle', cls: 'cl-status-incomplete' },
     { value: 'issue',       label: 'Issue',       icon: 'fa-exclamation-triangle', cls: 'cl-status-issue' },
     { value: 'na',          label: 'N/A',         icon: 'fa-minus-circle', cls: 'cl-status-na' },
   ],
@@ -193,7 +195,6 @@ const Checklists = {
         modal.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
           d.classList.remove('open');
           d.style.cssText = '';
-          d._dragBound = false;
         });
       }
     });
@@ -236,43 +237,42 @@ const Checklists = {
     document.addEventListener('touchend', onUp);
   },
 
+  _menuDragState: null,
+  _menuDragBound: false,
   _bindMenuDrag(dd) {
+    // Single set of document listeners, shared across all menus
+    if (!this._menuDragBound) {
+      this._menuDragBound = true;
+      const st = () => this._menuDragState;
+
+      document.addEventListener('mousemove', (e) => {
+        const s = st(); if (!s) return;
+        s.dd.style.left = (s.origLeft + e.clientX - s.startX) + 'px';
+        s.dd.style.top = (s.origTop + e.clientY - s.startY) + 'px';
+      });
+      document.addEventListener('mouseup', () => { this._menuDragState = null; });
+      document.addEventListener('touchmove', (e) => {
+        const s = st(); if (!s) return;
+        const pt = e.touches[0];
+        s.dd.style.left = (s.origLeft + pt.clientX - s.startX) + 'px';
+        s.dd.style.top = (s.origTop + pt.clientY - s.startY) + 'px';
+      }, { passive: false });
+      document.addEventListener('touchend', () => { this._menuDragState = null; });
+    }
+
     const grip = dd.querySelector('.cl-menu-grip');
-    if (!grip || dd._dragBound) return;
-    dd._dragBound = true;
-    let startX = 0, startY = 0, origLeft = 0, origTop = 0, dragging = false;
-
-    grip.addEventListener('mousedown', (e) => {
-      dragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      origLeft = parseInt(dd.style.left) || 0;
-      origTop = parseInt(dd.style.top) || 0;
+    if (!grip) return;
+    grip.onmousedown = (e) => {
+      this._menuDragState = { dd, startX: e.clientX, startY: e.clientY,
+        origLeft: parseInt(dd.style.left) || 0, origTop: parseInt(dd.style.top) || 0 };
       e.preventDefault();
-    });
-    document.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      dd.style.left = (origLeft + e.clientX - startX) + 'px';
-      dd.style.top = (origTop + e.clientY - startY) + 'px';
-    });
-    document.addEventListener('mouseup', () => { dragging = false; });
-
-    grip.addEventListener('touchstart', (e) => {
-      dragging = true;
+    };
+    grip.ontouchstart = (e) => {
       const pt = e.touches[0];
-      startX = pt.clientX;
-      startY = pt.clientY;
-      origLeft = parseInt(dd.style.left) || 0;
-      origTop = parseInt(dd.style.top) || 0;
+      this._menuDragState = { dd, startX: pt.clientX, startY: pt.clientY,
+        origLeft: parseInt(dd.style.left) || 0, origTop: parseInt(dd.style.top) || 0 };
       e.preventDefault();
-    }, { passive: false });
-    document.addEventListener('touchmove', (e) => {
-      if (!dragging) return;
-      const pt = e.touches[0];
-      dd.style.left = (origLeft + pt.clientX - startX) + 'px';
-      dd.style.top = (origTop + pt.clientY - startY) + 'px';
-    }, { passive: false });
-    document.addEventListener('touchend', () => { dragging = false; });
+    };
   },
 
   // ════════════════════════════════════════════════
@@ -406,7 +406,6 @@ const Checklists = {
     if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
       d.classList.remove('open');
       d.style.cssText = '';
-      d._dragBound = false;
     });
 
     try {
@@ -587,7 +586,6 @@ const Checklists = {
     if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
       d.classList.remove('open');
       d.style.cssText = '';
-      d._dragBound = false;
     });
 
     try {
@@ -805,23 +803,34 @@ const Checklists = {
                 <button type="button" class="cl-menu-trigger" title="Actions"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="cl-menu-dropdown">
                   <div class="cl-menu-grip"><i class="fas fa-grip-horizontal"></i></div>
-                  ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
-                  <hr>
-                  <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Mark Urgent</button>
-                  <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Mark Important</button>
-                  <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Mark Normal</button>
-                  <hr>
-                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="underwriter"${assignedTo === 'underwriter' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user-tie cl-assign-icon-underwriter"></i> Underwriter</button>
-                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="investor"${assignedTo === 'investor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-landmark cl-assign-icon-investor"></i> Investor</button>
-                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="title"${assignedTo === 'title' ? ' class="cl-menu-active"' : ''}><i class="fas fa-file-signature cl-assign-icon-title"></i> Title</button>
-                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to=""${!assignedTo ? ' class="cl-menu-active"' : ''}><i class="fas fa-times-circle"></i> Unassign</button>
-                  <hr>
-                  <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-check"></i> Set Date</button>
-                  <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Set Due Date</button>
-                  <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
-                  <button type="button" data-cl-action="add-subitem" data-cl-id="${item.id}"><i class="fas fa-indent"></i> Add Subitem</button>
-                  <button type="button" data-cl-action="add-note" data-cl-id="${item.id}"><i class="fas fa-comment-medical"></i> Add Call Note</button>
-                  <button type="button" data-cl-action="delete-item" data-cl-id="${item.id}" class="cl-menu-danger"><i class="fas fa-trash"></i> Delete</button>
+                  <div class="cl-menu-cols">
+                    <div class="cl-menu-col">
+                      <div class="cl-menu-section-label">Status</div>
+                      ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
+                      <hr>
+                      <div class="cl-menu-section-label">Priority</div>
+                      <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Urgent</button>
+                      <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Important</button>
+                      <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Normal</button>
+                    </div>
+                    <div class="cl-menu-col">
+                      <div class="cl-menu-section-label">Assign To</div>
+                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="underwriter"${assignedTo === 'underwriter' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user-tie cl-assign-icon-underwriter"></i> Underwriter</button>
+                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="investor"${assignedTo === 'investor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-landmark cl-assign-icon-investor"></i> Investor</button>
+                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="title"${assignedTo === 'title' ? ' class="cl-menu-active"' : ''}><i class="fas fa-file-signature cl-assign-icon-title"></i> Title</button>
+                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="borrower"${assignedTo === 'borrower' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user cl-assign-icon-borrower"></i> Borrower</button>
+                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="processor"${assignedTo === 'processor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-cogs cl-assign-icon-processor"></i> Processor</button>
+                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to=""${!assignedTo ? ' class="cl-menu-active"' : ''}><i class="fas fa-times-circle"></i> Unassign</button>
+                      <hr>
+                      <div class="cl-menu-section-label">Actions</div>
+                      <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-check"></i> Set Date</button>
+                      <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Due Date</button>
+                      <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
+                      <button type="button" data-cl-action="add-subitem" data-cl-id="${item.id}"><i class="fas fa-indent"></i> Subitem</button>
+                      <button type="button" data-cl-action="add-note" data-cl-id="${item.id}"><i class="fas fa-comment-medical"></i> Call Note</button>
+                      <button type="button" data-cl-action="delete-item" data-cl-id="${item.id}" class="cl-menu-danger"><i class="fas fa-trash"></i> Delete</button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1261,6 +1270,8 @@ const Checklists = {
     const lower = str.toLowerCase().trim();
     if (lower === 'done') return 'done';
     if (lower === 'in progress' || lower === 'in_progress') return 'in_progress';
+    if (lower === 'submitted') return 'submitted';
+    if (lower === 'incomplete') return 'incomplete';
     if (lower === 'issue') return 'issue';
     if (lower === 'n/a' || lower === 'na') return 'na';
     if (lower === 'not started' || lower === 'not_started') return 'not_started';
@@ -1268,7 +1279,7 @@ const Checklists = {
   },
 
   _statusLabel(status) {
-    const map = { not_started: 'Not Started', in_progress: 'In Progress', done: 'Done', issue: 'Issue', na: 'N/A' };
+    const map = { not_started: 'Not Started', in_progress: 'In Progress', submitted: 'Submitted', done: 'Done', incomplete: 'Incomplete', issue: 'Issue', na: 'N/A' };
     return map[status] || 'Not Started';
   },
 
@@ -1370,8 +1381,9 @@ const Checklists = {
   //  HELPERS
   // ════════════════════════════════════════════════
   _nextStatus(current) {
-    const order = ['not_started', 'in_progress', 'done'];
+    const order = ['not_started', 'in_progress', 'submitted', 'done'];
     const idx = order.indexOf(current);
+    if (idx < 0) return 'not_started';
     return order[(idx + 1) % order.length];
   },
 
