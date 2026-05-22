@@ -401,12 +401,6 @@ const Checklists = {
     if (payload.date !== undefined) item.date = payload.date;
     this._updateItemInPlace(itemId);
     this._updateProgressBar();
-    // Close menu after selection
-    const container = document.getElementById('clContent');
-    if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
-      d.classList.remove('open');
-      d.style.cssText = '';
-    });
 
     try {
       await ServerAPI.updateChecklistItem(itemId, payload);
@@ -572,7 +566,8 @@ const Checklists = {
       await ServerAPI.updateChecklistItem(itemId, { importance: newImp });
       item.importance = newImp;
       this._reorderClientSide();
-      this._renderChecklist();
+      this._updateItemInPlace(itemId);
+      this._reorderItemsDom();
     } catch (err) { Utils.showToast('Failed to set importance', 'error'); }
   },
 
@@ -581,12 +576,6 @@ const Checklists = {
     const newVal = btn.dataset.clAssignedTo || null;
     const item = this._findItem(itemId);
     if (!item) return;
-
-    const container = document.getElementById('clContent');
-    if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
-      d.classList.remove('open');
-      d.style.cssText = '';
-    });
 
     try {
       await ServerAPI.updateChecklistItem(itemId, { assigned_to: newVal });
@@ -694,7 +683,10 @@ const Checklists = {
       }
     }
 
-    // Update assignment + importance active states in menu
+    // Update status, assignment + importance active states in menu
+    el.querySelectorAll('[data-cl-action="set-status"]').forEach(b => {
+      b.classList.toggle('cl-menu-active', b.dataset.clStatus === item.status);
+    });
     el.querySelectorAll('[data-cl-action="set-assigned-to"]').forEach(b => {
       b.classList.toggle('cl-menu-active', (b.dataset.clAssignedTo || '') === assignedTo);
     });
@@ -806,7 +798,7 @@ const Checklists = {
                   <div class="cl-menu-cols">
                     <div class="cl-menu-col">
                       <div class="cl-menu-section-label">Status</div>
-                      ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
+                      ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"${s.value === item.status ? ' class="cl-menu-active"' : ''}><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
                       <hr>
                       <div class="cl-menu-section-label">Priority</div>
                       <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Urgent</button>
@@ -966,6 +958,28 @@ const Checklists = {
       if (au !== bu) return bu - au;
       return (a.sort_order || 0) - (b.sort_order || 0);
     });
+  },
+
+  _reorderItemsDom() {
+    const container = document.getElementById('clContent');
+    if (!container) return;
+    const list = container.querySelector('.cl-items-list');
+    if (!list) return;
+    const items = this._currentChecklist?.items || [];
+    const groups = new Map();
+    let curId = null;
+    for (const child of [...list.children]) {
+      if (child.classList.contains('cl-item')) {
+        curId = child.dataset.itemId;
+        groups.set(curId, [child]);
+      } else if (curId) {
+        groups.get(curId).push(child);
+      }
+    }
+    for (const item of items) {
+      const els = groups.get(String(item.id));
+      if (els) els.forEach(el => list.appendChild(el));
+    }
   },
 
   // ════════════════════════════════════════════════
