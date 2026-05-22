@@ -193,9 +193,26 @@ async function adminSyncGroup(username, role) {
  * We store cognito_sub in the DB, so we can use it as Username for Admin* ops
  * when email alias isn't configured. This helper tries email first, then sub.
  */
+/**
+ * Resolve a Cognito Username from whatever we know about a user.
+ *
+ * Pools differ in how Username is configured: in this project's pool
+ * (us-west-1_S6iE2uego) Username IS the sub UUID and email is a sign-in
+ * alias attribute, NOT the username. So `AdminGetUser({ Username: email })`
+ * returns UserNotFoundException — we must fall through to ListUsers with
+ * an email filter.
+ *
+ * Order of attempts:
+ *   1. AdminGetUser by email   (works only when email is the username alias)
+ *   2. AdminGetUser by sub     (when we have it on the DB row)
+ *   3. ListUsers filter sub    (sub is set but AdminGetUser was rejected)
+ *   4. ListUsers filter email  (covers Ashley's case — email-aliased pool
+ *                               with sub-as-username and no cognito_sub on
+ *                               the local DB row)
+ */
 async function findUsername({ email, sub }) {
   assertConfigured();
-  // Try email directly
+
   if (email) {
     try {
       const res = await client.send(new AdminGetUserCommand({
@@ -205,6 +222,7 @@ async function findUsername({ email, sub }) {
       return res.Username;
     } catch (_e) { /* fall through */ }
   }
+
   if (sub) {
     try {
       const res = await client.send(new AdminGetUserCommand({
@@ -214,7 +232,6 @@ async function findUsername({ email, sub }) {
       return res.Username;
     } catch (_e) { /* fall through */ }
 
-    // Fallback: ListUsers with sub filter
     try {
       const res = await client.send(new ListUsersCommand({
         UserPoolId: USER_POOL_ID,
@@ -222,8 +239,20 @@ async function findUsername({ email, sub }) {
         Limit: 1,
       }));
       if (res.Users && res.Users[0]) return res.Users[0].Username;
+    } catch (_e) { /* fall through */ }
+  }
+
+  if (email) {
+    try {
+      const res = await client.send(new ListUsersCommand({
+        UserPoolId: USER_POOL_ID,
+        Filter: `email = "${email}"`,
+        Limit: 1,
+      }));
+      if (res.Users && res.Users[0]) return res.Users[0].Username;
     } catch (_e) { /* ignore */ }
   }
+
   return null;
 }
 

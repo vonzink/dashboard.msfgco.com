@@ -224,6 +224,13 @@ router.post('/:id/set-password', async (req, res, next) => {
     });
     if (!username) return res.status(404).json({ error: 'Cognito user not found' });
 
+    // Self-heal: if the DB row was missing cognito_sub, fill it now so
+    // subsequent lookups hit the fast AdminGetUser path.
+    if (!rows[0].cognito_sub && /^[0-9a-f-]{36}$/i.test(username)) {
+      db.query('UPDATE users SET cognito_sub = ? WHERE id = ?', [username, req.params.id])
+        .catch(() => {});
+    }
+
     await cognito.adminSetPassword(username, password, true);
     res.json({ success: true, message: 'Password updated' });
   } catch (error) {
@@ -242,6 +249,13 @@ router.post('/:id/reset-password', async (req, res, next) => {
       sub: rows[0].cognito_sub,
     });
     if (!username) return res.status(404).json({ error: 'Cognito user not found' });
+
+    // Self-heal: if the DB row was missing cognito_sub, fill it now so
+    // subsequent lookups hit the fast AdminGetUser path.
+    if (!rows[0].cognito_sub && /^[0-9a-f-]{36}$/i.test(username)) {
+      db.query('UPDATE users SET cognito_sub = ? WHERE id = ?', [username, req.params.id])
+        .catch(() => {});
+    }
 
     await cognito.adminResetPassword(username);
     res.json({ success: true, message: 'Reset code emailed to user' });
