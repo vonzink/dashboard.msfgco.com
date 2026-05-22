@@ -10,7 +10,7 @@ This guide helps you migrate from browser localStorage to server-side database s
 The `config.js` has been updated with the EC2 server URL:
 ```javascript
 api: {
-    baseUrl: 'http://54.175.238.145:8080/api'
+    baseUrl: 'http://52.203.186.217:8080/api'
 }
 ```
 

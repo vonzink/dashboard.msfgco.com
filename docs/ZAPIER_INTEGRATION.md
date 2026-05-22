@@ -41,7 +41,7 @@ In your Zapier webhook configuration:
 ### Base URL
 
 **Production:** `https://api.msfgco.com/api/webhooks`  
-**Development:** `http://54.175.238.145:8080/api/webhooks`
+**Development:** `http://52.203.186.217:8080/api/webhooks`
 
 ---
 

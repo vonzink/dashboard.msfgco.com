@@ -3,7 +3,7 @@
 Your RDS database is in a private subnet (not publicly accessible). To connect, we'll use your EC2 instance as a "jump host."
 
 ## Your EC2 Details:
-- **Public IP:** 54.175.238.145
+- **Public IP:** 52.203.186.217
 - **Private IP:** 172.31.27.127
 - **Key Name:** msfg-mortgage-key
 - **Username:** ec2-user (for Amazon Linux) or ubuntu (for Ubuntu)
@@ -17,10 +17,10 @@ First, find your SSH key file. It's probably in `~/.ssh/msfg-mortgage-key.pem` o
 ls -la ~/.ssh/ | grep msfg
 
 # If you find it, SSH in (use 'ec2-user' for Amazon Linux, 'ubuntu' for Ubuntu):
-ssh -i ~/.ssh/msfg-mortgage-key.pem ec2-user@54.175.238.145
+ssh -i ~/.ssh/msfg-mortgage-key.pem ec2-user@52.203.186.217
 
 # OR if it's Ubuntu:
-ssh -i ~/.ssh/msfg-mortgage-key.pem ubuntu@54.175.238.145
+ssh -i ~/.ssh/msfg-mortgage-key.pem ubuntu@52.203.186.217
 ```
 
 **If you don't have the key file:**

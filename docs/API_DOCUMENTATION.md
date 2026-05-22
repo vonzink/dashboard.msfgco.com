@@ -2,7 +2,7 @@
 
 ## Base URL
 ```
-http://54.175.238.145:8080/api
+http://52.203.186.217:8080/api
 ```
 (Update port based on your Spring Boot configuration)
 

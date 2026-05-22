@@ -3,7 +3,7 @@
 ## Architecture Overview
 
 - **Database**: MySQL Aurora RDS (`msfg-mortgage-db`)
-- **Application Server**: EC2 (`msfg-mortgage-app`) - 54.175.238.145
+- **Application Server**: EC2 (`msfg-mortgage-app`) - 52.203.186.217
 - **File Storage**: S3 bucket (to be configured)
 - **Backend Framework**: Spring Boot (recommended) or Node.js/Express
 
@@ -170,7 +170,7 @@ spring.servlet.multipart.max-request-size=10MB
 ### SSH into EC2
 
 ```bash
-ssh -i msfg-mortgage-key.pem ec2-user@54.175.238.145
+ssh -i msfg-mortgage-key.pem ec2-user@52.203.186.217
 ```
 
 ### Install Java (for Spring Boot)
@@ -220,7 +220,7 @@ Ensure these ports are open:
 mvn clean package
 
 # Copy to EC2
-scp -i msfg-mortgage-key.pem target/dashboard-0.0.1-SNAPSHOT.jar ec2-user@54.175.238.145:/home/ec2-user/
+scp -i msfg-mortgage-key.pem target/dashboard-0.0.1-SNAPSHOT.jar ec2-user@52.203.186.217:/home/ec2-user/
 
 # Run on EC2
 java -jar dashboard-0.0.1-SNAPSHOT.jar
@@ -275,7 +275,7 @@ mysql -h msfg-mortgage-db.xxxxxxxxx.us-east-1.rds.amazonaws.com \
 ### Test API Endpoint
 
 ```bash
-curl http://54.175.238.145:8080/api/investors
+curl http://52.203.186.217:8080/api/investors
 ```
 
 ---
@@ -286,7 +286,7 @@ Update `js/config.js`:
 
 ```javascript
 api: {
-    baseUrl: 'http://54.175.238.145:8080/api',
+    baseUrl: 'http://52.203.186.217:8080/api',
     timeout: 30000
 }
 ```
@@ -294,7 +294,7 @@ api: {
 Or use environment variable:
 ```javascript
 api: {
-    baseUrl: process.env.API_URL || 'http://54.175.238.145:8080/api',
+    baseUrl: process.env.API_URL || 'http://52.203.186.217:8080/api',
     timeout: 30000
 }
 ```

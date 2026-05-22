@@ -39,20 +39,20 @@ From your Mac:
 cd /Users/zacharyzink/MSFG/index_page/msfg-dashboard
 
 # Transfer new route files
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/tasks.js ubuntu@54.175.238.145:~/msfg-backend/routes/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/preApprovals.js ubuntu@54.175.238.145:~/msfg-backend/routes/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/pipeline.js ubuntu@54.175.238.145:~/msfg-backend/routes/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/webhooks.js ubuntu@54.175.238.145:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/tasks.js ubuntu@52.203.186.217:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/preApprovals.js ubuntu@52.203.186.217:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/pipeline.js ubuntu@52.203.186.217:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/webhooks.js ubuntu@52.203.186.217:~/msfg-backend/routes/
 
 # Transfer middleware
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/middleware/auth.js ubuntu@54.175.238.145:~/msfg-backend/middleware/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/middleware/apiKeyAuth.js ubuntu@54.175.238.145:~/msfg-backend/middleware/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/middleware/auth.js ubuntu@52.203.186.217:~/msfg-backend/middleware/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/middleware/apiKeyAuth.js ubuntu@52.203.186.217:~/msfg-backend/middleware/
 
 # Transfer scripts
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/scripts/generateApiKey.js ubuntu@54.175.238.145:~/msfg-backend/scripts/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/scripts/generateApiKey.js ubuntu@52.203.186.217:~/msfg-backend/scripts/
 
 # Transfer updated server.js
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/server.js ubuntu@54.175.238.145:~/msfg-backend/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/server.js ubuntu@52.203.186.217:~/msfg-backend/
 ```
 
 ---

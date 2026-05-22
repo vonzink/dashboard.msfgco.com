@@ -59,19 +59,19 @@ Transfer new files to EC2:
 cd /Users/zacharyzink/MSFG/index_page/msfg-dashboard
 
 # Transfer routes
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/tasks.js ubuntu@54.175.238.145:~/msfg-backend/routes/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/preApprovals.js ubuntu@54.175.238.145:~/msfg-backend/routes/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/pipeline.js ubuntu@54.175.238.145:~/msfg-backend/routes/
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/webhooks.js ubuntu@54.175.238.145:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/tasks.js ubuntu@52.203.186.217:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/preApprovals.js ubuntu@52.203.186.217:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/pipeline.js ubuntu@52.203.186.217:~/msfg-backend/routes/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/routes/webhooks.js ubuntu@52.203.186.217:~/msfg-backend/routes/
 
 # Transfer middleware
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem -r backend/middleware ubuntu@54.175.238.145:~/msfg-backend/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem -r backend/middleware ubuntu@52.203.186.217:~/msfg-backend/
 
 # Transfer scripts
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem -r backend/scripts ubuntu@54.175.238.145:~/msfg-backend/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem -r backend/scripts ubuntu@52.203.186.217:~/msfg-backend/
 
 # Transfer updated server.js
-scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/server.js ubuntu@54.175.238.145:~/msfg-backend/
+scp -i /Users/zacharyzink/MSFG/msfg-mortgage-key.pem backend/server.js ubuntu@52.203.186.217:~/msfg-backend/
 ```
 
 ### Step 3: Restart Backend Server
@@ -94,13 +94,13 @@ From your Mac or browser:
 
 ```bash
 # Test health
-curl http://54.175.238.145:8080/health
+curl http://52.203.186.217:8080/health
 
 # Test tasks endpoint
-curl http://54.175.238.145:8080/api/tasks
+curl http://52.203.186.217:8080/api/tasks
 
 # Test creating a task
-curl -X POST http://54.175.238.145:8080/api/tasks \
+curl -X POST http://52.203.186.217:8080/api/tasks \
   -H "Content-Type: application/json" \
   -d '{"title":"Test Task","priority":"high","status":"todo"}'
 ```
@@ -121,7 +121,7 @@ node scripts/generateApiKey.js "Zapier Production" 1
 Test webhook with API key:
 
 ```bash
-curl -X POST http://54.175.238.145:8080/api/webhooks/tasks \
+curl -X POST http://52.203.186.217:8080/api/webhooks/tasks \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY_HERE" \
   -d '{"title":"Webhook Test Task","priority":"high"}'

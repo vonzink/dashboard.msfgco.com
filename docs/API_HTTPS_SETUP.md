@@ -11,7 +11,7 @@ In your DNS provider (Route 53 or wherever dashboard.msfgco.com is hosted):
 1. Create new A record:
    - **Name:** `api` (or `api.msfgco.com` depending on your DNS provider)
    - **Type:** A
-   - **Value:** `54.175.238.145` (your EC2 public IP)
+   - **Value:** `52.203.186.217` (your EC2 public IP)
    - **TTL:** 300 (or default)
 
 2. Wait 5-10 minutes for DNS to propagate

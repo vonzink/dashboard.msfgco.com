@@ -12,7 +12,7 @@ This guide walks you through the professional setup process step-by-step. We'll:
 ## STEP 1: Backend Setup (Current Step)
 
 ### What You Need:
-- SSH access to EC2 (54.175.238.145)
+- SSH access to EC2 (52.203.186.217)
 - Your RDS password
 - AWS credentials (for S3)
 
@@ -31,7 +31,7 @@ This guide walks you through the professional setup process step-by-step. We'll:
 
 3. **Verify It Works**:
    ```bash
-   curl http://54.175.238.145:8080/health
+   curl http://52.203.186.217:8080/health
    ```
    Should return: `{"status":"ok","timestamp":"..."}`
 

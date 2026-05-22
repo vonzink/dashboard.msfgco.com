@@ -1,7 +1,7 @@
 # Deploy Backend to EC2 - Complete Instructions
 
 ## Prerequisites
-- You have SSH access to your EC2 instance (54.175.238.145)
+- You have SSH access to your EC2 instance (52.203.186.217)
 - You know your RDS password
 - You have AWS credentials (for S3 access)
 
@@ -16,7 +16,7 @@
 cd /Users/zacharyzink/MSFG/index_page/msfg-dashboard
 
 # Transfer the entire backend folder to EC2
-scp -i ~/.ssh/msfg-mortgage-key.pem -r backend ec2-user@54.175.238.145:~/msfg-backend
+scp -i ~/.ssh/msfg-mortgage-key.pem -r backend ec2-user@52.203.186.217:~/msfg-backend
 ```
 
 ### Option B: Using Git (if you push to a repository)
@@ -37,7 +37,7 @@ cd YOUR_REPO_NAME/msfg-dashboard/backend
 ## Step 2: SSH into EC2
 
 ```bash
-ssh -i ~/.ssh/msfg-mortgage-key.pem ec2-user@54.175.238.145
+ssh -i ~/.ssh/msfg-mortgage-key.pem ec2-user@52.203.186.217
 ```
 
 ---
@@ -131,7 +131,7 @@ The migration script needs the SQL file. Copy it:
 cp ../DATABASE_SCHEMA.sql ./
 
 # OR if you need to upload it separately:
-# Use SCP to transfer: scp -i ~/.ssh/msfg-mortgage-key.pem DATABASE_SCHEMA.sql ec2-user@54.175.238.145:~/msfg-backend/
+# Use SCP to transfer: scp -i ~/.ssh/msfg-mortgage-key.pem DATABASE_SCHEMA.sql ec2-user@52.203.186.217:~/msfg-backend/
 ```
 
 ---
@@ -221,10 +221,10 @@ Allow inbound traffic on port 8080:
 
 ```bash
 # Test health endpoint
-curl http://54.175.238.145:8080/health
+curl http://52.203.186.217:8080/health
 
 # Test investors endpoint
-curl http://54.175.238.145:8080/api/investors
+curl http://52.203.186.217:8080/api/investors
 ```
 
 ---
@@ -235,7 +235,7 @@ Update `msfg-dashboard/js/config.js`:
 
 ```javascript
 api: {
-  baseUrl: 'http://54.175.238.145:8080/api'
+  baseUrl: 'http://52.203.186.217:8080/api'
 }
 ```
 

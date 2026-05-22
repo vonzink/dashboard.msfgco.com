@@ -7,7 +7,7 @@
 3. Check for errors:
    - Should see: `✅ MSFG Dashboard ready!`
    - Should NOT see red errors about ServerAPI or fetch failures
-4. Check Network tab → Look for requests to `http://54.175.238.145:8080/api/`
+4. Check Network tab → Look for requests to `http://52.203.186.217:8080/api/`
 
 ---
 
@@ -16,7 +16,7 @@
 ### Test Health Endpoint
 In browser console, run:
 ```javascript
-fetch('http://54.175.238.145:8080/health')
+fetch('http://52.203.186.217:8080/health')
   .then(r => r.json())
   .then(console.log)
 ```
@@ -151,7 +151,7 @@ SELECT * FROM notifications ORDER BY reminder_date, reminder_time LIMIT 5;
 **Solution:** 
 - Verify backend is running: `pm2 status`
 - Check backend logs: `pm2 logs msfg-backend`
-- Test API directly: `curl http://54.175.238.145:8080/health`
+- Test API directly: `curl http://52.203.186.217:8080/health`
 
 ### Issue: Database Connection Errors
 **Symptom:** Backend logs show database connection errors

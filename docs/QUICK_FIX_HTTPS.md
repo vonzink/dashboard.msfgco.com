@@ -33,7 +33,7 @@ You have two main options:
 - 5-10 minutes to set up
 
 **Steps:**
-1. Create DNS A record pointing to your EC2 IP (54.175.238.145)
+1. Create DNS A record pointing to your EC2 IP (52.203.186.217)
 2. Install nginx on EC2
 3. Configure nginx as reverse proxy
 4. Use Let's Encrypt for free SSL certificate

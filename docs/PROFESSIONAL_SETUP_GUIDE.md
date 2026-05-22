@@ -21,10 +21,10 @@ ls -la ~/Downloads/msfg-mortgage-key.pem
 ls -la ~/Desktop/msfg-mortgage-key.pem
 
 # Once found, SSH in (Amazon Linux uses 'ec2-user'):
-ssh -i /path/to/msfg-mortgage-key.pem ec2-user@54.175.238.145
+ssh -i /path/to/msfg-mortgage-key.pem ec2-user@52.203.186.217
 
 # OR if it's Ubuntu:
-ssh -i /path/to/msfg-mortgage-key.pem ubuntu@54.175.238.145
+ssh -i /path/to/msfg-mortgage-key.pem ubuntu@52.203.186.217
 ```
 
 ### Option B: If you don't have the key
