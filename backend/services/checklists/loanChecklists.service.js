@@ -360,7 +360,7 @@ async function addItemNote(userId, itemId, body) {
   );
   const [rows] = await db.query(
     `SELECT n.id, n.body, n.created_at, n.created_by_user_id,
-            u.first_name, u.last_name, u.email
+            u.name AS author_name, u.email
      FROM loan_checklist_item_notes n
      LEFT JOIN users u ON u.id = n.created_by_user_id
      WHERE n.id = ?`,
@@ -373,7 +373,7 @@ async function addItemNote(userId, itemId, body) {
     body: n.body,
     created_at: n.created_at,
     created_by_user_id: n.created_by_user_id,
-    author_name: [n.first_name, n.last_name].filter(Boolean).join(' ').trim() || n.email || 'Unknown',
+    author_name: n.author_name || n.email || 'Unknown',
   };
 }
 
@@ -496,7 +496,7 @@ async function _hydrateInternal(queryRunner, cl) {
     );
     [notes] = await queryRunner.query(
       `SELECT n.id, n.item_id, n.body, n.created_at, n.created_by_user_id,
-              u.first_name, u.last_name, u.email
+              u.name AS author_name, u.email
        FROM loan_checklist_item_notes n
        LEFT JOIN users u ON u.id = n.created_by_user_id
        WHERE n.item_id IN (${itemIds.map(() => '?').join(',')})
@@ -510,13 +510,12 @@ async function _hydrateInternal(queryRunner, cl) {
   }
   const notesByItem = {};
   for (const n of notes) {
-    const authorName = [n.first_name, n.last_name].filter(Boolean).join(' ').trim() || n.email || 'Unknown';
     (notesByItem[n.item_id] = notesByItem[n.item_id] || []).push({
       id: n.id,
       body: n.body,
       created_at: n.created_at,
       created_by_user_id: n.created_by_user_id,
-      author_name: authorName,
+      author_name: n.author_name || n.email || 'Unknown',
     });
   }
 

@@ -31,7 +31,7 @@ router.get('/', async (req, res, next) => {
       params.push(period_value);
     }
     
-    query += ' ORDER BY period_type, period_value, goal_type';
+    query += ' ORDER BY period_type, period_value, category';
     
     const [goals] = await db.query(query, params);
     res.json(goals);
@@ -47,9 +47,9 @@ router.put('/', validate(goalsUpdate), async (req, res, next) => {
     const results = [];
     
     for (const goal of goals) {
-      const { user_id, period_type, period_value, goal_type, current_value, target_value } = goal;
-      
-      if (!period_type || !period_value || !goal_type || target_value === undefined) {
+      const { user_id, period_type, period_value, category, current_value, target_value } = goal;
+
+      if (!period_type || !period_value || !category || target_value === undefined) {
         continue; // Skip invalid goals
       }
       
@@ -59,19 +59,19 @@ router.put('/', validate(goalsUpdate), async (req, res, next) => {
       const finalUserId = (isAdmin(req) && user_id) ? user_id : currentUserId;
 
       const [result] = await db.query(
-        `INSERT INTO goals (user_id, period_type, period_value, goal_type, current_value, target_value)
+        `INSERT INTO goals (user_id, period_type, period_value, category, current_value, target_value)
          VALUES (?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
          current_value = VALUES(current_value),
          target_value = VALUES(target_value),
          updated_at = NOW()`,
-        [finalUserId || null, period_type, period_value, goal_type, current_value || null, target_value]
+        [finalUserId || null, period_type, period_value, category, current_value || null, target_value]
       );
       
       // Get the updated/inserted goal
       const [updated] = await db.query(
-        'SELECT * FROM goals WHERE period_type = ? AND period_value = ? AND goal_type = ? AND (user_id = ? OR (user_id IS NULL AND ? IS NULL))',
-        [period_type, period_value, goal_type, finalUserId, finalUserId]
+        'SELECT * FROM goals WHERE period_type = ? AND period_value = ? AND category = ? AND (user_id = ? OR (user_id IS NULL AND ? IS NULL))',
+        [period_type, period_value, category, finalUserId, finalUserId]
       );
       
       if (updated[0]) {
