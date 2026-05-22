@@ -255,7 +255,7 @@ async function deleteChecklist(userId, checklistId) {
 
 async function updateItem(userId, itemId, body) {
   const parent = await authz.requireChecklistItemAccess(userId, itemId);
-  const allowed = ['name', 'status', 'importance', 'date', 'due_date', 'sort_order'];
+  const allowed = ['name', 'status', 'importance', 'assigned_to', 'date', 'due_date', 'sort_order'];
   const update = buildDynamicUpdate('loan_checklist_items', itemId, allowed, body);
   if (!update) return _readItem(itemId);
 

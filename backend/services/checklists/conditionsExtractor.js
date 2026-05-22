@@ -110,6 +110,12 @@ function detectFormat(text) {
     return 'conditional-approval';
   }
 
+  if (/LOAN APPROVAL CONDITIONS/i.test(text)
+    || (/Conditional Approval/i.test(text) && /UW\s*-?\s*Prior To Final/i.test(text))
+    || (/Borrower conditions to be satisfied/i.test(text) && /\d{4}\s+\w+/.test(text))) {
+    return 'uwm-approval';
+  }
+
   if (/Summary of Findings/i.test(text)
     || /Verification Messages\s*\/\s*Approval Conditions/i.test(text)
     || /Desktop Underwriter|DU Version/i.test(text)) {
@@ -134,6 +140,10 @@ function parseConditionsFromText(text, options = {}) {
 
   if (format === 'conditional-approval') {
     return parseConditionalApproval(text);
+  }
+
+  if (format === 'uwm-approval') {
+    return parseUwmApproval(text);
   }
 
   if (format === 'du-findings') {
@@ -207,6 +217,155 @@ function isConditionalApprovalNoiseLine(line) {
     || /^Section\s+2\s+[–-]\s+Underwriting Conditions/i.test(line)
     || /^Borrower:\s/i.test(line)
     || /^Co-borrower:\s/i.test(line);
+}
+
+const UWM_APPROVAL_SECTIONS = new Set([
+  'UW PRIOR TO FINAL APPROVAL (PTD)',
+  'UW - PRIOR TO FINAL APPROVAL (PTD)',
+  'UNDERWRITER TO OBTAIN AND CLEAR',
+  'CLOSING (PTF)',
+  'CLOSING (PTD)',
+]);
+
+const UWM_APPROVAL_CATEGORIES = new Set([
+  'APPRAISAL', 'APPRAISAL (CONV)', 'ASSETS', 'BORROWER', 'CLOSING',
+  'CREDIT', 'HOI', 'INCOME', 'INVOICE', 'PROPERTY', 'TC', 'TITLE',
+]);
+
+function parseUwmApproval(text) {
+  const lines = splitTextLines(text);
+  const borrowerConditions = [];
+  const codedConditions = [];
+
+  // Phase 1: "Borrower conditions to be satisfied:" section (no 4-digit codes)
+  let inBorrowerSection = false;
+  let currentCategory = '';
+  let currentLines = null;
+
+  const flush = () => {
+    if (!currentLines) return;
+    const cond = makeCondition(currentLines, [currentCategory].filter(Boolean));
+    if (cond) borrowerConditions.push(cond);
+    currentLines = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = normalizeWhitespace(rawLine);
+    if (!line) continue;
+
+    if (/Borrower conditions to be satisfied/i.test(line)) {
+      inBorrowerSection = true;
+      continue;
+    }
+
+    if (!inBorrowerSection) continue;
+
+    if (/^LOAN APPROVAL CONDITIONS/i.test(line)
+      || /^p\s+\d{3}[- ]\d{3}[- ]\d{4}/i.test(line)) {
+      flush();
+      break;
+    }
+
+    if (isGlobalNoiseLine(line)) continue;
+
+    // Category + description on same line: "Income Provide a W2..."
+    // Also handles compound categories like "Appraisal (Conv)"
+    // Description must start with an uppercase letter (a real sentence start)
+    const catMatch = line.match(/^((?:Appraisal\s*\([^)]+\))|[A-Za-z]+)\s+([A-Z].{10,})$/);
+    if (catMatch && UWM_APPROVAL_CATEGORIES.has(catMatch[1].replace(/\s*\([^)]+\)/, '').toUpperCase())) {
+      flush();
+      currentCategory = normalizeHeading(catMatch[1]);
+      currentLines = [catMatch[2]];
+      continue;
+    }
+
+    if (currentLines) {
+      currentLines.push(line);
+    }
+  }
+  flush();
+
+  // Phase 2: "CONDITIONS" section with 4-digit codes and section headers
+  let inConditionsSection = false;
+  let section = '';
+  currentLines = null;
+  let currentCode = '';
+
+  const flush2 = () => {
+    if (!currentLines) return;
+    const ctx = [section, currentCode ? `#${currentCode}` : ''].filter(Boolean);
+    const cond = makeCondition(currentLines, ctx);
+    if (cond) codedConditions.push(cond);
+    currentLines = null;
+    currentCode = '';
+  };
+
+  for (const rawLine of lines) {
+    const line = normalizeWhitespace(rawLine);
+    if (!line) continue;
+
+    if (/^CONDITIONS$/i.test(line)) {
+      inConditionsSection = true;
+      continue;
+    }
+
+    if (!inConditionsSection) continue;
+
+    if (/^EXPIR(ATION|ING) (DATES|DOCUMENTS)/i.test(line)) {
+      flush2();
+      break;
+    }
+    if (/^Mortgagee Clause:/i.test(line)
+      || /^p\s+\d{3}[- ]\d{3}[- ]\d{4}/i.test(line)
+      || /^UWM\.COM/i.test(line)) {
+      continue;
+    }
+
+    if (isGlobalNoiseLine(line)) continue;
+
+    // Section headers like "UW Prior To Final Approval (PTD)"
+    const upper = line.toUpperCase().replace(/\s+/g, ' ').trim();
+    if (UWM_APPROVAL_SECTIONS.has(upper)) {
+      flush2();
+      section = normalizeHeading(line);
+      continue;
+    }
+
+    // 4-digit code + category + description: "3463 Appraisal (Conv) Appraisal on Form..."
+    const codeMatch = line.match(/^(\d{4})\s+((?:Appraisal\s*\([^)]+\))|[A-Za-z]+)\s+([A-Z].{5,})$/);
+    if (codeMatch && UWM_APPROVAL_CATEGORIES.has(codeMatch[2].replace(/\s*\([^)]+\)/, '').toUpperCase())) {
+      flush2();
+      currentCode = codeMatch[1];
+      currentLines = [codeMatch[3]];
+      continue;
+    }
+    // 4-digit code without recognized category — still a condition start
+    const codeOnly = line.match(/^(\d{4})\s+(.{10,})$/);
+    if (codeOnly && !codeMatch) {
+      flush2();
+      currentCode = codeOnly[1];
+      currentLines = [codeOnly[2]];
+      continue;
+    }
+
+    // 4-digit code alone on a line
+    if (/^\d{4}$/.test(line)) {
+      flush2();
+      currentCode = line;
+      continue;
+    }
+
+    if (currentLines) {
+      currentLines.push(line);
+    }
+  }
+  flush2();
+
+  // Prefer the coded CONDITIONS section; fall back to borrower section
+  if (codedConditions.length > 0) {
+    return dedupeConditions(codedConditions);
+  }
+  return dedupeConditions(borrowerConditions);
 }
 
 const UWM_SECTION_RE = /^\d+\s*\/\s*\d+\s+(.+?)\s+\d+%$/;
@@ -734,6 +893,7 @@ module.exports = {
   parseConditionsSheet,
   parseDuFindings,
   parseGenericNumberedConditions,
+  parseUwmApproval,
   parseUwmEase,
   renderChecklistMarkdown,
   titleFromPdfPath,

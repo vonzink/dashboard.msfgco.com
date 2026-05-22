@@ -189,8 +189,12 @@ const Checklists = {
 
     // Persistent delegated handler for closing dropdown menus
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('.cl-menu-trigger')) {
-        modal.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
+      if (!e.target.closest('.cl-menu-trigger') && !e.target.closest('.cl-menu-dropdown')) {
+        modal.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
+          d.classList.remove('open');
+          d.style.cssText = '';
+          d._dragBound = false;
+        });
       }
     });
 
@@ -232,6 +236,45 @@ const Checklists = {
     document.addEventListener('touchend', onUp);
   },
 
+  _bindMenuDrag(dd) {
+    const grip = dd.querySelector('.cl-menu-grip');
+    if (!grip || dd._dragBound) return;
+    dd._dragBound = true;
+    let startX = 0, startY = 0, origLeft = 0, origTop = 0, dragging = false;
+
+    grip.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      origLeft = parseInt(dd.style.left) || 0;
+      origTop = parseInt(dd.style.top) || 0;
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      dd.style.left = (origLeft + e.clientX - startX) + 'px';
+      dd.style.top = (origTop + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
+
+    grip.addEventListener('touchstart', (e) => {
+      dragging = true;
+      const pt = e.touches[0];
+      startX = pt.clientX;
+      startY = pt.clientY;
+      origLeft = parseInt(dd.style.left) || 0;
+      origTop = parseInt(dd.style.top) || 0;
+      e.preventDefault();
+    }, { passive: false });
+    document.addEventListener('touchmove', (e) => {
+      if (!dragging) return;
+      const pt = e.touches[0];
+      dd.style.left = (origLeft + pt.clientX - startX) + 'px';
+      dd.style.top = (origTop + pt.clientY - startY) + 'px';
+    }, { passive: false });
+    document.addEventListener('touchend', () => { dragging = false; });
+  },
+
   // ════════════════════════════════════════════════
   //  ACTION DISPATCHER — routes to discrete handlers
   // ════════════════════════════════════════════════
@@ -255,6 +298,7 @@ const Checklists = {
       'delete-note':           () => this._actionDeleteNote(id),
       'edit-item':             () => this._actionEditItem(id),
       'set-importance':        () => this._actionSetImportance(id, btn),
+      'set-assigned-to':       () => this._actionSetAssignedTo(id, btn),
       'set-date':              () => this._actionSetDate(id, btn),
       'set-due-date':          () => this._actionSetDueDate(id, btn),
       'export-checklist':      () => this._exportCurrentChecklist(),
@@ -359,7 +403,11 @@ const Checklists = {
     this._updateProgressBar();
     // Close menu after selection
     const container = document.getElementById('clContent');
-    if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
+    if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
+      d.classList.remove('open');
+      d.style.cssText = '';
+      d._dragBound = false;
+    });
 
     try {
       await ServerAPI.updateChecklistItem(itemId, payload);
@@ -529,6 +577,26 @@ const Checklists = {
     } catch (err) { Utils.showToast('Failed to set importance', 'error'); }
   },
 
+  async _actionSetAssignedTo(id, btn) {
+    const itemId = parseInt(id);
+    const newVal = btn.dataset.clAssignedTo || null;
+    const item = this._findItem(itemId);
+    if (!item) return;
+
+    const container = document.getElementById('clContent');
+    if (container) container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
+      d.classList.remove('open');
+      d.style.cssText = '';
+      d._dragBound = false;
+    });
+
+    try {
+      await ServerAPI.updateChecklistItem(itemId, { assigned_to: newVal });
+      item.assigned_to = newVal;
+      this._updateItemInPlace(itemId);
+    } catch (err) { Utils.showToast('Failed to set assignment', 'error'); }
+  },
+
   async _actionSetDate(id, btn) {
     const itemId = parseInt(id);
     const item = this._findItem(itemId);
@@ -569,9 +637,13 @@ const Checklists = {
     const statusInfo = this.STATUS_OPTIONS.find(s => s.value === item.status) || this.STATUS_OPTIONS[0];
     const importance = item.importance || 'normal';
 
+    const assignedTo = item.assigned_to || '';
+    const assignedCls = assignedTo ? ` cl-assigned-${assignedTo}` : '';
+
     // Update item classes
-    el.className = `cl-item ${statusInfo.cls} cl-imp-${importance}`;
+    el.className = `cl-item ${statusInfo.cls} cl-imp-${importance}${assignedCls}`;
     el.dataset.importance = importance;
+    el.dataset.assignedTo = assignedTo;
 
     // Update status button
     const statusBtn = el.querySelector('.cl-status-btn');
@@ -623,6 +695,14 @@ const Checklists = {
         existingDue.remove();
       }
     }
+
+    // Update assignment + importance active states in menu
+    el.querySelectorAll('[data-cl-action="set-assigned-to"]').forEach(b => {
+      b.classList.toggle('cl-menu-active', (b.dataset.clAssignedTo || '') === assignedTo);
+    });
+    el.querySelectorAll('[data-cl-action="set-importance"]').forEach(b => {
+      b.classList.toggle('cl-menu-active', b.dataset.clImportance === importance);
+    });
   },
 
   _updateSubitemInPlace(subId) {
@@ -708,9 +788,11 @@ const Checklists = {
       const overdue = item.due_date && item.status !== 'done' && this._isOverdue(item.due_date);
       const importance = item.importance || 'normal';
       const importanceCls = `cl-imp-${importance}`;
+      const assignedTo = item.assigned_to || '';
+      const assignedCls = assignedTo ? ` cl-assigned-${assignedTo}` : '';
 
       html += `
-        <div class="cl-item ${statusInfo.cls} ${importanceCls}" data-item-id="${item.id}" data-importance="${importance}" draggable="true">
+        <div class="cl-item ${statusInfo.cls} ${importanceCls}${assignedCls}" data-item-id="${item.id}" data-importance="${importance}" data-assigned-to="${assignedTo}" draggable="true">
           <div class="cl-item-main">
             <button type="button" class="cl-status-btn ${statusInfo.cls}" data-cl-action="toggle-status" data-cl-id="${item.id}" title="${statusInfo.label}">
               <i class="fas ${statusInfo.icon}"></i>
@@ -722,11 +804,17 @@ const Checklists = {
               <div class="cl-item-menu">
                 <button type="button" class="cl-menu-trigger" title="Actions"><i class="fas fa-ellipsis-v"></i></button>
                 <div class="cl-menu-dropdown">
+                  <div class="cl-menu-grip"><i class="fas fa-grip-horizontal"></i></div>
                   ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
                   <hr>
                   <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Mark Urgent</button>
                   <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Mark Important</button>
                   <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Mark Normal</button>
+                  <hr>
+                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="underwriter"${assignedTo === 'underwriter' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user-tie cl-assign-icon-underwriter"></i> Underwriter</button>
+                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="investor"${assignedTo === 'investor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-landmark cl-assign-icon-investor"></i> Investor</button>
+                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="title"${assignedTo === 'title' ? ' class="cl-menu-active"' : ''}><i class="fas fa-file-signature cl-assign-icon-title"></i> Title</button>
+                  <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to=""${!assignedTo ? ' class="cl-menu-active"' : ''}><i class="fas fa-times-circle"></i> Unassign</button>
                   <hr>
                   <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-check"></i> Set Date</button>
                   <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Set Due Date</button>
@@ -779,15 +867,26 @@ const Checklists = {
     html += '</div>';
     container.innerHTML = html;
 
-    // Toggle menus — use event delegation, no per-trigger listeners
+    // Toggle menus — floating draggable panel
     container.addEventListener('click', (e) => {
       const trigger = e.target.closest('.cl-menu-trigger');
       if (!trigger) return;
       e.stopPropagation();
       const dd = trigger.nextElementSibling;
       const wasOpen = dd.classList.contains('open');
-      container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => d.classList.remove('open'));
-      if (!wasOpen) dd.classList.add('open');
+      container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
+        d.classList.remove('open');
+        d.style.cssText = '';
+      });
+      if (!wasOpen) {
+        const rect = trigger.getBoundingClientRect();
+        dd.style.position = 'fixed';
+        dd.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+        dd.style.top = Math.min(rect.bottom + 4, window.innerHeight - 400) + 'px';
+        dd.style.right = 'auto';
+        dd.classList.add('open');
+        this._bindMenuDrag(dd);
+      }
     });
 
     this._bindItemDrag(container);

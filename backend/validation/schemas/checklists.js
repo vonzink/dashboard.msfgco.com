@@ -12,6 +12,7 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD 
 
 const checklistStatus = z.enum(['not_started', 'in_progress', 'done', 'issue', 'na']);
 const checklistImportance = z.enum(['normal', 'important', 'urgent']);
+const checklistAssignedTo = z.enum(['underwriter', 'investor', 'title']);
 
 const checklistSubitemInput = z.object({
   name: trimmedString(500),
@@ -58,6 +59,7 @@ const loanChecklistItemUpdate = z.object({
   name: trimmedString(500).optional(),
   status: checklistStatus.optional(),
   importance: checklistImportance.optional(),
+  assigned_to: checklistAssignedTo.optional().nullable(),
   date: dateString.optional().nullable(),
   due_date: dateString.optional().nullable(),
   sort_order: z.number().int().nonnegative().optional(),
