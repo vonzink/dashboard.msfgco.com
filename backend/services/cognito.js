@@ -212,15 +212,17 @@ async function adminSyncGroup(username, role) {
  */
 async function findUsername({ email, sub }) {
   assertConfigured();
+  const trail = [];
+  const emailNorm = email ? String(email).trim().toLowerCase() : null;
 
-  if (email) {
+  if (emailNorm) {
     try {
       const res = await client.send(new AdminGetUserCommand({
         UserPoolId: USER_POOL_ID,
-        Username: email,
+        Username: emailNorm,
       }));
       return res.Username;
-    } catch (_e) { /* fall through */ }
+    } catch (e) { trail.push(`getByEmail:${e.name}`); }
   }
 
   if (sub) {
@@ -230,7 +232,7 @@ async function findUsername({ email, sub }) {
         Username: sub,
       }));
       return res.Username;
-    } catch (_e) { /* fall through */ }
+    } catch (e) { trail.push(`getBySub:${e.name}`); }
 
     try {
       const res = await client.send(new ListUsersCommand({
@@ -239,20 +241,30 @@ async function findUsername({ email, sub }) {
         Limit: 1,
       }));
       if (res.Users && res.Users[0]) return res.Users[0].Username;
-    } catch (_e) { /* fall through */ }
+      trail.push('listBySub:empty');
+    } catch (e) { trail.push(`listBySub:${e.name}`); }
   }
 
-  if (email) {
+  if (emailNorm) {
     try {
       const res = await client.send(new ListUsersCommand({
         UserPoolId: USER_POOL_ID,
-        Filter: `email = "${email}"`,
+        Filter: `email = "${emailNorm}"`,
         Limit: 1,
       }));
       if (res.Users && res.Users[0]) return res.Users[0].Username;
-    } catch (_e) { /* ignore */ }
+      trail.push('listByEmail:empty');
+    } catch (e) { trail.push(`listByEmail:${e.name}`); }
   }
 
+  // Surface the lookup trail so admins can diagnose lookup failures without
+  // SSH-ing to prod. Logged once per failed call; no PII beyond the email.
+  console.warn(JSON.stringify({
+    msg: 'cognito.findUsername miss',
+    email: emailNorm || null,
+    sub: sub || null,
+    trail,
+  }));
   return null;
 }
 

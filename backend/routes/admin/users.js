@@ -222,7 +222,12 @@ router.post('/:id/set-password', async (req, res, next) => {
       email: rows[0].email,
       sub: rows[0].cognito_sub,
     });
-    if (!username) return res.status(404).json({ error: 'Cognito user not found' });
+    if (!username) {
+      // Echo the email we tried so admins can diff against the Cognito console.
+      return res.status(404).json({
+        error: `Cognito user not found (looked up: ${rows[0].email}${rows[0].cognito_sub ? `, sub=${rows[0].cognito_sub}` : ', no sub on DB row'})`,
+      });
+    }
 
     // Self-heal: if the DB row was missing cognito_sub, fill it now so
     // subsequent lookups hit the fast AdminGetUser path.
@@ -248,7 +253,12 @@ router.post('/:id/reset-password', async (req, res, next) => {
       email: rows[0].email,
       sub: rows[0].cognito_sub,
     });
-    if (!username) return res.status(404).json({ error: 'Cognito user not found' });
+    if (!username) {
+      // Echo the email we tried so admins can diff against the Cognito console.
+      return res.status(404).json({
+        error: `Cognito user not found (looked up: ${rows[0].email}${rows[0].cognito_sub ? `, sub=${rows[0].cognito_sub}` : ', no sub on DB row'})`,
+      });
+    }
 
     // Self-heal: if the DB row was missing cognito_sub, fill it now so
     // subsequent lookups hit the fast AdminGetUser path.
