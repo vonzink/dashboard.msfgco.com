@@ -282,7 +282,7 @@ router.get('/:id/integrations', async (req, res, next) => {
     const [rows] = await db.query(
       `SELECT id, service, credential_type, encrypted_value, iv, auth_tag, is_active
        FROM user_integrations
-       WHERE user_id = ? AND service IN ('openai', 'anthropic')`,
+       WHERE user_id = ? AND service IN ('openai', 'anthropic', 'deepseek')`,
       [req.params.id]
     );
 
@@ -307,8 +307,8 @@ router.post('/:id/integrations', async (req, res, next) => {
     const userId = req.params.id;
     const { service, value } = req.body;
 
-    if (!service || !['openai', 'anthropic'].includes(service)) {
-      return res.status(400).json({ error: 'service must be openai or anthropic' });
+    if (!service || !['openai', 'anthropic', 'deepseek'].includes(service)) {
+      return res.status(400).json({ error: 'service must be openai, anthropic, or deepseek' });
     }
     if (!value || !value.trim()) {
       return res.status(400).json({ error: 'value is required' });

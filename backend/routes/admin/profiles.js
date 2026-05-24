@@ -39,7 +39,7 @@ router.get('/:id/profile', async (req, res, next) => {
     const [integrations] = await db.query(
       `SELECT id, service, credential_type, encrypted_value, iv, auth_tag, is_active
        FROM user_integrations
-       WHERE user_id = ? AND service IN ('openai', 'anthropic')`,
+       WHERE user_id = ? AND service IN ('openai', 'anthropic', 'deepseek')`,
       [userId]
     );
 

@@ -371,6 +371,17 @@
             <button class="btn btn-danger btn-sm" id="aiAnthropicClearBtn"><i class="fas fa-trash"></i></button>
           </div>
         </div>
+        <div class="monday-section">
+          <h4 style="margin:0 0 8px; font-size:14px; color:#104547;">
+            <i class="fas fa-cube" style="color:#1e40af;"></i> DeepSeek API Key
+          </h4>
+          <p id="aiDeepseekStatus" style="font-size:13px; color:#666; margin:0 0 8px;">Checking...</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="aiDeepseekInput" placeholder="sk-..." style="flex:1; padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;" />
+            <button class="btn btn-primary btn-sm" id="aiDeepseekSaveBtn"><i class="fas fa-save"></i> Save</button>
+            <button class="btn btn-danger btn-sm" id="aiDeepseekClearBtn"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
       </div>
 
       <!-- ── SUB-TAB: Email Signature ── -->
@@ -1596,6 +1607,7 @@
         if (data.ai_keys) {
           updateAIStatus('openai', data.ai_keys.openai);
           updateAIStatus('anthropic', data.ai_keys.anthropic);
+          updateAIStatus('deepseek', data.ai_keys.deepseek);
         }
       } catch (err) {
         console.error('Load profile error:', err);
@@ -2007,12 +2019,14 @@
     });
 
     // --- AI Keys ---
+    // Capitalize the first letter so 'openai' -> 'Openai', 'deepseek' -> 'Deepseek'
+    // — matches the DOM id convention (aiOpenaiStatus, aiAnthropicStatus, aiDeepseekStatus).
+    function aiServiceId(service) {
+      return service.charAt(0).toUpperCase() + service.slice(1);
+    }
+
     function updateAIStatus(service, data) {
-      const statusEl = document.getElementById('ai' + service.charAt(0).toUpperCase() + service.slice(1) + 'Status');
-      if (!statusEl) return;
-      // Map service names for display
-      const sId = service === 'openai' ? 'Openai' : 'Anthropic';
-      const el = document.getElementById('ai' + sId + 'Status');
+      const el = document.getElementById('ai' + aiServiceId(service) + 'Status');
       if (!el) return;
       if (data && data.maskedValue) {
         el.innerHTML = '<span style="color:#2e7d32;"><i class="fas fa-check-circle"></i> Configured</span> — ' + escHtml(data.maskedValue);
@@ -2021,15 +2035,13 @@
       }
     }
 
+    const AI_SERVICES = ['openai', 'anthropic', 'deepseek'];
+
     async function loadAIKeys() {
       try {
         const keys = await api('/admin/users/' + profileUserId + '/integrations');
         if (!keys) return;
-
-        // Reset both
-        updateAIStatus('openai', null);
-        updateAIStatus('anthropic', null);
-
+        AI_SERVICES.forEach(s => updateAIStatus(s, null));
         keys.forEach(k => updateAIStatus(k.service, k));
       } catch (err) {
         console.error('Load AI keys error:', err);
@@ -2037,7 +2049,7 @@
     }
 
     async function saveAIKey(service) {
-      const inputId = service === 'openai' ? 'aiOpenaiInput' : 'aiAnthropicInput';
+      const inputId = 'ai' + aiServiceId(service) + 'Input';
       const value = document.getElementById(inputId).value.trim();
       if (!value) return alert('Please enter an API key');
 
@@ -2070,6 +2082,8 @@
     document.getElementById('aiOpenaiClearBtn').addEventListener('click', () => clearAIKey('openai'));
     document.getElementById('aiAnthropicSaveBtn').addEventListener('click', () => saveAIKey('anthropic'));
     document.getElementById('aiAnthropicClearBtn').addEventListener('click', () => clearAIKey('anthropic'));
+    document.getElementById('aiDeepseekSaveBtn').addEventListener('click', () => saveAIKey('deepseek'));
+    document.getElementById('aiDeepseekClearBtn').addEventListener('click', () => clearAIKey('deepseek'));
 
     // --- Notes ---
     async function loadNotes() {

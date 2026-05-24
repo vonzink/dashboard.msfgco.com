@@ -57,6 +57,108 @@ const UserSettings = {
     if (tabId === 'checklists' && typeof Checklists !== 'undefined') {
       Checklists.renderTemplateManagerInto('settingsChecklistsContent');
     }
+    if (tabId === 'ai-keys') this._loadAiKeys();
+  },
+
+  // ========================================
+  // AI KEYS TAB (self-serve openai / anthropic / deepseek)
+  // ========================================
+  // Order + display metadata for each provider's card. ID convention matches
+  // admin-settings.html (capitalize first letter of service for DOM ids).
+  _AI_PROVIDERS: [
+    { service: 'openai',    label: 'ChatGPT (OpenAI)',   icon: 'fa-brain', color: '#10a37f', placeholder: 'sk-...' },
+    { service: 'anthropic', label: 'Claude (Anthropic)', icon: 'fa-robot', color: '#d97706', placeholder: 'sk-ant-...' },
+    { service: 'deepseek',  label: 'DeepSeek',           icon: 'fa-cube',  color: '#1e40af', placeholder: 'sk-...' },
+  ],
+
+  async _loadAiKeys() {
+    const container = document.getElementById('settingsAiKeysContent');
+    if (!container) return;
+    container.innerHTML = '<div class="settings-loading"><i class="fas fa-spinner fa-spin"></i> Loading AI keys...</div>';
+
+    let keys = [];
+    try {
+      // /api/integrations returns ALL the current user's services; we filter
+      // to the three AI providers for this panel.
+      keys = await ServerAPI.get('/integrations') || [];
+    } catch (err) {
+      container.innerHTML = '<div class="settings-error"><i class="fas fa-exclamation-triangle"></i> Failed to load AI keys.</div>';
+      return;
+    }
+    this._renderAiKeys(keys);
+  },
+
+  _renderAiKeys(keys) {
+    const container = document.getElementById('settingsAiKeysContent');
+    if (!container) return;
+    const byService = {};
+    for (const k of keys) byService[k.service] = k;
+
+    const esc = (typeof Utils !== 'undefined' && Utils.escapeHtml) ? Utils.escapeHtml : (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+    let html = '<div class="settings-section"><h3 style="margin:0 0 12px;">AI Provider API Keys</h3>'
+      + '<p style="color:var(--text-muted, #888); font-size:13px; margin:0 0 16px;">These keys power AI features in this dashboard (Content Studio, etc.). Stored encrypted; only your account can see them.</p>';
+
+    for (const p of this._AI_PROVIDERS) {
+      const k = byService[p.service];
+      const configured = !!(k && k.maskedValue);
+      const statusHtml = configured
+        ? `<span style="color:var(--status-success,#22c55e);"><i class="fas fa-check-circle"></i> Configured</span> &mdash; ${esc(k.maskedValue)}`
+        : `<span style="color:var(--text-muted,#888);"><i class="fas fa-times-circle"></i> Not configured</span>`;
+
+      html += `
+        <div class="settings-card" style="border:1px solid var(--border-color); border-radius:8px; padding:12px; margin-bottom:10px;">
+          <h4 style="margin:0 0 6px; font-size:14px;">
+            <i class="fas ${p.icon}" style="color:${p.color};"></i> ${p.label} API Key
+          </h4>
+          <p id="usAi${p.service}Status" style="font-size:13px; margin:0 0 8px;">${statusHtml}</p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="usAi${p.service}Input" placeholder="${p.placeholder}" style="flex:1; padding:8px 12px; border:1px solid var(--border-color); border-radius:6px; background:var(--bg-secondary); color:var(--text-primary); font-family:inherit; font-size:13px;" />
+            <button type="button" class="btn btn-sm btn-primary" data-us-ai-save="${p.service}"><i class="fas fa-save"></i> Save</button>
+            <button type="button" class="btn btn-sm btn-danger" data-us-ai-clear="${p.service}" ${configured ? '' : 'disabled'}><i class="fas fa-trash"></i></button>
+          </div>
+        </div>`;
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    container.querySelectorAll('[data-us-ai-save]').forEach(btn => {
+      btn.addEventListener('click', () => this._saveAiKey(btn.dataset.usAiSave));
+    });
+    container.querySelectorAll('[data-us-ai-clear]').forEach(btn => {
+      btn.addEventListener('click', () => this._clearAiKey(btn.dataset.usAiClear));
+    });
+  },
+
+  async _saveAiKey(service) {
+    const input = document.getElementById('usAi' + service + 'Input');
+    const value = input?.value.trim();
+    if (!value) {
+      if (typeof Utils !== 'undefined' && Utils.showToast) Utils.showToast('Enter an API key first', 'error');
+      else alert('Enter an API key first');
+      return;
+    }
+    try {
+      await ServerAPI.post('/integrations', { service, credential_type: 'api_key', value });
+      input.value = '';
+      if (typeof Utils !== 'undefined' && Utils.showToast) Utils.showToast(service + ' key saved', 'success');
+      await this._loadAiKeys();
+    } catch (err) {
+      if (typeof Utils !== 'undefined' && Utils.showToast) Utils.showToast('Save failed: ' + err.message, 'error');
+      else alert('Save failed: ' + err.message);
+    }
+  },
+
+  async _clearAiKey(service) {
+    if (!confirm('Remove your ' + service + ' API key?')) return;
+    try {
+      await ServerAPI.delete('/integrations/' + service);
+      if (typeof Utils !== 'undefined' && Utils.showToast) Utils.showToast(service + ' key removed', 'success');
+      await this._loadAiKeys();
+    } catch (err) {
+      if (typeof Utils !== 'undefined' && Utils.showToast) Utils.showToast('Remove failed: ' + err.message, 'error');
+      else alert('Remove failed: ' + err.message);
+    }
   },
 
   // ========================================

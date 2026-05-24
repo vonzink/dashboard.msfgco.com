@@ -16,7 +16,7 @@ const { encrypt, decrypt, mask } = require('../utils/encryption');
 router.use(requireDbUser);
 
 const VALID_SERVICES = [
-  'openai', 'anthropic', 'canva', 'elevenlabs', 'midjourney', 'sora',
+  'openai', 'anthropic', 'deepseek', 'canva', 'elevenlabs', 'midjourney', 'sora',
   'n8n', 'zapier', 'monday',
   'facebook', 'instagram', 'twitter', 'linkedin', 'tiktok',
 ];
