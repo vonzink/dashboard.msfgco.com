@@ -168,6 +168,83 @@ const calendarEvent = z.object({
   recurrence_end: z.string().optional().nullable(),
 });
 
+const timeString = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Expected HH:MM or HH:MM:SS format');
+
+const scheduleStatuses = ['out', 'remote', 'traveling', 'meeting_event', 'other', 'busy'];
+const scheduleSources = ['manual', 'outlook', 'google'];
+const scheduleVisibility = ['availability_only', 'shared_details'];
+
+const scheduleEntryBase = z.object({
+  user_id: z.coerce.number().int().positive(),
+  status: z.enum(scheduleStatuses),
+  start_date: dateString,
+  end_date: dateString,
+  start_time: timeString.optional().nullable(),
+  end_time: timeString.optional().nullable(),
+  timezone: optionalString(80).default('America/Denver'),
+  note: optionalString(1000),
+  visibility: z.enum(scheduleVisibility).optional().default('availability_only'),
+  source: z.enum(scheduleSources).optional().default('manual'),
+  source_provider: z.enum(['outlook', 'google']).optional().nullable(),
+  source_event_id: optionalString(255),
+});
+
+const scheduleEntry = scheduleEntryBase.strict().superRefine((data, ctx) => {
+  if (data.end_date < data.start_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_date'],
+      message: 'end_date must be on or after start_date',
+    });
+  }
+
+  if (
+    data.start_date === data.end_date &&
+    data.start_time &&
+    data.end_time &&
+    data.end_time < data.start_time
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_time'],
+      message: 'end_time must be after start_time',
+    });
+  }
+});
+
+const scheduleEntryUpdate = scheduleEntryBase.partial().strict().superRefine((data, ctx) => {
+  if (data.end_date && data.start_date && data.end_date < data.start_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_date'],
+      message: 'end_date must be on or after start_date',
+    });
+  }
+
+  if (
+    data.start_date &&
+    data.end_date &&
+    data.start_date === data.end_date &&
+    data.start_time &&
+    data.end_time &&
+    data.end_time < data.start_time
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['end_time'],
+      message: 'end_time must be after start_time',
+    });
+  }
+});
+
+const scheduleEntryQuery = z.object({
+  start_date: dateString.optional(),
+  end_date: dateString.optional(),
+  user_id: z.coerce.number().int().positive().optional(),
+  status: z.enum(scheduleStatuses).optional(),
+  source: z.enum(scheduleSources).optional(),
+}).strict();
+
 // ── Tasks ──────────────────────────────────
 const task = z.object({
   title: trimmedString(200),
@@ -440,6 +517,9 @@ module.exports = {
   notification,
   calendarEvent,
   calendarEventUpdate,
+  scheduleEntry,
+  scheduleEntryUpdate,
+  scheduleEntryQuery,
   task,
   taskUpdate,
   investor,

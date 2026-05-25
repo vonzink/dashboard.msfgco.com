@@ -250,6 +250,33 @@ CREATE TABLE IF NOT EXISTS calendar_events (
     INDEX idx_recurrence_group (recurrence_group_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS schedule_entries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    status ENUM('out','remote','traveling','meeting_event','other','busy') NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    start_time TIME NULL,
+    end_time TIME NULL,
+    timezone VARCHAR(80) DEFAULT 'America/Denver',
+    note TEXT NULL,
+    visibility ENUM('availability_only','shared_details') DEFAULT 'availability_only',
+    source ENUM('manual','outlook','google') DEFAULT 'manual',
+    source_provider ENUM('outlook','google') NULL,
+    source_event_id VARCHAR(255) NULL,
+    created_by INT NULL,
+    updated_by INT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+    INDEX idx_schedule_user_dates (user_id, start_date, end_date),
+    INDEX idx_schedule_dates (start_date, end_date),
+    INDEX idx_schedule_status (status),
+    UNIQUE KEY uq_schedule_source_event (source_provider, source_event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO users (email, name, initials, role)
 VALUES ('zachary.zink@msfg.us', 'Zachary Zink', 'ZZ', 'admin')
 ON DUPLICATE KEY UPDATE

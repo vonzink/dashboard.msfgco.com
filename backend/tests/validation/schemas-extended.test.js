@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  notification, calendarEvent, task, taskUpdate, investor,
+  notification, calendarEvent, scheduleEntry, scheduleEntryUpdate, task, taskUpdate, investor,
   contentGenerate, contentItemUpdate, contentTemplate, contentTemplateUpdate,
   contentPublishBatch, guidelineUpload, guidelineSearch,
   handbookSearch, handbookSectionUpdate, handbookSectionCreate,
@@ -72,6 +72,73 @@ describe('calendarEvent schema', () => {
     for (const rule of ['daily', 'weekly', 'biweekly', 'monthly', 'yearly']) {
       expect(calendarEvent.safeParse({ ...valid, recurrence_rule: rule }).success).toBe(true);
     }
+  });
+});
+
+describe('scheduleEntry schema', () => {
+  const valid = {
+    user_id: 7,
+    status: 'out',
+    start_date: '2026-06-01',
+    end_date: '2026-06-03',
+    start_time: null,
+    end_time: null,
+    timezone: 'America/Denver',
+    note: 'Conference',
+    visibility: 'shared_details',
+    source: 'manual',
+  };
+
+  it('accepts a valid manual availability entry', () => {
+    const result = scheduleEntry.safeParse(valid);
+    expect(result.success).toBe(true);
+    expect(result.data.status).toBe('out');
+    expect(result.data.visibility).toBe('shared_details');
+  });
+
+  it('defaults imported event visibility to availability only', () => {
+    const result = scheduleEntry.safeParse({
+      ...valid,
+      source: 'outlook',
+      visibility: undefined,
+      status: 'busy',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data.visibility).toBe('availability_only');
+  });
+
+  it('rejects PTO as a status', () => {
+    expect(scheduleEntry.safeParse({ ...valid, status: 'pto' }).success).toBe(false);
+  });
+
+  it('rejects an end date before the start date', () => {
+    const result = scheduleEntry.safeParse({
+      ...valid,
+      start_date: '2026-06-03',
+      end_date: '2026-06-01',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an end time before the start time on the same date', () => {
+    const result = scheduleEntry.safeParse({
+      ...valid,
+      start_date: '2026-06-01',
+      end_date: '2026-06-01',
+      start_time: '15:00',
+      end_time: '09:00',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('scheduleEntryUpdate schema', () => {
+  it('accepts partial updates', () => {
+    expect(scheduleEntryUpdate.safeParse({ status: 'remote' }).success).toBe(true);
+  });
+
+  it('rejects unknown update fields', () => {
+    expect(scheduleEntryUpdate.safeParse({ paid_hours: 8 }).success).toBe(false);
   });
 });
 
