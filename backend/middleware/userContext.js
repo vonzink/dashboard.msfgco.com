@@ -13,7 +13,7 @@ function getUserId(req) {
  * missing or invalid.
  */
 function getActiveRole(req) {
-  const requested = req.headers['x-active-role'];
+  const requested = req.headers?.['x-active-role'];
   if (requested) {
     const groups = req.user?.groups || [];
     if (groups.includes(requested)) {
