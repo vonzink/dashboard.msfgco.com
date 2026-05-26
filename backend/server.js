@@ -38,6 +38,7 @@ const contentItemsRoutes = require('./routes/contentItems');
 const contentPublishRoutes = require('./routes/contentPublish');
 const mondayRoutes = require('./routes/monday');
 const calendarEventsRoutes = require('./routes/calendarEvents');
+const scheduleRoutes = require('./routes/schedule');
 const usersRoutes = require('./routes/users');
 const guidelinesRoutes = require('./routes/guidelines');
 const lendingpadRoutes = require('./routes/lendingpad');
@@ -168,6 +169,7 @@ app.get('/api/me', authenticate, (req, res) => {
 app.use('/api/announcements', authenticate, announcementsRoutes);
 app.use('/api/notifications', authenticate, notificationsRoutes);
 app.use('/api/calendar-events', authenticate, calendarEventsRoutes);
+app.use('/api/schedule', authenticate, scheduleRoutes);
 app.use('/api/me/profile', authenticate, myProfileRoutes);
 
 // Routes blocked for External users
