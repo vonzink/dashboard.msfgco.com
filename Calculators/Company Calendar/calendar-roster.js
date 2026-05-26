@@ -18,7 +18,7 @@
   }
 
   function entryLabel(entry) {
-    if (entry.is_private || entry.private || entry.status === 'busy') {
+    if (entry.is_private || entry.private) {
       return entry.display_label || 'Busy';
     }
     return entry.note || entry.display_label || (window.CalendarState.STATUS_META[entry.status] && window.CalendarState.STATUS_META[entry.status].label) || entry.status || 'Schedule';
