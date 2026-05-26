@@ -53,7 +53,7 @@
     // Schedule
     // =====================
     'open-company-calendar': () =>
-      Utils.openPopup('Calculators/Company Calendar/calendar.html', 'MSFGCalendar', 1280, 860),
+      Utils.openPopup('Calculators/Company Calendar/calendar.html?v=20260526-2', 'MSFGCalendar', 1280, 860),
 
     'open-timeoff-requests': () => comingSoon('Time-Off Requests'),
 
