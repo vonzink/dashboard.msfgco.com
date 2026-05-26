@@ -64,7 +64,14 @@ if [ "$DEPLOY_FRONTEND" = true ]; then
   echo -e "${YELLOW}▸ Syncing frontend to S3...${NC}"
   aws s3 sync . "$S3_BUCKET" \
     --exclude "backend/*" \
+    --exclude ".git" \
     --exclude ".git/*" \
+    --exclude ".planning" \
+    --exclude ".planning/*" \
+    --exclude ".superpowers" \
+    --exclude ".superpowers/*" \
+    --exclude ".worktrees" \
+    --exclude ".worktrees/*" \
     --exclude "node_modules/*" \
     --exclude "*.sh" \
     --exclude ".env*" \
