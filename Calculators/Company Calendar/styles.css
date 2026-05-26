@@ -344,6 +344,13 @@ input {
   box-shadow: inset 4px 0 0 var(--accent);
 }
 
+.person-cell:focus-visible,
+.day-cell:focus-visible,
+.entry-bar:focus-visible {
+  outline: 3px solid rgba(140, 198, 62, .72);
+  outline-offset: -3px;
+}
+
 .avatar {
   flex: 0 0 auto;
   display: grid;
@@ -357,7 +364,13 @@ input {
   font-weight: 800;
 }
 
+.person-text {
+  display: block;
+  min-width: 0;
+}
+
 .person-name {
+  display: block;
   overflow: hidden;
   color: var(--ink);
   font-weight: 800;
@@ -366,6 +379,7 @@ input {
 }
 
 .person-role {
+  display: block;
   overflow: hidden;
   color: var(--ink-dim);
   font-size: 12px;
