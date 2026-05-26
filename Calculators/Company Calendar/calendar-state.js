@@ -33,7 +33,7 @@
   function monthRange(viewDate) {
     const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
     const end = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0);
-    return { start: isoDate(start), end: isoDate(end) };
+    return { start_date: isoDate(start), end_date: isoDate(end) };
   }
 
   function createState() {

@@ -26,8 +26,8 @@
       throw new Error(body.error || 'You do not have permission to perform this action.');
     }
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(text || 'Request failed');
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Request failed');
     }
     return res.status === 204 ? null : res.json();
   }

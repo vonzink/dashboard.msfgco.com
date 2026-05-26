@@ -3,6 +3,7 @@
 
   const app = document.getElementById('calendarApp');
   const state = CalendarState.createState();
+  let entriesRequestSeq = 0;
 
   function showToast(message, type) {
     const toast = document.getElementById('calToast');
@@ -14,16 +15,28 @@
   }
 
   async function loadEntries() {
+    const requestSeq = ++entriesRequestSeq;
     const range = CalendarState.monthRange(state.viewDate);
-    state.entries = await CalendarApi.getEntries(range);
-    state.people = CalendarRender.derivePeople(state.entries);
+    try {
+      const entries = await CalendarApi.getEntries(range);
+      if (requestSeq !== entriesRequestSeq) return false;
+      state.entries = entries;
+      state.people = CalendarRender.derivePeople(state.entries);
+      state.loading = false;
+      state.error = null;
+      return true;
+    } catch (err) {
+      if (requestSeq !== entriesRequestSeq) return false;
+      throw err;
+    }
   }
 
   async function boot() {
     try {
       state.me = await CalendarApi.getMe();
-      await loadEntries();
-      state.loading = false;
+      const loaded = await loadEntries();
+      if (!loaded) return;
+      state.error = null;
       CalendarRender.render(app, state, actions);
     } catch (err) {
       state.loading = false;
@@ -36,8 +49,15 @@
   const actions = {
     showToast,
     async reload() {
-      await loadEntries();
-      CalendarRender.render(app, state, actions);
+      try {
+        const loaded = await loadEntries();
+        if (loaded) CalendarRender.render(app, state, actions);
+      } catch (err) {
+        state.loading = false;
+        state.error = err.message;
+        CalendarRender.render(app, state, actions);
+        showToast(err.message, 'error');
+      }
     },
     setSearch(value) {
       state.search = value;
@@ -45,7 +65,7 @@
     },
     setViewDate(date) {
       state.viewDate = date;
-      actions.reload().catch(err => showToast(err.message, 'error'));
+      actions.reload();
     },
     setSelectedDate(date) {
       state.selectedDate = date;
