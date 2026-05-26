@@ -11,7 +11,7 @@ describe('presentScheduleEntry', () => {
     user_id: 10,
     employee_name: 'Morgan Smith',
     employee_initials: 'MS',
-    status: 'busy',
+    status: 'meeting_event',
     start_date: '2026-06-01',
     end_date: '2026-06-01',
     start_time: '09:00:00',
@@ -27,12 +27,14 @@ describe('presentScheduleEntry', () => {
     expect(result.note).toBeNull();
     expect(result.private).toBe(true);
     expect(result.display_label).toBe('Busy');
+    expect(result.status).toBe('busy');
   });
 
   it('shows details to the owner', () => {
     const result = presentScheduleEntry(entry, reqFor({ id: 10, role: 'user' }));
     expect(result.note).toBe('Private appointment');
     expect(result.private).toBe(false);
+    expect(result.status).toBe('meeting_event');
   });
 
   it('shows shared details to everyone', () => {
@@ -42,5 +44,32 @@ describe('presentScheduleEntry', () => {
     );
     expect(result.note).toBe('Client visit');
     expect(result.private).toBe(false);
+    expect(result.status).toBe('meeting_event');
+  });
+
+  it('shows manual-entry details to admins and managers', () => {
+    const manualEntry = { ...entry, source: 'manual', note: 'Leadership meeting' };
+
+    const adminResult = presentScheduleEntry(manualEntry, reqFor({ id: 11, role: 'admin' }));
+    const managerResult = presentScheduleEntry(manualEntry, reqFor({ id: 12, role: 'manager' }));
+
+    expect(adminResult.note).toBe('Leadership meeting');
+    expect(adminResult.private).toBe(false);
+    expect(adminResult.status).toBe('meeting_event');
+    expect(managerResult.note).toBe('Leadership meeting');
+    expect(managerResult.private).toBe(false);
+    expect(managerResult.status).toBe('meeting_event');
+  });
+
+  it('keeps imported availability-only details private from admins and managers', () => {
+    const adminResult = presentScheduleEntry(entry, reqFor({ id: 11, role: 'admin' }));
+    const managerResult = presentScheduleEntry(entry, reqFor({ id: 12, role: 'manager' }));
+
+    expect(adminResult.note).toBeNull();
+    expect(adminResult.private).toBe(true);
+    expect(adminResult.status).toBe('busy');
+    expect(managerResult.note).toBeNull();
+    expect(managerResult.private).toBe(true);
+    expect(managerResult.status).toBe('busy');
   });
 });

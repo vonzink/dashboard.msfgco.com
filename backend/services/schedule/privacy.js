@@ -23,7 +23,7 @@ function presentScheduleEntry(entry, req) {
     employee_name: entry.employee_name || null,
     employee_initials: entry.employee_initials || null,
     employee_role: entry.employee_role || null,
-    status: entry.status,
+    status: visible ? entry.status : 'busy',
     display_label: visible ? (STATUS_LABELS[entry.status] || 'Unavailable') : 'Busy',
     start_date: entry.start_date,
     end_date: entry.end_date,
