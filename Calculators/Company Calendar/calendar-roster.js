@@ -168,11 +168,6 @@
   }
 
   window.CalendarRoster = {
-    entryLabel,
-    filteredPeople,
-    entriesForPersonDay,
-    renderDayHeader,
-    renderPersonRow,
     render,
     bind,
   };
