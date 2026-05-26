@@ -46,6 +46,31 @@
     }
   }
 
+  function currentUserId() {
+    const me = state.me || {};
+    return me.id || me.user_id || me.userId || me.employee_id || me.employeeId || '';
+  }
+
+  function selectedIsoDate() {
+    return CalendarState.isoDate(state.selectedDate || state.today || new Date());
+  }
+
+  function newManualEntry() {
+    const date = selectedIsoDate();
+    return {
+      user_id: state.selectedUserId || currentUserId(),
+      status: 'out',
+      start_date: date,
+      end_date: date,
+      start_time: '',
+      end_time: '',
+      timezone: 'America/Denver',
+      visibility: 'shared_details',
+      source: 'manual',
+      note: '',
+    };
+  }
+
   const actions = {
     showToast,
     async reload() {
@@ -93,6 +118,31 @@
       if (state.hiddenStatuses.has(status)) state.hiddenStatuses.delete(status);
       else state.hiddenStatuses.add(status);
       CalendarRender.render(app, state, actions);
+    },
+    openEditor(entry) {
+      state.editor = entry || newManualEntry();
+      CalendarRender.render(app, state, actions);
+    },
+    closeEditor() {
+      state.editor = null;
+      CalendarRender.render(app, state, actions);
+    },
+    async saveEditor(payload) {
+      if (payload.id) {
+        await CalendarApi.updateEntry(payload.id, payload);
+        showToast('Schedule entry updated.', 'success');
+      } else {
+        await CalendarApi.createEntry(payload);
+        showToast('Schedule entry created.', 'success');
+      }
+      state.editor = null;
+      await actions.reload();
+    },
+    async deleteEntry(id) {
+      await CalendarApi.deleteEntry(id);
+      showToast('Schedule entry deleted.', 'success');
+      state.editor = null;
+      await actions.reload();
     },
   };
 

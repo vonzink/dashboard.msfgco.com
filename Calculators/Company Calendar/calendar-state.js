@@ -48,6 +48,7 @@
       search: '',
       hiddenStatuses: new Set(),
       selectedUserId: null,
+      editor: null,
       loading: true,
       error: null,
     };

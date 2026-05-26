@@ -483,6 +483,154 @@ input {
   background: var(--danger);
 }
 
+.editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  overflow-y: auto;
+  padding: 42px 16px;
+  background: rgba(36, 48, 46, .42);
+}
+
+.schedule-editor {
+  width: min(720px, 100%);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 24px 70px rgba(16, 69, 71, .22);
+}
+
+.schedule-editor form {
+  margin: 0;
+}
+
+.editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--surface-2);
+}
+
+.editor-head h2 {
+  margin: 0;
+  color: var(--accent-ink);
+  font-family: Raleway, "Source Sans 3", sans-serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.editor-head p {
+  margin: 4px 0 0;
+  color: var(--ink-dim);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.icon-btn:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(140, 198, 62, .18);
+}
+
+.editor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 20px;
+}
+
+.schedule-editor label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.schedule-editor input,
+.schedule-editor select,
+.schedule-editor textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  outline: none;
+}
+
+.schedule-editor textarea {
+  min-height: 98px;
+  resize: vertical;
+}
+
+.schedule-editor input:focus,
+.schedule-editor select:focus,
+.schedule-editor textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(140, 198, 62, .18);
+}
+
+.editor-note {
+  grid-column: 1 / -1;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 20px;
+}
+
+.editor-action-spacer {
+  flex: 1 1 auto;
+}
+
+.danger-btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--danger);
+  cursor: pointer;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.danger-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
 @media (max-width: 900px) {
   :root {
     --name-col: 172px;
@@ -525,5 +673,31 @@ input {
 
   .summary-number {
     font-size: 25px;
+  }
+
+  .editor-backdrop {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .editor-grid {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .editor-head,
+  .editor-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .editor-actions {
+    flex-wrap: wrap;
+  }
+
+  .editor-actions .nav-btn,
+  .editor-actions .primary-btn,
+  .danger-btn {
+    flex: 1 1 140px;
   }
 }

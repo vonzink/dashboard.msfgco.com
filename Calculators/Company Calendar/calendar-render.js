@@ -75,7 +75,7 @@
           <button class="nav-btn" type="button" data-cal-action="today">Today</button>
         </div>
         <div class="schedule-controls">
-          <button class="primary-btn" type="button" data-cal-action="add">Add Schedule</button>
+          <button class="primary-btn" type="button" data-cal-action="add" data-action="new-entry">Add Schedule</button>
         </div>
       </header>
     `;
@@ -122,7 +122,7 @@
     const prev = root.querySelector('[data-cal-action="prev"]');
     const next = root.querySelector('[data-cal-action="next"]');
     const today = root.querySelector('[data-cal-action="today"]');
-    const add = root.querySelector('[data-cal-action="add"]');
+    const add = root.querySelector('[data-cal-action="add"], [data-action="new-entry"]');
 
     if (prev) {
       prev.addEventListener('click', () => {
