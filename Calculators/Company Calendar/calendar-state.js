@@ -48,6 +48,7 @@
       search: '',
       hiddenStatuses: new Set(),
       selectedUserId: null,
+      syncConnections: [],
       editor: null,
       editorSaving: false,
       editorReturnFocus: null,

@@ -31,11 +31,21 @@
     }
   }
 
+  async function loadSyncStatus() {
+    try {
+      const status = await CalendarApi.getSyncStatus();
+      state.syncConnections = status.connections || [];
+    } catch (err) {
+      state.syncConnections = [];
+    }
+  }
+
   async function boot() {
     try {
       state.me = await CalendarApi.getMe();
       const loaded = await loadEntries();
       if (!loaded) return;
+      await loadSyncStatus();
       state.error = null;
       CalendarRender.render(app, state, actions);
     } catch (err) {
