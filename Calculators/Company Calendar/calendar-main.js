@@ -60,8 +60,22 @@
       }
     },
     setSearch(value) {
+      const active = document.activeElement;
+      const shouldRestoreSearch = active && active.classList && active.classList.contains('schedule-search');
+      const selectionStart = shouldRestoreSearch ? active.selectionStart : null;
+      const selectionEnd = shouldRestoreSearch ? active.selectionEnd : null;
       state.search = value;
       CalendarRender.render(app, state, actions);
+      if (!shouldRestoreSearch) return;
+      const search = app.querySelector('.schedule-search');
+      if (!search) return;
+      try {
+        search.focus({ preventScroll: true });
+      } catch (err) {
+        search.focus();
+      }
+      if (selectionStart == null || selectionEnd == null || !search.setSelectionRange) return;
+      search.setSelectionRange(selectionStart, selectionEnd);
     },
     setViewDate(date) {
       state.viewDate = date;
