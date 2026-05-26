@@ -24,6 +24,14 @@
     return entry.note || entry.display_label || (window.CalendarState.STATUS_META[entry.status] && window.CalendarState.STATUS_META[entry.status].label) || entry.status || 'Schedule';
   }
 
+  function isPrivateEntry(entry) {
+    return Boolean(entry && (entry.private || entry.is_private));
+  }
+
+  function isManualEditableEntry(entry) {
+    return Boolean(entry && entry.source === 'manual' && !isPrivateEntry(entry));
+  }
+
   function filteredPeople(state) {
     const query = String(state.search || '').trim().toLowerCase();
     const people = state.people || [];
@@ -186,7 +194,12 @@
       const entryDate = date || (entry ? entryStartIso(entry) : '');
       if (entryDate) actions.setSelectedDate(window.CalendarState.parseDate(entryDate));
       if (entryUser) actions.setSelectedUser(entryUser);
-      if (entry && actions.openEditor) actions.openEditor(entry);
+      if (!entry || !actions.openEditor) return;
+      if (!isManualEditableEntry(entry)) {
+        if (actions.showToast) actions.showToast('Synced/private entries can only be viewed as availability.', 'info');
+        return;
+      }
+      actions.openEditor(entry);
     }
 
     const search = root.querySelector('.schedule-search');

@@ -71,6 +71,40 @@
     };
   }
 
+  function isPrivateEntry(entry) {
+    return Boolean(entry && (entry.private || entry.is_private));
+  }
+
+  function isManualEditableEntry(entry) {
+    return !entry || (entry.source === 'manual' && !isPrivateEntry(entry));
+  }
+
+  function restoreEditorFocus() {
+    const target = state.editorReturnFocus;
+    state.editorReturnFocus = null;
+    if (!target || !document.contains || !document.contains(target) || !target.focus) return;
+    try {
+      target.focus({ preventScroll: true });
+    } catch (err) {
+      target.focus();
+    }
+  }
+
+  function schedulePayloadBody(payload) {
+    return {
+      user_id: payload.user_id,
+      status: payload.status,
+      start_date: payload.start_date,
+      end_date: payload.end_date,
+      start_time: payload.start_time,
+      end_time: payload.end_time,
+      timezone: payload.timezone || 'America/Denver',
+      note: payload.note || '',
+      visibility: payload.visibility,
+      source: payload.source || 'manual',
+    };
+  }
+
   const actions = {
     showToast,
     async reload() {
@@ -120,29 +154,65 @@
       CalendarRender.render(app, state, actions);
     },
     openEditor(entry) {
+      if (state.editorSaving) return;
+      if (entry && !isManualEditableEntry(entry)) {
+        showToast('Synced/private entries can only be viewed as availability.', 'info');
+        return;
+      }
+      state.editorReturnFocus = document.activeElement;
       state.editor = entry || newManualEntry();
       CalendarRender.render(app, state, actions);
     },
     closeEditor() {
+      if (state.editorSaving) return;
       state.editor = null;
+      state.editorSaving = false;
       CalendarRender.render(app, state, actions);
+      restoreEditorFocus();
     },
     async saveEditor(payload) {
-      if (payload.id) {
-        await CalendarApi.updateEntry(payload.id, payload);
-        showToast('Schedule entry updated.', 'success');
-      } else {
-        await CalendarApi.createEntry(payload);
-        showToast('Schedule entry created.', 'success');
+      if (state.editorSaving) return;
+      state.editorSaving = true;
+      CalendarRender.render(app, state, actions);
+      try {
+        const body = schedulePayloadBody(payload);
+        if (payload.id) {
+          await CalendarApi.updateEntry(payload.id, body);
+          showToast('Schedule entry updated.', 'success');
+        } else {
+          await CalendarApi.createEntry(body);
+          showToast('Schedule entry created.', 'success');
+        }
+        state.editor = null;
+        state.editorSaving = false;
+        await actions.reload();
+        restoreEditorFocus();
+      } catch (err) {
+        state.editorSaving = false;
+        CalendarRender.render(app, state, actions);
+        throw err;
       }
-      state.editor = null;
-      await actions.reload();
     },
     async deleteEntry(id) {
-      await CalendarApi.deleteEntry(id);
-      showToast('Schedule entry deleted.', 'success');
-      state.editor = null;
-      await actions.reload();
+      if (state.editorSaving) return;
+      if (!isManualEditableEntry(state.editor)) {
+        showToast('Synced/private entries can only be viewed as availability.', 'info');
+        return;
+      }
+      state.editorSaving = true;
+      CalendarRender.render(app, state, actions);
+      try {
+        await CalendarApi.deleteEntry(id);
+        showToast('Schedule entry deleted.', 'success');
+        state.editor = null;
+        state.editorSaving = false;
+        await actions.reload();
+        restoreEditorFocus();
+      } catch (err) {
+        state.editorSaving = false;
+        CalendarRender.render(app, state, actions);
+        throw err;
+      }
     },
   };
 

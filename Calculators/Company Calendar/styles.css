@@ -176,6 +176,16 @@ input {
   box-shadow: 0 0 0 3px rgba(140, 198, 62, .18);
 }
 
+.nav-btn:disabled,
+.filter-chip:disabled,
+.primary-btn:disabled,
+.icon-btn:disabled,
+.danger-btn:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+  box-shadow: none;
+}
+
 .schedule-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -629,6 +639,11 @@ input {
 .danger-btn:hover {
   background: var(--danger);
   color: #fff;
+}
+
+.danger-btn:disabled:hover {
+  background: #fff;
+  color: var(--danger);
 }
 
 @media (max-width: 900px) {

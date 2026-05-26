@@ -49,6 +49,8 @@
       hiddenStatuses: new Set(),
       selectedUserId: null,
       editor: null,
+      editorSaving: false,
+      editorReturnFocus: null,
       loading: true,
       error: null,
     };
