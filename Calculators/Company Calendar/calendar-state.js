@@ -57,6 +57,7 @@
     STATUS_META,
     MONTHS,
     DOW,
+    pad,
     createState,
     daysInMonth,
     isoDate,
