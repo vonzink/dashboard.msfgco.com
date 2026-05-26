@@ -65,11 +65,15 @@
     if (isToday(state, day)) classes.push('is-today');
     if (isWeekend(day)) classes.push('is-weekend');
     return `
-      <div class="${classes.join(' ')}" role="columnheader">
+      <div class="${classes.join(' ')}">
         <span class="day-dow">${window.CalendarState.DOW[day.getDay()]}</span>
         <span class="day-num">${day.getDate()}</span>
       </div>
     `;
+  }
+
+  function dayLabel(day) {
+    return `${window.CalendarState.MONTHS[day.getMonth()]} ${day.getDate()}`;
   }
 
   function initials(name) {
@@ -95,7 +99,12 @@
           ${escapeHtml(entryLabel(entry))}
         </button>
       `).join('');
-      return `<div class="${classes.join(' ')}" role="button" tabindex="0" data-date="${window.CalendarState.isoDate(day)}" data-user-id="${escapeHtml(person.id)}">${bars}</div>`;
+      return `
+        <div class="${classes.join(' ')}" data-date="${window.CalendarState.isoDate(day)}" data-user-id="${escapeHtml(person.id)}">
+          <button class="day-select-btn" type="button" data-date="${window.CalendarState.isoDate(day)}" data-user-id="${escapeHtml(person.id)}" aria-label="Select ${escapeHtml(dayLabel(day))} for ${escapeHtml(person.name)}">+</button>
+          ${bars}
+        </div>
+      `;
     }).join('');
 
     return `
@@ -136,8 +145,8 @@
         </div>
         <div class="roster-scroll">
           ${people.length ? `
-            <div class="roster-grid" style="--days:${days.length}" role="grid">
-              <div class="roster-cell corner-cell" role="columnheader">Team</div>
+            <div class="roster-grid" style="--days:${days.length}">
+              <div class="roster-cell corner-cell">Team</div>
               ${days.map((day) => renderDayHeader(state, day)).join('')}
               ${rows}
             </div>
@@ -177,7 +186,7 @@
       const entryDate = date || (entry ? entryStartIso(entry) : '');
       if (entryDate) actions.setSelectedDate(window.CalendarState.parseDate(entryDate));
       if (entryUser) actions.setSelectedUser(entryUser);
-      if (actions.openEditor) actions.openEditor(entry || entryId);
+      if (entry && actions.openEditor) actions.openEditor(entry);
     }
 
     const search = root.querySelector('.schedule-search');
@@ -192,16 +201,8 @@
       cell.addEventListener('click', activate);
       cell.addEventListener('keydown', (event) => activateOnKey(event, activate));
     });
-    root.querySelectorAll('.day-cell[data-date][data-user-id]').forEach((cell) => {
-      const activate = () => selectPersonDay(cell.dataset.userId, cell.dataset.date);
-      cell.addEventListener('click', (event) => {
-        if (event.target.closest('.entry-bar')) return;
-        activate();
-      });
-      cell.addEventListener('keydown', (event) => {
-        if (event.target.closest('.entry-bar')) return;
-        activateOnKey(event, activate);
-      });
+    root.querySelectorAll('.day-select-btn[data-date][data-user-id]').forEach((button) => {
+      button.addEventListener('click', () => selectPersonDay(button.dataset.userId, button.dataset.date));
     });
     root.querySelectorAll('.entry-bar[data-entry-id]').forEach((button) => {
       const cell = button.closest('.day-cell[data-date][data-user-id]');

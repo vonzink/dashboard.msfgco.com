@@ -345,7 +345,7 @@ input {
 }
 
 .person-cell:focus-visible,
-.day-cell:focus-visible,
+.day-select-btn:focus-visible,
 .entry-bar:focus-visible {
   outline: 3px solid rgba(140, 198, 62, .72);
   outline-offset: -3px;
@@ -393,14 +393,35 @@ input {
   align-items: center;
   gap: 4px;
   padding: 6px;
-  cursor: pointer;
 }
 
 .day-cell.is-today {
   background: rgba(140, 198, 62, .12);
 }
 
+.day-select-btn {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, .76);
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.day-select-btn:hover {
+  border-color: var(--accent);
+  background: rgba(140, 198, 62, .14);
+  color: var(--accent-ink);
+}
+
 .entry-bar {
+  flex: 1 1 auto;
+  min-width: 0;
   display: block;
   width: 100%;
   min-height: 30px;
