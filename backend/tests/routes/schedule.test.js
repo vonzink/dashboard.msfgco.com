@@ -20,7 +20,7 @@ describe('schedule routes', () => {
   let app;
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    db.query.mockReset();
 
     require.cache[dbPath] = {
       id: dbPath,
@@ -100,6 +100,74 @@ describe('schedule routes', () => {
       expect.stringContaining('se.end_date >= ?'),
       ['2026-06-01', '2026-06-30']
     );
+  });
+
+  it('returns presented availability entries with count for a date range', async () => {
+    db.query.mockResolvedValueOnce([
+      [
+        {
+          id: 2,
+          user_id: 99,
+          employee_name: 'Private User',
+          employee_initials: 'PU',
+          employee_role: 'employee',
+          status: 'out',
+          start_date: '2026-06-03',
+          end_date: '2026-06-03',
+          start_time: null,
+          end_time: null,
+          timezone: 'America/Denver',
+          note: 'Private appointment',
+          visibility: 'availability_only',
+          source: 'manual',
+          created_by: 99,
+          updated_by: 99,
+        },
+      ],
+    ]);
+
+    const res = await makeRequest(app, '/api/schedule/availability?start_date=2026-06-01&end_date=2026-06-30');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      count: 1,
+      entries: [
+        expect.objectContaining({
+          id: 2,
+          user_id: 99,
+          status: 'busy',
+          display_label: 'Busy',
+          note: null,
+          private: true,
+        }),
+      ],
+    });
+  });
+
+  it('requires start_date and end_date for schedule entries list', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const res = await makeRequest(app, '/api/schedule/entries');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'start_date and end_date are required',
+      field: undefined,
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('requires start_date and end_date for availability list', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const res = await makeRequest(app, '/api/schedule/availability');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'start_date and end_date are required',
+      field: undefined,
+    });
+    expect(db.query).not.toHaveBeenCalled();
   });
 
   it('lets a user create their own manual entry and returns the inserted id', async () => {
@@ -202,6 +270,101 @@ describe('schedule routes', () => {
     expect(res.status).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Access denied' });
     expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects partial updates that would make merged start_date after end_date', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 5,
+        user_id: 10,
+        status: 'out',
+        start_date: '2026-06-10',
+        end_date: '2026-06-12',
+        start_time: null,
+        end_time: null,
+        timezone: 'America/Denver',
+        note: 'PTO',
+        visibility: 'shared_details',
+        source: 'manual',
+        source_provider: null,
+        source_event_id: null,
+      },
+    ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      start_date: '2026-06-20',
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'end_date must be on or after start_date',
+      field: 'end_date',
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects partial updates that would make merged same-day end_time before start_time', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 5,
+        user_id: 10,
+        status: 'meeting_event',
+        start_date: '2026-06-10',
+        end_date: '2026-06-10',
+        start_time: '13:00:00',
+        end_time: '17:00:00',
+        timezone: 'America/Denver',
+        note: 'Planning',
+        visibility: 'shared_details',
+        source: 'manual',
+        source_provider: null,
+        source_event_id: null,
+      },
+    ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      end_time: '12:00:00',
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'end_time must be after start_time',
+      field: 'end_time',
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows partial updates when persisted date columns are Date objects', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 5,
+          user_id: 10,
+          status: 'remote',
+          start_date: new Date('2026-06-10T00:00:00.000Z'),
+          end_date: new Date('2026-06-12T00:00:00.000Z'),
+          start_time: null,
+          end_time: null,
+          timezone: 'America/Denver',
+          note: 'Old note',
+          visibility: 'shared_details',
+          source: 'manual',
+          source_provider: null,
+          source_event_id: null,
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      note: 'Updated note',
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ success: true });
+    expect(db.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE schedule_entries'),
+      expect.arrayContaining(['2026-06-10', '2026-06-12', 'Updated note'])
+    );
   });
 
   it('lets a manager delete another user schedule entry', async () => {

@@ -84,6 +84,17 @@ function getRows(result) {
   return Array.isArray(result?.[0]) ? result[0] : result;
 }
 
+function requireDateRange(req, res) {
+  if (!req.query.start_date || !req.query.end_date) {
+    res.status(400).json({
+      error: 'start_date and end_date are required',
+      field: undefined,
+    });
+    return false;
+  }
+  return true;
+}
+
 async function fetchEntry(id) {
   const result = await db.query(
     `SELECT ${SELECT_FIELDS}
@@ -142,8 +153,47 @@ function toUpdateValues(entry, userId) {
   ];
 }
 
+function toDateString(value) {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  return value;
+}
+
+function schedulePayloadFromEntry(entry) {
+  return {
+    user_id: entry.user_id,
+    status: entry.status,
+    start_date: toDateString(entry.start_date),
+    end_date: toDateString(entry.end_date),
+    start_time: entry.start_time || null,
+    end_time: entry.end_time || null,
+    timezone: entry.timezone || 'America/Denver',
+    note: entry.note || undefined,
+    visibility: entry.visibility || 'availability_only',
+    source: entry.source || 'manual',
+    source_provider: entry.source_provider || null,
+    source_event_id: entry.source_event_id || undefined,
+  };
+}
+
+function validateMergedEntry(entry, res) {
+  const result = scheduleEntry.safeParse(schedulePayloadFromEntry(entry));
+  if (!result.success) {
+    const firstIssue = result.error.issues[0];
+    res.status(400).json({
+      error: firstIssue.message,
+      field: firstIssue.path.join('.') || undefined,
+    });
+    return null;
+  }
+  return result.data;
+}
+
 router.get('/entries', validateQuery(scheduleEntryQuery), async (req, res, next) => {
   try {
+    if (!requireDateRange(req, res)) return;
+
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
     const rows = getRows(result) || [];
@@ -155,6 +205,8 @@ router.get('/entries', validateQuery(scheduleEntryQuery), async (req, res, next)
 
 router.get('/availability', validateQuery(scheduleEntryQuery), async (req, res, next) => {
   try {
+    if (!requireDateRange(req, res)) return;
+
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
     const rows = getRows(result) || [];
@@ -206,13 +258,17 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
       return;
     }
 
+    const validated = validateMergedEntry(merged, res);
+    if (!validated) return;
+    validated.id = existing.id;
+
     await db.query(
       `UPDATE schedule_entries
        SET user_id = ?, status = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?,
            timezone = ?, note = ?, visibility = ?, source = ?, source_provider = ?,
            source_event_id = ?, updated_by = ?
        WHERE id = ?`,
-      toUpdateValues(merged, getUserId(req))
+      toUpdateValues(validated, getUserId(req))
     );
 
     res.json({ success: true });
