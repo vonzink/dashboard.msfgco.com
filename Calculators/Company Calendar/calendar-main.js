@@ -101,7 +101,7 @@
       timezone: payload.timezone || 'America/Denver',
       note: payload.note || '',
       visibility: payload.visibility,
-      source: payload.source || 'manual',
+      source: 'manual',
     };
   }
 
