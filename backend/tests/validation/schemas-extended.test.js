@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  notification, calendarEvent, scheduleEntry, scheduleEntryUpdate, task, taskUpdate, investor,
+  notification, calendarEvent, scheduleEntry, scheduleEntryUpdate, scheduleEntryQuery, task, taskUpdate, investor,
   contentGenerate, contentItemUpdate, contentTemplate, contentTemplateUpdate,
   contentPublishBatch, guidelineUpload, guidelineSearch,
   handbookSearch, handbookSectionUpdate, handbookSectionCreate,
@@ -130,6 +130,17 @@ describe('scheduleEntry schema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects equal start and end times on the same date', () => {
+    const result = scheduleEntry.safeParse({
+      ...valid,
+      start_date: '2026-06-01',
+      end_date: '2026-06-01',
+      start_time: '09:00',
+      end_time: '09:00',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('scheduleEntryUpdate schema', () => {
@@ -137,8 +148,38 @@ describe('scheduleEntryUpdate schema', () => {
     expect(scheduleEntryUpdate.safeParse({ status: 'remote' }).success).toBe(true);
   });
 
+  it('does not apply create defaults to partial updates', () => {
+    const result = scheduleEntryUpdate.safeParse({ status: 'remote' });
+    expect(result.success).toBe(true);
+    expect(result.data).toEqual({ status: 'remote' });
+  });
+
+  it('rejects equal start and end times on the same date', () => {
+    const result = scheduleEntryUpdate.safeParse({
+      start_date: '2026-06-01',
+      end_date: '2026-06-01',
+      start_time: '09:00',
+      end_time: '09:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects unknown update fields', () => {
     expect(scheduleEntryUpdate.safeParse({ paid_hours: 8 }).success).toBe(false);
+  });
+});
+
+describe('scheduleEntryQuery schema', () => {
+  it('accepts valid schedule query filters', () => {
+    const result = scheduleEntryQuery.safeParse({
+      start_date: '2026-06-01',
+      end_date: '2026-06-30',
+      user_id: '7',
+      status: 'busy',
+      source: 'outlook',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data.user_id).toBe(7);
   });
 });
 

@@ -174,20 +174,29 @@ const scheduleStatuses = ['out', 'remote', 'traveling', 'meeting_event', 'other'
 const scheduleSources = ['manual', 'outlook', 'google'];
 const scheduleVisibility = ['availability_only', 'shared_details'];
 
-const scheduleEntryBase = z.object({
+const scheduleEntryFields = {
   user_id: z.coerce.number().int().positive(),
   status: z.enum(scheduleStatuses),
   start_date: dateString,
   end_date: dateString,
   start_time: timeString.optional().nullable(),
   end_time: timeString.optional().nullable(),
-  timezone: optionalString(80).default('America/Denver'),
+  timezone: optionalString(80),
   note: optionalString(1000),
-  visibility: z.enum(scheduleVisibility).optional().default('availability_only'),
-  source: z.enum(scheduleSources).optional().default('manual'),
+  visibility: z.enum(scheduleVisibility).optional(),
+  source: z.enum(scheduleSources).optional(),
   source_provider: z.enum(['outlook', 'google']).optional().nullable(),
   source_event_id: optionalString(255),
+};
+
+const scheduleEntryBase = z.object({
+  ...scheduleEntryFields,
+  timezone: optionalString(80).default('America/Denver'),
+  visibility: z.enum(scheduleVisibility).optional().default('availability_only'),
+  source: z.enum(scheduleSources).optional().default('manual'),
 });
+
+const scheduleEntryUpdateBase = z.object(scheduleEntryFields);
 
 const scheduleEntry = scheduleEntryBase.strict().superRefine((data, ctx) => {
   if (data.end_date < data.start_date) {
@@ -202,7 +211,7 @@ const scheduleEntry = scheduleEntryBase.strict().superRefine((data, ctx) => {
     data.start_date === data.end_date &&
     data.start_time &&
     data.end_time &&
-    data.end_time < data.start_time
+    data.end_time <= data.start_time
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -212,7 +221,7 @@ const scheduleEntry = scheduleEntryBase.strict().superRefine((data, ctx) => {
   }
 });
 
-const scheduleEntryUpdate = scheduleEntryBase.partial().strict().superRefine((data, ctx) => {
+const scheduleEntryUpdate = scheduleEntryUpdateBase.partial().strict().superRefine((data, ctx) => {
   if (data.end_date && data.start_date && data.end_date < data.start_date) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -227,7 +236,7 @@ const scheduleEntryUpdate = scheduleEntryBase.partial().strict().superRefine((da
     data.start_date === data.end_date &&
     data.start_time &&
     data.end_time &&
-    data.end_time < data.start_time
+    data.end_time <= data.start_time
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
