@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   notification, calendarEvent, scheduleEntry, scheduleEntryUpdate, scheduleEntryQuery, task, taskUpdate, investor,
+  calendarSyncConnectionStart, calendarSyncRun,
   contentGenerate, contentItemUpdate, contentTemplate, contentTemplateUpdate,
   contentPublishBatch, guidelineUpload, guidelineSearch,
   handbookSearch, handbookSectionUpdate, handbookSectionCreate,
@@ -200,6 +201,30 @@ describe('scheduleEntryQuery schema', () => {
       end_date: '2026-03-01',
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('calendar sync schemas', () => {
+  it('accepts a valid sync connection start request', () => {
+    const result = calendarSyncConnectionStart.safeParse({
+      provider: 'outlook',
+      privacy_default: 'availability_only',
+      sync_enabled: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects unsupported providers', () => {
+    const result = calendarSyncConnectionStart.safeParse({
+      provider: 'icloud',
+      privacy_default: 'availability_only',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an on-demand sync run request', () => {
+    const result = calendarSyncRun.safeParse({ provider: 'google' });
+    expect(result.success).toBe(true);
   });
 });
 

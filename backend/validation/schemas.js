@@ -266,6 +266,16 @@ const scheduleEntryQuery = z.object({
   source: z.enum(scheduleSources).optional(),
 }).strict();
 
+const calendarSyncConnectionStart = z.object({
+  provider: z.enum(['outlook', 'google']),
+  privacy_default: z.enum(scheduleVisibility).optional().default('availability_only'),
+  sync_enabled: z.boolean().optional().default(true),
+}).strict();
+
+const calendarSyncRun = z.object({
+  provider: z.enum(['outlook', 'google']).optional(),
+}).strict();
+
 // ── Tasks ──────────────────────────────────
 const task = z.object({
   title: trimmedString(200),
@@ -541,6 +551,8 @@ module.exports = {
   scheduleEntry,
   scheduleEntryUpdate,
   scheduleEntryQuery,
+  calendarSyncConnectionStart,
+  calendarSyncRun,
   task,
   taskUpdate,
   investor,
