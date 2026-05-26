@@ -96,8 +96,8 @@
       status: payload.status,
       start_date: payload.start_date,
       end_date: payload.end_date,
-      start_time: payload.start_time,
-      end_time: payload.end_time,
+      start_time: payload.start_time || null,
+      end_time: payload.end_time || null,
       timezone: payload.timezone || 'America/Denver',
       note: payload.note || '',
       visibility: payload.visibility,
@@ -170,14 +170,25 @@
       CalendarRender.render(app, state, actions);
       restoreEditorFocus();
     },
-    async saveEditor(payload) {
+    async saveEditor(payload = {}) {
       if (state.editorSaving) return;
+      const current = state.editor;
+      if (!current) return;
+      if (!isManualEditableEntry(current)) {
+        showToast('Synced/private entries can only be viewed as availability.', 'info');
+        return;
+      }
+      const editorId = current.id;
+      if (payload.id && String(payload.id) !== String(editorId || '')) {
+        showToast('Schedule entry changed. Please reopen and try again.', 'error');
+        return;
+      }
       state.editorSaving = true;
       CalendarRender.render(app, state, actions);
       try {
         const body = schedulePayloadBody(payload);
-        if (payload.id) {
-          await CalendarApi.updateEntry(payload.id, body);
+        if (editorId) {
+          await CalendarApi.updateEntry(editorId, body);
           showToast('Schedule entry updated.', 'success');
         } else {
           await CalendarApi.createEntry(body);
@@ -195,14 +206,20 @@
     },
     async deleteEntry(id) {
       if (state.editorSaving) return;
-      if (!isManualEditableEntry(state.editor)) {
+      const current = state.editor;
+      if (!current || !current.id) return;
+      if (!isManualEditableEntry(current)) {
         showToast('Synced/private entries can only be viewed as availability.', 'info');
+        return;
+      }
+      if (id && String(id) !== String(current.id)) {
+        showToast('Schedule entry changed. Please reopen and try again.', 'error');
         return;
       }
       state.editorSaving = true;
       CalendarRender.render(app, state, actions);
       try {
-        await CalendarApi.deleteEntry(id);
+        await CalendarApi.deleteEntry(current.id);
         showToast('Schedule entry deleted.', 'success');
         state.editor = null;
         state.editorSaving = false;

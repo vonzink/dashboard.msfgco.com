@@ -43,6 +43,10 @@
     return form.elements[name] ? String(form.elements[name].value || '').trim() : '';
   }
 
+  function optionalTimeValue(form, name) {
+    return fieldValue(form, name) || null;
+  }
+
   function isPrivateEntry(entry) {
     return Boolean(entry && (entry.private || entry.is_private));
   }
@@ -166,8 +170,8 @@
       status: fieldValue(form, 'status'),
       start_date: fieldValue(form, 'start_date'),
       end_date: fieldValue(form, 'end_date'),
-      start_time: fieldValue(form, 'start_time'),
-      end_time: fieldValue(form, 'end_time'),
+      start_time: optionalTimeValue(form, 'start_time'),
+      end_time: optionalTimeValue(form, 'end_time'),
       timezone: 'America/Denver',
       note: fieldValue(form, 'note'),
       visibility: fieldValue(form, 'visibility'),
