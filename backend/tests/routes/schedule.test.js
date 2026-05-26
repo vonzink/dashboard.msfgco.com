@@ -170,6 +170,45 @@ describe('schedule routes', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
+  it('rejects inverted schedule entries list date ranges', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const res = await makeRequest(app, '/api/schedule/entries?start_date=2026-07-01&end_date=2026-06-01');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'end_date must be on or after start_date',
+      field: 'end_date',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects schedule entries list date ranges longer than 370 days', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const res = await makeRequest(app, '/api/schedule/entries?start_date=2026-01-01&end_date=2027-12-31');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'date range must not exceed 370 days',
+      field: 'end_date',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects inverted availability date ranges', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const res = await makeRequest(app, '/api/schedule/availability?start_date=2026-07-01&end_date=2026-06-01');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'end_date must be on or after start_date',
+      field: 'end_date',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it('lets a user create their own manual entry and returns the inserted id', async () => {
     db.query.mockResolvedValueOnce([{ insertId: 123 }]);
 
@@ -270,6 +309,17 @@ describe('schedule routes', () => {
     expect(res.status).toBe(403);
     expect(JSON.parse(res.body)).toEqual({ error: 'Access denied' });
     expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects empty partial updates without running an update', async () => {
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {}, {}, 'PUT');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'At least one field is required',
+      field: undefined,
+    });
+    expect(db.query).not.toHaveBeenCalled();
   });
 
   it('rejects partial updates that would make merged start_date after end_date', async () => {

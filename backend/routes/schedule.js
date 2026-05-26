@@ -22,6 +22,8 @@ const SELECT_FIELDS = `
   u.role AS employee_role
 `;
 
+const MAX_QUERY_RANGE_DAYS = 370;
+
 const EDITABLE_FIELDS = [
   'user_id',
   'status',
@@ -92,6 +94,43 @@ function requireDateRange(req, res) {
     });
     return false;
   }
+
+  const startDate = parseDateOnly(req.query.start_date);
+  const endDate = parseDateOnly(req.query.end_date);
+
+  if (!startDate) {
+    res.status(400).json({
+      error: 'Expected valid YYYY-MM-DD date',
+      field: 'start_date',
+    });
+    return false;
+  }
+
+  if (!endDate) {
+    res.status(400).json({
+      error: 'Expected valid YYYY-MM-DD date',
+      field: 'end_date',
+    });
+    return false;
+  }
+
+  if (endDate < startDate) {
+    res.status(400).json({
+      error: 'end_date must be on or after start_date',
+      field: 'end_date',
+    });
+    return false;
+  }
+
+  const spanDays = (endDate - startDate) / 86400000 + 1;
+  if (spanDays > MAX_QUERY_RANGE_DAYS) {
+    res.status(400).json({
+      error: `date range must not exceed ${MAX_QUERY_RANGE_DAYS} days`,
+      field: 'end_date',
+    });
+    return false;
+  }
+
   return true;
 }
 
@@ -158,6 +197,25 @@ function toDateString(value) {
     return value.toISOString().slice(0, 10);
   }
   return value;
+}
+
+function parseDateOnly(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
 }
 
 function schedulePayloadFromEntry(entry) {
@@ -240,6 +298,13 @@ router.post('/entries', validate(scheduleEntry), async (req, res, next) => {
 
 router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next) => {
   try {
+    if (Object.keys(req.body).length === 0) {
+      return res.status(400).json({
+        error: 'At least one field is required',
+        field: undefined,
+      });
+    }
+
     const existing = await fetchEntry(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Schedule entry not found' });
