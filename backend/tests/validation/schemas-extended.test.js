@@ -120,6 +120,14 @@ describe('scheduleEntry schema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects impossible start dates', () => {
+    expect(scheduleEntry.safeParse({ ...valid, start_date: '2026-02-31' }).success).toBe(false);
+  });
+
+  it('rejects impossible end dates', () => {
+    expect(scheduleEntry.safeParse({ ...valid, end_date: '2026-13-01' }).success).toBe(false);
+  });
+
   it('rejects an end time before the start time on the same date', () => {
     const result = scheduleEntry.safeParse({
       ...valid,
@@ -167,6 +175,10 @@ describe('scheduleEntryUpdate schema', () => {
   it('rejects unknown update fields', () => {
     expect(scheduleEntryUpdate.safeParse({ paid_hours: 8 }).success).toBe(false);
   });
+
+  it('rejects impossible start dates', () => {
+    expect(scheduleEntryUpdate.safeParse({ start_date: '2026-02-31' }).success).toBe(false);
+  });
 });
 
 describe('scheduleEntryQuery schema', () => {
@@ -180,6 +192,14 @@ describe('scheduleEntryQuery schema', () => {
     });
     expect(result.success).toBe(true);
     expect(result.data.user_id).toBe(7);
+  });
+
+  it('rejects impossible query dates', () => {
+    const result = scheduleEntryQuery.safeParse({
+      start_date: '2026-02-31',
+      end_date: '2026-03-01',
+    });
+    expect(result.success).toBe(false);
   });
 });
 

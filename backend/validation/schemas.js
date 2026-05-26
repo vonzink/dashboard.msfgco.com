@@ -5,6 +5,18 @@ const { z } = require('zod');
 const trimmedString = (max) => z.string().trim().min(1).max(max);
 const optionalString = (max) => z.string().trim().max(max).optional().nullable();
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD format');
+const scheduleDateString = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD format')
+  .refine((value) => {
+    const [year, month, day] = value.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }, 'Expected valid YYYY-MM-DD date');
 
 // ── Chat ────────────────────────────────────────
 const chatMessage = z.object({
@@ -177,8 +189,8 @@ const scheduleVisibility = ['availability_only', 'shared_details'];
 const scheduleEntryFields = {
   user_id: z.coerce.number().int().positive(),
   status: z.enum(scheduleStatuses),
-  start_date: dateString,
-  end_date: dateString,
+  start_date: scheduleDateString,
+  end_date: scheduleDateString,
   start_time: timeString.optional().nullable(),
   end_time: timeString.optional().nullable(),
   timezone: optionalString(80),
@@ -247,8 +259,8 @@ const scheduleEntryUpdate = scheduleEntryUpdateBase.partial().strict().superRefi
 });
 
 const scheduleEntryQuery = z.object({
-  start_date: dateString.optional(),
-  end_date: dateString.optional(),
+  start_date: scheduleDateString.optional(),
+  end_date: scheduleDateString.optional(),
   user_id: z.coerce.number().int().positive().optional(),
   status: z.enum(scheduleStatuses).optional(),
   source: z.enum(scheduleSources).optional(),
