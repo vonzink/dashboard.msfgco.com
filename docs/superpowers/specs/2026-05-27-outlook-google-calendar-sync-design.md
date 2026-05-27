@@ -52,7 +52,7 @@ The existing `/api/schedule/sync` route remains the user-facing sync API surface
 
 - `GET /status`: return the current user's provider connection status.
 - `POST /connections/:provider/start`: validate the provider, create a provider OAuth authorization URL, and return it to the browser.
-- `GET /connections/:provider/callback`: validate OAuth state, exchange the code for tokens, store encrypted tokens, and redirect the user back to the calendar.
+- `GET /:provider/callback`: validate OAuth state, exchange the code for tokens, store encrypted tokens, and redirect the user back to the calendar. This matches the registered Outlook redirect URI shape, for example `/api/schedule/sync/outlook/callback`.
 - `POST /run`: run a manual sync for the current user's enabled connection.
 - `POST /connections/:provider/disconnect`: revoke/delete stored provider credentials and disable sync for that provider.
 
