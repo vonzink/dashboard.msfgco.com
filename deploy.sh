@@ -89,6 +89,14 @@ if [ "$DEPLOY_FRONTEND" = true ]; then
     --size-only
 
   echo -e "${GREEN}✓ S3 sync complete${NC}"
+
+  # The bulk sync above uses --size-only for speed, which means a same-length
+  # change (e.g. bumping a ?v=...a cache-buster to ...b) is INVISIBLE to sync
+  # and gets skipped. index.html is the cache-buster anchor for every JS/CSS
+  # asset, so force-upload it every deploy regardless of size.
+  echo -e "${YELLOW}▸ Force-uploading index.html (cache-buster anchor)...${NC}"
+  aws s3 cp index.html "$S3_BUCKET/index.html" --content-type "text/html" >/dev/null
+  echo -e "${GREEN}✓ index.html uploaded${NC}"
   echo ""
 
   echo -e "${YELLOW}▸ Invalidating CloudFront cache...${NC}"
