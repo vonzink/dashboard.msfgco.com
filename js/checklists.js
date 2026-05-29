@@ -1003,6 +1003,7 @@ const Checklists = {
         <div class="cl-template-header">
           <h4>Choose a template to get started</h4>
           <div class="cl-template-actions">
+            <button type="button" class="btn btn-sm btn-outline" data-cl-action="import-checklist" title="Upload a previously exported .md checklist file and load it for this loan"><i class="fas fa-file-import"></i> Import .md File</button>
             <button type="button" class="btn btn-sm btn-outline" data-cl-action="make-from-pdf" title="Upload a PDF (lender conditions, DU findings, etc.) and convert it into a checklist for this file"><i class="fas fa-file-pdf"></i> Make Checklist from PDF</button>
           </div>
         </div>
@@ -1247,7 +1248,7 @@ const Checklists = {
           result.subitems[currentParent].push({
             name: subName,
             status: this._parseStatus(parts[1]),
-            date: parts[2] || null,
+            date: this._normalizeImportDate(parts[2]),
           });
         }
         continue;
@@ -1260,7 +1261,7 @@ const Checklists = {
           result.items.push({
             name,
             status: this._parseStatus(cells[1]),
-            date: cells[2] || null,
+            date: this._normalizeImportDate(cells[2]),
             sort_order: result.items.length,
             subitems: [],
           });
@@ -1277,6 +1278,14 @@ const Checklists = {
     }
 
     return result;
+  },
+
+  // Exported dates may be full ISO timestamps (2026-05-28T00:00:00.000Z) or
+  // already YYYY-MM-DD. Backend requires YYYY-MM-DD; return null otherwise.
+  _normalizeImportDate(str) {
+    if (!str) return null;
+    const m = String(str).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : null;
   },
 
   _parseStatus(str) {
