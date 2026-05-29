@@ -10,6 +10,9 @@ const Checklists = {
   _currentChecklist: null,
   _templates: [],
   _initialized: false,
+  _selectedItemId: null,
+  _pinnedOpen: false,
+  _pinnedPos: null,    // {left, top} when user has dragged the panel
 
   STATUS_OPTIONS: [
     { value: 'not_started', label: 'Not Started', icon: 'fa-circle', cls: 'cl-status-not-started' },
@@ -72,7 +75,17 @@ const Checklists = {
   init() {
     if (this._initialized) return;
     this._initialized = true;
+    // Restore pinned-panel preference
+    try {
+      const raw = localStorage.getItem('clPinned');
+      if (raw) {
+        const saved = JSON.parse(raw);
+        this._pinnedOpen = !!saved.open;
+        this._pinnedPos = saved.pos || null;
+      }
+    } catch {}
     this._bindModalEvents();
+    this._initPinnedPanel();
   },
 
   // ════════════════════════════════════════════════
@@ -331,6 +344,7 @@ const Checklists = {
       'export-checklist':      () => this._exportCurrentChecklist(),
       'import-checklist':      () => this._importChecklist(),
       'show-template-selector':() => this._renderTemplateSelector(),
+      'toggle-pinned':         () => this._togglePinnedPanel(),
     }[action];
 
     if (!handler) return;
@@ -467,6 +481,7 @@ const Checklists = {
     try {
       await ServerAPI.deleteChecklistItem(itemId);
       this._currentChecklist.items = this._currentChecklist.items.filter(i => i.id !== itemId);
+      if (this._selectedItemId === itemId) this._selectedItemId = null;
       this._renderChecklist();
       this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
     } catch (err) { Utils.showToast('Failed to delete', 'error'); }
@@ -720,6 +735,11 @@ const Checklists = {
     el.querySelectorAll('[data-cl-action="set-importance"]').forEach(b => {
       b.classList.toggle('cl-menu-active', b.dataset.clImportance === importance);
     });
+
+    // Mirror the same state into the pinned panel if it's showing this item
+    if (this._pinnedOpen && this._selectedItemId === itemId) {
+      this._renderPinnedPanel();
+    }
   },
 
   _updateSubitemInPlace(subId) {
@@ -789,6 +809,7 @@ const Checklists = {
           <span class="cl-progress-text">${done}/${total} complete (${pct}%)</span>
         </div>
         <div class="cl-toolbar-actions">
+          <button type="button" class="btn btn-sm btn-outline${this._pinnedOpen ? ' cl-pin-active' : ''}" data-cl-action="toggle-pinned" title="Pin a single action menu — click an item to act on it"><i class="fas fa-thumbtack"></i> ${this._pinnedOpen ? 'Unpin' : 'Pin Menu'}</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item" title="Add item"><i class="fas fa-plus"></i> Add</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="export-checklist" title="Export as .md"><i class="fas fa-file-export"></i> Export</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="rename-checklist" title="Rename this checklist"><i class="fas fa-pen"></i></button>
@@ -896,6 +917,14 @@ const Checklists = {
     container.innerHTML = html;
 
     this._bindItemDrag(container);
+
+    // Re-apply selection highlight + sync pinned panel
+    if (this._selectedItemId) {
+      const stillExists = (this._currentChecklist?.items || []).some(i => i.id === this._selectedItemId);
+      if (!stillExists) this._selectedItemId = null;
+    }
+    this._applySelectionHighlight();
+    if (this._pinnedOpen) this._renderPinnedPanel();
   },
 
   _bindItemDrag(container) {
@@ -1902,6 +1931,195 @@ const Checklists = {
     } catch (err) {
       Utils.showToast('Failed: ' + err.message, 'error');
     }
+  },
+
+  // ════════════════════════════════════════════════
+  //  PINNED ACTION PANEL
+  //  One floating, draggable menu that operates on whichever
+  //  checklist item is currently "selected" (clicked). Avoids
+  //  the per-item 3-dot menu when working through many items.
+  // ════════════════════════════════════════════════
+
+  _initPinnedPanel() {
+    const modal = document.getElementById('checklistModal');
+    if (!modal) return;
+    if (document.getElementById('clPinnedPanel')) return; // idempotent
+
+    const panel = document.createElement('div');
+    panel.id = 'clPinnedPanel';
+    panel.className = 'cl-pinned-panel';
+    panel.innerHTML = `
+      <div class="cl-pinned-header">
+        <i class="fas fa-grip-horizontal cl-pinned-grip"></i>
+        <span class="cl-pinned-title">Quick Actions</span>
+        <button type="button" class="cl-pinned-close" data-cl-action="toggle-pinned" title="Unpin"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="cl-pinned-body"></div>
+    `;
+    modal.appendChild(panel);
+
+    // Apply restored position (if any) or sensible default
+    if (this._pinnedPos) {
+      panel.style.left = this._pinnedPos.left + 'px';
+      panel.style.top = this._pinnedPos.top + 'px';
+    }
+    panel.style.display = this._pinnedOpen ? 'block' : 'none';
+
+    this._bindPinnedDrag(panel);
+
+    // Row-click selection — delegated, bound ONCE on persistent #clContent
+    const content = document.getElementById('clContent');
+    if (content) {
+      content.addEventListener('click', (e) => {
+        if (!this._pinnedOpen) return;
+        if (e.target.closest('button, input, .cl-menu-dropdown, .cl-subitem, .cl-note, .cl-subitem-indent')) return;
+        const row = e.target.closest('.cl-item');
+        if (!row) return;
+        const itemId = parseInt(row.dataset.itemId);
+        if (!itemId) return;
+        this._selectItem(itemId);
+      });
+    }
+
+    // First-time render of panel contents
+    if (this._pinnedOpen) this._renderPinnedPanel();
+  },
+
+  _bindPinnedDrag(panel) {
+    const header = panel.querySelector('.cl-pinned-header');
+    if (!header) return;
+    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
+
+    const onDown = (e) => {
+      if (e.target.closest('.cl-pinned-close')) return;
+      dragging = true;
+      const pt = e.touches ? e.touches[0] : e;
+      startX = pt.clientX; startY = pt.clientY;
+      const rect = panel.getBoundingClientRect();
+      origLeft = rect.left; origTop = rect.top;
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+      e.preventDefault();
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      const pt = e.touches ? e.touches[0] : e;
+      const left = Math.max(0, Math.min(window.innerWidth - panel.offsetWidth, origLeft + (pt.clientX - startX)));
+      const top  = Math.max(0, Math.min(window.innerHeight - 40, origTop + (pt.clientY - startY)));
+      panel.style.left = left + 'px';
+      panel.style.top  = top + 'px';
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      this._pinnedPos = { left: parseInt(panel.style.left) || 0, top: parseInt(panel.style.top) || 0 };
+      this._persistPinned();
+    };
+
+    header.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    header.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  },
+
+  _persistPinned() {
+    try {
+      localStorage.setItem('clPinned', JSON.stringify({ open: this._pinnedOpen, pos: this._pinnedPos }));
+    } catch {}
+  },
+
+  _togglePinnedPanel() {
+    this._pinnedOpen = !this._pinnedOpen;
+    const panel = document.getElementById('clPinnedPanel');
+    if (panel) panel.style.display = this._pinnedOpen ? 'block' : 'none';
+    this._persistPinned();
+    if (this._pinnedOpen) this._renderPinnedPanel();
+    else {
+      this._selectedItemId = null;
+      this._applySelectionHighlight();
+    }
+    // Refresh the Pin button label in the toolbar
+    if (this._currentChecklist) this._renderChecklist();
+  },
+
+  _selectItem(itemId) {
+    this._selectedItemId = itemId;
+    this._applySelectionHighlight();
+    this._renderPinnedPanel();
+  },
+
+  _applySelectionHighlight() {
+    const container = document.getElementById('clContent');
+    if (!container) return;
+    container.querySelectorAll('.cl-item.cl-item-selected').forEach(el => el.classList.remove('cl-item-selected'));
+    if (this._selectedItemId) {
+      const el = container.querySelector(`.cl-item[data-item-id="${this._selectedItemId}"]`);
+      if (el) el.classList.add('cl-item-selected');
+    }
+  },
+
+  _renderPinnedPanel() {
+    const panel = document.getElementById('clPinnedPanel');
+    if (!panel) return;
+    const body = panel.querySelector('.cl-pinned-body');
+    const title = panel.querySelector('.cl-pinned-title');
+    if (!body || !title) return;
+
+    const item = this._selectedItemId
+      ? (this._currentChecklist?.items || []).find(i => i.id === this._selectedItemId)
+      : null;
+
+    if (!item) {
+      title.textContent = 'Quick Actions';
+      body.innerHTML = `<div class="cl-pinned-empty"><i class="fas fa-mouse-pointer"></i> Click a checklist item to act on it.</div>`;
+      return;
+    }
+
+    title.textContent = item.name.length > 40 ? item.name.slice(0, 40) + '…' : item.name;
+    title.title = item.name;
+    body.innerHTML = this._itemActionsHtml(item);
+  },
+
+  // Shared two-column action grid — used by both the per-item 3-dot
+  // dropdown and the pinned panel so the two stay in sync.
+  _itemActionsHtml(item) {
+    const importance = item.importance || 'normal';
+    const assignedTo = item.assigned_to || '';
+    const statusBtns = this.STATUS_OPTIONS.map(s =>
+      `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"${s.value === item.status ? ' class="cl-menu-active"' : ''}><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`
+    ).join('');
+    return `
+      <div class="cl-menu-cols">
+        <div class="cl-menu-col">
+          <div class="cl-menu-section-label">Status</div>
+          ${statusBtns}
+          <hr>
+          <div class="cl-menu-section-label">Priority</div>
+          <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Urgent</button>
+          <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Important</button>
+          <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Normal</button>
+        </div>
+        <div class="cl-menu-col">
+          <div class="cl-menu-section-label">Assign To</div>
+          <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="underwriter"${assignedTo === 'underwriter' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user-tie cl-assign-icon-underwriter"></i> Underwriter</button>
+          <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="investor"${assignedTo === 'investor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-landmark cl-assign-icon-investor"></i> Investor</button>
+          <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="title"${assignedTo === 'title' ? ' class="cl-menu-active"' : ''}><i class="fas fa-file-signature cl-assign-icon-title"></i> Title</button>
+          <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="borrower"${assignedTo === 'borrower' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user cl-assign-icon-borrower"></i> Borrower</button>
+          <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="processor"${assignedTo === 'processor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-cogs cl-assign-icon-processor"></i> Processor</button>
+          <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to=""${!assignedTo ? ' class="cl-menu-active"' : ''}><i class="fas fa-times-circle"></i> Unassign</button>
+          <hr>
+          <div class="cl-menu-section-label">Actions</div>
+          <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-check"></i> Set Date</button>
+          <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Due Date</button>
+          <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
+          <button type="button" data-cl-action="add-subitem" data-cl-id="${item.id}"><i class="fas fa-indent"></i> Subitem</button>
+          <button type="button" data-cl-action="add-note" data-cl-id="${item.id}"><i class="fas fa-comment-medical"></i> Call Note</button>
+          <button type="button" data-cl-action="delete-item" data-cl-id="${item.id}" class="cl-menu-danger"><i class="fas fa-trash"></i> Delete</button>
+        </div>
+      </div>
+    `;
   },
 };
 
