@@ -24,6 +24,12 @@ async function getClientName(conn, sourceType, sourceItemId) {
       );
       return rows[0]?.client_name || null;
     }
+    case 'funded': {
+      const [rows] = await conn.query(
+        'SELECT client_name FROM funded_loans WHERE id = ?', [sourceItemId],
+      );
+      return rows[0]?.client_name || null;
+    }
     default:
       return null;
   }

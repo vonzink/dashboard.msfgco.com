@@ -32,15 +32,20 @@ async function requireTemplateAccess(userId, templateId) {
  * Tighten here if/when per-user loan ACLs are introduced.
  */
 async function requireLoanAccess(/* userId, */ sourceType, sourceItemId) {
-  const validSources = ['pipeline', 'pre_approval', 'application'];
-  if (!validSources.includes(sourceType)) {
+  const tableBySource = {
+    pipeline: 'pipeline',
+    application: 'pipeline',
+    pre_approval: 'pre_approvals',
+    funded: 'funded_loans',
+  };
+  const table = tableBySource[sourceType];
+  if (!table) {
     const err = new Error('Invalid source type');
     err.status = 400;
     throw err;
   }
   // For now, just verify the source row exists — prevents IDOR-by-typo where
   // a caller invents an item ID that doesn't map to a real loan.
-  const table = sourceType === 'pre_approval' ? 'pre_approvals' : 'pipeline';
   const [rows] = await db.query(`SELECT id FROM ${table} WHERE id = ?`, [sourceItemId]);
   if (!rows.length) {
     const err = new Error('Loan record not found');

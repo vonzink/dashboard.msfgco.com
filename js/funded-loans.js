@@ -130,6 +130,10 @@ const FundedLoans = {
       this._availableGroups = result.groups || [];
       this._availableBoards = result.boards || [];
 
+      if (typeof Checklists !== 'undefined') {
+        try { await Checklists.loadStatusBadges('funded'); } catch (e) {}
+      }
+
       this._renderTable();
       this._renderSummary();
       this._renderGroupFilter();
@@ -214,17 +218,20 @@ const FundedLoans = {
 
     const cols = this._getVisibleColumns();
 
+    const hasChecklists = typeof Checklists !== 'undefined';
+
     // Update thead
     const thead = document.getElementById('fundedLoansHead');
     if (thead) {
       thead.innerHTML = '<tr>' +
         cols.map(c => '<th>' + Utils.escapeHtml(c.label) + '</th>').join('') +
+        (hasChecklists ? '<th>Checklist</th>' : '') +
         '</tr>';
     }
 
     if (this._data.length === 0) {
       tbody.innerHTML =
-        '<tr><td colspan="' + cols.length + '">' +
+        '<tr><td colspan="' + (cols.length + (hasChecklists ? 1 : 0)) + '">' +
         '<div class="empty-state-enhanced">' +
           '<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">' +
             '<path d="M35 85 L60 40 L85 85 Z" stroke="currentColor" stroke-width="2" fill="none" opacity="0.2"/>' +
@@ -243,16 +250,38 @@ const FundedLoans = {
     }
 
     tbody.innerHTML = this._data.map(loan =>
-      '<tr data-id="' + loan.id + '" class="pa-clickable-row">' + cols.map(c => this._renderCell(loan, c.field)).join('') + '</tr>'
+      '<tr data-id="' + loan.id + '" class="pa-clickable-row">' +
+        cols.map(c => this._renderCell(loan, c.field)).join('') +
+        (hasChecklists ? '<td class="cl-cell">' + Checklists.getStatusBadge('funded', loan.id) + '</td>' : '') +
+      '</tr>'
     ).join('');
 
-    // Bind row click → open detail view
+    // Bind row click → open detail view (ignore clicks on checklist badges)
     tbody.querySelectorAll('.pa-clickable-row').forEach(row => {
-      row.addEventListener('click', () => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.cl-icon-btn')) return;
         var id = parseInt(row.dataset.id);
         this._openDetail(id);
       });
     });
+
+    // Bind checklist badge clicks
+    if (hasChecklists) {
+      tbody.querySelectorAll('.cl-icon-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const itemId = parseInt(btn.dataset.clItem);
+          const row = btn.closest('tr');
+          const clientName = row?.querySelector('strong')?.textContent || '';
+          const checklistId = btn.dataset.clChecklist ? parseInt(btn.dataset.clChecklist) : null;
+          if (checklistId) {
+            Checklists.openById(checklistId, 'funded', itemId, clientName);
+          } else {
+            Checklists.openForNew('funded', itemId, clientName);
+          }
+        });
+      });
+    }
   },
 
   _renderSummary() {
