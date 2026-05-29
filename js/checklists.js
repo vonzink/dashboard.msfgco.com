@@ -189,6 +189,33 @@ const Checklists = {
       this._handleAction(action, id, btn);
     });
 
+    // Toggle the 3-dot item menu — bound ONCE on the persistent #clContent
+    // container (delegation). Binding per-render previously stacked listeners,
+    // making the menu open-then-close itself on alternate clicks.
+    const content = document.getElementById('clContent');
+    if (content) {
+      content.addEventListener('click', (e) => {
+        const trigger = e.target.closest('.cl-menu-trigger');
+        if (!trigger) return;
+        e.stopPropagation();
+        const dd = trigger.nextElementSibling;
+        const wasOpen = dd.classList.contains('open');
+        content.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
+          d.classList.remove('open');
+          d.style.cssText = '';
+        });
+        if (!wasOpen) {
+          const rect = trigger.getBoundingClientRect();
+          dd.style.position = 'fixed';
+          dd.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+          dd.style.top = Math.min(rect.bottom + 4, window.innerHeight - 400) + 'px';
+          dd.style.right = 'auto';
+          dd.classList.add('open');
+          this._bindMenuDrag(dd);
+        }
+      });
+    }
+
     // Persistent delegated handler for closing dropdown menus
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.cl-menu-trigger') && !e.target.closest('.cl-menu-dropdown')) {
@@ -867,28 +894,6 @@ const Checklists = {
 
     html += '</div>';
     container.innerHTML = html;
-
-    // Toggle menus — floating draggable panel
-    container.addEventListener('click', (e) => {
-      const trigger = e.target.closest('.cl-menu-trigger');
-      if (!trigger) return;
-      e.stopPropagation();
-      const dd = trigger.nextElementSibling;
-      const wasOpen = dd.classList.contains('open');
-      container.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
-        d.classList.remove('open');
-        d.style.cssText = '';
-      });
-      if (!wasOpen) {
-        const rect = trigger.getBoundingClientRect();
-        dd.style.position = 'fixed';
-        dd.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
-        dd.style.top = Math.min(rect.bottom + 4, window.innerHeight - 400) + 'px';
-        dd.style.right = 'auto';
-        dd.classList.add('open');
-        this._bindMenuDrag(dd);
-      }
-    });
 
     this._bindItemDrag(container);
   },
