@@ -774,22 +774,40 @@
   .cl-tpl-item-main .cl-select { width: 100%; }
 }
 
-/* ── Pinned action panel ───────────────────── */
+/* ── Action menu panel (dock or float modes) ───────── */
 .cl-pinned-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  font-size: 0.85rem;
+  display: none;
+}
+/* DOCK mode — locked across the top of the modal body, full width */
+.cl-pinned-panel.cl-pinned-dock {
+  position: relative;
+  width: 100%;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border-color);
+  max-height: 45vh;
+  z-index: 5;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-pinned-header { cursor: default; }
+/* FLOAT mode — detached, draggable, floats anywhere on screen */
+.cl-pinned-panel.cl-pinned-float {
   position: fixed;
-  top: 120px;
+  top: 140px;
   right: 24px;
   width: 380px;
   max-height: 70vh;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: 0 12px 36px rgba(0,0,0,0.5);
   z-index: 10001;
-  display: none;
-  overflow: hidden;
-  font-size: 0.85rem;
 }
+.cl-pinned-panel.cl-pinned-float .cl-pinned-header { cursor: grab; }
+.cl-pinned-panel.cl-pinned-float .cl-pinned-header:active { cursor: grabbing; }
 .cl-pinned-header {
   display: flex;
   align-items: center;
@@ -797,11 +815,20 @@
   padding: 8px 12px;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-tertiary, rgba(255,255,255,0.02));
-  cursor: grab;
   user-select: none;
 }
-.cl-pinned-header:active { cursor: grabbing; }
 .cl-pinned-grip { color: var(--text-muted); font-size: 0.75rem; }
+.cl-pinned-panel.cl-pinned-dock .cl-pinned-grip { display: none; }
+.cl-pinned-mode {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.cl-pinned-mode:hover { background: var(--bg-hover); color: var(--text-primary); }
 .cl-pinned-title {
   flex: 1;
   font-weight: 600;
@@ -821,10 +848,11 @@
 }
 .cl-pinned-close:hover { background: var(--bg-hover); color: var(--text-primary); }
 .cl-pinned-body {
-  max-height: calc(70vh - 44px);
   overflow-y: auto;
   padding: 4px 0;
 }
+.cl-pinned-panel.cl-pinned-float .cl-pinned-body { max-height: calc(70vh - 44px); }
+.cl-pinned-panel.cl-pinned-dock  .cl-pinned-body { max-height: calc(45vh - 44px); }
 .cl-pinned-body .cl-menu-cols { display: flex; gap: 0; }
 .cl-pinned-body .cl-menu-col { flex: 1; min-width: 0; padding: 4px 0; }
 .cl-pinned-body .cl-menu-col + .cl-menu-col { border-left: 1px solid var(--border-color); }

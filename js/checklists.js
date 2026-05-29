@@ -12,7 +12,8 @@ const Checklists = {
   _initialized: false,
   _selectedItemId: null,
   _pinnedOpen: false,
-  _pinnedPos: null,    // {left, top} when user has dragged the panel
+  _pinnedMode: 'dock', // 'dock' (locked across top) | 'float' (draggable)
+  _pinnedPos: null,    // {left, top} when in float mode
 
   STATUS_OPTIONS: [
     { value: 'not_started', label: 'Not Started', icon: 'fa-circle', cls: 'cl-status-not-started' },
@@ -81,6 +82,7 @@ const Checklists = {
       if (raw) {
         const saved = JSON.parse(raw);
         this._pinnedOpen = !!saved.open;
+        this._pinnedMode = saved.mode === 'float' ? 'float' : 'dock';
         this._pinnedPos = saved.pos || null;
       }
     } catch {}
@@ -345,6 +347,7 @@ const Checklists = {
       'import-checklist':      () => this._importChecklist(),
       'show-template-selector':() => this._renderTemplateSelector(),
       'toggle-pinned':         () => this._togglePinnedPanel(),
+      'toggle-pinned-mode':    () => this._togglePinnedMode(),
     }[action];
 
     if (!handler) return;
@@ -809,7 +812,7 @@ const Checklists = {
           <span class="cl-progress-text">${done}/${total} complete (${pct}%)</span>
         </div>
         <div class="cl-toolbar-actions">
-          <button type="button" class="btn btn-sm btn-outline${this._pinnedOpen ? ' cl-pin-active' : ''}" data-cl-action="toggle-pinned" title="Pin a single action menu — click an item to act on it"><i class="fas fa-thumbtack"></i> ${this._pinnedOpen ? 'Unpin' : 'Pin Menu'}</button>
+          <button type="button" class="btn btn-sm btn-outline${this._pinnedOpen ? ' cl-pin-active' : ''}" data-cl-action="toggle-pinned" title="Show/hide the action menu — click an item to act on it"><i class="fas fa-bars"></i> ${this._pinnedOpen ? 'Hide Menu' : 'Menu'}</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="add-item" title="Add item"><i class="fas fa-plus"></i> Add</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="export-checklist" title="Export as .md"><i class="fas fa-file-export"></i> Export</button>
           <button type="button" class="btn btn-sm btn-outline" data-cl-action="rename-checklist" title="Rename this checklist"><i class="fas fa-pen"></i></button>
@@ -1945,41 +1948,40 @@ const Checklists = {
     if (!modal) return;
     if (document.getElementById('clPinnedPanel')) return; // idempotent
 
+    const modalBox = modal.querySelector('.cl-modal');
+    const content = document.getElementById('clContent');
+    if (!modalBox || !content) return;
+
     const panel = document.createElement('div');
     panel.id = 'clPinnedPanel';
     panel.className = 'cl-pinned-panel';
     panel.innerHTML = `
       <div class="cl-pinned-header">
         <i class="fas fa-grip-horizontal cl-pinned-grip"></i>
-        <span class="cl-pinned-title">Quick Actions</span>
-        <button type="button" class="cl-pinned-close" data-cl-action="toggle-pinned" title="Unpin"><i class="fas fa-times"></i></button>
+        <span class="cl-pinned-title">Menu</span>
+        <button type="button" class="cl-pinned-mode" data-cl-action="toggle-pinned-mode" title="Detach (float) / Dock to top"><i class="fas fa-thumbtack"></i></button>
+        <button type="button" class="cl-pinned-close" data-cl-action="toggle-pinned" title="Hide menu"><i class="fas fa-times"></i></button>
       </div>
       <div class="cl-pinned-body"></div>
     `;
-    modal.appendChild(panel);
+    // Dock the panel above #clContent inside the modal box.
+    modalBox.insertBefore(panel, content);
 
-    // Apply restored position (if any) or sensible default
-    if (this._pinnedPos) {
-      panel.style.left = this._pinnedPos.left + 'px';
-      panel.style.top = this._pinnedPos.top + 'px';
-    }
+    this._applyPinnedMode(panel);
     panel.style.display = this._pinnedOpen ? 'block' : 'none';
 
     this._bindPinnedDrag(panel);
 
     // Row-click selection — delegated, bound ONCE on persistent #clContent
-    const content = document.getElementById('clContent');
-    if (content) {
-      content.addEventListener('click', (e) => {
-        if (!this._pinnedOpen) return;
-        if (e.target.closest('button, input, .cl-menu-dropdown, .cl-subitem, .cl-note, .cl-subitem-indent')) return;
-        const row = e.target.closest('.cl-item');
-        if (!row) return;
-        const itemId = parseInt(row.dataset.itemId);
-        if (!itemId) return;
-        this._selectItem(itemId);
-      });
-    }
+    content.addEventListener('click', (e) => {
+      if (!this._pinnedOpen) return;
+      if (e.target.closest('button, input, .cl-menu-dropdown, .cl-subitem, .cl-note, .cl-subitem-indent')) return;
+      const row = e.target.closest('.cl-item');
+      if (!row) return;
+      const itemId = parseInt(row.dataset.itemId);
+      if (!itemId) return;
+      this._selectItem(itemId);
+    });
 
     // First-time render of panel contents
     if (this._pinnedOpen) this._renderPinnedPanel();
@@ -1991,7 +1993,9 @@ const Checklists = {
     let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
 
     const onDown = (e) => {
-      if (e.target.closest('.cl-pinned-close')) return;
+      // Drag only works in float mode; ignore button clicks.
+      if (this._pinnedMode !== 'float') return;
+      if (e.target.closest('.cl-pinned-close, .cl-pinned-mode')) return;
       dragging = true;
       const pt = e.touches ? e.touches[0] : e;
       startX = pt.clientX; startY = pt.clientY;
@@ -2024,9 +2028,47 @@ const Checklists = {
     document.addEventListener('touchend', onUp);
   },
 
+  _applyPinnedMode(panel) {
+    panel = panel || document.getElementById('clPinnedPanel');
+    if (!panel) return;
+    if (this._pinnedMode === 'float') {
+      panel.classList.add('cl-pinned-float');
+      panel.classList.remove('cl-pinned-dock');
+      // Restore (or default) floating position
+      const pos = this._pinnedPos || { left: window.innerWidth - 420, top: 140 };
+      panel.style.left = pos.left + 'px';
+      panel.style.top = pos.top + 'px';
+      panel.style.right = 'auto';
+      panel.style.bottom = 'auto';
+    } else {
+      panel.classList.add('cl-pinned-dock');
+      panel.classList.remove('cl-pinned-float');
+      // Clear inline positioning so CSS takes over
+      panel.style.left = '';
+      panel.style.top = '';
+      panel.style.right = '';
+      panel.style.bottom = '';
+    }
+    // Update mode-toggle button icon/title
+    const modeBtn = panel.querySelector('.cl-pinned-mode i');
+    const modeBtnWrap = panel.querySelector('.cl-pinned-mode');
+    if (modeBtn) modeBtn.className = this._pinnedMode === 'float' ? 'fas fa-thumbtack' : 'fas fa-up-right-from-square';
+    if (modeBtnWrap) modeBtnWrap.title = this._pinnedMode === 'float' ? 'Dock to top' : 'Detach (drag anywhere)';
+  },
+
+  _togglePinnedMode() {
+    this._pinnedMode = this._pinnedMode === 'float' ? 'dock' : 'float';
+    this._applyPinnedMode();
+    this._persistPinned();
+  },
+
   _persistPinned() {
     try {
-      localStorage.setItem('clPinned', JSON.stringify({ open: this._pinnedOpen, pos: this._pinnedPos }));
+      localStorage.setItem('clPinned', JSON.stringify({
+        open: this._pinnedOpen,
+        mode: this._pinnedMode,
+        pos: this._pinnedPos,
+      }));
     } catch {}
   },
 
