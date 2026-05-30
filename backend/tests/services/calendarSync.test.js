@@ -172,3 +172,49 @@ describe('calendar sync OAuth state', () => {
     expect(params).toEqual([42, 'outlook', 'state-value']);
   });
 });
+
+describe('Outlook provider adapter', () => {
+  beforeEach(() => {
+    vi.stubEnv('OUTLOOK_CLIENT_ID', 'client-id');
+    vi.stubEnv('OUTLOOK_TENANT_ID', 'tenant-id');
+    vi.stubEnv('OUTLOOK_CLIENT_SECRET', 'client-secret');
+    vi.stubEnv('OUTLOOK_REDIRECT_URI', 'https://api.msfgco.com/api/schedule/sync/outlook/callback');
+  });
+
+  it('builds an Outlook authorization URL with state and delegated scopes', () => {
+    const { buildAuthorizationUrl } = require('../../services/calendarSync/providers/outlook');
+    const url = new URL(buildAuthorizationUrl('state-123'));
+
+    expect(url.origin).toBe('https://login.microsoftonline.com');
+    expect(url.pathname).toBe('/tenant-id/oauth2/v2.0/authorize');
+    expect(url.searchParams.get('client_id')).toBe('client-id');
+    expect(url.searchParams.get('response_type')).toBe('code');
+    expect(url.searchParams.get('redirect_uri')).toBe('https://api.msfgco.com/api/schedule/sync/outlook/callback');
+    expect(url.searchParams.get('state')).toBe('state-123');
+    expect(url.searchParams.get('scope')).toContain('Calendars.ReadWrite');
+    expect(url.searchParams.get('scope')).toContain('offline_access');
+  });
+
+  it('filters Outlook free and cancelled events', () => {
+    const { normalizeOutlookEvents } = require('../../services/calendarSync/providers/outlook');
+    const events = normalizeOutlookEvents([
+      { id: 'busy-1', showAs: 'busy', isCancelled: false, start: { dateTime: '2026-06-01T09:00:00' }, end: { dateTime: '2026-06-01T10:00:00' } },
+      { id: 'free-1', showAs: 'free', isCancelled: false, start: { dateTime: '2026-06-01T11:00:00' }, end: { dateTime: '2026-06-01T12:00:00' } },
+      { id: 'cancelled-1', showAs: 'busy', isCancelled: true, start: { dateTime: '2026-06-01T13:00:00' }, end: { dateTime: '2026-06-01T14:00:00' } },
+    ], { user_id: 7, provider: 'outlook', privacy_default: 'availability_only' });
+
+    expect(events.map((event) => event.source_event_id)).toEqual(['busy-1']);
+  });
+
+  it('maps Outlook availability states to MSFG statuses', () => {
+    const { normalizeOutlookEvents } = require('../../services/calendarSync/providers/outlook');
+    const events = normalizeOutlookEvents([
+      { id: 'ooo', showAs: 'outOfOffice', start: { dateTime: '2026-06-01T09:00:00' }, end: { dateTime: '2026-06-01T10:00:00' } },
+      { id: 'elsewhere', showAs: 'workingElsewhere', start: { dateTime: '2026-06-01T11:00:00' }, end: { dateTime: '2026-06-01T12:00:00' } },
+      { id: 'tentative', showAs: 'tentative', start: { dateTime: '2026-06-01T13:00:00' }, end: { dateTime: '2026-06-01T14:00:00' } },
+    ], { user_id: 7, provider: 'outlook', privacy_default: 'availability_only' });
+
+    expect(events.map((event) => event.status)).toEqual(['out', 'remote', 'meeting_event']);
+    expect(events.every((event) => event.note === null)).toBe(true);
+  });
+});
