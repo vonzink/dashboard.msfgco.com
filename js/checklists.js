@@ -1972,6 +1972,18 @@ const Checklists = {
 
     this._bindPinnedDrag(panel);
 
+    // Action dispatch — bind directly on the panel so it works in BOTH
+    // dock mode (panel inside modal) and float mode (panel reparented to
+    // document.body, outside the modal's click delegation).
+    panel.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-cl-action]');
+      if (!btn) return;
+      e.stopPropagation();
+      const action = btn.dataset.clAction;
+      const id = btn.dataset.clId;
+      this._handleAction(action, id, btn);
+    });
+
     // Row-click selection — delegated, bound ONCE on persistent #clContent
     content.addEventListener('click', (e) => {
       if (!this._pinnedOpen) return;
