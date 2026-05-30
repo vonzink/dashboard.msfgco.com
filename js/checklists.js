@@ -204,42 +204,8 @@ const Checklists = {
       this._handleAction(action, id, btn);
     });
 
-    // Toggle the 3-dot item menu — bound ONCE on the persistent #clContent
-    // container (delegation). Binding per-render previously stacked listeners,
-    // making the menu open-then-close itself on alternate clicks.
-    const content = document.getElementById('clContent');
-    if (content) {
-      content.addEventListener('click', (e) => {
-        const trigger = e.target.closest('.cl-menu-trigger');
-        if (!trigger) return;
-        e.stopPropagation();
-        const dd = trigger.nextElementSibling;
-        const wasOpen = dd.classList.contains('open');
-        content.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
-          d.classList.remove('open');
-          d.style.cssText = '';
-        });
-        if (!wasOpen) {
-          const rect = trigger.getBoundingClientRect();
-          dd.style.position = 'fixed';
-          dd.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
-          dd.style.top = Math.min(rect.bottom + 4, window.innerHeight - 400) + 'px';
-          dd.style.right = 'auto';
-          dd.classList.add('open');
-          this._bindMenuDrag(dd);
-        }
-      });
-    }
-
-    // Persistent delegated handler for closing dropdown menus
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.cl-menu-trigger') && !e.target.closest('.cl-menu-dropdown')) {
-        modal.querySelectorAll('.cl-menu-dropdown.open').forEach(d => {
-          d.classList.remove('open');
-          d.style.cssText = '';
-        });
-      }
-    });
+    // (The legacy per-item 3-dot dropdown was removed — the docked/floating
+    // pinned Menu panel is the single action surface now.)
 
     this._bindDragHandle();
   },
@@ -277,44 +243,6 @@ const Checklists = {
     header.addEventListener('touchstart', onDown, { passive: false });
     document.addEventListener('touchmove', onMove, { passive: false });
     document.addEventListener('touchend', onUp);
-  },
-
-  _menuDragState: null,
-  _menuDragBound: false,
-  _bindMenuDrag(dd) {
-    // Single set of document listeners, shared across all menus
-    if (!this._menuDragBound) {
-      this._menuDragBound = true;
-      const st = () => this._menuDragState;
-
-      document.addEventListener('mousemove', (e) => {
-        const s = st(); if (!s) return;
-        s.dd.style.left = (s.origLeft + e.clientX - s.startX) + 'px';
-        s.dd.style.top = (s.origTop + e.clientY - s.startY) + 'px';
-      });
-      document.addEventListener('mouseup', () => { this._menuDragState = null; });
-      document.addEventListener('touchmove', (e) => {
-        const s = st(); if (!s) return;
-        const pt = e.touches[0];
-        s.dd.style.left = (s.origLeft + pt.clientX - s.startX) + 'px';
-        s.dd.style.top = (s.origTop + pt.clientY - s.startY) + 'px';
-      }, { passive: false });
-      document.addEventListener('touchend', () => { this._menuDragState = null; });
-    }
-
-    const grip = dd.querySelector('.cl-menu-grip');
-    if (!grip) return;
-    grip.onmousedown = (e) => {
-      this._menuDragState = { dd, startX: e.clientX, startY: e.clientY,
-        origLeft: parseInt(dd.style.left) || 0, origTop: parseInt(dd.style.top) || 0 };
-      e.preventDefault();
-    };
-    grip.ontouchstart = (e) => {
-      const pt = e.touches[0];
-      this._menuDragState = { dd, startX: pt.clientX, startY: pt.clientY,
-        origLeft: parseInt(dd.style.left) || 0, origTop: parseInt(dd.style.top) || 0 };
-      e.preventDefault();
-    };
   },
 
   // ════════════════════════════════════════════════
@@ -842,40 +770,6 @@ const Checklists = {
             <div class="cl-item-actions">
               ${dueDateStr ? `<span class="cl-item-due-date${overdue ? ' cl-item-due-date-overdue' : ''}" title="Due ${dueDateStr}${overdue ? ' (overdue)' : ''}"><i class="fas fa-hourglass-half"></i> ${dueDateStr}</span>` : ''}
               ${dateStr ? `<span class="cl-item-date" title="Completed ${dateStr}">${dateStr}</span>` : ''}
-              <div class="cl-item-menu">
-                <button type="button" class="cl-menu-trigger" title="Actions"><i class="fas fa-ellipsis-v"></i></button>
-                <div class="cl-menu-dropdown">
-                  <div class="cl-menu-grip"><i class="fas fa-grip-horizontal"></i></div>
-                  <div class="cl-menu-cols">
-                    <div class="cl-menu-col">
-                      <div class="cl-menu-section-label">Status</div>
-                      ${this.STATUS_OPTIONS.map(s => `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"${s.value === item.status ? ' class="cl-menu-active"' : ''}><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`).join('')}
-                      <hr>
-                      <div class="cl-menu-section-label">Priority</div>
-                      <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="urgent"${importance === 'urgent' ? ' class="cl-menu-active"' : ''}><i class="fas fa-fire cl-imp-icon-urgent"></i> Urgent</button>
-                      <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="important"${importance === 'important' ? ' class="cl-menu-active"' : ''}><i class="fas fa-flag cl-imp-icon-important"></i> Important</button>
-                      <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Normal</button>
-                    </div>
-                    <div class="cl-menu-col">
-                      <div class="cl-menu-section-label">Assign To</div>
-                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="underwriter"${assignedTo === 'underwriter' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user-tie cl-assign-icon-underwriter"></i> Underwriter</button>
-                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="investor"${assignedTo === 'investor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-landmark cl-assign-icon-investor"></i> Investor</button>
-                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="title"${assignedTo === 'title' ? ' class="cl-menu-active"' : ''}><i class="fas fa-file-signature cl-assign-icon-title"></i> Title</button>
-                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="borrower"${assignedTo === 'borrower' ? ' class="cl-menu-active"' : ''}><i class="fas fa-user cl-assign-icon-borrower"></i> Borrower</button>
-                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="processor"${assignedTo === 'processor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-cogs cl-assign-icon-processor"></i> Processor</button>
-                      <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to=""${!assignedTo ? ' class="cl-menu-active"' : ''}><i class="fas fa-times-circle"></i> Unassign</button>
-                      <hr>
-                      <div class="cl-menu-section-label">Actions</div>
-                      <button type="button" data-cl-action="set-date" data-cl-id="${item.id}"><i class="fas fa-calendar-check"></i> Set Date</button>
-                      <button type="button" data-cl-action="set-due-date" data-cl-id="${item.id}"><i class="fas fa-hourglass-half"></i> Due Date</button>
-                      <button type="button" data-cl-action="edit-item" data-cl-id="${item.id}"><i class="fas fa-pencil-alt"></i> Edit</button>
-                      <button type="button" data-cl-action="add-subitem" data-cl-id="${item.id}"><i class="fas fa-indent"></i> Subitem</button>
-                      <button type="button" data-cl-action="add-note" data-cl-id="${item.id}"><i class="fas fa-comment-medical"></i> Call Note</button>
-                      <button type="button" data-cl-action="delete-item" data-cl-id="${item.id}" class="cl-menu-danger"><i class="fas fa-trash"></i> Delete</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
             </div>
           </div>`;
 

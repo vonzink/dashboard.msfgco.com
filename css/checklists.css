@@ -362,62 +362,8 @@
   font-family: inherit;
 }
 
-/* ── Context menu ──────────────────────────── */
-.cl-item-menu { position: relative; }
-.cl-menu-trigger {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px 6px;
-  font-size: 0.8rem;
-  border-radius: 4px;
-}
-.cl-menu-trigger:hover { background: var(--bg-hover); color: var(--text-primary); }
-
-.cl-menu-dropdown {
-  display: none;
-  position: fixed;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  min-width: 190px;
-  padding: 4px 0;
-  z-index: 10000;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-}
-.cl-menu-dropdown.open { display: block; }
-.cl-menu-grip {
-  display: flex;
-  justify-content: center;
-  padding: 3px 0 2px;
-  cursor: grab;
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  border-bottom: 1px solid var(--border-color);
-  margin-bottom: 2px;
-  user-select: none;
-}
-.cl-menu-grip:active { cursor: grabbing; }
-.cl-menu-dropdown button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 12px;
-  border: none;
-  background: none;
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  text-align: left;
-}
-.cl-menu-dropdown button:hover { background: var(--bg-hover); }
-.cl-menu-dropdown hr {
-  border: none;
-  border-top: 1px solid var(--border-color);
-  margin: 4px 0;
-}
+/* (Legacy per-item 3-dot dropdown styles removed — the pinned Menu panel
+   is the single action surface now. Shared menu styles live below.) */
 .cl-menu-danger { color: var(--status-danger) !important; }
 
 /* Two-column menu layout */
@@ -782,9 +728,13 @@
   font-size: 0.85rem;
   display: none;
 }
-/* DOCK mode — locked across the top of the modal body, full width */
+/* DOCK mode — locked across the top of the modal body, full width.
+   Critical: .cl-modal is `display: flex; flex-direction: column`, and
+   .cl-modal-body has `flex: 1`. Without flex-shrink: 0 the body squashes
+   the panel down to a sliver — which clips the menu buttons. */
 .cl-pinned-panel.cl-pinned-dock {
   position: relative;
+  flex-shrink: 0;
   width: 100%;
   border-left: 0;
   border-right: 0;
