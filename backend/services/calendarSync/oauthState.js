@@ -5,20 +5,21 @@ function getRows(result) {
   return Array.isArray(result?.[0]) ? result[0] : result;
 }
 
-function createStateValue() {
-  return crypto.randomBytes(32).toString('base64url');
+function getAffectedRows(result) {
+  const summary = Array.isArray(result) ? result[0] : result;
+  return summary?.affectedRows || 0;
 }
 
-function stateExpiry() {
-  return new Date(Date.now() + 10 * 60 * 1000);
+function createStateValue() {
+  return crypto.randomBytes(32).toString('base64url');
 }
 
 async function storeOAuthState(userId, provider, state) {
   await db.query(
     `UPDATE calendar_sync_connections
-     SET oauth_state = ?, oauth_state_expires_at = ?
+     SET oauth_state = ?, oauth_state_expires_at = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)
      WHERE user_id = ? AND provider = ?`,
-    [state, stateExpiry(), userId, provider]
+    [state, userId, provider]
   );
 }
 
@@ -35,14 +36,14 @@ async function consumeOAuthState(provider, state) {
 
   if (!connection) return null;
 
-  await db.query(
+  const updateResult = await db.query(
     `UPDATE calendar_sync_connections
      SET oauth_state = NULL, oauth_state_expires_at = NULL
-     WHERE id = ?`,
-    [connection.id]
+     WHERE id = ? AND provider = ? AND oauth_state = ? AND oauth_state_expires_at > UTC_TIMESTAMP()`,
+    [connection.id, provider, state]
   );
 
-  return connection;
+  return getAffectedRows(updateResult) > 0 ? connection : null;
 }
 
 module.exports = {

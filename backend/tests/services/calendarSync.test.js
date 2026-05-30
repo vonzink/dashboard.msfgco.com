@@ -5,10 +5,43 @@ import { normalizeOutlookEvent } from '../../services/calendarSync/providers/out
 import { normalizeGoogleEvent } from '../../services/calendarSync/providers/google';
 
 const require = createRequire(import.meta.url);
+const dbConnectionModulePath = require.resolve('../../db/connection');
+const oauthStateModulePath = require.resolve('../../services/calendarSync/oauthState');
+
+function normalizeSql(sql) {
+  return sql.replace(/\s+/g, ' ').trim();
+}
+
+function loadOAuthStateWithDb(mockDb) {
+  const originalConnectionModule = require.cache[dbConnectionModulePath];
+  delete require.cache[oauthStateModulePath];
+  require.cache[dbConnectionModulePath] = {
+    id: dbConnectionModulePath,
+    filename: dbConnectionModulePath,
+    loaded: true,
+    exports: mockDb,
+  };
+
+  return {
+    oauthState: require('../../services/calendarSync/oauthState'),
+    restore() {
+      delete require.cache[oauthStateModulePath];
+      if (originalConnectionModule) {
+        require.cache[dbConnectionModulePath] = originalConnectionModule;
+      } else {
+        delete require.cache[dbConnectionModulePath];
+      }
+    },
+  };
+}
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('calendar sync token crypto', () => {
   beforeEach(() => {
-    process.env.CALENDAR_SYNC_ENCRYPTION_KEY = Buffer.alloc(32, 'a').toString('base64');
+    vi.stubEnv('CALENDAR_SYNC_ENCRYPTION_KEY', Buffer.alloc(32, 'a').toString('base64'));
   });
 
   it('round trips encrypted tokens', () => {
@@ -55,11 +88,11 @@ describe('provider event normalization', () => {
 
 describe('calendar sync configuration', () => {
   beforeEach(() => {
-    process.env.OUTLOOK_CLIENT_ID = 'client-id';
-    process.env.OUTLOOK_TENANT_ID = 'tenant-id';
-    process.env.OUTLOOK_CLIENT_SECRET = 'client-secret';
-    process.env.OUTLOOK_REDIRECT_URI = 'https://api.msfgco.com/api/schedule/sync/outlook/callback';
-    process.env.GOOGLE_CALENDAR_SYNC_ENABLED = 'false';
+    vi.stubEnv('OUTLOOK_CLIENT_ID', 'client-id');
+    vi.stubEnv('OUTLOOK_TENANT_ID', 'tenant-id');
+    vi.stubEnv('OUTLOOK_CLIENT_SECRET', 'client-secret');
+    vi.stubEnv('OUTLOOK_REDIRECT_URI', 'https://api.msfgco.com/api/schedule/sync/outlook/callback');
+    vi.stubEnv('GOOGLE_CALENDAR_SYNC_ENABLED', 'false');
   });
 
   it('builds Outlook config from environment variables', () => {
@@ -79,7 +112,63 @@ describe('calendar sync configuration', () => {
     const window = getSyncWindow(new Date('2026-05-27T12:00:00.000Z'));
     expect(window.startDate).toBe('2026-04-27');
     expect(window.endDate).toBe('2026-11-23');
-    expect(window.startDateTime).toBe('2026-04-27T00:00:00.000Z');
-    expect(window.endDateTime).toBe('2026-11-23T23:59:59.999Z');
+    expect(window.startDateTime).toBe('2026-04-27T06:00:00.000Z');
+    expect(window.endDateTime).toBe('2026-11-24T06:59:59.999Z');
+  });
+
+  it('uses the Mountain local calendar date near UTC day rollover', () => {
+    const { getSyncWindow } = require('../../services/calendarSync/window');
+    const window = getSyncWindow(new Date('2026-05-28T03:30:00.000Z'));
+    expect(window.startDate).toBe('2026-04-27');
+    expect(window.endDate).toBe('2026-11-23');
+    expect(window.startDateTime).toBe('2026-04-27T06:00:00.000Z');
+    expect(window.endDateTime).toBe('2026-11-24T06:59:59.999Z');
+  });
+});
+
+describe('calendar sync OAuth state', () => {
+  it('stores OAuth state with a database UTC expiry', async () => {
+    const mockDb = {
+      query: vi.fn().mockResolvedValue({ affectedRows: 1 }),
+    };
+    const { oauthState, restore } = loadOAuthStateWithDb(mockDb);
+
+    try {
+      await oauthState.storeOAuthState(7, 'outlook', 'state-value');
+    } finally {
+      restore();
+    }
+
+    expect(mockDb.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = mockDb.query.mock.calls[0];
+    expect(normalizeSql(sql)).toContain(
+      'SET oauth_state = ?, oauth_state_expires_at = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 10 MINUTE)'
+    );
+    expect(params).toEqual(['state-value', 7, 'outlook']);
+  });
+
+  it('returns null when guarded OAuth state consumption loses the update race', async () => {
+    const connection = { id: 42, user_id: 7, provider: 'outlook' };
+    const mockDb = {
+      query: vi.fn()
+        .mockResolvedValueOnce([[connection]])
+        .mockResolvedValueOnce({ affectedRows: 0 }),
+    };
+    const { oauthState, restore } = loadOAuthStateWithDb(mockDb);
+    let consumed;
+
+    try {
+      consumed = await oauthState.consumeOAuthState('outlook', 'state-value');
+    } finally {
+      restore();
+    }
+
+    expect(consumed).toBeNull();
+    expect(mockDb.query).toHaveBeenCalledTimes(2);
+    const [sql, params] = mockDb.query.mock.calls[1];
+    expect(normalizeSql(sql)).toContain(
+      'WHERE id = ? AND provider = ? AND oauth_state = ? AND oauth_state_expires_at > UTC_TIMESTAMP()'
+    );
+    expect(params).toEqual([42, 'outlook', 'state-value']);
   });
 });
