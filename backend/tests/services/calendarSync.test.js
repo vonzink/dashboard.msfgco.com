@@ -1,7 +1,10 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createRequire } from 'module';
 import { encryptToken, decryptToken } from '../../services/calendarSync/tokenCrypto';
 import { normalizeOutlookEvent } from '../../services/calendarSync/providers/outlook';
 import { normalizeGoogleEvent } from '../../services/calendarSync/providers/google';
+
+const require = createRequire(import.meta.url);
 
 describe('calendar sync token crypto', () => {
   beforeEach(() => {
@@ -47,5 +50,36 @@ describe('provider event normalization', () => {
     expect(event.end_time).toBe('10:00:00');
     expect(event.source).toBe('google');
     expect(event.source_event_id).toBe('google-1');
+  });
+});
+
+describe('calendar sync configuration', () => {
+  beforeEach(() => {
+    process.env.OUTLOOK_CLIENT_ID = 'client-id';
+    process.env.OUTLOOK_TENANT_ID = 'tenant-id';
+    process.env.OUTLOOK_CLIENT_SECRET = 'client-secret';
+    process.env.OUTLOOK_REDIRECT_URI = 'https://api.msfgco.com/api/schedule/sync/outlook/callback';
+    process.env.GOOGLE_CALENDAR_SYNC_ENABLED = 'false';
+  });
+
+  it('builds Outlook config from environment variables', () => {
+    const { getOutlookConfig, isProviderEnabled } = require('../../services/calendarSync/config');
+    expect(getOutlookConfig()).toEqual(expect.objectContaining({
+      clientId: 'client-id',
+      tenantId: 'tenant-id',
+      clientSecret: 'client-secret',
+      redirectUri: 'https://api.msfgco.com/api/schedule/sync/outlook/callback',
+    }));
+    expect(isProviderEnabled('outlook')).toBe(true);
+    expect(isProviderEnabled('google')).toBe(false);
+  });
+
+  it('computes the default import window', () => {
+    const { getSyncWindow } = require('../../services/calendarSync/window');
+    const window = getSyncWindow(new Date('2026-05-27T12:00:00.000Z'));
+    expect(window.startDate).toBe('2026-04-27');
+    expect(window.endDate).toBe('2026-11-23');
+    expect(window.startDateTime).toBe('2026-04-27T00:00:00.000Z');
+    expect(window.endDateTime).toBe('2026-11-23T23:59:59.999Z');
   });
 });
