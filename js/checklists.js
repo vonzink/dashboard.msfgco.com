@@ -1246,31 +1246,30 @@ const Checklists = {
       const wrap = document.createElement('div');
       wrap.className = 'cl-prompt-overlay';
       wrap.innerHTML = `
-        <div class="cl-prompt">
+        <div class="cl-prompt cl-prompt-wide">
           <div class="cl-prompt-header"><strong>${Utils.escapeHtml(title)}</strong></div>
-          <input type="text" class="cl-prompt-input" value="${Utils.escapeHtml(defaultValue || '')}" placeholder="${Utils.escapeHtml(placeholder || '')}" />
+          <textarea class="cl-prompt-input cl-prompt-textarea" rows="5" placeholder="${Utils.escapeHtml(placeholder || '')}">${Utils.escapeHtml(defaultValue || '')}</textarea>
+          <div class="cl-prompt-hint">Cmd/Ctrl + Enter to save · Esc to cancel</div>
           <div class="cl-prompt-actions">
             <button type="button" class="btn btn-sm btn-outline" data-cl-cancel>Cancel</button>
             <button type="button" class="btn btn-sm btn-primary" data-cl-save>OK</button>
           </div>
         </div>`;
       document.body.appendChild(wrap);
-      const input = wrap.querySelector('input');
+      const input = wrap.querySelector('textarea');
       input.focus();
       input.select();
       const cleanup = (val) => { wrap.remove(); resolve(val); };
-      wrap.querySelector('[data-cl-cancel]').addEventListener('click', () => cleanup(null));
-      wrap.querySelector('[data-cl-save]').addEventListener('click', () => {
+      const submit = () => {
         const v = input.value.trim();
         cleanup(v || null);
-      });
+      };
+      wrap.querySelector('[data-cl-cancel]').addEventListener('click', () => cleanup(null));
+      wrap.querySelector('[data-cl-save]').addEventListener('click', submit);
       wrap.addEventListener('click', (e) => { if (e.target === wrap) cleanup(null); });
       input.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') cleanup(null);
-        if (e.key === 'Enter') {
-          const v = input.value.trim();
-          cleanup(v || null);
-        }
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
       });
     });
   },

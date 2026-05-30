@@ -562,6 +562,15 @@
   font-size: var(--font-sm);
 }
 .cl-prompt-input:focus { outline: none; border-color: var(--green-bright); box-shadow: var(--focus-ring); }
+.cl-prompt-wide { max-width: 640px; }
+.cl-prompt-textarea {
+  min-height: 120px;
+  max-height: 60vh;
+  resize: vertical;
+  line-height: 1.4;
+  font-family: inherit;
+}
+.cl-prompt-hint { font-size: 0.7rem; color: var(--text-muted); margin-top: -4px; }
 .cl-prompt-actions { display: flex; justify-content: flex-end; gap: 0.35rem; }
 
 .cl-choice-options { display: flex; flex-direction: column; gap: 0.35rem; }
