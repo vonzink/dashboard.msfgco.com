@@ -2031,18 +2031,36 @@ const Checklists = {
   _applyPinnedMode(panel) {
     panel = panel || document.getElementById('clPinnedPanel');
     if (!panel) return;
+    const modalBox = document.querySelector('#checklistModal .cl-modal');
+    const content = document.getElementById('clContent');
+
     if (this._pinnedMode === 'float') {
       panel.classList.add('cl-pinned-float');
       panel.classList.remove('cl-pinned-dock');
-      // Restore (or default) floating position
-      const pos = this._pinnedPos || { left: window.innerWidth - 420, top: 140 };
-      panel.style.left = pos.left + 'px';
-      panel.style.top = pos.top + 'px';
+      // The modal box uses CSS transform for drag, which traps position:fixed
+      // descendants in the modal's coordinate space. Reparent to body so float
+      // mode actually escapes to the viewport.
+      if (panel.parentElement !== document.body) document.body.appendChild(panel);
+      // Restore (or default) floating position — clamp to viewport so a stale
+      // saved position can never park the panel off-screen.
+      let { left, top } = this._pinnedPos || {};
+      if (typeof left !== 'number' || typeof top !== 'number') {
+        left = Math.max(20, window.innerWidth - 420);
+        top = 140;
+      }
+      left = Math.max(0, Math.min(window.innerWidth - 200, left));
+      top = Math.max(0, Math.min(window.innerHeight - 80, top));
+      panel.style.left = left + 'px';
+      panel.style.top = top + 'px';
       panel.style.right = 'auto';
       panel.style.bottom = 'auto';
     } else {
       panel.classList.add('cl-pinned-dock');
       panel.classList.remove('cl-pinned-float');
+      // Reparent back into the modal above #clContent
+      if (modalBox && content && panel.parentElement !== modalBox) {
+        modalBox.insertBefore(panel, content);
+      }
       // Clear inline positioning so CSS takes over
       panel.style.left = '';
       panel.style.top = '';
@@ -2052,7 +2070,7 @@ const Checklists = {
     // Update mode-toggle button icon/title
     const modeBtn = panel.querySelector('.cl-pinned-mode i');
     const modeBtnWrap = panel.querySelector('.cl-pinned-mode');
-    if (modeBtn) modeBtn.className = this._pinnedMode === 'float' ? 'fas fa-thumbtack' : 'fas fa-up-right-from-square';
+    if (modeBtn) modeBtn.className = this._pinnedMode === 'float' ? 'fas fa-window-maximize' : 'fas fa-thumbtack';
     if (modeBtnWrap) modeBtnWrap.title = this._pinnedMode === 'float' ? 'Dock to top' : 'Detach (drag anywhere)';
   },
 

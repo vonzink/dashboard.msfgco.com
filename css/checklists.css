@@ -852,7 +852,52 @@
   padding: 4px 0;
 }
 .cl-pinned-panel.cl-pinned-float .cl-pinned-body { max-height: calc(70vh - 44px); }
-.cl-pinned-panel.cl-pinned-dock  .cl-pinned-body { max-height: calc(45vh - 44px); }
+.cl-pinned-panel.cl-pinned-dock  .cl-pinned-body { max-height: 30vh; padding: 4px 8px; }
+
+/* Compact horizontal layout in dock mode — sections stack vertically but
+   each section's buttons sit inline as pills. */
+.cl-pinned-panel.cl-pinned-dock .cl-menu-cols { display: block; }
+.cl-pinned-panel.cl-pinned-dock .cl-menu-col {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-menu-col + .cl-menu-col {
+  border-left: none;
+  border-top: 1px solid var(--border-color);
+}
+.cl-pinned-panel.cl-pinned-dock .cl-menu-section-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 0 6px 0 0;
+  margin-right: 2px;
+  flex: 0 0 auto;
+  min-width: 64px;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-pinned-body button {
+  width: auto;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary, transparent);
+  gap: 4px;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-pinned-body button:hover {
+  background: var(--bg-hover);
+}
+.cl-pinned-panel.cl-pinned-dock .cl-pinned-body button.cl-menu-active {
+  background: var(--green-bright);
+  color: #0a1f08;
+  border-color: var(--green-bright);
+  font-weight: 600;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-pinned-body hr { display: none; }
 .cl-pinned-body .cl-menu-cols { display: flex; gap: 0; }
 .cl-pinned-body .cl-menu-col { flex: 1; min-width: 0; padding: 4px 0; }
 .cl-pinned-body .cl-menu-col + .cl-menu-col { border-left: 1px solid var(--border-color); }
