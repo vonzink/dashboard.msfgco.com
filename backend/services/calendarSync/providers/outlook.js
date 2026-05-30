@@ -3,7 +3,7 @@ const { getOutlookConfig } = require('../config');
 const { getSyncWindow } = require('../window');
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
-const IMPORTABLE_SHOW_AS = new Set(['busy', 'tentative', 'outOfOffice', 'workingElsewhere']);
+const IMPORTABLE_SHOW_AS = new Set(['busy', 'tentative', 'oof', 'workingElsewhere']);
 
 function dateParts(value) {
   const text = String(value || '');
@@ -15,7 +15,7 @@ function dateParts(value) {
 }
 
 function outlookStatus(showAs) {
-  if (showAs === 'outOfOffice') return 'out';
+  if (showAs === 'oof') return 'out';
   if (showAs === 'workingElsewhere') return 'remote';
   if (showAs === 'tentative') return 'meeting_event';
   return 'busy';
@@ -26,21 +26,41 @@ function isImportableEvent(event) {
   return IMPORTABLE_SHOW_AS.has(event.showAs || 'busy');
 }
 
+function addDays(date, days) {
+  const [year, month, day] = String(date || '').split('-').map(Number);
+  if (!year || !month || !day) return null;
+
+  const value = new Date(Date.UTC(year, month - 1, day) + days * 24 * 60 * 60 * 1000);
+  return value.toISOString().slice(0, 10);
+}
+
+function inclusiveAllDayEndDate(startDate, endDate) {
+  if (!endDate || endDate <= startDate) return startDate;
+  return addDays(endDate, -1) || startDate;
+}
+
+function canIncludeSubject(event, visibility) {
+  if (visibility !== 'shared_details') return false;
+  return !event.sensitivity || event.sensitivity === 'normal';
+}
+
 function normalizeOutlookEvent(event, connection) {
   const start = dateParts(event.start?.dateTime);
   const end = dateParts(event.end?.dateTime);
   const visibility = connection.privacy_default || 'availability_only';
-  const shared = visibility === 'shared_details';
+  const endDate = event.isAllDay
+    ? inclusiveAllDayEndDate(start.date, end.date)
+    : end.date || start.date;
 
   return {
     user_id: connection.user_id,
     status: outlookStatus(event.showAs || 'busy'),
     start_date: start.date,
-    end_date: end.date || start.date,
+    end_date: endDate,
     start_time: event.isAllDay ? null : start.time,
     end_time: event.isAllDay ? null : end.time,
     timezone: event.start?.timeZone || 'America/Denver',
-    note: shared ? (event.subject || null) : null,
+    note: canIncludeSubject(event, visibility) ? (event.subject || null) : null,
     visibility,
     source: 'outlook',
     source_provider: 'outlook',
@@ -129,6 +149,9 @@ async function accessTokenFor(connection) {
   if (tokenExpired(connection) && connection.encrypted_refresh_token) {
     const refreshed = await refreshTokens(connection);
     Object.assign(connection, refreshed);
+    if (typeof connection.persistRefreshedTokens === 'function') {
+      await connection.persistRefreshedTokens(refreshed);
+    }
   }
 
   return decryptToken(connection.encrypted_access_token);
@@ -181,7 +204,7 @@ async function listEvents(connection, syncWindow = getSyncWindow()) {
 }
 
 function showAsForEntry(entry) {
-  if (entry.status === 'out') return 'outOfOffice';
+  if (entry.status === 'out') return 'oof';
   if (entry.status === 'remote') return 'workingElsewhere';
   return 'busy';
 }
@@ -192,7 +215,7 @@ function outlookEventPayload(entry) {
     ? `${entry.start_date}T00:00:00`
     : `${entry.start_date}T${entry.start_time || '00:00:00'}`;
   const endDateTime = isAllDay
-    ? `${entry.end_date}T23:59:59`
+    ? `${addDays(entry.end_date || entry.start_date, 1)}T00:00:00`
     : `${entry.end_date}T${entry.end_time || entry.start_time || '23:59:59'}`;
 
   return {
@@ -236,6 +259,7 @@ module.exports = {
   listEvents,
   normalizeOutlookEvent,
   normalizeOutlookEvents,
+  outlookEventPayload,
   refreshTokens,
   updateEvent,
 };

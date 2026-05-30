@@ -37,6 +37,7 @@ function loadOAuthStateWithDb(mockDb) {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe('calendar sync token crypto', () => {
@@ -209,12 +210,122 @@ describe('Outlook provider adapter', () => {
   it('maps Outlook availability states to MSFG statuses', () => {
     const { normalizeOutlookEvents } = require('../../services/calendarSync/providers/outlook');
     const events = normalizeOutlookEvents([
-      { id: 'ooo', showAs: 'outOfOffice', start: { dateTime: '2026-06-01T09:00:00' }, end: { dateTime: '2026-06-01T10:00:00' } },
+      { id: 'ooo', showAs: 'oof', start: { dateTime: '2026-06-01T09:00:00' }, end: { dateTime: '2026-06-01T10:00:00' } },
       { id: 'elsewhere', showAs: 'workingElsewhere', start: { dateTime: '2026-06-01T11:00:00' }, end: { dateTime: '2026-06-01T12:00:00' } },
       { id: 'tentative', showAs: 'tentative', start: { dateTime: '2026-06-01T13:00:00' }, end: { dateTime: '2026-06-01T14:00:00' } },
     ], { user_id: 7, provider: 'outlook', privacy_default: 'availability_only' });
 
     expect(events.map((event) => event.status)).toEqual(['out', 'remote', 'meeting_event']);
     expect(events.every((event) => event.note === null)).toBe(true);
+  });
+
+  it('normalizes Graph oof events as out availability', () => {
+    const { normalizeOutlookEvents } = require('../../services/calendarSync/providers/outlook');
+    const events = normalizeOutlookEvents([
+      { id: 'oof-1', showAs: 'oof', isCancelled: false, start: { dateTime: '2026-06-01T09:00:00' }, end: { dateTime: '2026-06-01T10:00:00' } },
+    ], { user_id: 7, provider: 'outlook', privacy_default: 'availability_only' });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual(expect.objectContaining({
+      status: 'out',
+      source_event_id: 'oof-1',
+    }));
+  });
+
+  it('converts all-day Graph exclusive end dates to inclusive MSFG end dates', () => {
+    const { normalizeOutlookEvents } = require('../../services/calendarSync/providers/outlook');
+    const events = normalizeOutlookEvents([
+      {
+        id: 'all-day-1',
+        showAs: 'busy',
+        isAllDay: true,
+        start: { dateTime: '2026-06-01T00:00:00' },
+        end: { dateTime: '2026-06-02T00:00:00' },
+      },
+    ], { user_id: 7, provider: 'outlook', privacy_default: 'availability_only' });
+
+    expect(events[0]).toEqual(expect.objectContaining({
+      start_date: '2026-06-01',
+      end_date: '2026-06-01',
+      start_time: null,
+      end_time: null,
+    }));
+  });
+
+  it('suppresses private Outlook subjects even when shared details are enabled', () => {
+    const { normalizeOutlookEvents } = require('../../services/calendarSync/providers/outlook');
+    const events = normalizeOutlookEvents([
+      { id: 'private-1', subject: 'Private detail', sensitivity: 'private', showAs: 'busy', start: { dateTime: '2026-06-01T09:00:00' }, end: { dateTime: '2026-06-01T10:00:00' } },
+      { id: 'normal-1', subject: 'Shareable detail', sensitivity: 'normal', showAs: 'busy', start: { dateTime: '2026-06-01T11:00:00' }, end: { dateTime: '2026-06-01T12:00:00' } },
+    ], { user_id: 7, provider: 'outlook', privacy_default: 'shared_details' });
+
+    expect(events.map((event) => event.note)).toEqual([null, 'Shareable detail']);
+  });
+
+  it('exports all-day entries with Graph exclusive next-day midnight end dates', () => {
+    const { outlookEventPayload } = require('../../services/calendarSync/providers/outlook');
+    const payload = outlookEventPayload({
+      status: 'out',
+      start_date: '2026-06-01',
+      end_date: '2026-06-01',
+      start_time: null,
+      end_time: null,
+      timezone: 'America/Denver',
+      visibility: 'availability_only',
+    });
+
+    expect(payload.isAllDay).toBe(true);
+    expect(payload.showAs).toBe('oof');
+    expect(payload.start.dateTime).toBe('2026-06-01T00:00:00');
+    expect(payload.end.dateTime).toBe('2026-06-02T00:00:00');
+  });
+
+  it('persists refreshed token fields before continuing Graph requests', async () => {
+    vi.stubEnv('CALENDAR_SYNC_ENCRYPTION_KEY', Buffer.alloc(32, 'a').toString('base64'));
+    const { getAccountEmail } = require('../../services/calendarSync/providers/outlook');
+    const calls = [];
+    const persistRefreshedTokens = vi.fn(async () => {
+      calls.push('persist');
+    });
+    const fetchMock = vi.fn(async (url) => {
+      if (String(url).includes('/oauth2/v2.0/token')) {
+        calls.push('refresh');
+        return {
+          ok: true,
+          json: async () => ({
+            access_token: 'new-access-token',
+            refresh_token: 'new-refresh-token',
+            expires_in: 3600,
+            scope: 'offline_access User.Read Calendars.ReadWrite',
+          }),
+        };
+      }
+
+      calls.push('graph');
+      return {
+        ok: true,
+        json: async () => ({ mail: 'user@msfg.us' }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const email = await getAccountEmail({
+      user_id: 7,
+      provider: 'outlook',
+      provider_account_email: null,
+      encrypted_access_token: encryptToken('old-access-token'),
+      encrypted_refresh_token: encryptToken('old-refresh-token'),
+      access_token_expires_at: new Date(Date.now() - 60_000),
+      persistRefreshedTokens,
+    });
+
+    expect(email).toBe('user@msfg.us');
+    expect(persistRefreshedTokens).toHaveBeenCalledTimes(1);
+    const refreshed = persistRefreshedTokens.mock.calls[0][0];
+    expect(decryptToken(refreshed.encrypted_access_token)).toBe('new-access-token');
+    expect(decryptToken(refreshed.encrypted_refresh_token)).toBe('new-refresh-token');
+    expect(refreshed.scopes).toBe('offline_access User.Read Calendars.ReadWrite');
+    expect(calls).toEqual(['refresh', 'persist', 'graph']);
+    expect(fetchMock.mock.calls[1][1].headers.authorization).toBe('Bearer new-access-token');
   });
 });
