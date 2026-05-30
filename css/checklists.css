@@ -813,19 +813,24 @@
 .cl-pinned-panel.cl-pinned-float .cl-pinned-body { max-height: calc(70vh - 44px); }
 .cl-pinned-panel.cl-pinned-dock  .cl-pinned-body { max-height: 30vh; padding: 4px 8px; }
 
-/* Compact horizontal layout in dock mode — sections stack vertically but
-   each section's buttons sit inline as pills. */
+/* Compact horizontal layout in dock mode — each section is its own row
+   with the category label aligned to a fixed left column, buttons flowing
+   to the right. All four labels (Status, Priority, Assign To, Actions)
+   line up vertically. */
 .cl-pinned-panel.cl-pinned-dock .cl-menu-cols { display: block; }
-.cl-pinned-panel.cl-pinned-dock .cl-menu-col {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 0;
-}
+.cl-pinned-panel.cl-pinned-dock .cl-menu-col { padding: 2px 0; }
 .cl-pinned-panel.cl-pinned-dock .cl-menu-col + .cl-menu-col {
   border-left: none;
   border-top: 1px solid var(--border-color);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-menu-section {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
 }
 .cl-pinned-panel.cl-pinned-dock .cl-menu-section-label {
   font-size: 0.62rem;
@@ -833,10 +838,14 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-muted);
-  padding: 0 6px 0 0;
-  margin-right: 2px;
-  flex: 0 0 auto;
-  min-width: 64px;
+  text-align: left;
+  padding: 0;
+  margin: 0;
+}
+.cl-pinned-panel.cl-pinned-dock .cl-menu-section-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 .cl-pinned-panel.cl-pinned-dock .cl-pinned-body button {
   width: auto;
