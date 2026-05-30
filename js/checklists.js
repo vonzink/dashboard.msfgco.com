@@ -174,6 +174,9 @@ const Checklists = {
     modal.setAttribute('aria-hidden', 'false');
     document.getElementById('clModalTitle').textContent = clientName ? `Checklist — ${clientName}` : 'Loan Checklist';
     document.getElementById('clContent').innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+    // Restore pinned-menu visibility if user had it open last time
+    const panel = document.getElementById('clPinnedPanel');
+    if (panel && this._pinnedOpen) panel.style.display = 'block';
   },
 
   close() {
@@ -184,9 +187,14 @@ const Checklists = {
     }
     this._currentSource = null;
     this._currentChecklist = null;
+    this._selectedItemId = null;
     this._dragOffset = { x: 0, y: 0 };
     const modalBox = document.querySelector('#checklistModal .cl-modal');
     if (modalBox) modalBox.style.transform = '';
+    // Hide the pinned menu too — in float mode it lives in document.body
+    // and would otherwise linger on screen after the checklist closes.
+    const panel = document.getElementById('clPinnedPanel');
+    if (panel) panel.style.display = 'none';
   },
 
   _bindModalEvents() {
