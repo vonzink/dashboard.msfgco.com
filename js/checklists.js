@@ -1227,23 +1227,11 @@ const Checklists = {
     return m ? m[1] : null;
   },
 
-  _parseStatus(str) {
-    if (!str) return 'not_started';
-    const lower = str.toLowerCase().trim();
-    if (lower === 'done') return 'done';
-    if (lower === 'in progress' || lower === 'in_progress') return 'in_progress';
-    if (lower === 'submitted') return 'submitted';
-    if (lower === 'incomplete') return 'incomplete';
-    if (lower === 'issue') return 'issue';
-    if (lower === 'n/a' || lower === 'na') return 'na';
-    if (lower === 'not started' || lower === 'not_started') return 'not_started';
-    return 'not_started';
-  },
-
-  _statusLabel(status) {
-    const map = { not_started: 'Not Started', in_progress: 'In Progress', submitted: 'Submitted', done: 'Done', incomplete: 'Incomplete', issue: 'Issue', na: 'N/A' };
-    return map[status] || 'Not Started';
-  },
+  // Format/status helpers — extracted to js/checklists/format.js.
+  // Thin wrappers preserve existing `this._fmtDate(...)` / `this._isOverdue(...)`
+  // call sites scattered through this file.
+  _parseStatus(str)     { return ChecklistFormat.parseStatus(str); },
+  _statusLabel(status)  { return ChecklistFormat.statusLabel(status); },
 
   // ════════════════════════════════════════════════
   //  INLINE PROMPT HELPERS (replace native prompt/confirm)
@@ -1263,59 +1251,15 @@ const Checklists = {
   },
 
   // ════════════════════════════════════════════════
-  //  HELPERS
+  //  HELPERS — most delegate to ChecklistFormat / ChecklistDialogs
   // ════════════════════════════════════════════════
-  _nextStatus(current) {
-    const order = ['not_started', 'in_progress', 'submitted', 'done'];
-    const idx = order.indexOf(current);
-    if (idx < 0) return 'not_started';
-    return order[(idx + 1) % order.length];
-  },
-
-  _todayISO() {
-    const d = new Date();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${d.getFullYear()}-${m}-${day}`;
-  },
-
-  _promptNoteBody(item) {
-    return ChecklistDialogs.promptNoteBody(item);
-  },
-
-  _fmtDateTime(value) {
-    if (!value) return '';
-    const d = (value instanceof Date) ? value : new Date(value);
-    if (isNaN(d.getTime())) return String(value);
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    const yy = String(d.getFullYear()).slice(2);
-    let h = d.getHours();
-    const min = String(d.getMinutes()).padStart(2, '0');
-    const am = h < 12 ? 'AM' : 'PM';
-    h = h % 12 || 12;
-    return `${mm}/${dd}/${yy} ${h}:${min} ${am}`;
-  },
-
-  _fmtDate(dateStr) {
-    if (!dateStr) return '';
-    const parts = String(dateStr).slice(0, 10).split('-');
-    if (parts.length === 3) {
-      const [y, m, d] = parts;
-      return `${m}/${d}/${y.slice(2)}`;
-    }
-    return dateStr;
-  },
-
-  _isOverdue(dueDateStr) {
-    if (!dueDateStr) return false;
-    const today = this._todayISO();
-    return String(dueDateStr).slice(0, 10) < today;
-  },
-
-  _pickDate(anchorEl, currentISO, cb) {
-    return ChecklistDialogs.pickDate(anchorEl, currentISO, cb);
-  },
+  _nextStatus(current)               { return ChecklistFormat.nextStatus(current); },
+  _todayISO()                        { return ChecklistFormat.todayISO(); },
+  _fmtDateTime(value)                { return ChecklistFormat.fmtDateTime(value); },
+  _fmtDate(dateStr)                  { return ChecklistFormat.fmtDate(dateStr); },
+  _isOverdue(dueDateStr)             { return ChecklistFormat.isOverdue(dueDateStr); },
+  _promptNoteBody(item)              { return ChecklistDialogs.promptNoteBody(item); },
+  _pickDate(anchorEl, currentISO, cb){ return ChecklistDialogs.pickDate(anchorEl, currentISO, cb); },
 
   _findItem(id) {
     return (this._currentChecklist?.items || []).find(i => i.id === id);
