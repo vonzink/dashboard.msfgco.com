@@ -187,6 +187,14 @@
         showToast(err.message || 'Unable to disconnect calendar.', 'error');
       }
     },
+    openSyncSettings() {
+      state.syncSettingsOpen = true;
+      CalendarRender.render(app, state, actions);
+    },
+    closeSyncSettings() {
+      state.syncSettingsOpen = false;
+      CalendarRender.render(app, state, actions);
+    },
     setSearch(value) {
       const active = document.activeElement;
       const shouldRestoreSearch = active && active.classList && active.classList.contains('schedule-search');

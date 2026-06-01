@@ -75,6 +75,7 @@
           <button class="nav-btn" type="button" data-cal-action="today">Today</button>
         </div>
         <div class="schedule-controls">
+          ${window.CalendarSync ? window.CalendarSync.renderTrigger(state) : ''}
           <button class="primary-btn" type="button" data-cal-action="add" data-action="new-entry">Add Schedule</button>
         </div>
       </header>

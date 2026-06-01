@@ -49,6 +49,7 @@
       hiddenStatuses: new Set(),
       selectedUserId: null,
       syncConnections: [],
+      syncSettingsOpen: false,
       editor: null,
       editorSaving: false,
       editorReturnFocus: null,

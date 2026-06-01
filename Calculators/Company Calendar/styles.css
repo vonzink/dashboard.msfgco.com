@@ -602,16 +602,32 @@ button.detail-entry:hover {
   color: var(--ink-dim);
 }
 
+.sync-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 890;
+  display: grid;
+  align-items: start;
+  justify-items: end;
+  overflow-y: auto;
+  padding: 82px 18px 18px;
+  background: rgba(36, 48, 46, .36);
+}
+
 .sync-panel {
-  margin-top: 16px;
+  width: min(540px, calc(100vw - 36px));
   padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: 0 24px 70px rgba(16, 69, 71, .22);
 }
 
 .sync-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 12px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--line-soft);
@@ -780,6 +796,17 @@ button.detail-entry:hover {
   box-shadow: 0 0 0 3px rgba(140, 198, 62, .18);
 }
 
+.sync-settings-trigger {
+  flex: 0 0 auto;
+}
+
+.sync-settings-trigger svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .editor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -910,6 +937,16 @@ button.detail-entry:hover {
   .editor-backdrop {
     align-items: stretch;
     padding: 10px;
+  }
+
+  .sync-settings-backdrop {
+    align-items: stretch;
+    justify-items: stretch;
+    padding: 10px;
+  }
+
+  .sync-panel {
+    width: 100%;
   }
 
   .editor-grid {

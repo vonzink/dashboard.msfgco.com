@@ -68,23 +68,68 @@
     `;
   }
 
-  function render(state) {
+  function renderTrigger(state) {
+    const connectedCount = (state.syncConnections || []).filter(isConnected).length;
+    const label = connectedCount
+      ? `Calendar connection settings, ${connectedCount} connected`
+      : 'Calendar connection settings';
+
     return `
-      <section class="sync-panel" aria-label="Optional calendar sync">
-        <div class="sync-head">
-          <div>
-            <p class="detail-eyebrow">Optional Sync</p>
-            <h2>Calendar Connections</h2>
+      <button
+        class="icon-btn sync-settings-trigger"
+        type="button"
+        data-sync-settings-toggle
+        aria-label="${escapeHtml(label)}"
+        aria-expanded="${state.syncSettingsOpen ? 'true' : 'false'}"
+        title="Calendar connection settings"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+          <path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.4-2.4 1a8 8 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.6A8 8 0 0 0 7 6.6l-2.4-1-2 3.4 2 1.5a10 10 0 0 0 0 3l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a8 8 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.5ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"></path>
+        </svg>
+      </button>
+    `;
+  }
+
+  function render(state) {
+    if (!state.syncSettingsOpen) return '';
+
+    return `
+      <div class="sync-settings-backdrop" data-sync-settings-backdrop>
+        <section class="sync-panel" role="dialog" aria-modal="true" aria-labelledby="syncSettingsTitle">
+          <div class="sync-head">
+            <div>
+              <p class="detail-eyebrow">Optional Sync</p>
+              <h2 id="syncSettingsTitle">Calendar Connections</h2>
+            </div>
+            <button class="icon-btn" type="button" data-sync-settings-close aria-label="Close calendar connection settings">&times;</button>
           </div>
-        </div>
-        <div class="sync-list">
-          ${providers().map((provider) => renderProvider(state, provider)).join('')}
-        </div>
-      </section>
+          <div class="sync-list">
+            ${providers().map((provider) => renderProvider(state, provider)).join('')}
+          </div>
+        </section>
+      </div>
     `;
   }
 
   function bind(root, _state, actions) {
+    root.querySelectorAll('[data-sync-settings-toggle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (actions.openSyncSettings) actions.openSyncSettings();
+      });
+    });
+
+    root.querySelectorAll('[data-sync-settings-close]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (actions.closeSyncSettings) actions.closeSyncSettings();
+      });
+    });
+
+    root.querySelectorAll('[data-sync-settings-backdrop]').forEach((backdrop) => {
+      backdrop.addEventListener('click', (event) => {
+        if (event.target === backdrop && actions.closeSyncSettings) actions.closeSyncSettings();
+      });
+    });
+
     root.querySelectorAll('[data-sync-connect]').forEach((button) => {
       button.addEventListener('click', () => {
         actions.connectSyncProvider(button.dataset.syncConnect);
@@ -105,6 +150,7 @@
   }
 
   window.CalendarSync = {
+    renderTrigger,
     render,
     bind,
   };
