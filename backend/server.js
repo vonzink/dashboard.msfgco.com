@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
 const { requireNonExternal } = require('./middleware/userContext');
+const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
 const pinoHttp = require('pino-http');
 const websocket = require('./lib/websocket');
@@ -53,6 +54,7 @@ const checklistsRoutes = require('./routes/checklists');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+let calendarSyncScheduler = null;
 
 // ======================
 // SECURITY MIDDLEWARE
@@ -257,6 +259,8 @@ async function startServer() {
       logger.warn({ err: err.message }, 'Global checklist template seed failed (non-fatal)');
     }
 
+    calendarSyncScheduler = startCalendarSyncScheduler();
+
     const server = app.listen(PORT, '0.0.0.0', () => {
       logger.info({ port: PORT, env: process.env.NODE_ENV || 'development', origins: allowedOrigins }, 'Server started');
     });
@@ -288,6 +292,7 @@ async function startServer() {
 
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
   websocket.close();
   await db.close();
   process.exit(0);
@@ -295,6 +300,7 @@ process.on('SIGTERM', async () => {
 
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
+  if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
   websocket.close();
   await db.close();
   process.exit(0);

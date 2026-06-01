@@ -496,3 +496,39 @@ describe('calendar sync engine', () => {
     );
   });
 });
+
+describe('calendar sync scheduler', () => {
+  const schedulerModulePath = require.resolve('../../services/calendarSync/scheduler');
+  const originalDbCacheEntry = require.cache[dbConnectionModulePath];
+  const db = { query: vi.fn() };
+
+  beforeEach(() => {
+    db.query.mockReset();
+    require.cache[dbConnectionModulePath] = {
+      id: dbConnectionModulePath,
+      filename: dbConnectionModulePath,
+      loaded: true,
+      exports: db,
+    };
+    delete require.cache[schedulerModulePath];
+  });
+
+  afterEach(() => {
+    delete require.cache[schedulerModulePath];
+    if (originalDbCacheEntry) {
+      require.cache[dbConnectionModulePath] = originalDbCacheEntry;
+    } else {
+      delete require.cache[dbConnectionModulePath];
+    }
+  });
+
+  it('selects enabled connected sync connections', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 4, user_id: 7, provider: 'outlook', sync_status: 'connected' }]]);
+
+    const { loadDueConnections } = require('../../services/calendarSync/scheduler');
+    const rows = await loadDueConnections();
+
+    expect(rows).toEqual([expect.objectContaining({ id: 4, provider: 'outlook' })]);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("sync_status IN ('connected','error')"));
+  });
+});
