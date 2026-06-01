@@ -29,6 +29,10 @@
     return Boolean(entry && entry.source === 'manual' && !isPrivateEntry(entry));
   }
 
+  function isOutlookOwnedEntry(entry) {
+    return Boolean(entry && (entry.source_provider === 'outlook' || entry.source === 'outlook'));
+  }
+
   function selectedIso(state) {
     return window.CalendarState.isoDate(state.selectedDate || state.today || new Date());
   }
@@ -96,6 +100,11 @@
     return Boolean(entry.note && !isPrivateEntry(entry) && entry.visibility !== 'availability_only');
   }
 
+  function providerReadOnlyMessage(entry) {
+    if (!isOutlookOwnedEntry(entry)) return '';
+    return '<span class="detail-note">Managed in Outlook. Edit this event in Outlook.</span>';
+  }
+
   function personLabel(entry, state) {
     const selected = selectedPerson(state);
     if (selected) return selected.name;
@@ -119,6 +128,7 @@
           </span>
           <span class="detail-person">${escapeHtml(personLabel(entry, state))}</span>
           ${canShowNote(entry) ? `<span class="detail-note">${escapeHtml(entry.note)}</span>` : ''}
+          ${!editable ? providerReadOnlyMessage(entry) : ''}
         </span>
       </${tag}>
     `;

@@ -592,6 +592,10 @@ button.detail-entry:hover {
   color: var(--ink-2);
 }
 
+.detail-entry.is-readonly .detail-note {
+  color: #6a7672;
+}
+
 .empty-detail {
   margin: 0;
   padding: 8px 0;
@@ -639,6 +643,14 @@ button.detail-entry:hover {
   background: var(--surface-2);
 }
 
+.sync-provider.is-error {
+  border-color: #b85a2e;
+}
+
+.sync-provider-copy {
+  min-width: 0;
+}
+
 .sync-provider strong,
 .sync-provider small {
   display: block;
@@ -654,7 +666,22 @@ button.detail-entry:hover {
   color: var(--ink-dim);
   font-size: 12px;
   font-weight: 700;
-  text-transform: capitalize;
+}
+
+.sync-provider-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sync-error {
+  display: block;
+  margin-top: 4px;
+  color: #b85a2e;
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .cal-toast {
@@ -914,8 +941,14 @@ button.detail-entry:hover {
     flex-direction: column;
   }
 
+  .sync-provider-actions {
+    justify-content: flex-start;
+  }
+
   .editor-actions .nav-btn,
   .editor-actions .primary-btn,
+  .sync-provider-actions .nav-btn,
+  .sync-provider-actions .danger-btn,
   .danger-btn {
     flex: 1 1 140px;
   }

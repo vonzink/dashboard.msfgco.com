@@ -34,9 +34,6 @@ const EDITABLE_FIELDS = [
   'timezone',
   'note',
   'visibility',
-  'source',
-  'source_provider',
-  'source_event_id',
 ];
 
 function buildListQuery(query) {
@@ -154,6 +151,20 @@ function requireScheduleAccess(req, res, userId) {
   return true;
 }
 
+function isProviderOwned(entry) {
+  return Boolean(entry?.source_provider && entry?.source_event_id);
+}
+
+function providerName(entry) {
+  return entry.source_provider === 'google' ? 'Google' : 'Outlook';
+}
+
+function requireEditableEntry(entry, res) {
+  if (!isProviderOwned(entry)) return true;
+  res.status(409).json({ error: `This schedule entry is managed in ${providerName(entry)}.` });
+  return false;
+}
+
 function toInsertValues(payload, userId) {
   return [
     payload.user_id,
@@ -165,9 +176,9 @@ function toInsertValues(payload, userId) {
     payload.timezone || 'America/Denver',
     payload.note || null,
     payload.visibility || 'availability_only',
-    payload.source || 'manual',
-    payload.source_provider || null,
-    payload.source_event_id || null,
+    'manual',
+    null,
+    null,
     userId,
     userId,
   ];
@@ -184,9 +195,9 @@ function toUpdateValues(entry, userId) {
     entry.timezone || 'America/Denver',
     entry.note || null,
     entry.visibility || 'availability_only',
-    entry.source || 'manual',
-    entry.source_provider || null,
-    entry.source_event_id || null,
+    'manual',
+    null,
+    null,
     userId,
     entry.id,
   ];
@@ -310,6 +321,8 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
       return res.status(404).json({ error: 'Schedule entry not found' });
     }
 
+    if (!requireEditableEntry(existing, res)) return;
+
     if (!requireScheduleAccess(req, res, existing.user_id)) return;
 
     const merged = { ...existing };
@@ -348,6 +361,8 @@ router.delete('/entries/:id', async (req, res, next) => {
     if (!existing) {
       return res.status(404).json({ error: 'Schedule entry not found' });
     }
+
+    if (!requireEditableEntry(existing, res)) return;
 
     if (!requireScheduleAccess(req, res, existing.user_id)) return;
 

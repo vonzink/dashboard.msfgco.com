@@ -1,10 +1,16 @@
 (function() {
   'use strict';
 
-  const PROVIDERS = [
+  const BASE_PROVIDERS = [
     { id: 'outlook', label: 'Outlook' },
-    { id: 'google', label: 'Google' },
   ];
+
+  function providers() {
+    if (window.MSFG_CALENDAR_ENABLE_GOOGLE_SYNC === true) {
+      return [...BASE_PROVIDERS, { id: 'google', label: 'Google' }];
+    }
+    return BASE_PROVIDERS;
+  }
 
   function escapeHtml(value) {
     return window.CalendarRender.escapeHtml(value);
@@ -14,36 +20,50 @@
     return (state.syncConnections || []).find((connection) => connection.provider === provider) || null;
   }
 
-  function statusText(connection) {
-    if (!connection) return 'Not connected';
-    return String(connection.sync_status || 'not_connected').replace(/_/g, ' ');
+  function statusLabel(connection) {
+    if (!connection || connection.sync_status === 'not_connected') return 'Not connected';
+    if (!connection.sync_enabled) return 'Paused';
+    if (connection.sync_status === 'connected') return 'Connected';
+    if (connection.sync_status === 'syncing') return 'Syncing';
+    if (connection.sync_status === 'error') return 'Error';
+    return 'Not connected';
   }
 
-  function enabledText(connection) {
-    if (!connection) return 'Optional';
-    return connection.sync_enabled ? 'Enabled' : 'Paused';
+  function providerMeta(connection) {
+    const parts = [statusLabel(connection)];
+    if (connection?.provider_account_email) parts.push(connection.provider_account_email);
+    if (connection?.last_sync_at) parts.push(`Last sync ${String(connection.last_sync_at).slice(0, 10)}`);
+    return parts.join(' - ');
   }
 
-  function lastSyncText(connection) {
-    if (!connection || !connection.last_sync_at) return '';
-    return `Last sync ${String(connection.last_sync_at).slice(0, 10)}`;
+  function isConnected(connection) {
+    return Boolean(connection && connection.sync_enabled && connection.sync_status !== 'not_connected');
   }
 
   function renderProvider(state, provider) {
     const connection = providerStatus(state, provider.id);
-    const meta = [statusText(connection), enabledText(connection), lastSyncText(connection)]
-      .filter(Boolean)
-      .join(' - ');
+    const connected = isConnected(connection);
+    const syncing = connection?.sync_status === 'syncing';
+    const error = connection?.sync_status === 'error' ? connection.sync_error : '';
 
     return `
-      <div class="sync-provider">
-        <div>
+      <div class="sync-provider ${error ? 'is-error' : ''}">
+        <div class="sync-provider-copy">
           <strong>${escapeHtml(provider.label)}</strong>
-          <small>${escapeHtml(meta)}</small>
+          <small>${escapeHtml(providerMeta(connection))}</small>
+          ${error ? `<span class="sync-error">${escapeHtml(error)}</span>` : ''}
         </div>
-        <button class="nav-btn" type="button" data-sync-provider="${escapeHtml(provider.id)}">
-          ${connection ? 'Manage' : 'Connect'}
-        </button>
+        <div class="sync-provider-actions">
+          <button class="nav-btn" type="button" data-sync-connect="${escapeHtml(provider.id)}">
+            ${connected ? 'Reconnect' : 'Connect'}
+          </button>
+          <button class="nav-btn" type="button" data-sync-run="${escapeHtml(provider.id)}" ${connected && !syncing ? '' : 'disabled'}>
+            Sync now
+          </button>
+          <button class="danger-btn" type="button" data-sync-disconnect="${escapeHtml(provider.id)}" ${connection ? '' : 'disabled'}>
+            Disconnect
+          </button>
+        </div>
       </div>
     `;
   }
@@ -58,17 +78,28 @@
           </div>
         </div>
         <div class="sync-list">
-          ${PROVIDERS.map((provider) => renderProvider(state, provider)).join('')}
+          ${providers().map((provider) => renderProvider(state, provider)).join('')}
         </div>
       </section>
     `;
   }
 
-  function bind(root, state, actions) {
-    root.querySelectorAll('[data-sync-provider]').forEach((button) => {
+  function bind(root, _state, actions) {
+    root.querySelectorAll('[data-sync-connect]').forEach((button) => {
       button.addEventListener('click', () => {
-        const provider = button.dataset.syncProvider || 'calendar';
-        actions.showToast(`${provider} connection setup will open here.`, 'info');
+        actions.connectSyncProvider(button.dataset.syncConnect);
+      });
+    });
+
+    root.querySelectorAll('[data-sync-run]').forEach((button) => {
+      button.addEventListener('click', () => {
+        actions.runSyncProvider(button.dataset.syncRun);
+      });
+    });
+
+    root.querySelectorAll('[data-sync-disconnect]').forEach((button) => {
+      button.addEventListener('click', () => {
+        actions.disconnectSyncProvider(button.dataset.syncDisconnect);
       });
     });
   }

@@ -5,24 +5,68 @@ import express from 'express';
 const require = createRequire(import.meta.url);
 const dbPath = require.resolve('../../db/connection');
 const enginePath = require.resolve('../../services/calendarSync/syncEngine');
+const outlookProviderPath = require.resolve('../../services/calendarSync/providers/outlook');
+const oauthStatePath = require.resolve('../../services/calendarSync/oauthState');
 const routePath = require.resolve('../../routes/scheduleSync');
+const publicRoutePath = require.resolve('../../routes/scheduleSyncPublic');
 const originalDbCacheEntry = require.cache[dbPath];
 const originalEngineCacheEntry = require.cache[enginePath];
+const originalOutlookProviderCacheEntry = require.cache[outlookProviderPath];
+const originalOAuthStateCacheEntry = require.cache[oauthStatePath];
+const originalPublicRouteCacheEntry = require.cache[publicRoutePath];
 
 const db = {
   query: vi.fn(),
+  getConnection: vi.fn(),
+};
+
+const transactionConnection = {
+  beginTransaction: vi.fn(),
+  query: vi.fn(),
+  commit: vi.fn(),
+  rollback: vi.fn(),
+  release: vi.fn(),
 };
 
 const syncEngine = {
   runSyncForConnection: vi.fn().mockResolvedValue({ imported: 2, exported: 1 }),
 };
 
+const outlookProvider = {
+  buildAuthorizationUrl: vi.fn((state) => `https://login.microsoftonline.com/auth?state=${state}`),
+  exchangeCodeForTokens: vi.fn(),
+  getAccountEmail: vi.fn(),
+  refreshTokens: vi.fn(),
+  listEvents: vi.fn().mockResolvedValue([]),
+};
+
+const oauthState = {
+  createStateValue: vi.fn(() => 'state-123'),
+  storeOAuthState: vi.fn().mockResolvedValue(),
+  consumeOAuthState: vi.fn(),
+};
+
 describe('schedule sync routes', () => {
   let app;
 
   beforeEach(() => {
+    vi.stubEnv('CALENDAR_SYNC_ENCRYPTION_KEY', Buffer.alloc(32, 'a').toString('base64'));
     db.query.mockReset();
+    db.getConnection.mockReset();
+    transactionConnection.beginTransaction.mockReset();
+    transactionConnection.query.mockReset();
+    transactionConnection.commit.mockReset();
+    transactionConnection.rollback.mockReset();
+    transactionConnection.release.mockReset();
     syncEngine.runSyncForConnection.mockClear();
+    outlookProvider.buildAuthorizationUrl.mockClear();
+    outlookProvider.exchangeCodeForTokens.mockReset();
+    outlookProvider.getAccountEmail.mockReset();
+    outlookProvider.refreshTokens.mockClear();
+    outlookProvider.listEvents.mockClear();
+    oauthState.createStateValue.mockClear();
+    oauthState.storeOAuthState.mockClear();
+    oauthState.consumeOAuthState.mockReset();
 
     require.cache[dbPath] = {
       id: dbPath,
@@ -36,14 +80,28 @@ describe('schedule sync routes', () => {
       loaded: true,
       exports: syncEngine,
     };
+    require.cache[outlookProviderPath] = {
+      id: outlookProviderPath,
+      filename: outlookProviderPath,
+      loaded: true,
+      exports: outlookProvider,
+    };
+    require.cache[oauthStatePath] = {
+      id: oauthStatePath,
+      filename: oauthStatePath,
+      loaded: true,
+      exports: oauthState,
+    };
     delete require.cache[routePath];
+    delete require.cache[publicRoutePath];
 
     const syncRoutes = require('../../routes/scheduleSync');
 
     app = express();
     app.use(express.json());
     app.use((req, _res, next) => {
-      req.user = { db: { id: 7, role: 'user' }, groups: ['user'] };
+      const role = req.headers['x-test-user'] || 'user';
+      req.user = { db: { id: 7, role }, groups: [role] };
       next();
     });
     app.use('/api/schedule/sync', syncRoutes);
@@ -53,19 +111,15 @@ describe('schedule sync routes', () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     delete require.cache[routePath];
+    delete require.cache[publicRoutePath];
 
-    if (originalDbCacheEntry) {
-      require.cache[dbPath] = originalDbCacheEntry;
-    } else {
-      delete require.cache[dbPath];
-    }
-
-    if (originalEngineCacheEntry) {
-      require.cache[enginePath] = originalEngineCacheEntry;
-    } else {
-      delete require.cache[enginePath];
-    }
+    restoreCacheEntry(dbPath, originalDbCacheEntry);
+    restoreCacheEntry(enginePath, originalEngineCacheEntry);
+    restoreCacheEntry(outlookProviderPath, originalOutlookProviderCacheEntry);
+    restoreCacheEntry(oauthStatePath, originalOAuthStateCacheEntry);
+    restoreCacheEntry(publicRoutePath, originalPublicRouteCacheEntry);
   });
 
   it('returns current user sync status', async () => {
@@ -91,7 +145,7 @@ describe('schedule sync routes', () => {
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('FROM calendar_sync_connections'), [7]);
   });
 
-  it('starts a connection record for Outlook', async () => {
+  it('returns an Outlook authorization URL on connection start', async () => {
     db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
 
     const res = await makeJsonRequest(app, '/api/schedule/sync/connections/outlook/start', {
@@ -101,11 +155,12 @@ describe('schedule sync routes', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({
+    expect(JSON.parse(res.body)).toEqual(expect.objectContaining({
       provider: 'outlook',
-      status: 'not_connected',
-      authorization_url: null,
-    });
+      status: 'authorization_required',
+      authorization_url: 'https://login.microsoftonline.com/auth?state=state-123',
+    }));
+    expect(oauthState.storeOAuthState).toHaveBeenCalledWith(7, 'outlook', 'state-123');
   });
 
   it('rejects provider mismatches on connection start', async () => {
@@ -134,10 +189,125 @@ describe('schedule sync routes', () => {
     });
     expect(syncEngine.runSyncForConnection).toHaveBeenCalledWith(
       expect.objectContaining({ id: 4, user_id: 7, provider: 'outlook' }),
-      expect.objectContaining({ listEvents: expect.any(Function) })
+      outlookProvider
+    );
+  });
+
+  it('returns an error response when provider sync fails', async () => {
+    db.query.mockResolvedValueOnce([[
+      { id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 },
+    ]]);
+    syncEngine.runSyncForConnection.mockResolvedValueOnce({
+      imported: 0,
+      exported: 0,
+      error: 'Outlook Graph request failed',
+    });
+
+    const res = await makeJsonRequest(app, '/api/schedule/sync/run', { provider: 'outlook' });
+
+    expect(res.status).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Calendar sync failed.',
+      results: [
+        { provider: 'outlook', imported: 0, exported: 0, error: 'Outlook Graph request failed' },
+      ],
+    });
+  });
+
+  it('disconnects a provider connection', async () => {
+    db.getConnection.mockResolvedValueOnce(transactionConnection);
+    transactionConnection.query.mockResolvedValue([{ affectedRows: 1 }]);
+
+    const res = await makeRequest(app, '/api/schedule/sync/connections/outlook/disconnect', {
+      method: 'POST',
+    });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ success: true });
+    expect(transactionConnection.beginTransaction).toHaveBeenCalledTimes(1);
+    expect(transactionConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM schedule_entries'),
+      [7, 'outlook']
+    );
+    expect(transactionConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM calendar_sync_mappings'),
+      [7, 'outlook']
+    );
+    expect(transactionConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining('encrypted_access_token = NULL'),
+      [7, 'outlook']
+    );
+    expect(transactionConnection.commit).toHaveBeenCalledTimes(1);
+    expect(transactionConnection.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns admin sync health for managers and admins only', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 1,
+        user_id: 7,
+        name: 'Test User',
+        email: 'user@msfg.us',
+        provider: 'outlook',
+        sync_enabled: 1,
+        sync_status: 'connected',
+        last_sync_at: null,
+        sync_error: null,
+      },
+    ]]);
+
+    const res = await makeRequest(app, '/api/schedule/sync/admin/status', {
+      headers: { 'x-test-user': 'manager' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).connections[0]).toEqual(expect.objectContaining({
+      user_id: 7,
+      provider: 'outlook',
+      sync_status: 'connected',
+    }));
+  });
+
+  it('handles Outlook OAuth callback without app authentication', async () => {
+    oauthState.consumeOAuthState.mockResolvedValueOnce({ id: 4, user_id: 7, provider: 'outlook' });
+    outlookProvider.exchangeCodeForTokens.mockResolvedValueOnce({
+      access_token: 'access-token',
+      refresh_token: 'refresh-token',
+      expires_in: 3600,
+      scope: 'offline_access User.Read Calendars.ReadWrite',
+    });
+    outlookProvider.getAccountEmail.mockResolvedValueOnce('user@msfg.us');
+    db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+    syncEngine.runSyncForConnection.mockResolvedValueOnce({ imported: 1, exported: 0 });
+
+    const publicRoutes = require('../../routes/scheduleSyncPublic');
+    const publicApp = express();
+    publicApp.use('/api/schedule/sync', publicRoutes);
+    publicApp.use((err, _req, res, _next) => {
+      res.status(500).json({ error: err.message });
+    });
+
+    const res = await makeRequest(publicApp, '/api/schedule/sync/outlook/callback?code=abc&state=state-123', {
+      redirect: 'manual',
+    });
+
+    expect([302, 303]).toContain(res.status);
+    expect(oauthState.consumeOAuthState).toHaveBeenCalledWith('outlook', 'state-123');
+    expect(outlookProvider.exchangeCodeForTokens).toHaveBeenCalledWith('abc');
+    expect(syncEngine.runSyncForConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 4, user_id: 7, provider_account_email: 'user@msfg.us' }),
+      outlookProvider
     );
   });
 });
+
+function restoreCacheEntry(path, entry) {
+  if (entry) {
+    require.cache[path] = entry;
+  } else {
+    delete require.cache[path];
+  }
+}
 
 function makeJsonRequest(app, path, body, headers = {}, method = 'POST') {
   return makeRequest(app, path, {

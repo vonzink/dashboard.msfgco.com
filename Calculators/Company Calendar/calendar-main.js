@@ -40,6 +40,25 @@
     }
   }
 
+  function handleSyncReturnParams() {
+    const params = new URLSearchParams(window.location.search || '');
+    const syncStatus = params.get('sync');
+    if (!syncStatus) return;
+
+    const provider = params.get('provider') || 'calendar';
+    if (syncStatus === 'connected') {
+      showToast(`${provider} connected.`, 'success');
+    } else if (syncStatus === 'error') {
+      showToast(`Unable to connect ${provider}.`, 'error');
+    }
+
+    params.delete('sync');
+    params.delete('provider');
+    params.delete('reason');
+    const cleanUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, document.title, cleanUrl);
+  }
+
   async function boot() {
     try {
       state.me = await CalendarApi.getMe();
@@ -48,6 +67,7 @@
       await loadSyncStatus();
       state.error = null;
       CalendarRender.render(app, state, actions);
+      handleSyncReturnParams();
     } catch (err) {
       state.loading = false;
       state.error = err.message;
@@ -126,6 +146,45 @@
         state.error = err.message;
         CalendarRender.render(app, state, actions);
         showToast(err.message, 'error');
+      }
+    },
+    async connectSyncProvider(provider) {
+      try {
+        const result = await CalendarApi.startSyncConnection(provider, {
+          privacy_default: 'availability_only',
+          sync_enabled: true,
+        });
+        if (result.authorization_url) {
+          window.location.href = result.authorization_url;
+          return;
+        }
+        await loadSyncStatus();
+        CalendarRender.render(app, state, actions);
+      } catch (err) {
+        showToast(err.message || 'Unable to start calendar connection.', 'error');
+      }
+    },
+    async runSyncProvider(provider) {
+      try {
+        showToast('Syncing calendar...', 'info');
+        await CalendarApi.runSync(provider);
+        await loadSyncStatus();
+        await loadEntries();
+        CalendarRender.render(app, state, actions);
+        showToast('Calendar sync complete.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Unable to sync calendar.', 'error');
+      }
+    },
+    async disconnectSyncProvider(provider) {
+      if (window.confirm && !window.confirm('Disconnect this calendar account?')) return;
+      try {
+        await CalendarApi.disconnectSyncConnection(provider);
+        await loadSyncStatus();
+        CalendarRender.render(app, state, actions);
+        showToast('Calendar disconnected.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Unable to disconnect calendar.', 'error');
       }
     },
     setSearch(value) {

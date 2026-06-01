@@ -47,5 +47,17 @@
     updateEntry: (id, payload) => request(`/schedule/entries/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
     deleteEntry: (id) => request(`/schedule/entries/${id}`, { method: 'DELETE' }),
     getSyncStatus: () => request('/schedule/sync/status'),
+    startSyncConnection: (provider, payload) => request(`/schedule/sync/connections/${encodeURIComponent(provider)}/start`, {
+      method: 'POST',
+      body: JSON.stringify({ provider, ...(payload || {}) }),
+    }),
+    runSync: (provider) => request('/schedule/sync/run', {
+      method: 'POST',
+      body: JSON.stringify(provider ? { provider } : {}),
+    }),
+    disconnectSyncConnection: (provider) => request(`/schedule/sync/connections/${encodeURIComponent(provider)}/disconnect`, {
+      method: 'POST',
+    }),
+    getAdminSyncStatus: () => request('/schedule/sync/admin/status'),
   };
 })();
