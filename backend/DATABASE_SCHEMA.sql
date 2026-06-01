@@ -282,9 +282,13 @@ CREATE TABLE IF NOT EXISTS calendar_sync_connections (
     user_id INT NOT NULL,
     provider ENUM('outlook','google') NOT NULL,
     provider_account_email VARCHAR(255) NULL,
+    provider_calendar_id VARCHAR(255) NULL,
     encrypted_access_token TEXT NULL,
+    access_token_expires_at TIMESTAMP NULL,
     encrypted_refresh_token TEXT NULL,
     scopes TEXT NULL,
+    oauth_state VARCHAR(128) NULL,
+    oauth_state_expires_at TIMESTAMP NULL,
     sync_enabled TINYINT DEFAULT 1,
     privacy_default ENUM('availability_only','shared_details') DEFAULT 'availability_only',
     last_sync_at TIMESTAMP NULL,
@@ -311,7 +315,7 @@ CREATE TABLE IF NOT EXISTS calendar_sync_mappings (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (schedule_entry_id) REFERENCES schedule_entries(id) ON DELETE CASCADE,
-    UNIQUE KEY uq_calendar_sync_mapping (provider, provider_event_id),
+    UNIQUE KEY uq_calendar_sync_mapping (user_id, provider, provider_event_id),
     INDEX idx_calendar_sync_entry (schedule_entry_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
