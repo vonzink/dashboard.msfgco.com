@@ -144,6 +144,45 @@ describe('schedule routes', () => {
     });
   });
 
+  it('returns provider source markers without exposing private provider details', async () => {
+    db.query.mockResolvedValueOnce([
+      [
+        {
+          id: 3,
+          user_id: 99,
+          employee_name: 'Private User',
+          employee_initials: 'PU',
+          employee_role: 'employee',
+          status: 'out',
+          start_date: '2026-06-03',
+          end_date: '2026-06-03',
+          start_time: null,
+          end_time: null,
+          timezone: 'America/Denver',
+          note: 'Doctor',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          created_by: null,
+          updated_by: null,
+        },
+      ],
+    ]);
+
+    const res = await makeRequest(app, '/api/schedule/availability?start_date=2026-06-01&end_date=2026-06-30');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).entries[0]).toEqual(expect.objectContaining({
+      status: 'busy',
+      note: null,
+      private: true,
+      source: 'outlook',
+      source_provider: 'outlook',
+      source_event_id: 'event-1',
+    }));
+  });
+
   it('requires start_date and end_date for schedule entries list', async () => {
     db.query.mockResolvedValueOnce([[]]);
 
@@ -415,6 +454,50 @@ describe('schedule routes', () => {
       expect.stringContaining('UPDATE schedule_entries'),
       expect.arrayContaining(['2026-06-10', '2026-06-12', 'Updated note'])
     );
+  });
+
+  it('blocks updates to provider-owned schedule entries', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        user_id: 10,
+        status: 'busy',
+        start_date: '2026-06-01',
+        end_date: '2026-06-01',
+        source: 'outlook',
+        source_provider: 'outlook',
+        source_event_id: 'event-1',
+      },
+    ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/9', { note: 'Change' }, {}, 'PUT');
+
+    expect(res.status).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'This schedule entry is managed in Outlook.',
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks deletes of provider-owned schedule entries', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        user_id: 10,
+        status: 'busy',
+        source: 'outlook',
+        source_provider: 'outlook',
+        source_event_id: 'event-1',
+      },
+    ]]);
+
+    const res = await makeRequest(app, '/api/schedule/entries/9', { method: 'DELETE' });
+
+    expect(res.status).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'This schedule entry is managed in Outlook.',
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 
   it('lets a manager delete another user schedule entry', async () => {

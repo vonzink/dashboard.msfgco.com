@@ -33,6 +33,8 @@ function presentScheduleEntry(entry, req) {
     note: visible ? (entry.note || null) : null,
     visibility: entry.visibility,
     source: entry.source,
+    source_provider: entry.source_provider || null,
+    source_event_id: entry.source_event_id || null,
     private: !visible,
     created_by: entry.created_by || null,
     updated_by: entry.updated_by || null,

@@ -154,6 +154,20 @@ function requireScheduleAccess(req, res, userId) {
   return true;
 }
 
+function isProviderOwned(entry) {
+  return Boolean(entry?.source_provider && entry?.source_event_id);
+}
+
+function providerName(entry) {
+  return entry.source_provider === 'google' ? 'Google' : 'Outlook';
+}
+
+function requireEditableEntry(entry, res) {
+  if (!isProviderOwned(entry)) return true;
+  res.status(409).json({ error: `This schedule entry is managed in ${providerName(entry)}.` });
+  return false;
+}
+
 function toInsertValues(payload, userId) {
   return [
     payload.user_id,
@@ -310,6 +324,8 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
       return res.status(404).json({ error: 'Schedule entry not found' });
     }
 
+    if (!requireEditableEntry(existing, res)) return;
+
     if (!requireScheduleAccess(req, res, existing.user_id)) return;
 
     const merged = { ...existing };
@@ -348,6 +364,8 @@ router.delete('/entries/:id', async (req, res, next) => {
     if (!existing) {
       return res.status(404).json({ error: 'Schedule entry not found' });
     }
+
+    if (!requireEditableEntry(existing, res)) return;
 
     if (!requireScheduleAccess(req, res, existing.user_id)) return;
 
