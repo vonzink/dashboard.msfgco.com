@@ -92,5 +92,8 @@
     },
   };
 
-  window.ChecklistFormat = ChecklistFormat;
+  // Browser global (consumed by checklists.js via mixin)
+  if (typeof window !== 'undefined') window.ChecklistFormat = ChecklistFormat;
+  // CommonJS export for vitest unit tests (Node has no `window`)
+  if (typeof module !== 'undefined' && module.exports) module.exports = ChecklistFormat;
 })();
