@@ -329,3 +329,170 @@ describe('Outlook provider adapter', () => {
     expect(fetchMock.mock.calls[1][1].headers.authorization).toBe('Bearer new-access-token');
   });
 });
+
+describe('calendar sync engine', () => {
+  const engineModulePath = require.resolve('../../services/calendarSync/syncEngine');
+  const originalDbCacheEntry = require.cache[dbConnectionModulePath];
+  const db = { query: vi.fn() };
+
+  beforeEach(() => {
+    db.query.mockReset();
+    require.cache[dbConnectionModulePath] = {
+      id: dbConnectionModulePath,
+      filename: dbConnectionModulePath,
+      loaded: true,
+      exports: db,
+    };
+    delete require.cache[engineModulePath];
+  });
+
+  afterEach(() => {
+    delete require.cache[engineModulePath];
+    if (originalDbCacheEntry) {
+      require.cache[dbConnectionModulePath] = originalDbCacheEntry;
+    } else {
+      delete require.cache[dbConnectionModulePath];
+    }
+  });
+
+  it('imports provider entries and removes stale imported provider entries', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO calendar_sync_runs')) return [{ insertId: 9 }];
+      if (sql.includes('SELECT provider_event_id')) return [[{ provider_event_id: 'exported-event' }]];
+      return [{ affectedRows: 1 }];
+    });
+
+    const adapter = {
+      listEvents: vi.fn().mockResolvedValue([
+        {
+          user_id: 7,
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: null,
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'imported-event',
+        },
+        {
+          user_id: 7,
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'exported-event',
+        },
+      ]),
+    };
+
+    const { runSyncForConnection } = require('../../services/calendarSync/syncEngine');
+    const result = await runSyncForConnection(
+      { id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 },
+      adapter,
+      {
+        startDate: '2026-04-27',
+        endDate: '2026-11-23',
+        startDateTime: '2026-04-27T06:00:00.000Z',
+        endDateTime: '2026-11-24T06:59:59.999Z',
+      }
+    );
+
+    expect(result).toEqual({ imported: 1, exported: 0 });
+    expect(adapter.listEvents).toHaveBeenCalled();
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO schedule_entries'),
+      expect.arrayContaining(['imported-event'])
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM schedule_entries'),
+      expect.arrayContaining([7, 'outlook', '2026-11-23', '2026-04-27', 'imported-event', 'exported-event'])
+    );
+  });
+
+  it('exports manual entries using calendar sync mappings', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO calendar_sync_runs')) return [{ insertId: 10 }];
+      if (sql.includes('FROM schedule_entries se')) {
+        return [[{
+          id: 22,
+          user_id: 7,
+          status: 'out',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          start_time: null,
+          end_time: null,
+          timezone: 'America/Denver',
+          note: 'Conference',
+          visibility: 'shared_details',
+          source: 'manual',
+          provider_event_id: null,
+          provider_etag: null,
+        }]];
+      }
+      if (sql.includes('SELECT provider_event_id')) return [[]];
+      return [{ affectedRows: 1 }];
+    });
+
+    const adapter = {
+      createEvent: vi.fn().mockResolvedValue({ provider_event_id: 'created-1', provider_etag: 'etag-1' }),
+      listEvents: vi.fn().mockResolvedValue([]),
+    };
+
+    const { runSyncForConnection } = require('../../services/calendarSync/syncEngine');
+    const result = await runSyncForConnection(
+      { id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 },
+      adapter,
+      {
+        startDate: '2026-04-27',
+        endDate: '2026-11-23',
+        startDateTime: '2026-04-27T06:00:00.000Z',
+        endDateTime: '2026-11-24T06:59:59.999Z',
+      }
+    );
+
+    expect(result).toEqual({ imported: 0, exported: 1 });
+    expect(adapter.createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 4, user_id: 7, provider: 'outlook' }),
+      expect.objectContaining({ id: 22 })
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO calendar_sync_mappings'),
+      expect.arrayContaining([7, 22, 'outlook', 'created-1', 'etag-1'])
+    );
+  });
+
+  it('persists refreshed provider tokens during sync', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO calendar_sync_runs')) return [{ insertId: 11 }];
+      if (sql.includes('FROM schedule_entries se')) return [[]];
+      if (sql.includes('SELECT provider_event_id')) return [[]];
+      return [{ affectedRows: 1 }];
+    });
+
+    const adapter = {
+      createEvent: vi.fn(),
+      listEvents: vi.fn(async (connection) => {
+        await connection.persistRefreshedTokens({
+          encrypted_access_token: 'encrypted-access',
+          encrypted_refresh_token: 'encrypted-refresh',
+          access_token_expires_at: new Date('2026-06-01T12:00:00.000Z'),
+          scopes: 'offline_access User.Read Calendars.ReadWrite',
+        });
+        return [];
+      }),
+    };
+
+    const { runSyncForConnection } = require('../../services/calendarSync/syncEngine');
+    await runSyncForConnection({ id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 }, adapter);
+
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('encrypted_access_token = ?'),
+      ['encrypted-access', 'encrypted-refresh', new Date('2026-06-01T12:00:00.000Z'), 'offline_access User.Read Calendars.ReadWrite', 4]
+    );
+  });
+});
