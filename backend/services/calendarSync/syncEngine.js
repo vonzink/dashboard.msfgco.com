@@ -9,6 +9,24 @@ function getResultInfo(result) {
   return Array.isArray(result) ? result[0] : result;
 }
 
+function getAffectedRows(result) {
+  return getResultInfo(result)?.affectedRows || 0;
+}
+
+async function acquireConnectionLock(connection) {
+  const result = await db.query(
+    `UPDATE calendar_sync_connections
+     SET sync_status = 'syncing',
+         sync_error = NULL,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+       AND (COALESCE(sync_status, 'not_connected') <> 'syncing'
+            OR updated_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 20 MINUTE))`,
+    [connection.id]
+  );
+  return getAffectedRows(result) > 0;
+}
+
 async function updateConnectionStatus(connection, status, errorMessage = null) {
   await db.query(
     `UPDATE calendar_sync_connections
@@ -222,9 +240,17 @@ async function runSyncForConnection(connection, adapter, syncWindow = getSyncWin
   const syncConnection = prepareConnection(connection);
 
   try {
-    runId = await startRun(syncConnection);
-    await updateConnectionStatus(syncConnection, 'syncing');
+    const lockAcquired = await acquireConnectionLock(syncConnection);
+    if (!lockAcquired) {
+      return {
+        imported,
+        exported,
+        skipped: true,
+        reason: 'sync_in_progress',
+      };
+    }
 
+    runId = await startRun(syncConnection);
     exported = await exportManualEntries(syncConnection, adapter, syncWindow);
     imported = await importProviderEntries(syncConnection, adapter, syncWindow);
 
@@ -240,6 +266,7 @@ async function runSyncForConnection(connection, adapter, syncWindow = getSyncWin
 }
 
 module.exports = {
+  acquireConnectionLock,
   deleteStaleImportedEntries,
   exportManualEntries,
   importProviderEntries,

@@ -25,6 +25,43 @@ function getAdapter(provider) {
   return null;
 }
 
+async function disconnectProviderConnection(userId, provider) {
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query(
+      `DELETE FROM schedule_entries
+       WHERE user_id = ? AND source_provider = ? AND source_event_id IS NOT NULL`,
+      [userId, provider]
+    );
+    await connection.query(
+      `DELETE FROM calendar_sync_mappings
+       WHERE user_id = ? AND provider = ?`,
+      [userId, provider]
+    );
+    await connection.query(
+      `UPDATE calendar_sync_connections
+       SET encrypted_access_token = NULL,
+           encrypted_refresh_token = NULL,
+           access_token_expires_at = NULL,
+           oauth_state = NULL,
+           oauth_state_expires_at = NULL,
+           sync_enabled = 0,
+           sync_status = 'not_connected',
+           sync_error = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = ? AND provider = ?`,
+      [userId, provider]
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 router.get('/status', async (req, res, next) => {
   try {
     const result = await db.query(
@@ -83,20 +120,7 @@ router.post('/connections/:provider/disconnect', async (req, res, next) => {
       return res.status(400).json({ error: 'Provider is not enabled' });
     }
 
-    await db.query(
-      `UPDATE calendar_sync_connections
-       SET encrypted_access_token = NULL,
-           encrypted_refresh_token = NULL,
-           access_token_expires_at = NULL,
-           oauth_state = NULL,
-           oauth_state_expires_at = NULL,
-           sync_enabled = 0,
-           sync_status = 'not_connected',
-           sync_error = NULL,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = ? AND provider = ?`,
-      [getUserId(req), provider]
-    );
+    await disconnectProviderConnection(getUserId(req), provider);
 
     return res.json({ success: true });
   } catch (error) {
@@ -126,6 +150,13 @@ router.post('/run', validate(calendarSyncRun), async (req, res, next) => {
       if (!adapter) continue;
       const syncResult = await runSyncForConnection(connection, adapter);
       results.push({ provider: connection.provider, ...syncResult });
+    }
+
+    if (results.some((result) => result.error)) {
+      return res.status(502).json({ error: 'Calendar sync failed.', results });
+    }
+    if (results.some((result) => result.skipped)) {
+      return res.status(409).json({ error: 'Calendar sync already running.', results });
     }
 
     return res.json({ results });

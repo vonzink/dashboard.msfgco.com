@@ -17,6 +17,15 @@ const originalPublicRouteCacheEntry = require.cache[publicRoutePath];
 
 const db = {
   query: vi.fn(),
+  getConnection: vi.fn(),
+};
+
+const transactionConnection = {
+  beginTransaction: vi.fn(),
+  query: vi.fn(),
+  commit: vi.fn(),
+  rollback: vi.fn(),
+  release: vi.fn(),
 };
 
 const syncEngine = {
@@ -43,6 +52,12 @@ describe('schedule sync routes', () => {
   beforeEach(() => {
     vi.stubEnv('CALENDAR_SYNC_ENCRYPTION_KEY', Buffer.alloc(32, 'a').toString('base64'));
     db.query.mockReset();
+    db.getConnection.mockReset();
+    transactionConnection.beginTransaction.mockReset();
+    transactionConnection.query.mockReset();
+    transactionConnection.commit.mockReset();
+    transactionConnection.rollback.mockReset();
+    transactionConnection.release.mockReset();
     syncEngine.runSyncForConnection.mockClear();
     outlookProvider.buildAuthorizationUrl.mockClear();
     outlookProvider.exchangeCodeForTokens.mockReset();
@@ -178,8 +193,30 @@ describe('schedule sync routes', () => {
     );
   });
 
+  it('returns an error response when provider sync fails', async () => {
+    db.query.mockResolvedValueOnce([[
+      { id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 },
+    ]]);
+    syncEngine.runSyncForConnection.mockResolvedValueOnce({
+      imported: 0,
+      exported: 0,
+      error: 'Outlook Graph request failed',
+    });
+
+    const res = await makeJsonRequest(app, '/api/schedule/sync/run', { provider: 'outlook' });
+
+    expect(res.status).toBe(502);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Calendar sync failed.',
+      results: [
+        { provider: 'outlook', imported: 0, exported: 0, error: 'Outlook Graph request failed' },
+      ],
+    });
+  });
+
   it('disconnects a provider connection', async () => {
-    db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+    db.getConnection.mockResolvedValueOnce(transactionConnection);
+    transactionConnection.query.mockResolvedValue([{ affectedRows: 1 }]);
 
     const res = await makeRequest(app, '/api/schedule/sync/connections/outlook/disconnect', {
       method: 'POST',
@@ -187,7 +224,21 @@ describe('schedule sync routes', () => {
 
     expect(res.status).toBe(200);
     expect(JSON.parse(res.body)).toEqual({ success: true });
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('encrypted_access_token = NULL'), [7, 'outlook']);
+    expect(transactionConnection.beginTransaction).toHaveBeenCalledTimes(1);
+    expect(transactionConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM schedule_entries'),
+      [7, 'outlook']
+    );
+    expect(transactionConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM calendar_sync_mappings'),
+      [7, 'outlook']
+    );
+    expect(transactionConnection.query).toHaveBeenCalledWith(
+      expect.stringContaining('encrypted_access_token = NULL'),
+      [7, 'outlook']
+    );
+    expect(transactionConnection.commit).toHaveBeenCalledTimes(1);
+    expect(transactionConnection.release).toHaveBeenCalledTimes(1);
   });
 
   it('returns admin sync health for managers and admins only', async () => {

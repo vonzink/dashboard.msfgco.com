@@ -34,7 +34,7 @@ function presentScheduleEntry(entry, req) {
     visibility: entry.visibility,
     source: entry.source,
     source_provider: entry.source_provider || null,
-    source_event_id: entry.source_event_id || null,
+    provider_owned: Boolean(entry.source_provider && entry.source_event_id),
     private: !visible,
     created_by: entry.created_by || null,
     updated_by: entry.updated_by || null,

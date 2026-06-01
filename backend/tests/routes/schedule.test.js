@@ -179,8 +179,9 @@ describe('schedule routes', () => {
       private: true,
       source: 'outlook',
       source_provider: 'outlook',
-      source_event_id: 'event-1',
+      provider_owned: true,
     }));
+    expect(JSON.parse(res.body).entries[0]).not.toHaveProperty('source_event_id');
   });
 
   it('requires start_date and end_date for schedule entries list', async () => {
@@ -269,6 +270,61 @@ describe('schedule routes', () => {
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO schedule_entries'),
       expect.arrayContaining([10, 'out', '2026-06-10', '2026-06-12', 10, 10])
+    );
+  });
+
+  it('forces public schedule creates to remain manual entries', async () => {
+    db.query.mockResolvedValueOnce([{ insertId: 124 }]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries', {
+      user_id: 10,
+      status: 'busy',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      source: 'outlook',
+      source_provider: 'outlook',
+      source_event_id: 'forged-event',
+    });
+
+    expect(res.status).toBe(201);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO schedule_entries'),
+      expect.arrayContaining(['manual', null, null, 10, 10])
+    );
+  });
+
+  it('ignores provider ownership fields on public schedule updates', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 5,
+          user_id: 10,
+          status: 'remote',
+          start_date: '2026-06-10',
+          end_date: '2026-06-10',
+          start_time: null,
+          end_time: null,
+          timezone: 'America/Denver',
+          note: 'Old note',
+          visibility: 'shared_details',
+          source: 'manual',
+          source_provider: null,
+          source_event_id: null,
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      source: 'outlook',
+      source_provider: 'outlook',
+      source_event_id: 'forged-event',
+      note: 'Still manual',
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(200);
+    expect(db.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('UPDATE schedule_entries'),
+      expect.arrayContaining(['Still manual', 'manual', null, null])
     );
   });
 

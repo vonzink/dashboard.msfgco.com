@@ -495,6 +495,29 @@ describe('calendar sync engine', () => {
       ['encrypted-access', 'encrypted-refresh', new Date('2026-06-01T12:00:00.000Z'), 'offline_access User.Read Calendars.ReadWrite', 4]
     );
   });
+
+  it('skips sync when another run already owns the connection lock', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes("SET sync_status = 'syncing'")) return [{ affectedRows: 0 }];
+      return [{ affectedRows: 1 }];
+    });
+
+    const adapter = {
+      createEvent: vi.fn(),
+      listEvents: vi.fn(),
+    };
+
+    const { runSyncForConnection } = require('../../services/calendarSync/syncEngine');
+    const result = await runSyncForConnection({ id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 }, adapter);
+
+    expect(result).toEqual({
+      imported: 0,
+      exported: 0,
+      skipped: true,
+      reason: 'sync_in_progress',
+    });
+    expect(adapter.listEvents).not.toHaveBeenCalled();
+  });
 });
 
 describe('calendar sync scheduler', () => {

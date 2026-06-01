@@ -34,9 +34,6 @@ const EDITABLE_FIELDS = [
   'timezone',
   'note',
   'visibility',
-  'source',
-  'source_provider',
-  'source_event_id',
 ];
 
 function buildListQuery(query) {
@@ -179,9 +176,9 @@ function toInsertValues(payload, userId) {
     payload.timezone || 'America/Denver',
     payload.note || null,
     payload.visibility || 'availability_only',
-    payload.source || 'manual',
-    payload.source_provider || null,
-    payload.source_event_id || null,
+    'manual',
+    null,
+    null,
     userId,
     userId,
   ];
@@ -198,9 +195,9 @@ function toUpdateValues(entry, userId) {
     entry.timezone || 'America/Denver',
     entry.note || null,
     entry.visibility || 'availability_only',
-    entry.source || 'manual',
-    entry.source_provider || null,
-    entry.source_event_id || null,
+    'manual',
+    null,
+    null,
     userId,
     entry.id,
   ];

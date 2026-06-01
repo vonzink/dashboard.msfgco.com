@@ -73,7 +73,10 @@ router.get('/:provider/callback', async (req, res, next) => {
       ]
     );
 
-    await runSyncForConnection({ ...tokenConnection, provider_account_email: email }, adapter);
+    const syncResult = await runSyncForConnection({ ...tokenConnection, provider_account_email: email }, adapter);
+    if (syncResult.error) {
+      return res.redirect(getReturnUrl({ sync: 'error', provider, reason: 'initial_sync_failed' }));
+    }
     return res.redirect(getReturnUrl({ sync: 'connected', provider }));
   } catch (error) {
     return next(error);
