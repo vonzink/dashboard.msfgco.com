@@ -1,4 +1,5 @@
 const db = require('../../db/connection');
+const { prepareConnection } = require('./connections');
 const { getSyncWindow } = require('./window');
 
 function getRows(result) {
@@ -36,25 +37,6 @@ async function updateConnectionStatus(connection, status, errorMessage = null) {
          updated_at = CURRENT_TIMESTAMP
      WHERE id = ?`,
     [status, errorMessage, status, connection.id]
-  );
-}
-
-async function persistRefreshedTokens(connection, refreshed) {
-  await db.query(
-    `UPDATE calendar_sync_connections
-     SET encrypted_access_token = ?,
-         encrypted_refresh_token = ?,
-         access_token_expires_at = ?,
-         scopes = ?,
-         updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [
-      refreshed.encrypted_access_token,
-      refreshed.encrypted_refresh_token,
-      refreshed.access_token_expires_at,
-      refreshed.scopes || null,
-      connection.id,
-    ]
   );
 }
 
@@ -118,6 +100,40 @@ async function upsertImportedEntry(entry) {
       entry.provider_sensitivity || null,
     ]
   );
+
+  if (Array.isArray(entry.attendees)) {
+    const entryId = await fetchImportedEntryId(entry);
+    if (entryId) await replaceEntryAttendees(entryId, entry.attendees);
+  }
+}
+
+async function fetchImportedEntryId(entry) {
+  const result = await db.query(
+    `SELECT id FROM schedule_entries
+     WHERE user_id = ? AND source_provider = ? AND source_event_id = ?
+     LIMIT 1`,
+    [entry.user_id, entry.source_provider, entry.source_event_id]
+  );
+  return (getRows(result) || [])[0]?.id || null;
+}
+
+async function replaceEntryAttendees(entryId, attendees = []) {
+  await db.query('DELETE FROM schedule_entry_attendees WHERE schedule_entry_id = ?', [entryId]);
+  for (const attendee of attendees || []) {
+    if (!attendee.email) continue;
+    await db.query(
+      `INSERT INTO schedule_entry_attendees
+       (schedule_entry_id, user_id, email, name, response_status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        entryId,
+        attendee.user_id || null,
+        attendee.email,
+        attendee.name || null,
+        attendee.response_status || null,
+      ]
+    );
+  }
 }
 
 async function fetchMappedProviderIds(connection) {
@@ -230,16 +246,6 @@ async function importProviderEntries(connection, adapter, syncWindow) {
   return imported;
 }
 
-function prepareConnection(connection) {
-  return {
-    ...connection,
-    persistRefreshedTokens: async (refreshed) => {
-      Object.assign(connection, refreshed);
-      await persistRefreshedTokens(connection, refreshed);
-    },
-  };
-}
-
 async function runSyncForConnection(connection, adapter, syncWindow = getSyncWindow()) {
   let imported = 0;
   let exported = 0;
@@ -277,6 +283,7 @@ module.exports = {
   deleteStaleImportedEntries,
   exportManualEntries,
   importProviderEntries,
+  replaceEntryAttendees,
   runSyncForConnection,
   upsertImportedEntry,
 };
