@@ -1,0 +1,158 @@
+# Company Calendar Enhanced Views and Sync Design
+
+## Goal
+
+The company calendar should make employee availability fast to scan, while still allowing users to control whether event details are shared with the team. It should stop exposing raw internal employee IDs in the UI, add operational day/week/all views, support event colors, and make manual company calendar entries sync back to Outlook when the target employee has connected their company Outlook account.
+
+## Core Decisions
+
+- Employee selection will use names, not raw database IDs.
+- NMLS numbers can be shown beside names when available. Example: `Zachary Zink - NMLS 451924`.
+- Internal user IDs remain behind the scenes for API payloads.
+- Every event defaults to `Hidden from Team`.
+- Hidden events are visually dimmed. Shared events are visually brighter. This gives a quick scan of whether an event is team-visible without opening details.
+- Users can share or hide details per event when the event is shareable.
+- Company email calendars remain employee-owned. The app will sync to another employee's Outlook only through that employee's connected company Outlook account.
+
+## Views
+
+The calendar will support these view modes:
+
+- `Day`: one selected day, focused on that day only.
+- `Week`: one week with event bars laid across the week.
+- `Month`: full month grid.
+- `2 Months`: two month grids.
+- `Year`: twelve compact month summaries.
+- `People`: employee cards stacked with upcoming entries.
+- `All`: employee rows stacked vertically, dates across columns like the older roster view.
+
+The `All` view is the dense operations view. It should be the best place to compare all employee schedules at once.
+
+## Multi-Day Event Rendering
+
+Multi-day events should read as one continuous event.
+
+- In `Week` and `All`, a multi-day event renders as one long horizontal bar spanning all covered days.
+- In `Month`, a multi-day event renders as connected week-row segments. If an event crosses a week boundary, it continues on the next week row with the same color and label treatment.
+- In compact views like `Year`, multi-day events affect day density indicators rather than full labels.
+
+## Event Privacy Display
+
+Every event has a visibility state:
+
+- `availability_only`: details hidden from team.
+- `shared_details`: details visible to team.
+
+Visual rules:
+
+- Hidden events are dimmed with lower opacity and softer contrast.
+- Shared events are brighter and more saturated.
+- Private provider events, such as Outlook private/sensitive items, stay hidden and cannot be made shared.
+- The detail panel keeps explicit controls such as `Share details` and `Hide details`.
+
+Imported Outlook/Google events start as `availability_only` even if their title is stored internally for the owner.
+
+Manual events also start as `availability_only`.
+
+## Employee Identity and NMLS
+
+The schedule list and editor should use employee names.
+
+The employee picker will load active employees from the user directory. The directory response should include `nmls_number` when available.
+
+Picker labels:
+
+- If NMLS exists: `Name - NMLS ######`.
+- If NMLS is missing: `Name`.
+
+The API still accepts `user_id`, but the UI should not ask the user to type a raw ID.
+
+## Event Colors
+
+Each schedule entry can have an optional color override.
+
+- Existing status colors remain the default.
+- The editor exposes color swatches and a custom color input if practical.
+- Color applies to event bars and detail markers.
+- Hidden/shared brightness is applied on top of the event color.
+
+The first implementation should store the color on `schedule_entries` as `event_color`.
+
+## Outlook Sync Behavior
+
+The current sync model exports manual schedule entries to Outlook through connected user calendar connections. That model stays in place.
+
+Manual company calendar entry behavior:
+
+- If a user creates an event for themselves and their Outlook is connected, the event exports to their Outlook calendar on sync.
+- If a manager/admin creates an event for another employee and that employee has connected company Outlook, the event exports to that employee's Outlook calendar on sync.
+- If the target employee has not connected Outlook, the event is saved internally and the UI shows that Outlook sync is not connected for that employee.
+
+The app should not use tenant-wide Graph application permissions for this phase. Using each employee's delegated connected company Outlook account is safer and fits the existing architecture.
+
+## Backend Changes
+
+Add or update:
+
+- `schedule_entries.event_color`.
+- User directory fields to include `nmls_number`.
+- Schedule list responses to include `event_color` and employee NMLS when available.
+- Schedule create/update validation to accept event color.
+- Tests for default `availability_only`, event color validation, NMLS directory data, and target-user Outlook export behavior.
+
+Manual create/update should continue enforcing existing permissions:
+
+- Users can create/update their own entries.
+- Managers/admins can create/update entries for other users.
+- Provider-owned imported entries cannot be edited directly except via the sharing toggle.
+
+## Frontend Changes
+
+Add or update:
+
+- Employee picker in the editor.
+- Day, Week, and All view modes.
+- Multi-day bar layout helpers.
+- Event brightness classes for hidden vs shared.
+- Color swatch controls in the editor.
+- Sync status messaging for target employees without connected Outlook.
+
+Existing search and status filters should continue to work across all views.
+
+## Error Handling
+
+- If the employee directory cannot load, the editor should still allow the current user as a fallback.
+- If Outlook sync is unavailable for the selected employee, saving the internal event should still succeed.
+- Sync failures should surface as a warning, not block internal schedule visibility.
+- Private Outlook events cannot be shared and should retain the current private warning behavior.
+
+## Testing
+
+Backend:
+
+- Schema accepts valid event colors and rejects invalid color strings.
+- New manual entries default to hidden from team.
+- Directory includes NMLS numbers.
+- Schedule responses include employee NMLS and event color.
+- Manual entries for another employee are exported through that employee's connected Outlook account.
+
+Frontend VM tests:
+
+- Editor renders employee names/NMLS labels instead of raw ID labels.
+- New entries default to hidden.
+- View tabs include Day, Week, and All.
+- Hidden event markup uses dimmed class; shared event markup uses bright class.
+- Week/All multi-day entries render as spanning bars.
+
+Browser verification:
+
+- Desktop and mobile views have no horizontal page overflow except inside intentionally dense `All` view if the date range requires horizontal comparison.
+- Hidden/shared brightness is visible at a glance.
+- Multi-day bars read as one event.
+
+## Out of Scope for This Phase
+
+- Tenant-wide application permissions to write directly to any mailbox without employee-delegated connection.
+- Google writeback expansion.
+- PTO/hour tracking.
+- Automatic NMLS import from licensing systems.
