@@ -160,6 +160,30 @@
       this._persistPinned();
     },
 
+    // Fully tear down the Menu when the checklist modal closes. In float mode
+    // the panel is reparented to <body>, so hiding the modal does NOT hide it —
+    // it must be explicitly hidden AND re-docked back into the modal, or it
+    // lingers on screen after the checklist is closed (Bug 2). The user's
+    // mode/position preference is preserved and re-applied next time it opens.
+    _teardownPinnedPanel() {
+      const panel = document.getElementById('clPinnedPanel');
+      if (panel) {
+        panel.style.display = 'none';
+        const modalBox = document.querySelector('#checklistModal .cl-modal');
+        const content = document.getElementById('clContent');
+        if (modalBox && content && panel.parentElement !== modalBox) {
+          // Re-dock the DOM node back inside the modal. _pinnedMode (the saved
+          // preference) is intentionally left untouched.
+          panel.classList.remove('cl-pinned-float');
+          panel.classList.add('cl-pinned-dock');
+          panel.style.left = panel.style.top = panel.style.right = panel.style.bottom = '';
+          modalBox.insertBefore(panel, content);
+        }
+      }
+      this._selectedItemId = null;
+      this._applySelectionHighlight();
+    },
+
     _persistPinned() {
       try {
         localStorage.setItem('clPinned', JSON.stringify({

@@ -151,9 +151,14 @@ const Checklists = {
     modal.setAttribute('aria-hidden', 'false');
     document.getElementById('clModalTitle').textContent = clientName ? `Checklist — ${clientName}` : 'Loan Checklist';
     document.getElementById('clContent').innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-    // Restore pinned-menu visibility if user had it open last time
+    // Restore pinned-menu visibility if user had it open last time. Re-apply
+    // the saved mode first so a panel that was re-docked on the previous close
+    // floats again when float is the user's preference.
     const panel = document.getElementById('clPinnedPanel');
-    if (panel && this._pinnedOpen) panel.style.display = 'block';
+    if (panel && this._pinnedOpen) {
+      this._applyPinnedMode(panel);
+      panel.style.display = 'block';
+    }
   },
 
   close() {
@@ -168,10 +173,9 @@ const Checklists = {
     this._dragOffset = { x: 0, y: 0 };
     const modalBox = document.querySelector('#checklistModal .cl-modal');
     if (modalBox) modalBox.style.transform = '';
-    // Hide the pinned menu too — in float mode it lives in document.body
-    // and would otherwise linger on screen after the checklist closes.
-    const panel = document.getElementById('clPinnedPanel');
-    if (panel) panel.style.display = 'none';
+    // Tear down the pinned Menu — in float mode it lives in document.body, so
+    // it must be hidden AND re-docked or it lingers after the modal closes.
+    this._teardownPinnedPanel();
   },
 
   _bindModalEvents() {
