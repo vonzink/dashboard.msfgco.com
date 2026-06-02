@@ -87,6 +87,38 @@ function getRows(result) {
   return Array.isArray(result?.[0]) ? result[0] : result;
 }
 
+async function attachAttendees(rows) {
+  const entries = rows || [];
+  const ids = entries.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return entries;
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const result = await db.query(
+    `SELECT schedule_entry_id, user_id, email, name, response_status
+     FROM schedule_entry_attendees
+     WHERE schedule_entry_id IN (${placeholders})
+     ORDER BY name ASC, email ASC`,
+    ids
+  );
+  const attendeeRows = getRows(result) || [];
+  const byEntry = new Map();
+  attendeeRows.forEach((row) => {
+    const key = String(row.schedule_entry_id);
+    if (!byEntry.has(key)) byEntry.set(key, []);
+    byEntry.get(key).push({
+      user_id: row.user_id || null,
+      email: row.email,
+      name: row.name || null,
+      response_status: row.response_status || null,
+    });
+  });
+
+  return entries.map((entry) => ({
+    ...entry,
+    attendees: byEntry.get(String(entry.id)) || [],
+  }));
+}
+
 function requireDateRange(req, res) {
   if (!req.query.start_date || !req.query.end_date) {
     res.status(400).json({
@@ -313,7 +345,7 @@ router.get('/entries', validateQuery(scheduleEntryQuery), async (req, res, next)
 
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
-    const rows = getRows(result) || [];
+    const rows = await attachAttendees(getRows(result) || []);
     res.json(rows.map((row) => presentScheduleEntry(row, req)));
   } catch (error) {
     next(error);
@@ -326,7 +358,7 @@ router.get('/availability', validateQuery(scheduleEntryQuery), async (req, res, 
 
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
-    const rows = getRows(result) || [];
+    const rows = await attachAttendees(getRows(result) || []);
     const entries = rows.map((row) => presentScheduleEntry(row, req));
     res.json({ entries, count: rows.length });
   } catch (error) {

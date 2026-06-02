@@ -107,6 +107,59 @@ describe('schedule routes', () => {
     expect(sql).toContain('LEFT JOIN user_profiles p ON p.user_id = u.id');
   });
 
+  it('returns employee NMLS, event color, sync warning, and attendees with schedule entries', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 77,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          employee_nmls_number: '451924',
+          status: 'meeting_event',
+          start_date: '2026-06-10',
+          end_date: '2026-06-10',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Client meeting',
+          visibility: 'shared_details',
+          source: 'manual',
+          event_color: '#0F766E',
+          sync_write_status: 'error',
+          sync_write_error: 'Outlook Graph request failed',
+        },
+      ]])
+      .mockResolvedValueOnce([[
+        {
+          schedule_entry_id: 77,
+          user_id: 11,
+          email: 'assistant@msfg.us',
+          name: 'Assistant User',
+          response_status: null,
+        },
+      ]]);
+
+    const res = await makeRequest(app, '/api/schedule/entries?start_date=2026-06-01&end_date=2026-06-30');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)[0]).toEqual(expect.objectContaining({
+      employee_nmls_number: '451924',
+      event_color: '#0F766E',
+      sync_write_status: 'error',
+      sync_write_error: 'Outlook Graph request failed',
+      attendees: [
+        {
+          user_id: 11,
+          email: 'assistant@msfg.us',
+          name: 'Assistant User',
+          response_status: null,
+        },
+      ],
+    }));
+  });
+
   it('returns presented availability entries with count for a date range', async () => {
     db.query.mockResolvedValueOnce([
       [
