@@ -288,6 +288,64 @@ describe('Outlook provider adapter', () => {
     expect(events.map((event) => event.provider_sensitivity)).toEqual(['private', 'normal']);
   });
 
+  it('exports MSFG status categories and attendee payloads to Outlook', () => {
+    const { outlookEventPayload } = require('../../services/calendarSync/providers/outlook');
+    const payload = outlookEventPayload({
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      start_time: '09:00:00',
+      end_time: '10:00:00',
+      timezone: 'America/Denver',
+      note: 'Borrower call',
+      visibility: 'shared_details',
+      attendees: [
+        { email: 'assistant@msfg.us', name: 'Assistant User' },
+      ],
+    });
+
+    expect(payload.showAs).toBe('busy');
+    expect(payload.sensitivity).toBe('normal');
+    expect(payload.categories).toEqual(['MSFG Schedule', 'MSFG Meeting/Event']);
+    expect(payload.attendees).toEqual([
+      {
+        emailAddress: {
+          address: 'assistant@msfg.us',
+          name: 'Assistant User',
+        },
+        type: 'required',
+      },
+    ]);
+  });
+
+  it('imports Outlook category labels back into MSFG statuses', () => {
+    const { normalizeOutlookEvent } = require('../../services/calendarSync/providers/outlook');
+    const event = normalizeOutlookEvent({
+      id: 'event-99',
+      subject: 'Borrower call',
+      sensitivity: 'normal',
+      showAs: 'busy',
+      categories: ['MSFG Schedule', 'MSFG Meeting/Event'],
+      start: { dateTime: '2026-06-10T09:00:00', timeZone: 'Mountain Standard Time' },
+      end: { dateTime: '2026-06-10T10:00:00', timeZone: 'Mountain Standard Time' },
+      attendees: [
+        {
+          emailAddress: { address: 'assistant@msfg.us', name: 'Assistant User' },
+          status: { response: 'accepted' },
+        },
+      ],
+    }, { user_id: 10, provider: 'outlook' });
+
+    expect(event.status).toBe('meeting_event');
+    expect(event.attendees).toEqual([
+      {
+        email: 'assistant@msfg.us',
+        name: 'Assistant User',
+        response_status: 'accepted',
+      },
+    ]);
+  });
+
   it('exports all-day entries with Graph exclusive next-day midnight end dates', () => {
     const { outlookEventPayload } = require('../../services/calendarSync/providers/outlook');
     const payload = outlookEventPayload({
