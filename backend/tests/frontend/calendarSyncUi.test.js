@@ -185,11 +185,52 @@ describe('calendar view controls', () => {
     const CalendarRender = loadCalendarRender();
     const html = CalendarRender.renderViewTabs({ viewMode: 'month' });
 
+    expect(html).toContain('data-view-mode="day"');
+    expect(html).toContain('data-view-mode="week"');
     expect(html).toContain('data-view-mode="month"');
     expect(html).toContain('data-view-mode="two_months"');
     expect(html).toContain('data-view-mode="year"');
     expect(html).toContain('data-view-mode="people"');
+    expect(html).toContain('data-view-mode="all"');
     expect(html).toContain('aria-pressed="true"');
+  });
+});
+
+describe('calendar multi-day view rendering', () => {
+  it('renders week and all-view multi-day bars with span metadata', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'week';
+    state.entries = [{
+      id: 30,
+      user_id: 10,
+      employee_name: 'Zachary Zink',
+      status: 'out',
+      start_date: '2026-06-02',
+      end_date: '2026-06-05',
+      visibility: 'availability_only',
+      event_color: '#0F766E',
+    }];
+    state.people = context.window.CalendarRender.derivePeople(state.entries);
+
+    const weekHtml = context.window.CalendarRoster.render(state);
+    expect(weekHtml).toContain('week-overview');
+    expect(weekHtml).toContain('grid-column');
+    expect(weekHtml).toContain('is-hidden-details');
+
+    state.viewMode = 'all';
+    const allHtml = context.window.CalendarRoster.render(state);
+    expect(allHtml).toContain('all-overview');
+    expect(allHtml).toContain('person-timeline-row');
   });
 });
 

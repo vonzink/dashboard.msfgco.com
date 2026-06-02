@@ -25,8 +25,12 @@
     return Boolean(entry && (entry.private || entry.is_private));
   }
 
-  function isManualEditableEntry(entry) {
-    return Boolean(entry && entry.source === 'manual' && !isPrivateEntry(entry));
+  function isEditableEntry(entry) {
+    return Boolean(
+      entry &&
+      !isPrivateEntry(entry) &&
+      (entry.source === 'manual' || entry.source_provider === 'outlook' || entry.source === 'outlook')
+    );
   }
 
   function isOutlookOwnedEntry(entry) {
@@ -166,7 +170,7 @@
   }
 
   function renderEntry(entry, state) {
-    const editable = isManualEditableEntry(entry);
+    const editable = isEditableEntry(entry);
     const tag = editable ? 'button' : 'div';
     const attrs = editable
       ? `type="button" data-entry-id="${escapeHtml(entry.id)}" aria-label="Edit ${escapeHtml(entryTitle(entry))}"`
