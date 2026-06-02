@@ -149,3 +149,32 @@ describe('ChecklistFormat.isOverdue', () => {
     expect(ChecklistFormat.isOverdue('2020-01-01T23:59:59.999Z')).toBe(true);
   });
 });
+
+describe('ChecklistFormat.matchesTagFilter', () => {
+  const item = { category: 'income', gate: 'ptd' };
+
+  it('passes everything when the filter is empty', () => {
+    expect(ChecklistFormat.matchesTagFilter(item, { category: null, gate: null })).toBe(true);
+    expect(ChecklistFormat.matchesTagFilter(item, null)).toBe(true);
+  });
+
+  it('matches on category alone', () => {
+    expect(ChecklistFormat.matchesTagFilter(item, { category: 'income', gate: null })).toBe(true);
+    expect(ChecklistFormat.matchesTagFilter(item, { category: 'assets', gate: null })).toBe(false);
+  });
+
+  it('matches on gate alone', () => {
+    expect(ChecklistFormat.matchesTagFilter(item, { category: null, gate: 'ptd' })).toBe(true);
+    expect(ChecklistFormat.matchesTagFilter(item, { category: null, gate: 'ctc' })).toBe(false);
+  });
+
+  it('ANDs category and gate together', () => {
+    expect(ChecklistFormat.matchesTagFilter(item, { category: 'income', gate: 'ptd' })).toBe(true);
+    expect(ChecklistFormat.matchesTagFilter(item, { category: 'income', gate: 'ctc' })).toBe(false);
+  });
+
+  it('treats an untagged item as non-matching while a filter is active', () => {
+    expect(ChecklistFormat.matchesTagFilter({}, { category: 'income', gate: null })).toBe(false);
+    expect(ChecklistFormat.matchesTagFilter({}, { category: null, gate: null })).toBe(true);
+  });
+});

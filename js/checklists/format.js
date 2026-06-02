@@ -90,6 +90,17 @@
       if (!dueDateStr) return false;
       return String(dueDateStr).slice(0, 10) < ChecklistFormat.todayISO();
     },
+
+    /**
+     * Category/Gate filter predicate. An item passes when it matches every
+     * active dimension (AND). A null/absent filter dimension matches anything.
+     */
+    matchesTagFilter(item, filter) {
+      if (!filter) return true;
+      if (filter.category && (item.category || null) !== filter.category) return false;
+      if (filter.gate && (item.gate || null) !== filter.gate) return false;
+      return true;
+    },
   };
 
   // Browser global (consumed by checklists.js via mixin)

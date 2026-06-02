@@ -14,6 +14,7 @@ const Checklists = {
   _pinnedOpen: false,
   _pinnedMode: 'dock', // 'dock' (locked across top) | 'float' (draggable)
   _pinnedPos: null,    // {left, top} when in float mode
+  _tagFilter: { category: null, gate: null }, // client-side Category/Gate filter
 
   STATUS_OPTIONS: [
     { value: 'not_started', label: 'Not Started', icon: 'fa-circle', cls: 'cl-status-not-started' },
@@ -187,6 +188,7 @@ const Checklists = {
     this._currentSource = null;
     this._currentChecklist = null;
     this._selectedItemId = null;
+    this._tagFilter = { category: null, gate: null };
     this._dragOffset = { x: 0, y: 0 };
     const modalBox = document.querySelector('#checklistModal .cl-modal');
     if (modalBox) modalBox.style.transform = '';
@@ -277,6 +279,9 @@ const Checklists = {
       'set-assigned-to':       () => this._actionSetAssignedTo(id, btn),
       'set-category':          () => this._actionSetCategory(id, btn),
       'set-gate':              () => this._actionSetGate(id, btn),
+      'filter-category':       () => this._actionFilterCategory(btn),
+      'filter-gate':           () => this._actionFilterGate(btn),
+      'clear-filter':          () => this._actionClearTagFilter(),
       'set-date':              () => this._actionSetDate(id, btn),
       'set-due-date':          () => this._actionSetDueDate(id, btn),
       'export-checklist':      () => this._exportCurrentChecklist(),

@@ -140,6 +140,19 @@
         b.classList.toggle('cl-menu-active', b.dataset.clImportance === importance);
       });
 
+      // Refresh the category/gate row pills.
+      const tagsEl = el.querySelector('.cl-item-tags');
+      if (tagsEl) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = this._itemTagPillsHtml(item);
+        const fresh = tmp.firstElementChild;
+        if (fresh) tagsEl.replaceWith(fresh);
+      }
+      // If a tag filter is active, a changed tag may flip this row's visibility.
+      if (this._tagFilter && (this._tagFilter.category || this._tagFilter.gate)) {
+        this._applyTagFilter();
+      }
+
       // Mirror the same state into the pinned panel if it's showing this item
       if (this._pinnedOpen && this._selectedItemId === itemId) {
         this._renderPinnedPanel();
@@ -217,6 +230,7 @@
             <button type="button" class="btn btn-sm btn-outline btn-danger-outline" data-cl-action="delete-checklist" title="Delete this checklist"><i class="fas fa-trash"></i></button>
           </div>
         </div>
+        ${this._filterBarHtml(items)}
         <div class="cl-items-list">
       `;
 
@@ -237,6 +251,7 @@
                 <i class="fas ${statusInfo.icon}"></i>
               </button>
               <div class="cl-item-name">${Utils.escapeHtml(item.name)}</div>
+              ${this._itemTagPillsHtml(item)}
               <div class="cl-item-actions">
                 ${dueDateStr ? `<span class="cl-item-due-date${overdue ? ' cl-item-due-date-overdue' : ''}" title="Due ${dueDateStr}${overdue ? ' (overdue)' : ''}"><i class="fas fa-hourglass-half"></i> ${dueDateStr}</span>` : ''}
                 ${dateStr ? `<span class="cl-item-date" title="Completed ${dateStr}">${dateStr}</span>` : ''}
@@ -291,7 +306,88 @@
         if (!stillExists) this._selectedItemId = null;
       }
       this._applySelectionHighlight();
+      this._applyTagFilter();
       if (this._pinnedOpen) this._renderPinnedPanel();
+    },
+
+    // ─── Category / Gate tag pills + client-side filter
+
+    /** Two display-only pills (category, gate) for an item row. Always returns
+     *  a .cl-item-tags wrapper (possibly empty) so _updateItemInPlace can swap it. */
+    _itemTagPillsHtml(item) {
+      const cat = item.category ? this.CATEGORY_OPTIONS.find(c => c.value === item.category) : null;
+      const gate = item.gate ? this.GATE_OPTIONS.find(g => g.value === item.gate) : null;
+      let inner = '';
+      if (cat) inner += `<span class="cl-tag-pill cl-cat-${cat.value}" title="Category: ${cat.label}">${cat.label}</span>`;
+      if (gate) inner += `<span class="cl-tag-pill cl-gate-${gate.value}" title="Gate: ${gate.label}">${gate.label}</span>`;
+      return `<span class="cl-item-tags">${inner}</span>`;
+    },
+
+    /** Filter-chip bar — one chip per Category/Gate value actually present on
+     *  the checklist, plus a Clear button. Empty string when no tags are used. */
+    _filterBarHtml(items) {
+      const f = this._tagFilter || { category: null, gate: null };
+      const presentCats = this.CATEGORY_OPTIONS.filter(c => items.some(i => i.category === c.value));
+      const presentGates = this.GATE_OPTIONS.filter(g => items.some(i => i.gate === g.value));
+      if (!presentCats.length && !presentGates.length) return '';
+      const catChips = presentCats.map(c =>
+        `<button type="button" class="cl-filter-chip cl-cat-${c.value}${f.category === c.value ? ' cl-chip-active' : ''}" data-cl-action="filter-category" data-cl-category="${c.value}">${c.label}</button>`
+      ).join('');
+      const gateChips = presentGates.map(g =>
+        `<button type="button" class="cl-filter-chip cl-gate-${g.value}${f.gate === g.value ? ' cl-chip-active' : ''}" data-cl-action="filter-gate" data-cl-gate="${g.value}">${g.label}</button>`
+      ).join('');
+      const sep = (catChips && gateChips) ? '<span class="cl-filter-sep"></span>' : '';
+      const active = !!(f.category || f.gate);
+      return `<div class="cl-filter-bar">
+          <span class="cl-filter-label"><i class="fas fa-filter"></i> Filter</span>
+          ${catChips}${sep}${gateChips}
+          <button type="button" class="cl-filter-clear" data-cl-action="clear-filter"${active ? '' : ' hidden'}>Clear</button>
+        </div>`;
+    },
+
+    /** Show/hide item rows per the active Category/Gate filter (AND). */
+    _applyTagFilter() {
+      const container = document.getElementById('clContent');
+      if (!container) return;
+      const byId = new Map((this._currentChecklist?.items || []).map(i => [String(i.id), i]));
+      container.querySelectorAll('.cl-item').forEach(el => {
+        const item = byId.get(el.dataset.itemId);
+        const show = !item || ChecklistFormat.matchesTagFilter(item, this._tagFilter);
+        el.classList.toggle('cl-item-hidden', !show);
+      });
+    },
+
+    /** Reflect _tagFilter onto the chip active states + Clear button visibility. */
+    _syncFilterChips() {
+      const container = document.getElementById('clContent');
+      if (!container) return;
+      const f = this._tagFilter || { category: null, gate: null };
+      container.querySelectorAll('[data-cl-action="filter-category"]').forEach(b =>
+        b.classList.toggle('cl-chip-active', (b.dataset.clCategory || null) === f.category));
+      container.querySelectorAll('[data-cl-action="filter-gate"]').forEach(b =>
+        b.classList.toggle('cl-chip-active', (b.dataset.clGate || null) === f.gate));
+      const clear = container.querySelector('[data-cl-action="clear-filter"]');
+      if (clear) clear.hidden = !(f.category || f.gate);
+    },
+
+    _actionFilterCategory(btn) {
+      const v = btn.dataset.clCategory || null;
+      this._tagFilter.category = (this._tagFilter.category === v) ? null : v;
+      this._syncFilterChips();
+      this._applyTagFilter();
+    },
+
+    _actionFilterGate(btn) {
+      const v = btn.dataset.clGate || null;
+      this._tagFilter.gate = (this._tagFilter.gate === v) ? null : v;
+      this._syncFilterChips();
+      this._applyTagFilter();
+    },
+
+    _actionClearTagFilter() {
+      this._tagFilter = { category: null, gate: null };
+      this._syncFilterChips();
+      this._applyTagFilter();
     },
 
     // ─── Drag-to-reorder
