@@ -13,6 +13,8 @@ The company calendar should make employee availability fast to scan, while still
 - Hidden events are visually dimmed. Shared events are visually brighter. This gives a quick scan of whether an event is team-visible without opening details.
 - Users can share or hide details per event when the event is shareable.
 - Company email calendars remain employee-owned. The app will sync to another employee's Outlook only through that employee's connected company Outlook account.
+- The calendar header should use the official MSFG logo asset in the top-right header area:
+  `https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG+Home+Loans/MSFG-Color-Transparent.png`.
 
 ## Views
 
@@ -111,6 +113,7 @@ Manual create/update should continue enforcing existing permissions:
 Add or update:
 
 - Employee picker in the editor.
+- Header logo treatment using the official transparent MSFG logo image, with accessible alt text and responsive sizing.
 - Day, Week, and All view modes.
 - Multi-day bar layout helpers.
 - Event brightness classes for hidden vs shared.
