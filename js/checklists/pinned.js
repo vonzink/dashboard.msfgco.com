@@ -253,6 +253,14 @@
       const statusBtns = this.STATUS_OPTIONS.map(s =>
         `<button type="button" data-cl-action="set-status" data-cl-item-id="${item.id}" data-cl-status="${s.value}"${s.value === item.status ? ' class="cl-menu-active"' : ''}><i class="fas ${s.icon} ${s.cls}"></i> ${s.label}</button>`
       ).join('');
+      const category = item.category || '';
+      const gate = item.gate || '';
+      const catBtns = this.CATEGORY_OPTIONS.map(c =>
+        `<button type="button" class="cl-tag-pill cl-cat-${c.value}${category === c.value ? ' cl-tag-active' : ''}" data-cl-action="set-category" data-cl-id="${item.id}" data-cl-category="${c.value}">${c.label}</button>`
+      ).join('');
+      const gateBtns = this.GATE_OPTIONS.map(g =>
+        `<button type="button" class="cl-tag-pill cl-gate-${g.value}${gate === g.value ? ' cl-tag-active' : ''}" data-cl-action="set-gate" data-cl-id="${item.id}" data-cl-gate="${g.value}">${g.label}</button>`
+      ).join('');
       return `
         <div class="cl-menu-cols">
           <div class="cl-menu-col">
@@ -268,6 +276,10 @@
                 <button type="button" data-cl-action="set-importance" data-cl-id="${item.id}" data-cl-importance="normal"${importance === 'normal' ? ' class="cl-menu-active"' : ''}><i class="fas fa-minus"></i> Normal</button>
               </div>
             </div>
+            <div class="cl-menu-section">
+              <div class="cl-menu-section-label">Category</div>
+              <div class="cl-menu-section-buttons cl-tag-pills">${catBtns}</div>
+            </div>
           </div>
           <div class="cl-menu-col">
             <div class="cl-menu-section">
@@ -280,6 +292,10 @@
                 <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to="processor"${assignedTo === 'processor' ? ' class="cl-menu-active"' : ''}><i class="fas fa-cogs cl-assign-icon-processor"></i> Processor</button>
                 <button type="button" data-cl-action="set-assigned-to" data-cl-id="${item.id}" data-cl-assigned-to=""${!assignedTo ? ' class="cl-menu-active"' : ''}><i class="fas fa-times-circle"></i> Unassign</button>
               </div>
+            </div>
+            <div class="cl-menu-section">
+              <div class="cl-menu-section-label">Gate</div>
+              <div class="cl-menu-section-buttons cl-tag-pills">${gateBtns}</div>
             </div>
             <div class="cl-menu-section">
               <div class="cl-menu-section-label">Actions</div>

@@ -25,6 +25,23 @@ const Checklists = {
     { value: 'na',          label: 'N/A',         icon: 'fa-minus-circle', cls: 'cl-status-na' },
   ],
 
+  // Condition tags (single-select per item). Color-coded as pills in the Menu,
+  // on each item row, and usable as filter chips. Mirror the DB ENUMs in
+  // migration 081 + the Zod enums in schemas/checklists.js.
+  CATEGORY_OPTIONS: [
+    { value: 'assets', label: 'Assets' },
+    { value: 'income', label: 'Income' },
+    { value: 'reo',    label: 'REO' },
+    { value: 'credit', label: 'Credit' },
+    { value: 'title',  label: 'Title' },
+  ],
+  GATE_OPTIONS: [
+    { value: 'ptd', label: 'PTD' },
+    { value: 'ptc', label: 'PTC' },
+    { value: 'ptf', label: 'PTF' },
+    { value: 'ctc', label: 'CTC' },
+  ],
+
   SAMPLE_TEMPLATE: {
     name: 'Loan Processing Checklist',
     description: 'Standard loan processing workflow — covers pre-approval through funding.',
@@ -258,6 +275,8 @@ const Checklists = {
       'edit-item':             () => this._actionEditItem(id),
       'set-importance':        () => this._actionSetImportance(id, btn),
       'set-assigned-to':       () => this._actionSetAssignedTo(id, btn),
+      'set-category':          () => this._actionSetCategory(id, btn),
+      'set-gate':              () => this._actionSetGate(id, btn),
       'set-date':              () => this._actionSetDate(id, btn),
       'set-due-date':          () => this._actionSetDueDate(id, btn),
       'export-checklist':      () => this._exportCurrentChecklist(),

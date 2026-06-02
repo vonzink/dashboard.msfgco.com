@@ -291,6 +291,43 @@
       } catch (err) { Utils.showToast('Failed to set assignment: ' + (err.message || ''), 'error'); }
     },
 
+    async _actionSetCategory(id, btn) {
+      const itemId = parseInt(id);
+      const item = this._findItem(itemId);
+      if (!item) return;
+      const clicked = btn.dataset.clCategory || null;
+      // Re-clicking the current value clears it (toggle off).
+      const newVal = (item.category === clicked) ? null : clicked;
+      const prev = item.category;
+      item.category = newVal;                 // optimistic
+      this._updateItemInPlace(itemId);
+      try {
+        await ServerAPI.updateChecklistItem(itemId, { category: newVal });
+      } catch (err) {
+        item.category = prev;                 // revert
+        this._updateItemInPlace(itemId);
+        Utils.showToast('Failed to set category: ' + (err.message || ''), 'error');
+      }
+    },
+
+    async _actionSetGate(id, btn) {
+      const itemId = parseInt(id);
+      const item = this._findItem(itemId);
+      if (!item) return;
+      const clicked = btn.dataset.clGate || null;
+      const newVal = (item.gate === clicked) ? null : clicked;
+      const prev = item.gate;
+      item.gate = newVal;                     // optimistic
+      this._updateItemInPlace(itemId);
+      try {
+        await ServerAPI.updateChecklistItem(itemId, { gate: newVal });
+      } catch (err) {
+        item.gate = prev;                     // revert
+        this._updateItemInPlace(itemId);
+        Utils.showToast('Failed to set gate: ' + (err.message || ''), 'error');
+      }
+    },
+
     async _actionSetDate(id, btn) {
       const itemId = parseInt(id);
       const item = this._findItem(itemId);
