@@ -68,6 +68,16 @@ function isPassthrough(rel) {
   return false;
 }
 
+// ES-module island + its Web Worker. These reference EACH OTHER by relative
+// `import './scanner-util.js'` and `new Worker('js/scanner-worker.js')` — paths
+// a hash-only fingerprinter can't rewrite (the rewriter only touches HTML), so
+// hashing them 404s the whole scanner. Keep them un-hashed (passthrough) so
+// their existing ?v= versioning + relative imports keep resolving exactly as
+// before. TODO(path-B): bundle these with esbuild and drop this carve-out.
+function isUnbundledModule(rel) {
+  return /^js\/scanner-[^/]+\.js$/.test(rel);
+}
+
 function walk(dir, files = []) {
   for (const name of fs.readdirSync(dir)) {
     if (EXCLUDE_DIRS.has(name)) continue;
@@ -111,6 +121,7 @@ const versionable = allFiles.filter(f => {
   const rel = path.relative(ROOT, f);
   if (rel.includes('node_modules')) return false;
   if (!(rel.startsWith('js' + path.sep) || rel.startsWith('css' + path.sep))) return false;
+  if (isUnbundledModule(rel.split(path.sep).join('/'))) return false; // scanner island stays un-hashed
   return f.endsWith('.js') || f.endsWith('.css');
 });
 
@@ -154,7 +165,7 @@ for (const file of allFiles) {
   const rel = path.relative(ROOT, file).split(path.sep).join('/');
   if (file.endsWith('.html')) continue; // already handled
   if (manifest[rel]) continue;          // already hashed
-  if (!isPassthrough(rel)) continue;
+  if (!isPassthrough(rel) && !isUnbundledModule(rel)) continue; // scanner island copies un-hashed
   // For Calculators subdirs, copy *.js and *.css as-is (their own version
   // strings still apply; this pass doesn't migrate them).
   copyToDist(file, rel);
