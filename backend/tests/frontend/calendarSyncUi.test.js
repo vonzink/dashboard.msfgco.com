@@ -194,6 +194,17 @@ describe('calendar view controls', () => {
     expect(html).toContain('data-view-mode="all"');
     expect(html).toContain('aria-pressed="true"');
   });
+
+  it('renders the official MSFG logo in the calendar header', () => {
+    const CalendarRender = loadCalendarRender();
+    const html = CalendarRender.renderHeader?.({
+      viewMode: 'month',
+      viewDate: new Date(2026, 5, 1),
+    });
+
+    expect(String(html)).toContain('MSFG-Color-Transparent.png');
+    expect(String(html)).toContain('alt="MSFG Home Loans"');
+  });
 });
 
 describe('calendar multi-day view rendering', () => {
