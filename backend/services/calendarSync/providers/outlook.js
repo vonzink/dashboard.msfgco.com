@@ -26,8 +26,13 @@ function isImportableEvent(event) {
   return IMPORTABLE_SHOW_AS.has(event.showAs || 'busy');
 }
 
+function dateOnly(value) {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value || '').slice(0, 10);
+}
+
 function addDays(date, days) {
-  const [year, month, day] = String(date || '').split('-').map(Number);
+  const [year, month, day] = dateOnly(date).split('-').map(Number);
   if (!year || !month || !day) return null;
 
   const value = new Date(Date.UTC(year, month - 1, day) + days * 24 * 60 * 60 * 1000);
@@ -211,12 +216,14 @@ function showAsForEntry(entry) {
 
 function outlookEventPayload(entry) {
   const isAllDay = !entry.start_time && !entry.end_time;
+  const startDate = dateOnly(entry.start_date);
+  const endDate = dateOnly(entry.end_date || entry.start_date);
   const startDateTime = isAllDay
-    ? `${entry.start_date}T00:00:00`
-    : `${entry.start_date}T${entry.start_time || '00:00:00'}`;
+    ? `${startDate}T00:00:00`
+    : `${startDate}T${entry.start_time || '00:00:00'}`;
   const endDateTime = isAllDay
-    ? `${addDays(entry.end_date || entry.start_date, 1)}T00:00:00`
-    : `${entry.end_date}T${entry.end_time || entry.start_time || '23:59:59'}`;
+    ? `${addDays(endDate, 1)}T00:00:00`
+    : `${endDate}T${entry.end_time || entry.start_time || '23:59:59'}`;
 
   return {
     subject: entry.note || 'MSFG Schedule',

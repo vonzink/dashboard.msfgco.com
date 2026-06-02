@@ -280,6 +280,22 @@ describe('Outlook provider adapter', () => {
     expect(payload.end.dateTime).toBe('2026-06-02T00:00:00');
   });
 
+  it('exports Date object entry dates as Graph ISO local date times', () => {
+    const { outlookEventPayload } = require('../../services/calendarSync/providers/outlook');
+    const payload = outlookEventPayload({
+      status: 'out',
+      start_date: new Date('2026-05-26T00:00:00.000Z'),
+      end_date: new Date('2026-05-26T00:00:00.000Z'),
+      start_time: null,
+      end_time: null,
+      timezone: 'America/Denver',
+      visibility: 'availability_only',
+    });
+
+    expect(payload.start.dateTime).toBe('2026-05-26T00:00:00');
+    expect(payload.end.dateTime).toBe('2026-05-27T00:00:00');
+  });
+
   it('persists refreshed token fields before continuing Graph requests', async () => {
     vi.stubEnv('CALENDAR_SYNC_ENCRYPTION_KEY', Buffer.alloc(32, 'a').toString('base64'));
     const { getAccountEmail } = require('../../services/calendarSync/providers/outlook');
