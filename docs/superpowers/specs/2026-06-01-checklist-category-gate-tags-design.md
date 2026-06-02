@@ -84,6 +84,7 @@ Readback is unchanged (`_hydrateInternal` uses `SELECT *`).
 - **`css/checklists.css`:** `.cl-tag-pill` base + per-value modifiers, theme-aware via existing `data-theme` variables.
   - Category palette: assets·teal, income·green, reo·amber, credit·purple, title·blue.
   - Gate palette: ptd·slate, ptc·orange, ptf·red, ctc·green.
+  - **Status menu icons (polish):** color the `i.cl-status-*` icons in the Menu's Status section to each status's canonical color (`.cl-pinned-body i.cl-status-*`), matching the row name + status button. Brings Status in line with the already-colored Priority (`cl-imp-icon-*`) and Assign-To (`cl-assign-icon-*`) icons. Mapping: not_started/na·muted, in_progress·`--status-warning`, submitted·`#38bdf8`, done·`--green-bright`, incomplete·`#f97316`, issue·`--status-danger`.
 
 ### Render/data flow
 Menu pill click → `_actionSetCategory/Gate` → optimistic `item.category/gate` + `_updateItemInPlace` → `PUT /loan-items/:id {category|gate}` → on success keep, on throw revert + error toast. Filter chips are pure client-side view state over `_currentChecklist.items`.
@@ -108,7 +109,7 @@ Menu pill click → `_actionSetCategory/Gate` → optimistic `item.category/gate
 | `js/checklists/actions.js` | `_actionSetCategory`, `_actionSetGate` |
 | `js/checklists/pinned.js` | `_teardownPinnedPanel`; Category/Gate menu sections |
 | `js/checklists/render.js` | row pills + filter-chip bar + filter logic |
-| `css/checklists.css` | pill + chip styles |
+| `css/checklists.css` | pill + chip styles + Status menu icon colors |
 | `backend/tests/validation/*` | schema contract test |
 | `backend/tests/frontend/*` | filter-predicate test |
 
@@ -116,5 +117,5 @@ Menu pill click → `_actionSetCategory/Gate` → optimistic `item.category/gate
 1. `migration + schema + service` (backend tag plumbing + empty-update 400 + subitem schema fix)
 2. `bug2: harden pinned-panel teardown on close`
 3. `feature: Category/Gate menu sections + actions + dispatcher`
-4. `feature: row pills + filter chips + CSS`
+4. `feature: row pills + filter chips + CSS (incl. Status menu icon colors)`
 5. `tests: schema contract + filter predicate`
