@@ -67,6 +67,7 @@ describe('schedule routes', () => {
           employee_name: 'Employee User',
           employee_initials: 'EU',
           employee_role: 'employee',
+          employee_nmls_number: '123456',
           status: 'remote',
           start_date: '2026-06-01',
           end_date: '2026-06-01',
@@ -90,6 +91,7 @@ describe('schedule routes', () => {
         id: 1,
         user_id: 10,
         employee_name: 'Employee User',
+        employee_nmls_number: '123456',
         status: 'remote',
         display_label: 'Remote',
         note: 'Working from home',
@@ -100,6 +102,9 @@ describe('schedule routes', () => {
       expect.stringContaining('se.end_date >= ?'),
       ['2026-06-01', '2026-06-30']
     );
+    const [sql] = db.query.mock.calls[0];
+    expect(sql).toContain('p.nmls_number AS employee_nmls_number');
+    expect(sql).toContain('LEFT JOIN user_profiles p ON p.user_id = u.id');
   });
 
   it('returns presented availability entries with count for a date range', async () => {
@@ -741,6 +746,8 @@ describe('schedule routes', () => {
       expect.stringContaining('SET visibility = ?'),
       ['shared_details', 10, '9']
     );
+    expect(db.query.mock.calls[0][0]).toContain('LEFT JOIN user_profiles p ON p.user_id = u.id');
+    expect(db.query.mock.calls[2][0]).toContain('LEFT JOIN user_profiles p ON p.user_id = u.id');
   });
 
   it('blocks non-owners from changing provider event sharing', async () => {

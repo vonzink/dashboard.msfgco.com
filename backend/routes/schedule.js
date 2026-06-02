@@ -20,7 +20,8 @@ const SELECT_FIELDS = `
   se.*,
   u.name AS employee_name,
   u.initials AS employee_initials,
-  u.role AS employee_role
+  u.role AS employee_role,
+  p.nmls_number AS employee_nmls_number
 `;
 
 const MAX_QUERY_RANGE_DAYS = 370;
@@ -74,6 +75,7 @@ function buildListQuery(query) {
       SELECT ${SELECT_FIELDS}
       FROM schedule_entries se
       JOIN users u ON u.id = se.user_id
+      LEFT JOIN user_profiles p ON p.user_id = u.id
       ${whereClause}
       ORDER BY se.start_date ASC, se.start_time ASC, u.name ASC
     `,
@@ -138,6 +140,7 @@ async function fetchEntry(id) {
     `SELECT ${SELECT_FIELDS}
      FROM schedule_entries se
      JOIN users u ON u.id = se.user_id
+     LEFT JOIN user_profiles p ON p.user_id = u.id
      WHERE se.id = ?`,
     [id]
   );
