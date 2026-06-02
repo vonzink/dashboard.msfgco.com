@@ -299,6 +299,8 @@ describe('calendar detail sharing controls', () => {
 
     const html = CalendarDetail.render(state);
     expect(html).toContain('Private in Outlook');
+    expect(html).toContain('is-readonly');
+    expect(html).not.toContain('Edit Busy');
     expect(html).not.toContain('data-entry-visibility="shared_details"');
   });
 });

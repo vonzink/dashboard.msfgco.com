@@ -122,9 +122,22 @@
     return Boolean(entry && (entry.provider_owned || entry.source_provider || entry.source === 'outlook' || entry.source === 'google'));
   }
 
+  function isFalseValue(value) {
+    return value === false || value === 0 || value === '0';
+  }
+
+  function isProtectedOutlookEntry(entry) {
+    return Boolean(
+      entry &&
+      (entry.source_provider === 'outlook' || entry.source === 'outlook') &&
+      (isFalseValue(entry.details_shareable) || (entry.provider_sensitivity && entry.provider_sensitivity !== 'normal'))
+    );
+  }
+
   function isEditableEntry(entry) {
     if (!entry || isPrivateEntry(entry)) return false;
     if (entry.source === 'manual') return true;
+    if (isProtectedOutlookEntry(entry)) return false;
     return Boolean(isProviderOwnedEntry(entry) && (entry.source_provider === 'outlook' || entry.source === 'outlook'));
   }
 
