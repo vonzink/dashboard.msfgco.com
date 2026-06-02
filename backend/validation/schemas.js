@@ -182,6 +182,18 @@ const calendarEvent = z.object({
 
 const timeString = z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/, 'Expected HH:MM or HH:MM:SS format');
 
+const eventColor = z.string()
+  .trim()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, 'Expected #RGB or #RRGGBB color')
+  .optional()
+  .nullable();
+
+const scheduleAttendee = z.object({
+  user_id: z.coerce.number().int().positive().optional().nullable(),
+  email: z.string().trim().email().max(255),
+  name: optionalString(255),
+}).strict();
+
 const scheduleStatuses = ['out', 'remote', 'traveling', 'meeting_event', 'other', 'busy'];
 const scheduleSources = ['manual', 'outlook', 'google'];
 const scheduleVisibility = ['availability_only', 'shared_details'];
@@ -201,6 +213,9 @@ const scheduleEntryFields = {
   source_event_id: optionalString(255),
   details_shareable: z.coerce.boolean().optional(),
   provider_sensitivity: optionalString(40),
+  event_color: eventColor,
+  attendees: z.array(scheduleAttendee).max(100).optional().default([]),
+  send_updates: z.boolean().optional().default(false),
 };
 
 const scheduleEntryBase = z.object({
@@ -210,7 +225,11 @@ const scheduleEntryBase = z.object({
   source: z.enum(scheduleSources).optional().default('manual'),
 });
 
-const scheduleEntryUpdateBase = z.object(scheduleEntryFields);
+const scheduleEntryUpdateBase = z.object({
+  ...scheduleEntryFields,
+  attendees: z.array(scheduleAttendee).max(100).optional(),
+  send_updates: z.boolean().optional(),
+});
 
 const scheduleEntry = scheduleEntryBase.strict().superRefine((data, ctx) => {
   if (data.end_date < data.start_date) {

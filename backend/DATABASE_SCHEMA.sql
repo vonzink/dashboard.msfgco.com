@@ -264,6 +264,12 @@ CREATE TABLE IF NOT EXISTS schedule_entries (
     source ENUM('manual','outlook','google') DEFAULT 'manual',
     source_provider ENUM('outlook','google') NULL,
     source_event_id VARCHAR(255) NULL,
+    details_shareable TINYINT DEFAULT 0,
+    provider_sensitivity VARCHAR(40) NULL,
+    event_color VARCHAR(20) NULL,
+    sync_write_status ENUM('idle','pending','synced','error') DEFAULT 'idle',
+    sync_write_error TEXT NULL,
+    sync_write_attempted_at TIMESTAMP NULL,
     created_by INT NULL,
     updated_by INT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -275,6 +281,21 @@ CREATE TABLE IF NOT EXISTS schedule_entries (
     INDEX idx_schedule_dates (start_date, end_date),
     INDEX idx_schedule_status (status),
     UNIQUE KEY uq_schedule_source_event (source_provider, source_event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS schedule_entry_attendees (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    schedule_entry_id INT NOT NULL,
+    user_id INT NULL,
+    email VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NULL,
+    response_status VARCHAR(40) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (schedule_entry_id) REFERENCES schedule_entries(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE KEY uq_schedule_entry_attendee_email (schedule_entry_id, email),
+    INDEX idx_schedule_entry_attendees_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS calendar_sync_connections (
