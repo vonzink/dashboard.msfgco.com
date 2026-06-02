@@ -13,6 +13,10 @@ const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD 
 const checklistStatus = z.enum(['not_started', 'in_progress', 'submitted', 'done', 'incomplete', 'issue', 'na']);
 const checklistImportance = z.enum(['normal', 'important', 'urgent']);
 const checklistAssignedTo = z.enum(['underwriter', 'investor', 'title', 'borrower', 'processor']);
+// Condition tags: a document Category and an underwriting Gate. Both
+// single-select per item, color-coded as pills in the UI.
+const checklistCategory = z.enum(['assets', 'income', 'reo', 'credit', 'title']);
+const checklistGate = z.enum(['ptd', 'ptc', 'ptf', 'ctc']);
 
 const checklistSubitemInput = z.object({
   name: trimmedString(500),
@@ -60,8 +64,23 @@ const loanChecklistItemUpdate = z.object({
   status: checklistStatus.optional(),
   importance: checklistImportance.optional(),
   assigned_to: checklistAssignedTo.optional().nullable(),
+  category: checklistCategory.optional().nullable(),
+  gate: checklistGate.optional().nullable(),
   date: dateString.optional().nullable(),
   due_date: dateString.optional().nullable(),
+  sort_order: z.number().int().nonnegative().optional(),
+}).refine(
+  data => Object.keys(data).length > 0,
+  { message: 'At least one field is required' },
+);
+
+// Subitems carry a subset of item fields — they have no importance, assignment,
+// category, gate, or due_date. (Previously the subitem route reused
+// loanChecklistItemUpdate, which silently accepted those item-only fields.)
+const loanChecklistSubitemUpdate = z.object({
+  name: trimmedString(500).optional(),
+  status: checklistStatus.optional(),
+  date: dateString.optional().nullable(),
   sort_order: z.number().int().nonnegative().optional(),
 }).refine(
   data => Object.keys(data).length > 0,
@@ -107,11 +126,14 @@ const checklistNoteCreate = z.object({
 module.exports = {
   checklistStatus,
   checklistImportance,
+  checklistCategory,
+  checklistGate,
   checklistTemplate,
   checklistTemplateUpdate,
   loanChecklistAssign,
   loanChecklistRename,
   loanChecklistItemUpdate,
+  loanChecklistSubitemUpdate,
   loanChecklistItemCreate,
   loanChecklistSubitemCreate,
   loanChecklistImport,
