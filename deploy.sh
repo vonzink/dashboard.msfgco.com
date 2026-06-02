@@ -61,42 +61,23 @@ if [ "$DEPLOY_FRONTEND" = true ]; then
     echo ""
   fi
 
-  echo -e "${YELLOW}▸ Syncing frontend to S3...${NC}"
-  aws s3 sync . "$S3_BUCKET" \
-    --exclude "backend/*" \
-    --exclude ".git" \
-    --exclude ".git/*" \
-    --exclude ".planning" \
-    --exclude ".planning/*" \
-    --exclude ".superpowers" \
-    --exclude ".superpowers/*" \
-    --exclude ".worktrees" \
-    --exclude ".worktrees/*" \
-    --exclude "node_modules/*" \
-    --exclude "*.sh" \
-    --exclude ".env*" \
-    --exclude ".claude/*" \
-    --exclude "*.sql" \
-    --exclude "*.md" \
-    --exclude "*.txt" \
-    --exclude "*.json" \
-    --exclude ".gitignore" \
-    --exclude ".DS_Store" \
-    --exclude "deploy/*" \
-    --exclude "docs/*" \
-    --exclude "tools/*" \
-    --delete \
-    --size-only
+  # Build step (audit §3.1): content-hash every js/css file and rewrite the
+  # HTML to point at the hashed names. dist/ becomes the deployable tree.
+  #
+  # This replaces the old approach of hand-bumping ?v=... query strings in
+  # the HTML and relying on the s3 sync --size-only heuristic, both of which
+  # silently broke whenever a same-length version bump was made.
+  echo -e "${YELLOW}▸ Building (content-hashing js/css, rewriting HTML)...${NC}"
+  node build.js
+  echo -e "${GREEN}✓ Build complete${NC}"
+  echo ""
 
+  echo -e "${YELLOW}▸ Syncing dist/ to S3...${NC}"
+  # --delete removes orphaned old hashed files so we don't accumulate them.
+  # Brief 404 window for in-flight users between sync + CloudFront invalidation
+  # is acceptable; HTML is invalidated immediately and clients re-fetch.
+  aws s3 sync dist/ "$S3_BUCKET" --delete
   echo -e "${GREEN}✓ S3 sync complete${NC}"
-
-  # The bulk sync above uses --size-only for speed, which means a same-length
-  # change (e.g. bumping a ?v=...a cache-buster to ...b) is INVISIBLE to sync
-  # and gets skipped. index.html is the cache-buster anchor for every JS/CSS
-  # asset, so force-upload it every deploy regardless of size.
-  echo -e "${YELLOW}▸ Force-uploading index.html (cache-buster anchor)...${NC}"
-  aws s3 cp index.html "$S3_BUCKET/index.html" --content-type "text/html" >/dev/null
-  echo -e "${GREEN}✓ index.html uploaded${NC}"
   echo ""
 
   echo -e "${YELLOW}▸ Invalidating CloudFront cache...${NC}"

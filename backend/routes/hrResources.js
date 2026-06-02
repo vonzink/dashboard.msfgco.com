@@ -1,8 +1,15 @@
-// HR Resources API routes — links + notes per HR category (mirrors Programs pattern)
+// HR Resources API routes — links + notes per HR category (mirrors Programs pattern).
+//
+// Response convention (per backend/utils/response.js):
+//   ok(res, data)          — 200 + JSON
+//   created(res, data)     — 201 + JSON
+//   deleted(res, msg?)     — 200 + { success: true, message }
+//   fail(res, msg, status) — error envelope { error: msg }
 const express = require('express');
 const router = express.Router();
 const db = require('../db/connection');
 const { getUserId, getDbUser, isAdmin, requireDbUser, requireManagerOrAdmin } = require('../middleware/userContext');
+const { ok, created, deleted, fail } = require('../utils/response');
 
 const VALID_CATEGORIES = ['famli', 'general'];
 
@@ -21,7 +28,7 @@ router.get('/', async (req, res, next) => {
         notes: notes.filter(n => n.category === cat),
       };
     }
-    res.json(result);
+    ok(res, result);
   } catch (error) {
     next(error);
   }
@@ -32,13 +39,13 @@ router.get('/:category', async (req, res, next) => {
   try {
     const cat = req.params.category;
     if (!VALID_CATEGORIES.includes(cat)) {
-      return res.status(400).json({ error: 'Invalid category' });
+      return fail(res, 'Invalid category', 400);
     }
 
     const [links] = await db.query('SELECT * FROM hr_links WHERE category = ? ORDER BY sort_order', [cat]);
     const [notes] = await db.query('SELECT * FROM hr_notes WHERE category = ? ORDER BY created_at DESC', [cat]);
 
-    res.json({ links, notes });
+    ok(res, { links, notes });
   } catch (error) {
     next(error);
   }
@@ -50,10 +57,10 @@ router.post('/links', requireManagerOrAdmin, async (req, res, next) => {
     const { category, url, label, description, sort_order } = req.body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: 'Invalid category' });
+      return fail(res, 'Invalid category', 400);
     }
     if (!url || !label) {
-      return res.status(400).json({ error: 'url and label are required' });
+      return fail(res, 'url and label are required', 400);
     }
 
     const [result] = await db.query(
@@ -62,7 +69,7 @@ router.post('/links', requireManagerOrAdmin, async (req, res, next) => {
     );
 
     const [rows] = await db.query('SELECT * FROM hr_links WHERE id = ?', [result.insertId]);
-    res.status(201).json(rows[0]);
+    created(res, rows[0]);
   } catch (error) {
     next(error);
   }
@@ -81,15 +88,15 @@ router.put('/links/:id', requireManagerOrAdmin, async (req, res, next) => {
     if (sort_order !== undefined) { sets.push('sort_order = ?'); vals.push(sort_order); }
 
     if (sets.length === 0) {
-      return res.status(400).json({ error: 'No fields to update' });
+      return fail(res, 'No fields to update', 400);
     }
 
     vals.push(req.params.id);
     await db.query(`UPDATE hr_links SET ${sets.join(', ')} WHERE id = ?`, vals);
 
     const [rows] = await db.query('SELECT * FROM hr_links WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'Link not found' });
-    res.json(rows[0]);
+    if (rows.length === 0) return fail(res, 'Link not found', 404);
+    ok(res, rows[0]);
   } catch (error) {
     next(error);
   }
@@ -99,8 +106,8 @@ router.put('/links/:id', requireManagerOrAdmin, async (req, res, next) => {
 router.delete('/links/:id', requireManagerOrAdmin, async (req, res, next) => {
   try {
     const [result] = await db.query('DELETE FROM hr_links WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ error: 'Link not found' });
-    res.json({ message: 'Link deleted' });
+    if (result.affectedRows === 0) return fail(res, 'Link not found', 404);
+    deleted(res, 'Link deleted');
   } catch (error) {
     next(error);
   }
@@ -112,10 +119,10 @@ router.post('/notes', async (req, res, next) => {
     const { category, content } = req.body;
 
     if (!category || !VALID_CATEGORIES.includes(category)) {
-      return res.status(400).json({ error: 'Invalid category' });
+      return fail(res, 'Invalid category', 400);
     }
     if (!content || !content.trim()) {
-      return res.status(400).json({ error: 'content is required' });
+      return fail(res, 'content is required', 400);
     }
 
     const userId = getUserId(req);
@@ -128,7 +135,7 @@ router.post('/notes', async (req, res, next) => {
     );
 
     const [rows] = await db.query('SELECT * FROM hr_notes WHERE id = ?', [result.insertId]);
-    res.status(201).json(rows[0]);
+    created(res, rows[0]);
   } catch (error) {
     next(error);
   }
@@ -139,19 +146,19 @@ router.put('/notes/:id', async (req, res, next) => {
   try {
     const { content } = req.body;
     if (!content || !content.trim()) {
-      return res.status(400).json({ error: 'content is required' });
+      return fail(res, 'content is required', 400);
     }
 
     const [existing] = await db.query('SELECT * FROM hr_notes WHERE id = ?', [req.params.id]);
-    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+    if (existing.length === 0) return fail(res, 'Note not found', 404);
 
     if (!isAdmin(req) && existing[0].created_by !== getUserId(req)) {
-      return res.status(403).json({ error: 'You can only edit your own notes' });
+      return fail(res, 'You can only edit your own notes', 403);
     }
 
     await db.query('UPDATE hr_notes SET content = ? WHERE id = ?', [content.trim(), req.params.id]);
     const [rows] = await db.query('SELECT * FROM hr_notes WHERE id = ?', [req.params.id]);
-    res.json(rows[0]);
+    ok(res, rows[0]);
   } catch (error) {
     next(error);
   }
@@ -161,14 +168,14 @@ router.put('/notes/:id', async (req, res, next) => {
 router.delete('/notes/:id', async (req, res, next) => {
   try {
     const [existing] = await db.query('SELECT * FROM hr_notes WHERE id = ?', [req.params.id]);
-    if (existing.length === 0) return res.status(404).json({ error: 'Note not found' });
+    if (existing.length === 0) return fail(res, 'Note not found', 404);
 
     if (!isAdmin(req) && existing[0].created_by !== getUserId(req)) {
-      return res.status(403).json({ error: 'You can only delete your own notes' });
+      return fail(res, 'You can only delete your own notes', 403);
     }
 
     await db.query('DELETE FROM hr_notes WHERE id = ?', [req.params.id]);
-    res.json({ message: 'Note deleted' });
+    deleted(res, 'Note deleted');
   } catch (error) {
     next(error);
   }

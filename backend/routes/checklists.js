@@ -26,6 +26,7 @@ const {
   loanChecklistAssign: assignSchema,
   loanChecklistRename: renameSchema,
   loanChecklistItemUpdate: itemUpdateSchema,
+  loanChecklistSubitemUpdate: subitemUpdateSchema,
   loanChecklistItemCreate: itemCreateSchema,
   loanChecklistSubitemCreate: subitemCreateSchema,
   loanChecklistImport: importSchema,
@@ -199,7 +200,7 @@ router.delete('/loan-item-notes/:noteId', async (req, res, next) => {
 
 // ── Subitems ────────────────────────────────────
 
-router.put('/loan-subitems/:subitemId', validate(itemUpdateSchema), async (req, res, next) => {
+router.put('/loan-subitems/:subitemId', validate(subitemUpdateSchema), async (req, res, next) => {
   try { ok(res, await loanChecklists.updateSubitem(getUserId(req), req.params.subitemId, req.body)); }
   catch (err) { if (!handleServiceError(res, err)) next(err); }
 });

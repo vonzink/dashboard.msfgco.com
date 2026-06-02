@@ -255,9 +255,15 @@ async function deleteChecklist(userId, checklistId) {
 
 async function updateItem(userId, itemId, body) {
   const parent = await authz.requireChecklistItemAccess(userId, itemId);
-  const allowed = ['name', 'status', 'importance', 'assigned_to', 'date', 'due_date', 'sort_order'];
+  const allowed = ['name', 'status', 'importance', 'assigned_to', 'category', 'gate', 'date', 'due_date', 'sort_order'];
   const update = buildDynamicUpdate('loan_checklist_items', itemId, allowed, body);
-  if (!update) return _readItem(itemId);
+  if (!update) {
+    // No recognized fields. Never silently return a 200 with an unchanged row
+    // — that masked failed saves (Bug 1). Surface it as a client error instead.
+    const err = new Error('No valid fields to update');
+    err.status = 400;
+    throw err;
+  }
 
   await db.query(update.sql, update.params);
   // Touch parent checklist for cache-busting / freshness

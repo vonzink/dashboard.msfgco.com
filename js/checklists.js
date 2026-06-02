@@ -14,6 +14,7 @@ const Checklists = {
   _pinnedOpen: false,
   _pinnedMode: 'dock', // 'dock' (locked across top) | 'float' (draggable)
   _pinnedPos: null,    // {left, top} when in float mode
+  _tagFilter: { category: null, gate: null }, // client-side Category/Gate filter
 
   STATUS_OPTIONS: [
     { value: 'not_started', label: 'Not Started', icon: 'fa-circle', cls: 'cl-status-not-started' },
@@ -23,6 +24,23 @@ const Checklists = {
     { value: 'incomplete',  label: 'Incomplete',  icon: 'fa-exclamation-circle', cls: 'cl-status-incomplete' },
     { value: 'issue',       label: 'Issue',       icon: 'fa-exclamation-triangle', cls: 'cl-status-issue' },
     { value: 'na',          label: 'N/A',         icon: 'fa-minus-circle', cls: 'cl-status-na' },
+  ],
+
+  // Condition tags (single-select per item). Color-coded as pills in the Menu,
+  // on each item row, and usable as filter chips. Mirror the DB ENUMs in
+  // migration 081 + the Zod enums in schemas/checklists.js.
+  CATEGORY_OPTIONS: [
+    { value: 'assets', label: 'Assets' },
+    { value: 'income', label: 'Income' },
+    { value: 'reo',    label: 'REO' },
+    { value: 'credit', label: 'Credit' },
+    { value: 'title',  label: 'Title' },
+  ],
+  GATE_OPTIONS: [
+    { value: 'ptd', label: 'PTD' },
+    { value: 'ptc', label: 'PTC' },
+    { value: 'ptf', label: 'PTF' },
+    { value: 'ctc', label: 'CTC' },
   ],
 
   SAMPLE_TEMPLATE: {
@@ -151,9 +169,14 @@ const Checklists = {
     modal.setAttribute('aria-hidden', 'false');
     document.getElementById('clModalTitle').textContent = clientName ? `Checklist — ${clientName}` : 'Loan Checklist';
     document.getElementById('clContent').innerHTML = '<div class="cl-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
-    // Restore pinned-menu visibility if user had it open last time
+    // Restore pinned-menu visibility if user had it open last time. Re-apply
+    // the saved mode first so a panel that was re-docked on the previous close
+    // floats again when float is the user's preference.
     const panel = document.getElementById('clPinnedPanel');
-    if (panel && this._pinnedOpen) panel.style.display = 'block';
+    if (panel && this._pinnedOpen) {
+      this._applyPinnedMode(panel);
+      panel.style.display = 'block';
+    }
   },
 
   close() {
@@ -165,13 +188,13 @@ const Checklists = {
     this._currentSource = null;
     this._currentChecklist = null;
     this._selectedItemId = null;
+    this._tagFilter = { category: null, gate: null };
     this._dragOffset = { x: 0, y: 0 };
     const modalBox = document.querySelector('#checklistModal .cl-modal');
     if (modalBox) modalBox.style.transform = '';
-    // Hide the pinned menu too — in float mode it lives in document.body
-    // and would otherwise linger on screen after the checklist closes.
-    const panel = document.getElementById('clPinnedPanel');
-    if (panel) panel.style.display = 'none';
+    // Tear down the pinned Menu — in float mode it lives in document.body, so
+    // it must be hidden AND re-docked or it lingers after the modal closes.
+    this._teardownPinnedPanel();
   },
 
   _bindModalEvents() {
@@ -254,6 +277,11 @@ const Checklists = {
       'edit-item':             () => this._actionEditItem(id),
       'set-importance':        () => this._actionSetImportance(id, btn),
       'set-assigned-to':       () => this._actionSetAssignedTo(id, btn),
+      'set-category':          () => this._actionSetCategory(id, btn),
+      'set-gate':              () => this._actionSetGate(id, btn),
+      'filter-category':       () => this._actionFilterCategory(btn),
+      'filter-gate':           () => this._actionFilterGate(btn),
+      'clear-filter':          () => this._actionClearTagFilter(),
       'set-date':              () => this._actionSetDate(id, btn),
       'set-due-date':          () => this._actionSetDueDate(id, btn),
       'export-checklist':      () => this._exportCurrentChecklist(),

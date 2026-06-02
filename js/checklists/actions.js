@@ -88,7 +88,7 @@
         item.date = prevDate;
         this._updateItemInPlace(itemId);
         this._updateProgressBar();
-        Utils.showToast('Failed to update status', 'error');
+        Utils.showToast('Failed to update status: ' + (err.message || ''), 'error');
       }
     },
 
@@ -116,7 +116,7 @@
         item.date = prevDate;
         this._updateItemInPlace(itemId);
         this._updateProgressBar();
-        Utils.showToast('Failed to update', 'error');
+        Utils.showToast('Failed to update: ' + (err.message || ''), 'error');
       }
     },
 
@@ -135,7 +135,7 @@
       } catch (err) {
         sub.status = prevStatus;
         this._updateSubitemInPlace(subId);
-        Utils.showToast('Failed to update', 'error');
+        Utils.showToast('Failed to update: ' + (err.message || ''), 'error');
       }
     },
 
@@ -149,7 +149,7 @@
         if (this._selectedItemId === itemId) this._selectedItemId = null;
         this._renderChecklist();
         this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-      } catch (err) { Utils.showToast('Failed to delete', 'error'); }
+      } catch (err) { Utils.showToast('Failed to delete: ' + (err.message || ''), 'error'); }
     },
 
     async _actionDeleteSubitem(id) {
@@ -160,7 +160,7 @@
           item.subitems = (item.subitems || []).filter(s => s.id !== subId);
         }
         this._renderChecklist();
-      } catch (err) { Utils.showToast('Failed to delete', 'error'); }
+      } catch (err) { Utils.showToast('Failed to delete: ' + (err.message || ''), 'error'); }
     },
 
     async _actionAddItem(src) {
@@ -189,7 +189,7 @@
         this._currentChecklist.items.push({ ...newItem, subitems: [] });
         this._renderChecklist();
         this.loadStatusBadges(src.type).then(() => this._refreshBadgeInTable(src.type, src.itemId));
-      } catch (err) { Utils.showToast('Failed to add item', 'error'); }
+      } catch (err) { Utils.showToast('Failed to add item: ' + (err.message || ''), 'error'); }
     },
 
     async _actionMakeFromPdf(src) {
@@ -219,7 +219,7 @@
           item.subitems.push(newSub);
         }
         this._renderChecklist();
-      } catch (err) { Utils.showToast('Failed to add subitem', 'error'); }
+      } catch (err) { Utils.showToast('Failed to add subitem: ' + (err.message || ''), 'error'); }
     },
 
     async _actionAddNote(id) {
@@ -248,7 +248,7 @@
           if (it.notes) it.notes = it.notes.filter(n => n.id !== noteId);
         }
         this._renderChecklist();
-      } catch (err) { Utils.showToast('Failed to delete note', 'error'); }
+      } catch (err) { Utils.showToast('Failed to delete note: ' + (err.message || ''), 'error'); }
     },
 
     async _actionEditItem(id) {
@@ -261,7 +261,7 @@
         await ServerAPI.updateChecklistItem(itemId, { name });
         item.name = name;
         this._renderChecklist();
-      } catch (err) { Utils.showToast('Failed to update', 'error'); }
+      } catch (err) { Utils.showToast('Failed to update: ' + (err.message || ''), 'error'); }
     },
 
     async _actionSetImportance(id, btn) {
@@ -275,7 +275,7 @@
         this._reorderClientSide();
         this._updateItemInPlace(itemId);
         this._reorderItemsDom();
-      } catch (err) { Utils.showToast('Failed to set importance', 'error'); }
+      } catch (err) { Utils.showToast('Failed to set importance: ' + (err.message || ''), 'error'); }
     },
 
     async _actionSetAssignedTo(id, btn) {
@@ -288,7 +288,44 @@
         await ServerAPI.updateChecklistItem(itemId, { assigned_to: newVal });
         item.assigned_to = newVal;
         this._updateItemInPlace(itemId);
-      } catch (err) { Utils.showToast('Failed to set assignment', 'error'); }
+      } catch (err) { Utils.showToast('Failed to set assignment: ' + (err.message || ''), 'error'); }
+    },
+
+    async _actionSetCategory(id, btn) {
+      const itemId = parseInt(id);
+      const item = this._findItem(itemId);
+      if (!item) return;
+      const clicked = btn.dataset.clCategory || null;
+      // Re-clicking the current value clears it (toggle off).
+      const newVal = (item.category === clicked) ? null : clicked;
+      const prev = item.category;
+      item.category = newVal;                 // optimistic
+      this._updateItemInPlace(itemId);
+      try {
+        await ServerAPI.updateChecklistItem(itemId, { category: newVal });
+      } catch (err) {
+        item.category = prev;                 // revert
+        this._updateItemInPlace(itemId);
+        Utils.showToast('Failed to set category: ' + (err.message || ''), 'error');
+      }
+    },
+
+    async _actionSetGate(id, btn) {
+      const itemId = parseInt(id);
+      const item = this._findItem(itemId);
+      if (!item) return;
+      const clicked = btn.dataset.clGate || null;
+      const newVal = (item.gate === clicked) ? null : clicked;
+      const prev = item.gate;
+      item.gate = newVal;                     // optimistic
+      this._updateItemInPlace(itemId);
+      try {
+        await ServerAPI.updateChecklistItem(itemId, { gate: newVal });
+      } catch (err) {
+        item.gate = prev;                     // revert
+        this._updateItemInPlace(itemId);
+        Utils.showToast('Failed to set gate: ' + (err.message || ''), 'error');
+      }
     },
 
     async _actionSetDate(id, btn) {
@@ -300,7 +337,7 @@
           await ServerAPI.updateChecklistItem(itemId, { date: newDate || null });
           item.date = newDate || null;
           this._updateItemInPlace(itemId);
-        } catch (err) { Utils.showToast('Failed to update date', 'error'); }
+        } catch (err) { Utils.showToast('Failed to update date: ' + (err.message || ''), 'error'); }
       });
     },
 
@@ -313,7 +350,7 @@
           await ServerAPI.updateChecklistItem(itemId, { due_date: newDate || null });
           item.due_date = newDate || null;
           this._updateItemInPlace(itemId);
-        } catch (err) { Utils.showToast('Failed to update due date', 'error'); }
+        } catch (err) { Utils.showToast('Failed to update due date: ' + (err.message || ''), 'error'); }
       });
     },
   };

@@ -513,6 +513,16 @@ function validate(schema) {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);
     if (!result.success) {
+      // Log the rejected body once so 400s are diagnosable from logs.
+      // Pino already structures this; redaction below masks anything risky.
+      const safeBody = redactSensitive(req.body);
+      // eslint-disable-next-line no-console
+      console.warn('[validate] reject', JSON.stringify({
+        method: req.method,
+        url: req.originalUrl,
+        issues: result.error.issues.map(i => ({ path: i.path.join('.'), code: i.code, message: i.message })),
+        body: safeBody,
+      }));
       return res.status(400).json({
         error: result.error.issues[0].message,
         field: result.error.issues[0].path.join('.') || undefined,
@@ -521,6 +531,19 @@ function validate(schema) {
     req.body = result.data;
     next();
   };
+}
+
+// Strip likely-sensitive fields before logging a rejected body.
+function redactSensitive(body) {
+  if (!body || typeof body !== 'object') return body;
+  const REDACT = new Set(['password', 'token', 'authorization', 'api_key', 'apiKey', 'value']);
+  const out = Array.isArray(body) ? [] : {};
+  for (const k of Object.keys(body)) {
+    if (REDACT.has(k)) out[k] = '[redacted]';
+    else if (body[k] && typeof body[k] === 'object') out[k] = redactSensitive(body[k]);
+    else out[k] = body[k];
+  }
+  return out;
 }
 
 /**
