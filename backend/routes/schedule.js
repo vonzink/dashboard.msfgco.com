@@ -35,6 +35,7 @@ const EDITABLE_FIELDS = [
   'timezone',
   'note',
   'visibility',
+  'event_color',
 ];
 
 function buildListQuery(query) {
@@ -186,6 +187,26 @@ function requireShareableProviderDetails(entry, visibility, res) {
   return false;
 }
 
+function rejectUnsupportedEntryWriteFields(body, res) {
+  if (Array.isArray(body.attendees) && body.attendees.length > 0) {
+    res.status(400).json({
+      error: 'Attendee invites are not supported by this endpoint yet.',
+      field: 'attendees',
+    });
+    return true;
+  }
+
+  if (body.send_updates === true) {
+    res.status(400).json({
+      error: 'Sending calendar invite updates is not supported by this endpoint yet.',
+      field: 'send_updates',
+    });
+    return true;
+  }
+
+  return false;
+}
+
 function toInsertValues(payload, userId) {
   return [
     payload.user_id,
@@ -197,6 +218,7 @@ function toInsertValues(payload, userId) {
     payload.timezone || 'America/Denver',
     payload.note || null,
     payload.visibility || 'availability_only',
+    payload.event_color || null,
     'manual',
     null,
     null,
@@ -216,6 +238,7 @@ function toUpdateValues(entry, userId) {
     entry.timezone || 'America/Denver',
     entry.note || null,
     entry.visibility || 'availability_only',
+    entry.event_color || null,
     'manual',
     null,
     null,
@@ -261,6 +284,7 @@ function schedulePayloadFromEntry(entry) {
     timezone: entry.timezone || 'America/Denver',
     note: entry.note || undefined,
     visibility: entry.visibility || 'availability_only',
+    event_color: entry.event_color || null,
     source: entry.source || 'manual',
     source_provider: entry.source_provider || null,
     source_event_id: entry.source_event_id || undefined,
@@ -311,14 +335,16 @@ router.post('/entries', validate(scheduleEntry), async (req, res, next) => {
   try {
     const payload = req.body;
 
+    if (rejectUnsupportedEntryWriteFields(payload, res)) return;
+
     if (!requireScheduleAccess(req, res, payload.user_id)) return;
 
     const userId = getUserId(req);
     const [result] = await db.query(
       `INSERT INTO schedule_entries
         (user_id, status, start_date, end_date, start_time, end_time, timezone, note,
-         visibility, source, source_provider, source_event_id, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         visibility, event_color, source, source_provider, source_event_id, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       toInsertValues(payload, userId)
     );
 
@@ -336,6 +362,8 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
         field: undefined,
       });
     }
+
+    if (rejectUnsupportedEntryWriteFields(req.body, res)) return;
 
     const existing = await fetchEntry(req.params.id);
     if (!existing) {
@@ -364,7 +392,7 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
     await db.query(
       `UPDATE schedule_entries
        SET user_id = ?, status = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?,
-           timezone = ?, note = ?, visibility = ?, source = ?, source_provider = ?,
+           timezone = ?, note = ?, visibility = ?, event_color = ?, source = ?, source_provider = ?,
            source_event_id = ?, updated_by = ?
        WHERE id = ?`,
       toUpdateValues(validated, getUserId(req))

@@ -36,11 +36,46 @@ describe('presentScheduleEntry', () => {
     expect(result.provider_sensitivity).toBe('normal');
   });
 
+  it('redacts sync diagnostics and attendees when details are hidden', () => {
+    const result = presentScheduleEntry(
+      {
+        ...entry,
+        sync_write_status: 'error',
+        sync_write_error: 'Provider write failed with private subject',
+        sync_write_attempted_at: '2026-06-01T16:30:00.000Z',
+        attendees: [{ email: 'client@example.com', name: 'Client Person' }],
+      },
+      reqFor({ id: 11, role: 'user' })
+    );
+
+    expect(result.sync_write_status).toBe('error');
+    expect(result.sync_write_error).toBeNull();
+    expect(result.sync_write_attempted_at).toBeNull();
+    expect(result.attendees).toEqual([]);
+  });
+
   it('shows details to the owner', () => {
     const result = presentScheduleEntry(entry, reqFor({ id: 10, role: 'user' }));
     expect(result.note).toBe('Private appointment');
     expect(result.private).toBe(false);
     expect(result.status).toBe('meeting_event');
+  });
+
+  it('shows sync diagnostics and attendees to viewers with details access', () => {
+    const result = presentScheduleEntry(
+      {
+        ...entry,
+        sync_write_status: 'error',
+        sync_write_error: 'Provider write failed',
+        sync_write_attempted_at: '2026-06-01T16:30:00.000Z',
+        attendees: [{ email: 'client@example.com', name: 'Client Person' }],
+      },
+      reqFor({ id: 10, role: 'user' })
+    );
+
+    expect(result.sync_write_error).toBe('Provider write failed');
+    expect(result.sync_write_attempted_at).toBe('2026-06-01T16:30:00.000Z');
+    expect(result.attendees).toEqual([{ email: 'client@example.com', name: 'Client Person' }]);
   });
 
   it('shows shared details to everyone', () => {

@@ -17,6 +17,8 @@ function canSeeDetails(entry, req) {
 
 function presentScheduleEntry(entry, req) {
   const visible = canSeeDetails(entry, req);
+  const visibleAttendees = visible && Array.isArray(entry.attendees) ? entry.attendees : [];
+
   return {
     id: entry.id,
     user_id: entry.user_id,
@@ -40,9 +42,9 @@ function presentScheduleEntry(entry, req) {
     provider_sensitivity: entry.provider_sensitivity || null,
     event_color: entry.event_color || null,
     sync_write_status: entry.sync_write_status || 'idle',
-    sync_write_error: entry.sync_write_status === 'error' ? (entry.sync_write_error || null) : null,
-    sync_write_attempted_at: entry.sync_write_attempted_at || null,
-    attendees: Array.isArray(entry.attendees) ? entry.attendees : [],
+    sync_write_error: visible && entry.sync_write_status === 'error' ? (entry.sync_write_error || null) : null,
+    sync_write_attempted_at: visible ? (entry.sync_write_attempted_at || null) : null,
+    attendees: visibleAttendees,
     private: !visible,
     created_by: entry.created_by || null,
     updated_by: entry.updated_by || null,

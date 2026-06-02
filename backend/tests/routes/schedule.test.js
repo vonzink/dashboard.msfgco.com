@@ -273,6 +273,64 @@ describe('schedule routes', () => {
     );
   });
 
+  it('persists event_color when creating a manual entry', async () => {
+    db.query.mockResolvedValueOnce([{ insertId: 125 }]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries', {
+      user_id: 10,
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      start_time: '09:00:00',
+      end_time: '10:00:00',
+      timezone: 'America/Denver',
+      visibility: 'shared_details',
+      source: 'manual',
+      event_color: '#0F766E',
+    });
+
+    expect(res.status).toBe(201);
+    const [sql, values] = db.query.mock.calls[0];
+    expect(sql).toContain('event_color');
+    expect(values).toContain('#0F766E');
+  });
+
+  it('rejects attendee invites on create until writeback is supported', async () => {
+    const res = await makeJsonRequest(app, '/api/schedule/entries', {
+      user_id: 10,
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      source: 'manual',
+      attendees: [{ email: 'client@example.com', name: 'Client Person' }],
+    });
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Attendee invites are not supported by this endpoint yet.',
+      field: 'attendees',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects invite update notifications on create until writeback is supported', async () => {
+    const res = await makeJsonRequest(app, '/api/schedule/entries', {
+      user_id: 10,
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      source: 'manual',
+      send_updates: true,
+    });
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Sending calendar invite updates is not supported by this endpoint yet.',
+      field: 'send_updates',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
   it('forces public schedule creates to remain manual entries', async () => {
     db.query.mockResolvedValueOnce([{ insertId: 124 }]);
 
@@ -326,6 +384,64 @@ describe('schedule routes', () => {
       expect.stringContaining('UPDATE schedule_entries'),
       expect.arrayContaining(['Still manual', 'manual', null, null])
     );
+  });
+
+  it('persists event_color when updating a manual entry', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 5,
+          user_id: 10,
+          status: 'remote',
+          start_date: '2026-06-10',
+          end_date: '2026-06-10',
+          start_time: null,
+          end_time: null,
+          timezone: 'America/Denver',
+          note: 'Old note',
+          visibility: 'shared_details',
+          source: 'manual',
+          source_provider: null,
+          source_event_id: null,
+          event_color: '#475569',
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      event_color: '#0F766E',
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(200);
+    const [sql, values] = db.query.mock.calls[1];
+    expect(sql).toContain('event_color = ?');
+    expect(values).toContain('#0F766E');
+  });
+
+  it('rejects attendee invites on update until writeback is supported', async () => {
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      attendees: [{ email: 'client@example.com', name: 'Client Person' }],
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Attendee invites are not supported by this endpoint yet.',
+      field: 'attendees',
+    });
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('rejects invite update notifications on update until writeback is supported', async () => {
+    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
+      send_updates: true,
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(400);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'Sending calendar invite updates is not supported by this endpoint yet.',
+      field: 'send_updates',
+    });
+    expect(db.query).not.toHaveBeenCalled();
   });
 
   it('blocks a normal user creating an entry for another user', async () => {
