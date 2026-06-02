@@ -12,7 +12,7 @@
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const VIEW_MODES = ['month', 'two_months', 'year', 'people'];
+  const VIEW_MODES = ['day', 'week', 'month', 'two_months', 'year', 'people', 'all'];
 
   function pad(n) {
     return String(n).padStart(2, '0');
@@ -66,6 +66,8 @@
       me: null,
       entries: [],
       people: [],
+      peopleDirectory: [],
+      directoryError: null,
       search: '',
       hiddenStatuses: new Set(),
       selectedUserId: null,

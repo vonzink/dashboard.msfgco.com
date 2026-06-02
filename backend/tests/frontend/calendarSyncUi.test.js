@@ -140,6 +140,43 @@ describe('calendar API helpers', () => {
     expect(calls[0].url).toBe('https://api.msfgco.com/api/schedule/entries/42/visibility');
     expect(calls[0].options.method).toBe('PATCH');
     expect(JSON.parse(calls[0].options.body)).toEqual({ visibility: 'shared_details' });
+    expect(typeof CalendarApi.getUserDirectory).toBe('function');
+  });
+});
+
+describe('calendar editor enhanced fields', () => {
+  it('renders employee names, NMLS numbers, color controls, and attendee picker fields', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-editor.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.peopleDirectory = [
+      { id: 10, name: 'Zachary Zink', email: 'zachary.zink@msfg.us', nmls_number: '451924' },
+      { id: 11, name: 'Assistant User', email: 'assistant@msfg.us', nmls_number: null },
+    ];
+    state.editor = {
+      user_id: 10,
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      visibility: 'availability_only',
+      source: 'manual',
+      event_color: '#0F766E',
+      attendees: [{ email: 'assistant@msfg.us', name: 'Assistant User' }],
+    };
+
+    const html = context.window.CalendarEditor.render(state);
+    expect(html).toContain('Zachary Zink - NMLS 451924');
+    expect(html).not.toContain('Employee ID');
+    expect(html).toContain('name="event_color"');
+    expect(html).toContain('Assistant User');
+    expect(html).toContain('Hidden from Team');
   });
 });
 
