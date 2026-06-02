@@ -11,6 +11,9 @@ const {
 } = require('../validation/schemas');
 const { canManageScheduleEntry } = require('../services/schedule/permissions');
 const { presentScheduleEntry } = require('../services/schedule/privacy');
+const outlookProvider = require('../services/calendarSync/providers/outlook');
+const { loadWritableConnection } = require('../services/calendarSync/connections');
+const { replaceEntryAttendees } = require('../services/calendarSync/syncEngine');
 
 const router = express.Router();
 
@@ -200,6 +203,31 @@ function requireEditableEntry(entry, res) {
   if (!isProviderOwned(entry)) return true;
   res.status(409).json({ error: `This schedule entry is managed in ${providerName(entry)}.` });
   return false;
+}
+
+function isProtectedProviderEntry(entry) {
+  return Boolean(
+    isProviderOwned(entry) &&
+    (!entry.details_shareable || (entry.provider_sensitivity && entry.provider_sensitivity !== 'normal'))
+  );
+}
+
+function hasProtectedDetailChanges(body) {
+  return Object.prototype.hasOwnProperty.call(body, 'note') ||
+    (Array.isArray(body.attendees) && body.attendees.length > 0) ||
+    body.visibility === 'shared_details';
+}
+
+async function markEntryWriteback(id, status, errorMessage = null) {
+  await db.query(
+    `UPDATE schedule_entries
+     SET sync_write_status = ?,
+         sync_write_error = ?,
+         sync_write_attempted_at = UTC_TIMESTAMP(),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [status, errorMessage, id]
+  );
 }
 
 function requireProviderVisibilityOwner(entry, req, res) {
@@ -398,14 +426,22 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
       });
     }
 
-    if (rejectUnsupportedEntryWriteFields(req.body, res)) return;
-
     const existing = await fetchEntry(req.params.id);
     if (!existing) {
       return res.status(404).json({ error: 'Schedule entry not found' });
     }
 
-    if (!requireEditableEntry(existing, res)) return;
+    if (isProviderOwned(existing) && existing.source_provider !== 'outlook') {
+      return res.status(409).json({ error: `This schedule entry is managed in ${providerName(existing)}.` });
+    }
+
+    if (isProviderOwned(existing) && isProtectedProviderEntry(existing) && hasProtectedDetailChanges(req.body)) {
+      return res.status(409).json({
+        error: 'This Outlook event is private and cannot update details or attendees from MSFG Calendar.',
+      });
+    }
+
+    if (!isProviderOwned(existing) && !requireEditableEntry(existing, res)) return;
 
     if (!requireScheduleAccess(req, res, existing.user_id)) return;
 
@@ -432,6 +468,35 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
        WHERE id = ?`,
       toUpdateValues(validated, getUserId(req))
     );
+
+    if (Array.isArray(req.body.attendees)) {
+      await replaceEntryAttendees(existing.id, req.body.attendees);
+    }
+
+    if (isProviderOwned(existing) && existing.source_provider === 'outlook') {
+      const connection = await loadWritableConnection(validated.user_id, 'outlook');
+      if (!connection) {
+        await markEntryWriteback(existing.id, 'error', 'Outlook is not connected for this employee.');
+      } else {
+        try {
+          await outlookProvider.updateEvent(connection, existing.source_event_id, {
+            ...validated,
+            id: existing.id,
+            attendees: req.body.attendees || existing.attendees || [],
+          });
+          await markEntryWriteback(existing.id, 'synced');
+        } catch (error) {
+          await markEntryWriteback(existing.id, 'error', error.message || 'Outlook writeback failed');
+        }
+      }
+
+      const updated = await fetchEntry(req.params.id);
+      const rows = await attachAttendees(updated ? [updated] : []);
+      return res.json({
+        success: true,
+        entry: presentScheduleEntry(rows[0] || updated || validated, req),
+      });
+    }
 
     res.json({ success: true });
   } catch (error) {

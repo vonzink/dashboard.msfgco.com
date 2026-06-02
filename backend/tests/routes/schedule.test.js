@@ -5,10 +5,29 @@ import express from 'express';
 const require = createRequire(import.meta.url);
 const dbPath = require.resolve('../../db/connection');
 const routePath = require.resolve('../../routes/schedule');
+const outlookProviderPath = require.resolve('../../services/calendarSync/providers/outlook');
+const connectionsPath = require.resolve('../../services/calendarSync/connections');
+const syncEnginePath = require.resolve('../../services/calendarSync/syncEngine');
 const originalDbCacheEntry = require.cache[dbPath];
+const originalOutlookProviderCacheEntry = require.cache[outlookProviderPath];
+const originalConnectionsCacheEntry = require.cache[connectionsPath];
+const originalSyncEngineCacheEntry = require.cache[syncEnginePath];
 
 const db = {
   query: vi.fn(),
+};
+
+const outlookProvider = {
+  updateEvent: vi.fn(),
+};
+
+const calendarConnections = {
+  loadWritableConnection: vi.fn(),
+  prepareConnection: vi.fn((connection) => ({
+    ...connection,
+    persistRefreshedTokens: vi.fn(),
+  })),
+  persistRefreshedTokens: vi.fn(),
 };
 
 const userContext = {
@@ -21,6 +40,17 @@ describe('schedule routes', () => {
 
   beforeEach(async () => {
     db.query.mockReset();
+    outlookProvider.updateEvent.mockReset();
+    outlookProvider.updateEvent.mockResolvedValue({ provider_event_id: 'outlook-9', provider_etag: 'etag-9' });
+    calendarConnections.loadWritableConnection.mockReset();
+    calendarConnections.loadWritableConnection.mockResolvedValue({
+      id: 3,
+      user_id: 10,
+      provider: 'outlook',
+      encrypted_access_token: 'encrypted-access-token',
+    });
+    calendarConnections.prepareConnection.mockClear();
+    calendarConnections.persistRefreshedTokens.mockClear();
 
     require.cache[dbPath] = {
       id: dbPath,
@@ -28,6 +58,19 @@ describe('schedule routes', () => {
       loaded: true,
       exports: db,
     };
+    require.cache[outlookProviderPath] = {
+      id: outlookProviderPath,
+      filename: outlookProviderPath,
+      loaded: true,
+      exports: outlookProvider,
+    };
+    require.cache[connectionsPath] = {
+      id: connectionsPath,
+      filename: connectionsPath,
+      loaded: true,
+      exports: calendarConnections,
+    };
+    delete require.cache[syncEnginePath];
     delete require.cache[routePath];
 
     const scheduleRoutes = require('../../routes/schedule');
@@ -50,11 +93,27 @@ describe('schedule routes', () => {
 
   afterEach(() => {
     delete require.cache[routePath];
+    delete require.cache[syncEnginePath];
 
     if (originalDbCacheEntry) {
       require.cache[dbPath] = originalDbCacheEntry;
     } else {
       delete require.cache[dbPath];
+    }
+    if (originalOutlookProviderCacheEntry) {
+      require.cache[outlookProviderPath] = originalOutlookProviderCacheEntry;
+    } else {
+      delete require.cache[outlookProviderPath];
+    }
+    if (originalConnectionsCacheEntry) {
+      require.cache[connectionsPath] = originalConnectionsCacheEntry;
+    } else {
+      delete require.cache[connectionsPath];
+    }
+    if (originalSyncEngineCacheEntry) {
+      require.cache[syncEnginePath] = originalSyncEngineCacheEntry;
+    } else {
+      delete require.cache[syncEnginePath];
     }
   });
 
@@ -476,32 +535,6 @@ describe('schedule routes', () => {
     expect(values).toContain('#0F766E');
   });
 
-  it('rejects attendee invites on update until writeback is supported', async () => {
-    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
-      attendees: [{ email: 'client@example.com', name: 'Client Person' }],
-    }, {}, 'PUT');
-
-    expect(res.status).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'Attendee invites are not supported by this endpoint yet.',
-      field: 'attendees',
-    });
-    expect(db.query).not.toHaveBeenCalled();
-  });
-
-  it('rejects invite update notifications on update until writeback is supported', async () => {
-    const res = await makeJsonRequest(app, '/api/schedule/entries/5', {
-      send_updates: true,
-    }, {}, 'PUT');
-
-    expect(res.status).toBe(400);
-    expect(JSON.parse(res.body)).toEqual({
-      error: 'Sending calendar invite updates is not supported by this endpoint yet.',
-      field: 'send_updates',
-    });
-    expect(db.query).not.toHaveBeenCalled();
-  });
-
   it('blocks a normal user creating an entry for another user', async () => {
     const res = await makeJsonRequest(app, '/api/schedule/entries', {
       user_id: 99,
@@ -686,7 +719,114 @@ describe('schedule routes', () => {
     );
   });
 
-  it('blocks updates to provider-owned schedule entries', async () => {
+  it('lets the owner reclassify an Outlook-backed busy event as a meeting event', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'busy',
+          start_date: '2026-06-10',
+          end_date: '2026-06-10',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Borrower call',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'outlook-9',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'meeting_event',
+          start_date: '2026-06-10',
+          end_date: '2026-06-10',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Borrower call',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'outlook-9',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+          event_color: '#0F766E',
+          sync_write_status: 'synced',
+        },
+      ]])
+      .mockResolvedValueOnce([[]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/9', {
+      status: 'meeting_event',
+      event_color: '#0F766E',
+      attendees: [],
+      send_updates: false,
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).entry).toEqual(expect.objectContaining({
+      status: 'meeting_event',
+      event_color: '#0F766E',
+      provider_owned: true,
+    }));
+    expect(calendarConnections.loadWritableConnection).toHaveBeenCalledWith(10, 'outlook');
+    expect(outlookProvider.updateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 3, provider: 'outlook' }),
+      'outlook-9',
+      expect.objectContaining({
+        id: 9,
+        status: 'meeting_event',
+        attendees: [],
+      })
+    );
+  });
+
+  it('blocks Outlook detail edits on provider-private events', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        user_id: 10,
+        status: 'busy',
+        start_date: '2026-06-10',
+        end_date: '2026-06-10',
+        source: 'outlook',
+        source_provider: 'outlook',
+        source_event_id: 'outlook-private',
+        details_shareable: 0,
+        provider_sensitivity: 'private',
+      },
+    ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/9', {
+      note: 'Private detail',
+      attendees: [{ email: 'assistant@msfg.us', name: 'Assistant User' }],
+      send_updates: true,
+    }, {}, 'PUT');
+
+    expect(res.status).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'This Outlook event is private and cannot update details or attendees from MSFG Calendar.',
+    });
+    expect(outlookProvider.updateEvent).not.toHaveBeenCalled();
+  });
+
+  it('blocks updates to non-Outlook provider-owned schedule entries', async () => {
     db.query.mockResolvedValueOnce([[
       {
         id: 9,
@@ -694,8 +834,8 @@ describe('schedule routes', () => {
         status: 'busy',
         start_date: '2026-06-01',
         end_date: '2026-06-01',
-        source: 'outlook',
-        source_provider: 'outlook',
+        source: 'google',
+        source_provider: 'google',
         source_event_id: 'event-1',
       },
     ]]);
@@ -704,7 +844,7 @@ describe('schedule routes', () => {
 
     expect(res.status).toBe(409);
     expect(JSON.parse(res.body)).toEqual({
-      error: 'This schedule entry is managed in Outlook.',
+      error: 'This schedule entry is managed in Google.',
     });
     expect(db.query).toHaveBeenCalledTimes(1);
   });
