@@ -12,8 +12,9 @@ function normalizeGoogleEvent(event, connection) {
   const endValue = event.end?.dateTime || event.end?.date || startValue;
   const start = dateParts(startValue);
   const end = dateParts(endValue);
-  const visibility = connection.privacy_default || 'availability_only';
-  const shared = visibility === 'shared_details';
+  const visibility = 'availability_only';
+  const providerSensitivity = event.visibility || 'normal';
+  const detailsShareable = providerSensitivity !== 'private' && Boolean(event.summary);
 
   return {
     user_id: connection.user_id,
@@ -23,11 +24,13 @@ function normalizeGoogleEvent(event, connection) {
     start_time: event.start?.dateTime ? start.time : null,
     end_time: event.end?.dateTime ? end.time : null,
     timezone: 'America/Denver',
-    note: shared ? (event.summary || null) : null,
+    note: detailsShareable ? event.summary : null,
     visibility,
     source: 'google',
     source_provider: 'google',
     source_event_id: event.id,
+    details_shareable: detailsShareable,
+    provider_sensitivity: providerSensitivity,
   };
 }
 

@@ -33,6 +33,37 @@
     return Boolean(entry && (entry.source_provider === 'outlook' || entry.source === 'outlook'));
   }
 
+  function isProviderOwnedEntry(entry) {
+    return Boolean(entry && (entry.provider_owned || entry.source_provider || entry.source === 'outlook' || entry.source === 'google'));
+  }
+
+  function providerName(entry) {
+    return (entry.source_provider || entry.source) === 'google' ? 'Google' : 'Outlook';
+  }
+
+  function currentUserId(state) {
+    const me = state.me || {};
+    return String(me.id || me.user_id || me.userId || me.employee_id || me.employeeId || '');
+  }
+
+  function isOwnerEntry(entry, state) {
+    return Boolean(entry && currentUserId(state) && entryUserId(entry) === currentUserId(state));
+  }
+
+  function canToggleProviderDetails(entry, state) {
+    return Boolean(isProviderOwnedEntry(entry) && isOwnerEntry(entry, state) && entry.details_shareable && entry.id);
+  }
+
+  function isProviderPrivate(entry, state) {
+    return Boolean(
+      isProviderOwnedEntry(entry) &&
+      isOwnerEntry(entry, state) &&
+      !entry.details_shareable &&
+      entry.provider_sensitivity &&
+      entry.provider_sensitivity !== 'normal'
+    );
+  }
+
   function selectedIso(state) {
     return window.CalendarState.isoDate(state.selectedDate || state.today || new Date());
   }
@@ -90,6 +121,7 @@
 
   function entryTitle(entry) {
     if (isPrivateEntry(entry)) return 'Busy';
+    if (entry.note && isProviderOwnedEntry(entry)) return entry.note;
     if (entry.visibility === 'availability_only') return statusLabel(entry);
     return entry.display_label ||
       entry.note ||
@@ -103,6 +135,28 @@
   function providerReadOnlyMessage(entry) {
     if (!isOutlookOwnedEntry(entry)) return '';
     return '<span class="detail-note">Managed in Outlook. Edit this event in Outlook.</span>';
+  }
+
+  function providerPrivacyControl(entry, state) {
+    if (isProviderPrivate(entry, state)) {
+      return `<span class="detail-privacy-badge">Private in ${escapeHtml(providerName(entry))}</span>`;
+    }
+
+    if (!canToggleProviderDetails(entry, state)) return '';
+
+    const sharing = entry.visibility === 'shared_details';
+    const targetVisibility = sharing ? 'availability_only' : 'shared_details';
+    const label = sharing ? 'Hide details' : 'Share details';
+    const stateLabel = sharing ? 'Shared with team' : 'Hidden from team';
+
+    return `
+      <span class="detail-share-row">
+        <span class="detail-privacy-badge">${escapeHtml(stateLabel)}</span>
+        <button class="detail-share-toggle" type="button" data-entry-id="${escapeHtml(entry.id)}" data-entry-visibility="${escapeHtml(targetVisibility)}">
+          ${escapeHtml(label)}
+        </button>
+      </span>
+    `;
   }
 
   function personLabel(entry, state) {
@@ -129,6 +183,7 @@
           <span class="detail-person">${escapeHtml(personLabel(entry, state))}</span>
           ${canShowNote(entry) ? `<span class="detail-note">${escapeHtml(entry.note)}</span>` : ''}
           ${!editable ? providerReadOnlyMessage(entry) : ''}
+          ${providerPrivacyControl(entry, state)}
         </span>
       </${tag}>
     `;
@@ -169,6 +224,15 @@
       button.addEventListener('click', () => {
         const entry = (state.entries || []).find((item) => String(item.id) === String(button.dataset.entryId));
         if (entry && actions.openEditor) actions.openEditor(entry);
+      });
+    });
+
+    root.querySelectorAll('[data-entry-visibility]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (actions.updateEntryVisibility) {
+          actions.updateEntryVisibility(button.dataset.entryId, button.dataset.entryVisibility);
+        }
       });
     });
   }

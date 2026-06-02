@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   notification, calendarEvent, scheduleEntry, scheduleEntryUpdate, scheduleEntryQuery, task, taskUpdate, investor,
-  calendarSyncConnectionStart, calendarSyncRun,
+  calendarSyncConnectionStart, calendarSyncRun, scheduleEntryVisibilityUpdate,
   contentGenerate, contentItemUpdate, contentTemplate, contentTemplateUpdate,
   contentPublishBatch, guidelineUpload, guidelineSearch,
   handbookSearch, handbookSectionUpdate, handbookSectionCreate,
@@ -106,6 +106,26 @@ describe('scheduleEntry schema', () => {
     });
     expect(result.success).toBe(true);
     expect(result.data.visibility).toBe('availability_only');
+  });
+
+  it('accepts provider detail metadata for imported schedule entries', () => {
+    const result = scheduleEntry.safeParse({
+      user_id: 7,
+      status: 'busy',
+      start_date: '2026-06-01',
+      end_date: '2026-06-01',
+      visibility: 'availability_only',
+      source: 'outlook',
+      source_provider: 'outlook',
+      source_event_id: 'outlook-1',
+      details_shareable: true,
+      provider_sensitivity: 'normal',
+      note: 'Client review',
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data.details_shareable).toBe(true);
+    expect(result.data.provider_sensitivity).toBe('normal');
   });
 
   it('rejects PTO as a status', () => {
@@ -225,6 +245,17 @@ describe('calendar sync schemas', () => {
   it('accepts an on-demand sync run request', () => {
     const result = calendarSyncRun.safeParse({ provider: 'google' });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('scheduleEntryVisibilityUpdate schema', () => {
+  it('accepts supported visibility values', () => {
+    expect(scheduleEntryVisibilityUpdate.safeParse({ visibility: 'shared_details' }).success).toBe(true);
+    expect(scheduleEntryVisibilityUpdate.safeParse({ visibility: 'availability_only' }).success).toBe(true);
+  });
+
+  it('rejects unsupported visibility values', () => {
+    expect(scheduleEntryVisibilityUpdate.safeParse({ visibility: 'public' }).success).toBe(false);
   });
 });
 

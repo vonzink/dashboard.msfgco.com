@@ -53,33 +53,56 @@ describe('calendar sync token crypto', () => {
 });
 
 describe('provider event normalization', () => {
-  it('normalizes Outlook busy events without private details', () => {
+  it('stores shareable Outlook details while keeping imported visibility private by default', () => {
     const event = normalizeOutlookEvent({
       id: 'outlook-1',
-      subject: 'Private appointment',
+      subject: 'Client review',
+      sensitivity: 'normal',
       start: { dateTime: '2026-06-01T09:00:00', timeZone: 'Mountain Standard Time' },
       end: { dateTime: '2026-06-01T10:00:00', timeZone: 'Mountain Standard Time' },
       showAs: 'busy',
     }, { user_id: 7, privacy_default: 'availability_only' });
 
     expect(event.status).toBe('busy');
-    expect(event.note).toBeNull();
+    expect(event.note).toBe('Client review');
+    expect(event.visibility).toBe('availability_only');
+    expect(event.details_shareable).toBe(true);
+    expect(event.provider_sensitivity).toBe('normal');
     expect(event.start_time).toBe('09:00:00');
     expect(event.end_time).toBe('10:00:00');
     expect(event.source).toBe('outlook');
     expect(event.source_event_id).toBe('outlook-1');
   });
 
-  it('normalizes Google busy events without private details', () => {
+  it('suppresses private Outlook details before storage', () => {
+    const event = normalizeOutlookEvent({
+      id: 'outlook-private',
+      subject: 'Private appointment',
+      sensitivity: 'private',
+      start: { dateTime: '2026-06-01T09:00:00', timeZone: 'Mountain Standard Time' },
+      end: { dateTime: '2026-06-01T10:00:00', timeZone: 'Mountain Standard Time' },
+      showAs: 'busy',
+    }, { user_id: 7, privacy_default: 'shared_details' });
+
+    expect(event.note).toBeNull();
+    expect(event.visibility).toBe('availability_only');
+    expect(event.details_shareable).toBe(false);
+    expect(event.provider_sensitivity).toBe('private');
+  });
+
+  it('stores shareable Google details while keeping imported visibility private by default', () => {
     const event = normalizeGoogleEvent({
       id: 'google-1',
-      summary: 'Private appointment',
+      summary: 'Client appointment',
       start: { dateTime: '2026-06-01T09:00:00-06:00' },
       end: { dateTime: '2026-06-01T10:00:00-06:00' },
     }, { user_id: 7, privacy_default: 'availability_only' });
 
     expect(event.status).toBe('busy');
-    expect(event.note).toBeNull();
+    expect(event.note).toBe('Client appointment');
+    expect(event.visibility).toBe('availability_only');
+    expect(event.details_shareable).toBe(true);
+    expect(event.provider_sensitivity).toBe('normal');
     expect(event.start_time).toBe('09:00:00');
     expect(event.end_time).toBe('10:00:00');
     expect(event.source).toBe('google');
@@ -216,7 +239,8 @@ describe('Outlook provider adapter', () => {
     ], { user_id: 7, provider: 'outlook', privacy_default: 'availability_only' });
 
     expect(events.map((event) => event.status)).toEqual(['out', 'remote', 'meeting_event']);
-    expect(events.every((event) => event.note === null)).toBe(true);
+    expect(events.map((event) => event.note)).toEqual([null, null, null]);
+    expect(events.every((event) => event.details_shareable === false)).toBe(true);
   });
 
   it('normalizes Graph oof events as out availability', () => {
@@ -260,6 +284,8 @@ describe('Outlook provider adapter', () => {
     ], { user_id: 7, provider: 'outlook', privacy_default: 'shared_details' });
 
     expect(events.map((event) => event.note)).toEqual([null, 'Shareable detail']);
+    expect(events.map((event) => event.details_shareable)).toEqual([false, true]);
+    expect(events.map((event) => event.provider_sensitivity)).toEqual(['private', 'normal']);
   });
 
   it('exports all-day entries with Graph exclusive next-day midnight end dates', () => {
@@ -393,6 +419,8 @@ describe('calendar sync engine', () => {
           source: 'outlook',
           source_provider: 'outlook',
           source_event_id: 'imported-event',
+          details_shareable: true,
+          provider_sensitivity: 'normal',
         },
         {
           user_id: 7,
@@ -421,8 +449,12 @@ describe('calendar sync engine', () => {
     expect(result).toEqual({ imported: 1, exported: 0 });
     expect(adapter.listEvents).toHaveBeenCalled();
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('INSERT INTO schedule_entries'),
-      expect.arrayContaining(['imported-event'])
+      expect.stringContaining('details_shareable'),
+      expect.arrayContaining(['imported-event', 1, 'normal'])
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining("WHEN VALUES(details_shareable) = 0 THEN 'availability_only'"),
+      expect.any(Array)
     );
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM schedule_entries'),

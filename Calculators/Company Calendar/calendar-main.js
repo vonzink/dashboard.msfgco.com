@@ -16,7 +16,7 @@
 
   async function loadEntries() {
     const requestSeq = ++entriesRequestSeq;
-    const range = CalendarState.monthRange(state.viewDate);
+    const range = CalendarState.visibleRange(state);
     try {
       const entries = await CalendarApi.getEntries(range);
       if (requestSeq !== entriesRequestSeq) return false;
@@ -217,6 +217,11 @@
       state.viewDate = date;
       actions.reload();
     },
+    setViewMode(mode) {
+      if (!CalendarState.VIEW_MODES.includes(mode) || state.viewMode === mode) return;
+      state.viewMode = mode;
+      actions.reload();
+    },
     setSelectedDate(date) {
       state.selectedDate = date;
       CalendarRender.render(app, state, actions);
@@ -279,6 +284,26 @@
         state.editorSaving = false;
         CalendarRender.render(app, state, actions);
         throw err;
+      }
+    },
+    async updateEntryVisibility(id, visibility) {
+      try {
+        const result = await CalendarApi.updateEntryVisibility(id, visibility);
+        if (result && result.entry) {
+          state.entries = state.entries.map((entry) => (
+            String(entry.id) === String(result.entry.id) ? result.entry : entry
+          ));
+          if (state.editor && String(state.editor.id) === String(result.entry.id)) {
+            state.editor = result.entry;
+          }
+          state.people = CalendarRender.derivePeople(state.entries);
+          CalendarRender.render(app, state, actions);
+        } else {
+          await actions.reload();
+        }
+        showToast(visibility === 'shared_details' ? 'Event details shared.' : 'Event details hidden.', 'success');
+      } catch (err) {
+        showToast(err.message || 'Unable to update event sharing.', 'error');
       }
     },
     async deleteEntry(id) {

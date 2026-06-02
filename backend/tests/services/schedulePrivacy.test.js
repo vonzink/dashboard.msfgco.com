@@ -20,6 +20,10 @@ describe('presentScheduleEntry', () => {
     note: 'Private appointment',
     visibility: 'availability_only',
     source: 'outlook',
+    source_provider: 'outlook',
+    source_event_id: 'outlook-1',
+    details_shareable: 1,
+    provider_sensitivity: 'normal',
   };
 
   it('hides private imported details from other employees', () => {
@@ -28,6 +32,8 @@ describe('presentScheduleEntry', () => {
     expect(result.private).toBe(true);
     expect(result.display_label).toBe('Busy');
     expect(result.status).toBe('busy');
+    expect(result.details_shareable).toBe(true);
+    expect(result.provider_sensitivity).toBe('normal');
   });
 
   it('shows details to the owner', () => {

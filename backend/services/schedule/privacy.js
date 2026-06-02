@@ -35,6 +35,8 @@ function presentScheduleEntry(entry, req) {
     source: entry.source,
     source_provider: entry.source_provider || null,
     provider_owned: Boolean(entry.source_provider && entry.source_event_id),
+    details_shareable: Boolean(entry.details_shareable),
+    provider_sensitivity: entry.provider_sensitivity || null,
     private: !visible,
     created_by: entry.created_by || null,
     updated_by: entry.updated_by || null,

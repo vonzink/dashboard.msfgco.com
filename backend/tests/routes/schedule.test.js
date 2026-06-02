@@ -556,6 +556,127 @@ describe('schedule routes', () => {
     expect(db.query).toHaveBeenCalledTimes(1);
   });
 
+  it('lets the owner share details for a shareable provider-owned entry', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Client review',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Client review',
+          visibility: 'shared_details',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/9/visibility', {
+      visibility: 'shared_details',
+    }, {}, 'PATCH');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      success: true,
+      entry: expect.objectContaining({
+        id: 9,
+        note: 'Client review',
+        visibility: 'shared_details',
+        details_shareable: true,
+        provider_owned: true,
+        private: false,
+      }),
+    });
+    expect(db.query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('SET visibility = ?'),
+      ['shared_details', 10, '9']
+    );
+  });
+
+  it('blocks non-owners from changing provider event sharing', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        user_id: 99,
+        status: 'busy',
+        source: 'outlook',
+        source_provider: 'outlook',
+        source_event_id: 'event-1',
+        details_shareable: 1,
+        provider_sensitivity: 'normal',
+      },
+    ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/9/visibility', {
+      visibility: 'shared_details',
+    }, {}, 'PATCH');
+
+    expect(res.status).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: "Only the connected calendar owner can change this event's sharing.",
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks sharing provider-private event details', async () => {
+    db.query.mockResolvedValueOnce([[
+      {
+        id: 9,
+        user_id: 10,
+        status: 'busy',
+        source: 'outlook',
+        source_provider: 'outlook',
+        source_event_id: 'event-1',
+        details_shareable: 0,
+        provider_sensitivity: 'private',
+      },
+    ]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/9/visibility', {
+      visibility: 'shared_details',
+    }, {}, 'PATCH');
+
+    expect(res.status).toBe(409);
+    expect(JSON.parse(res.body)).toEqual({
+      error: 'This Outlook event is private and cannot be shared.',
+    });
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
   it('lets a manager delete another user schedule entry', async () => {
     db.query
       .mockResolvedValueOnce([[{ id: 5, user_id: 99, status: 'out' }]])

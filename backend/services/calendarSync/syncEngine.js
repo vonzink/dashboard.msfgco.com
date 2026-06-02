@@ -84,8 +84,8 @@ async function finishRun(runId, status, imported, exported, errorMessage = null)
 async function upsertImportedEntry(entry) {
   await db.query(
     `INSERT INTO schedule_entries
-     (user_id, status, start_date, end_date, start_time, end_time, timezone, note, visibility, source, source_provider, source_event_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     (user_id, status, start_date, end_date, start_time, end_time, timezone, note, visibility, source, source_provider, source_event_id, details_shareable, provider_sensitivity)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        status=VALUES(status),
        start_date=VALUES(start_date),
@@ -94,7 +94,12 @@ async function upsertImportedEntry(entry) {
        end_time=VALUES(end_time),
        timezone=VALUES(timezone),
        note=VALUES(note),
-       visibility=VALUES(visibility),
+       visibility=CASE
+         WHEN VALUES(details_shareable) = 0 THEN 'availability_only'
+         ELSE visibility
+       END,
+       details_shareable=VALUES(details_shareable),
+       provider_sensitivity=VALUES(provider_sensitivity),
        updated_at=CURRENT_TIMESTAMP`,
     [
       entry.user_id,
@@ -109,6 +114,8 @@ async function upsertImportedEntry(entry) {
       entry.source || entry.source_provider,
       entry.source_provider,
       entry.source_event_id,
+      entry.details_shareable ? 1 : 0,
+      entry.provider_sensitivity || null,
     ]
   );
 }

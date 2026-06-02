@@ -45,6 +45,10 @@
     getEntries: (params) => request(`/schedule/entries${toQuery(params)}`),
     createEntry: (payload) => request('/schedule/entries', { method: 'POST', body: JSON.stringify(payload) }),
     updateEntry: (id, payload) => request(`/schedule/entries/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+    updateEntryVisibility: (id, visibility) => request(`/schedule/entries/${id}/visibility`, {
+      method: 'PATCH',
+      body: JSON.stringify({ visibility }),
+    }),
     deleteEntry: (id) => request(`/schedule/entries/${id}`, { method: 'DELETE' }),
     getSyncStatus: () => request('/schedule/sync/status'),
     startSyncConnection: (provider, payload) => request(`/schedule/sync/connections/${encodeURIComponent(provider)}/start`, {

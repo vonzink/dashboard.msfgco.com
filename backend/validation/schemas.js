@@ -199,6 +199,8 @@ const scheduleEntryFields = {
   source: z.enum(scheduleSources).optional(),
   source_provider: z.enum(['outlook', 'google']).optional().nullable(),
   source_event_id: optionalString(255),
+  details_shareable: z.coerce.boolean().optional(),
+  provider_sensitivity: optionalString(40),
 };
 
 const scheduleEntryBase = z.object({
@@ -274,6 +276,10 @@ const calendarSyncConnectionStart = z.object({
 
 const calendarSyncRun = z.object({
   provider: z.enum(['outlook', 'google']).optional(),
+}).strict();
+
+const scheduleEntryVisibilityUpdate = z.object({
+  visibility: z.enum(scheduleVisibility),
 }).strict();
 
 // ── Tasks ──────────────────────────────────
@@ -551,6 +557,7 @@ module.exports = {
   scheduleEntry,
   scheduleEntryUpdate,
   scheduleEntryQuery,
+  scheduleEntryVisibilityUpdate,
   calendarSyncConnectionStart,
   calendarSyncRun,
   task,

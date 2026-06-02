@@ -56,7 +56,32 @@
   }
 
   function monthLabel(state) {
+    if (state.viewMode === 'year') return `${state.viewDate.getFullYear()}`;
+    if (state.viewMode === 'two_months') {
+      const next = new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + 1, 1);
+      return `${window.CalendarState.MONTHS[state.viewDate.getMonth()]} - ${window.CalendarState.MONTHS[next.getMonth()]} ${next.getFullYear()}`;
+    }
     return `${window.CalendarState.MONTHS[state.viewDate.getMonth()]} ${state.viewDate.getFullYear()}`;
+  }
+
+  function viewModeLabel(mode) {
+    if (mode === 'two_months') return '2 Months';
+    if (mode === 'year') return 'Year';
+    if (mode === 'people') return 'People';
+    return 'Month';
+  }
+
+  function renderViewTabs(state) {
+    const current = state.viewMode || 'month';
+    return `
+      <div class="view-tabs" aria-label="Calendar view">
+        ${window.CalendarState.VIEW_MODES.map((mode) => `
+          <button class="view-tab ${current === mode ? 'is-active' : ''}" type="button" data-view-mode="${escapeHtml(mode)}" aria-pressed="${current === mode ? 'true' : 'false'}">
+            ${escapeHtml(viewModeLabel(mode))}
+          </button>
+        `).join('')}
+      </div>
+    `;
   }
 
   function renderHeader(state) {
@@ -74,6 +99,7 @@
           <button class="nav-btn" type="button" data-cal-action="next" aria-label="Next month">&gt;</button>
           <button class="nav-btn" type="button" data-cal-action="today">Today</button>
         </div>
+        ${renderViewTabs(state)}
         <div class="schedule-controls">
           ${window.CalendarSync ? window.CalendarSync.renderTrigger(state) : ''}
           <button class="primary-btn" type="button" data-cal-action="add" data-action="new-entry">Add Schedule</button>
@@ -124,15 +150,16 @@
     const next = root.querySelector('[data-cal-action="next"]');
     const today = root.querySelector('[data-cal-action="today"]');
     const add = root.querySelector('[data-cal-action="add"], [data-action="new-entry"]');
+    const step = state.viewMode === 'year' ? 12 : (state.viewMode === 'two_months' ? 2 : 1);
 
     if (prev) {
       prev.addEventListener('click', () => {
-        actions.setViewDate(new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() - 1, 1));
+        actions.setViewDate(new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() - step, 1));
       });
     }
     if (next) {
       next.addEventListener('click', () => {
-        actions.setViewDate(new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + 1, 1));
+        actions.setViewDate(new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + step, 1));
       });
     }
     if (today) {
@@ -147,6 +174,9 @@
         if (actions.openEditor) actions.openEditor();
       });
     }
+    root.querySelectorAll('[data-view-mode]').forEach((button) => {
+      button.addEventListener('click', () => actions.setViewMode(button.dataset.viewMode));
+    });
   }
 
   function render(root, state, actions) {
@@ -180,6 +210,7 @@
     escapeHtml,
     derivePeople,
     entriesForDay,
+    renderViewTabs,
     render,
   };
 })();

@@ -5,6 +5,7 @@ const {
   scheduleEntry,
   scheduleEntryUpdate,
   scheduleEntryQuery,
+  scheduleEntryVisibilityUpdate,
   validate,
   validateQuery,
 } = require('../validation/schemas');
@@ -162,6 +163,26 @@ function providerName(entry) {
 function requireEditableEntry(entry, res) {
   if (!isProviderOwned(entry)) return true;
   res.status(409).json({ error: `This schedule entry is managed in ${providerName(entry)}.` });
+  return false;
+}
+
+function requireProviderVisibilityOwner(entry, req, res) {
+  if (Number(entry.user_id) !== Number(getUserId(req))) {
+    res.status(403).json({
+      error: "Only the connected calendar owner can change this event's sharing.",
+    });
+    return false;
+  }
+  return true;
+}
+
+function requireShareableProviderDetails(entry, visibility, res) {
+  if (visibility !== 'shared_details') return true;
+  if (entry.details_shareable) return true;
+
+  res.status(409).json({
+    error: `This ${providerName(entry)} event is private and cannot be shared.`,
+  });
   return false;
 }
 
@@ -350,6 +371,39 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
     );
 
     res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/entries/:id/visibility', validate(scheduleEntryVisibilityUpdate), async (req, res, next) => {
+  try {
+    const existing = await fetchEntry(req.params.id);
+    if (!existing) {
+      return res.status(404).json({ error: 'Schedule entry not found' });
+    }
+
+    if (!isProviderOwned(existing)) {
+      return res.status(409).json({ error: 'Only connected calendar events can use this sharing control.' });
+    }
+
+    if (!requireProviderVisibilityOwner(existing, req, res)) return;
+    if (!requireShareableProviderDetails(existing, req.body.visibility, res)) return;
+
+    await db.query(
+      `UPDATE schedule_entries
+       SET visibility = ?,
+           updated_by = ?,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [req.body.visibility, getUserId(req), req.params.id]
+    );
+
+    const updated = await fetchEntry(req.params.id);
+    res.json({
+      success: true,
+      entry: presentScheduleEntry(updated || { ...existing, visibility: req.body.visibility }, req),
+    });
   } catch (error) {
     next(error);
   }

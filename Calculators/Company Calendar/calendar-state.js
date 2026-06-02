@@ -12,6 +12,7 @@
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const VIEW_MODES = ['month', 'two_months', 'year', 'people'];
 
   function pad(n) {
     return String(n).padStart(2, '0');
@@ -36,11 +37,31 @@
     return { start_date: isoDate(start), end_date: isoDate(end) };
   }
 
+  function visibleRange(state) {
+    const viewDate = state.viewDate || new Date();
+    const viewMode = state.viewMode || 'month';
+
+    if (viewMode === 'two_months') {
+      const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+      const end = new Date(viewDate.getFullYear(), viewDate.getMonth() + 2, 0);
+      return { start_date: isoDate(start), end_date: isoDate(end) };
+    }
+
+    if (viewMode === 'year') {
+      const start = new Date(viewDate.getFullYear(), 0, 1);
+      const end = new Date(viewDate.getFullYear(), 11, 31);
+      return { start_date: isoDate(start), end_date: isoDate(end) };
+    }
+
+    return monthRange(viewDate);
+  }
+
   function createState() {
     const today = new Date();
     return {
       today,
       viewDate: new Date(today.getFullYear(), today.getMonth(), 1),
+      viewMode: 'month',
       selectedDate: today,
       me: null,
       entries: [],
@@ -62,11 +83,13 @@
     STATUS_META,
     MONTHS,
     DOW,
+    VIEW_MODES,
     pad,
     createState,
     daysInMonth,
     isoDate,
     parseDate,
     monthRange,
+    visibleRange,
   };
 })();

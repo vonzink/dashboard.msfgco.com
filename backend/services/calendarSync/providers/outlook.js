@@ -44,15 +44,19 @@ function inclusiveAllDayEndDate(startDate, endDate) {
   return addDays(endDate, -1) || startDate;
 }
 
-function canIncludeSubject(event, visibility) {
-  if (visibility !== 'shared_details') return false;
-  return !event.sensitivity || event.sensitivity === 'normal';
+function providerSensitivity(event) {
+  return event.sensitivity || 'normal';
+}
+
+function canStoreSubject(event) {
+  return providerSensitivity(event) === 'normal' && Boolean(event.subject);
 }
 
 function normalizeOutlookEvent(event, connection) {
   const start = dateParts(event.start?.dateTime);
   const end = dateParts(event.end?.dateTime);
-  const visibility = connection.privacy_default || 'availability_only';
+  const visibility = 'availability_only';
+  const detailsShareable = canStoreSubject(event);
   const endDate = event.isAllDay
     ? inclusiveAllDayEndDate(start.date, end.date)
     : end.date || start.date;
@@ -65,11 +69,13 @@ function normalizeOutlookEvent(event, connection) {
     start_time: event.isAllDay ? null : start.time,
     end_time: event.isAllDay ? null : end.time,
     timezone: event.start?.timeZone || 'America/Denver',
-    note: canIncludeSubject(event, visibility) ? (event.subject || null) : null,
+    note: detailsShareable ? event.subject : null,
     visibility,
     source: 'outlook',
     source_provider: 'outlook',
     source_event_id: event.id,
+    details_shareable: detailsShareable,
+    provider_sensitivity: providerSensitivity(event),
   };
 }
 
