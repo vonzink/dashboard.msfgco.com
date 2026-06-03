@@ -652,6 +652,7 @@ const Investors = {
           '<div class="contact-card-section">' +
             '<h4 style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; margin:0 0 8px;">Email Signature</h4>' +
             '<div class="signature-preview">' + user.email_signature + '</div>' +
+            '<button type="button" class="signature-copy-btn"><i class="fas fa-copy"></i> Copy for Outlook</button>' +
           '</div>';
       }
 
@@ -674,12 +675,69 @@ const Investors = {
       // Re-bind close
       const newCloseBtn = content.querySelector('.contacts-modal-close');
       if (newCloseBtn) newCloseBtn.addEventListener('click', () => this.hideCompanyContactsModal());
+
+      // Copy signature (rich HTML) for pasting into Outlook
+      const copyBtn = content.querySelector('.signature-copy-btn');
+      if (copyBtn) copyBtn.addEventListener('click', () => this.copySignatureForOutlook(user.email_signature, copyBtn));
     } catch (err) {
       content.innerHTML =
         '<button type="button" class="contacts-modal-close">&times;</button>' +
         '<div style="text-align:center; padding:40px; color:#e74c3c;"><i class="fas fa-exclamation-circle" style="font-size:24px; margin-bottom:8px; display:block;"></i><p>Could not load contact information.</p></div>';
       const errCloseBtn = content.querySelector('.contacts-modal-close');
       if (errCloseBtn) errCloseBtn.addEventListener('click', () => this.hideCompanyContactsModal());
+    }
+  },
+
+  // Copy a signature as rich HTML so it pastes into Outlook with formatting intact.
+  async copySignatureForOutlook(html, btn) {
+    if (!html) return;
+    const restore = btn.innerHTML;
+    const flash = (ok, msg) => {
+      btn.innerHTML = (ok ? '<i class="fas fa-check"></i> ' : '<i class="fas fa-exclamation-triangle"></i> ') + msg;
+      btn.classList.toggle('is-copied', ok);
+      setTimeout(() => { btn.innerHTML = restore; btn.classList.remove('is-copied'); }, 2200);
+    };
+
+    // Plain-text fallback so non-rich targets still get readable text.
+    const plain = html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|tr|h[1-6]|li)>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    // Preferred: Async Clipboard API with both HTML + plain flavors.
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([plain], { type: 'text/plain' }),
+        })]);
+        flash(true, 'Copied!');
+        return;
+      }
+    } catch (e) { /* fall through to execCommand path */ }
+
+    // Fallback: select rendered HTML in an offscreen node and execCommand('copy').
+    try {
+      const holder = document.createElement('div');
+      holder.setAttribute('contenteditable', 'true');
+      holder.style.cssText = 'position:fixed; left:-9999px; top:0; opacity:0;';
+      holder.innerHTML = html;
+      document.body.appendChild(holder);
+      const range = document.createRange();
+      range.selectNodeContents(holder);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      const ok = document.execCommand('copy');
+      sel.removeAllRanges();
+      document.body.removeChild(holder);
+      flash(ok, ok ? 'Copied!' : 'Copy failed');
+    } catch (e) {
+      flash(false, 'Copy failed');
     }
   },
 };
