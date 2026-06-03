@@ -43,6 +43,11 @@ function parseLabels(settingsStr) {
         `query { boards(ids: [${b.board_id}]) { columns { id title type settings_str } } }`);
       const cols = (data.boards && data.boards[0] && data.boards[0].columns) || [];
 
+      console.error(`[dbg] ${b.board_name} (${b.board_id}): maps=${maps.length} cols=${cols.length} ` +
+        `statusCols=${cols.filter(c => c.type === 'status').length} ` +
+        `mappedStatus=${cols.filter(c => c.type === 'status' && fieldByCol[c.id]).length} ` +
+        `colTypes=${[...new Set(cols.map(c => c.type))].join('/')}`);
+
       for (const c of cols) {
         if (c.type !== 'status') continue;
         const field = fieldByCol[c.id];
