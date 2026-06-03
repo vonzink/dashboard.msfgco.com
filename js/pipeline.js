@@ -63,7 +63,7 @@ const Pipeline = {
     // {label: value}; an unknown label makes change_multiple_column_values reject the
     // whole mutation, so the row silently fails to sync (warning only, DB still saves).
     wvoes: ['Please Order', 'Requested', 'Partially Complete', 'Need Info', 'Pending LO Approval', 'LO Approved', 'Done', 'NA'],
-    vvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
+    vvoes: ['Needed', 'Done', 'NA'],  // matches Monday status46 (VVOE) labels
     hoa: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
     dpa: ['Not Applied', 'Applied', 'Approved', 'Received', 'Pending', 'Denied', 'N/A'],
     closing_docs: ['Not Sent', 'Sent', 'Signed', 'Received', 'Pending', 'N/A'],
