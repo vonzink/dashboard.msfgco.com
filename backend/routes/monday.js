@@ -431,7 +431,7 @@ router.get('/mappings', requireAdmin, async (req, res, next) => {
 // ── POST /mappings — save column mappings (admin) ───────────────
 router.post('/mappings', requireAdmin, async (req, res, next) => {
   try {
-    const { mappings, boardId } = req.body;
+    const { mappings, boardId, replace } = req.body;
     if (!boardId) {
       return res.status(400).json({ error: 'boardId is required' });
     }
@@ -455,12 +455,25 @@ router.post('/mappings', requireAdmin, async (req, res, next) => {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
-      await connection.query('DELETE FROM monday_column_mappings WHERE board_id = ?', [boardId]);
+
+      // Non-destructive by default (merge): upsert the listed mappings and update
+      // their display config, WITHOUT deleting columns the caller didn't list — so
+      // an admin save can't silently drop auto-mapped columns (e.g. WVOEs/VVOEs),
+      // which previously broke Monday write-back. Pass { replace: true } for an
+      // explicit full reset (legacy delete-all-then-insert) when truly remapping.
+      if (replace === true) {
+        await connection.query('DELETE FROM monday_column_mappings WHERE board_id = ?', [boardId]);
+      }
 
       for (const m of mappings) {
         await connection.query(
           `INSERT INTO monday_column_mappings (board_id, monday_column_id, monday_column_title, pipeline_field, display_label, display_order, visible)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE
+             monday_column_title = VALUES(monday_column_title),
+             display_label = VALUES(display_label),
+             display_order = VALUES(display_order),
+             visible = VALUES(visible)`,
           [boardId, m.mondayColumnId, m.mondayColumnTitle || null, m.pipelineField,
            m.displayLabel || null, m.displayOrder ?? 99, m.visible !== false ? 1 : 0]
         );
@@ -474,7 +487,7 @@ router.post('/mappings', requireAdmin, async (req, res, next) => {
       connection.release();
     }
 
-    res.json({ success: true, count: mappings.length, boardId });
+    res.json({ success: true, count: mappings.length, boardId, mode: replace === true ? 'replace' : 'merge' });
   } catch (error) {
     next(error);
   }
