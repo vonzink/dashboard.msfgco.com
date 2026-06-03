@@ -59,7 +59,10 @@ const Pipeline = {
     prelims_status: ['Not Ordered', 'Ordered', 'Received', 'Approved', 'Pending', 'Cleared', 'N/A'],
     mini_set_status: ['Not Sent', 'Sent', 'Received', 'Approved', 'Pending', 'N/A'],
     cd_status: ['Not Sent', 'Sent', 'Signed', 'Received', 'Approved', 'Pending', 'N/A'],
-    wvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
+    // WVOE — must match Monday.com column status69 labels EXACTLY. Write-back sends
+    // {label: value}; an unknown label makes change_multiple_column_values reject the
+    // whole mutation, so the row silently fails to sync (warning only, DB still saves).
+    wvoes: ['Please Order', 'Requested', 'Partially Complete', 'Need Info', 'Pending LO Approval', 'LO Approved', 'Done', 'NA'],
     vvoes: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
     hoa: ['Not Ordered', 'Ordered', 'Received', 'Pending', 'N/A'],
     dpa: ['Not Applied', 'Applied', 'Approved', 'Received', 'Pending', 'Denied', 'N/A'],
@@ -490,14 +493,6 @@ const Pipeline = {
           </div>
         </div>
       </div>
-      <div class="pa-detail-section full-width">
-        <h3 class="pa-detail-section-title">
-          <i class="fas fa-sticky-note"></i> Loan Notes
-          <span class="pa-detail-section-hint">synced to Monday.com</span>
-        </h3>
-        <textarea id="pipelineMondayNotes" rows="3" class="form-input" placeholder="Add notes about this loan — these sync to Monday.com...">${esc(item.notes || '')}</textarea>
-        <button type="button" class="btn btn-primary btn-sm" id="pipelineSaveMondayNotes" style="margin-top:0.5rem;"><i class="fas fa-save"></i> Save Loan Notes</button>
-      </div>
       ${item.monday_item_id ? `<div class="pa-detail-section full-width">
         <h3 class="pa-detail-section-title"><i class="fab fa-monday"></i> Post Comment to Monday.com</h3>
         <textarea id="pipelineMondayComment" rows="2" class="form-input" placeholder="Write a comment — it will appear in the item's activity feed on Monday.com..."></textarea>
@@ -526,12 +521,6 @@ const Pipeline = {
     // Status field change handlers — prompt for optional comment, then save
     modal.querySelectorAll('.pipeline-status-select').forEach(select => {
       select.addEventListener('change', () => this._onStatusChange(id, select));
-    });
-
-    // Monday Notes save
-    document.getElementById('pipelineSaveMondayNotes')?.addEventListener('click', () => {
-      const val = document.getElementById('pipelineMondayNotes')?.value || '';
-      this._saveField(id, 'notes', val.trim());
     });
 
     // Post comment to Monday.com item
