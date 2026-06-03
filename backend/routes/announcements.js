@@ -138,6 +138,45 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// GET /api/announcements/:id/attachments/:index/url
+// Mint a FRESH presigned download URL on demand. The list endpoint embeds
+// presigned URLs that expire after 900s; if a user opens an announcement
+// modal and clicks download later, the baked URL is dead ("Request has
+// expired"). The frontend calls this per click so the link is always live.
+// Any authenticated dashboard user can fetch any announcement attachment —
+// News & Announcements are intentionally readable by everyone with access.
+router.get('/:id/attachments/:index/url', parseId(), async (req, res, next) => {
+  try {
+    const index = Number.parseInt(req.params.index, 10);
+    if (!Number.isInteger(index) || index < 0) {
+      return res.status(400).json({ error: 'Invalid attachment index' });
+    }
+
+    const [rows] = await db.query('SELECT * FROM announcements WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'Announcement not found' });
+
+    const attachments = mergeLegacyAttachment(
+      normalizeAnnouncementAttachments(parseJsonArray(rows[0].attachments_json)),
+      {
+        file_s3_key: rows[0].file_s3_key,
+        file_name: rows[0].file_name,
+        file_size: rows[0].file_size,
+        file_type: rows[0].file_type,
+      }
+    );
+
+    const attachment = attachments[index];
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+    const url = await signedDashboardUrl(attachment.file_s3_key);
+    if (!url) return res.status(404).json({ error: 'Attachment file unavailable' });
+
+    res.json({ url, file_name: attachment.file_name || 'attachment', file_type: attachment.file_type || null });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/announcements/generate-image - Create a PNG from announcement content
 router.post('/generate-image', async (req, res, next) => {
   try {

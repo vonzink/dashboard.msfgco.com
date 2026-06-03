@@ -10,7 +10,38 @@ const Announcements = {
   init() {
     this.bindAnnouncementModal();
     this.bindDeleteButtons();
+    this.bindAttachmentDownloads();
     this.loadAnnouncements();
+  },
+
+  // ========================================
+  // ATTACHMENT DOWNLOADS (delegation, fresh presigned URL per click)
+  // ========================================
+  bindAttachmentDownloads() {
+    document.addEventListener('click', async (e) => {
+      const link = e.target.closest('.news-attachment-dl');
+      if (!link) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const annId = Number(link.dataset.annId);
+      const index = Number(link.dataset.attIndex);
+      if (!Number.isFinite(annId) || !Number.isFinite(index)) return;
+
+      link.classList.add('is-loading');
+      try {
+        const data = await ServerAPI.get(`/announcements/${annId}/attachments/${index}/url`);
+        if (data && data.url) {
+          window.open(data.url, '_blank', 'noopener,noreferrer');
+        } else {
+          Utils.showToast('Could not open attachment', 'error');
+        }
+      } catch (err) {
+        Utils.showToast('Could not open attachment: ' + (err.message || 'error'), 'error');
+      } finally {
+        link.classList.remove('is-loading');
+      }
+    });
   },
 
   // ========================================
@@ -344,11 +375,15 @@ const Announcements = {
         <i class="fas fa-link"></i> ${Utils.escapeHtml(label)}
       </a>`;
     }).join('');
-    const attachmentsHtml = attachments.map((attachment) => {
+    const attachmentsHtml = attachments.map((attachment, index) => {
       const name = attachment.file_name || attachment.fileName || 'Attachment';
       const type = attachment.file_type || attachment.fileType || '';
       const size = attachment.file_size || attachment.fileSize || 0;
       const safeUrl = this._safeUrl(attachment.url || attachment.file_url || '');
+      // Prefer an on-demand fresh URL fetch (presigned URLs in the payload
+      // expire after 15 min). If the attachment is a dashboard S3 upload we
+      // have an announcement id + index to mint a fresh URL per click.
+      const canFreshFetch = !!(attachment.file_s3_key && Number.isFinite(announcement.id));
       const isImage = type.startsWith('image/') && safeUrl;
       const thumb = isImage
         ? `<img src="${safeUrl}" alt="">`
@@ -359,8 +394,11 @@ const Announcements = {
           <div class="news-attachment-name">${Utils.escapeHtml(name)}</div>
           <div class="news-attachment-meta">${Utils.escapeHtml(type || 'file')}${size ? ' &middot; ' + Utils.formatFileSize(size) : ''}</div>
         </div>
-        ${safeUrl ? '<i class="fas fa-download"></i>' : ''}
+        ${(canFreshFetch || safeUrl) ? '<i class="fas fa-download"></i>' : ''}
       `;
+      if (canFreshFetch) {
+        return `<a class="news-attachment news-attachment-dl" href="#" data-ann-id="${announcement.id}" data-att-index="${index}" data-att-name="${Utils.escapeHtml(name)}">${inner}</a>`;
+      }
       return safeUrl
         ? `<a class="news-attachment" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${inner}</a>`
         : `<div class="news-attachment">${inner}</div>`;
