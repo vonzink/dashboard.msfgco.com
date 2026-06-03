@@ -1,12 +1,14 @@
-// Read-only: dump live Monday status-column labels for every mapped status field,
-// per active pipeline board. Used to align js/pipeline.js STATUS_OPTIONS to Monday.
-// Flags fields whose labels differ across boards. Writes nothing.
+// Read-only: dump live Monday status-column labels per active pipeline board,
+// matched to dashboard fields by column TITLE via DEFAULT_TITLE_MAP (independent of
+// the monday_column_mappings table, which can be wiped by the admin save endpoint).
+// Used to align js/pipeline.js STATUS_OPTIONS to Monday. Writes nothing.
 //   node backend/scripts/dump-status-labels.js
 
 require('dotenv').config({ path: require('path').join(__dirname, '../../.env') });
 const db = require('../db/connection');
 const { mondayQuery } = require('../services/monday/client');
 const { getMondayToken } = require('../services/monday/sync');
+const { DEFAULT_TITLE_MAP } = require('../services/monday/mapper');
 
 function parseLabels(settingsStr) {
   try {
@@ -31,48 +33,42 @@ function parseLabels(settingsStr) {
 
     const fieldLabels = {};   // field -> { boardName -> labels[] }
     const fieldCol = {};      // field -> "title [colId]"
+    const unmapped = {};      // boardName -> ["Title [id]", ...]  (status cols with no field)
 
     for (const b of boards) {
-      const [maps] = await db.query(
-        'SELECT monday_column_id, pipeline_field FROM monday_column_mappings WHERE board_id = ?', [b.board_id]
-      );
-      const fieldByCol = {};
-      maps.forEach(m => { fieldByCol[m.monday_column_id] = m.pipeline_field; });
-
       const data = await mondayQuery(token,
         `query { boards(ids: [${b.board_id}]) { columns { id title type settings_str } } }`);
       const cols = (data.boards && data.boards[0] && data.boards[0].columns) || [];
 
-      console.error(`[dbg] ${b.board_name} (${b.board_id}): maps=${maps.length} cols=${cols.length} ` +
-        `statusCols=${cols.filter(c => c.type === 'status').length} ` +
-        `mappedStatus=${cols.filter(c => c.type === 'status' && fieldByCol[c.id]).length} ` +
-        `colTypes=${[...new Set(cols.map(c => c.type))].join('/')}`);
-
       for (const c of cols) {
         if (c.type !== 'status') continue;
-        const field = fieldByCol[c.id];
-        if (!field) continue;
+        const field = DEFAULT_TITLE_MAP[String(c.title).toLowerCase().trim()];
+        if (!field) {
+          (unmapped[b.board_name] = unmapped[b.board_name] || []).push(`"${c.title}" [${c.id}]`);
+          continue;
+        }
         (fieldLabels[field] = fieldLabels[field] || {})[b.board_name] = parseLabels(c.settings_str);
         fieldCol[field] = `${c.title} [${c.id}]`;
       }
     }
 
-    const fields = Object.keys(fieldLabels).sort();
-    console.log(`Boards: ${boards.map(b => b.board_name).join(', ')}`);
-    for (const field of fields) {
+    console.log(`Boards: ${boards.map(b => b.board_name).join(', ')}\n`);
+    for (const field of Object.keys(fieldLabels).sort()) {
       const byBoard = fieldLabels[field];
       const sets = Object.values(byBoard);
       const same = sets.every(s => JSON.stringify(s) === JSON.stringify(sets[0]));
       if (same) {
-        console.log(`\n${field}  (${fieldCol[field]})`);
+        console.log(`${field}  (${fieldCol[field]})`);
         console.log('  ' + sets[0].map(l => `"${l}"`).join(', '));
       } else {
-        console.log(`\n${field}  (${fieldCol[field]})  *** DIFFERS ACROSS BOARDS ***`);
+        console.log(`${field}  (${fieldCol[field]})  *** DIFFERS ACROSS BOARDS ***`);
         for (const [bn, labels] of Object.entries(byBoard)) {
           console.log(`  [${bn}] ` + labels.map(l => `"${l}"`).join(', '));
         }
       }
     }
+    console.log('\n-- status columns with no DEFAULT_TITLE_MAP field (ignored) --');
+    for (const [bn, list] of Object.entries(unmapped)) console.log(`  [${bn}] ${list.join(', ')}`);
     process.exit(0);
   } catch (e) { console.error('ERROR:', e.message); process.exit(1); }
 })();
