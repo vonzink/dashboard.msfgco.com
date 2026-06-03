@@ -87,6 +87,16 @@
     return new Set(ids);
   }
 
+  function selectedPerson(state) {
+    const selectedUserId = String(state.selectedUserId || '');
+    if (!selectedUserId) return null;
+    return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === selectedUserId) || {
+      id: selectedUserId,
+      name: `Employee ${selectedUserId}`,
+      role: '',
+    };
+  }
+
   function entryOverlapsDate(entry, iso) {
     const start = entryStartIso(entry);
     const end = entryEndIso(entry) || start;
@@ -157,11 +167,13 @@
   }
 
   function renderStatusFilters(state) {
+    const hiddenStatuses = state.hiddenStatuses || new Set();
     return Object.keys(window.CalendarState.STATUS_META).map((status) => {
       const meta = window.CalendarState.STATUS_META[status];
-      const hidden = state.hiddenStatuses.has(status);
+      const hidden = hiddenStatuses.has(status);
       return `
         <button class="filter-chip ${hidden ? 'is-muted' : 'is-active'}" type="button" data-status-filter="${escapeHtml(status)}" aria-pressed="${hidden ? 'false' : 'true'}">
+          <span class="status-dot" style="--status-color:${escapeHtml(meta.color)}" aria-hidden="true"></span>
           ${escapeHtml(meta.label)}
         </button>
       `;
@@ -169,12 +181,16 @@
   }
 
   function renderToolbar(state) {
+    const selected = selectedPerson(state);
     return `
       <div class="roster-toolbar">
-        <input class="schedule-search" type="search" placeholder="Search people or roles" value="${escapeHtml(state.search || '')}" aria-label="Search people or roles">
-        <div class="status-filters" aria-label="Status filters">
-          ${renderStatusFilters(state)}
-        </div>
+        <input class="schedule-search" type="search" placeholder="Search names, roles, or NMLS" value="${escapeHtml(state.search || '')}" aria-label="Search names, roles, or NMLS">
+        ${selected ? `
+          <button class="selected-person-chip" type="button" data-roster-clear-person>
+            Viewing ${escapeHtml(selected.name)}
+            <span aria-hidden="true">&times;</span>
+          </button>
+        ` : ''}
       </div>
     `;
   }
@@ -189,6 +205,10 @@
     return entry.visibility === 'shared_details' ? 'is-shared-details' : 'is-hidden-details';
   }
 
+  function visibilityLabel(entry) {
+    return entry.visibility === 'shared_details' ? 'Shared' : 'Hidden';
+  }
+
   function barStyle(entry) {
     return `--entry-color:${escapeHtml(entryColor(entry))};`;
   }
@@ -200,6 +220,7 @@
         ${compact ? '' : `<span class="entry-time">${escapeHtml(time)}</span>`}
         <span class="entry-name">${escapeHtml(entryLabel(entry))}</span>
         ${compact ? '' : `<span class="entry-person">${escapeHtml(entryUserName(entry))}</span>`}
+        ${compact ? '' : `<span class="entry-visibility">${escapeHtml(visibilityLabel(entry))}</span>`}
       </button>
     `;
   }
@@ -296,7 +317,8 @@
             if (entries.length) classes.push('has-entries');
             if (isToday(state, day)) classes.push('is-today');
             if (isSelectedDate(state, day)) classes.push('is-selected');
-            return `<button class="${classes.join(' ')}" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" title="${escapeHtml(dayLabel(day))}: ${entries.length} entries">${day.getDate()}</button>`;
+            const pips = entries.slice(0, 3).map((entry) => `<i style="--pip-color:${escapeHtml(entryColor(entry))}" aria-hidden="true"></i>`).join('');
+            return `<button class="${classes.join(' ')}" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" title="${escapeHtml(dayLabel(day))}: ${entries.length} entries"><span>${day.getDate()}</span>${pips ? `<span class="mini-pips">${pips}</span>` : ''}</button>`;
           }).join('')}
         </div>
       </article>
@@ -321,7 +343,7 @@
           <span class="avatar" aria-hidden="true">${escapeHtml(initials(person.name))}</span>
           <span class="person-text">
             <span class="person-name">${escapeHtml(person.name)}</span>
-            <span class="person-role">${escapeHtml(person.role || 'Team')}</span>
+            <span class="person-role">${escapeHtml(person.role || 'Team')}${person.nmls_number ? ` · NMLS ${escapeHtml(person.nmls_number)}` : ''}</span>
           </span>
           <strong>${entries.length}</strong>
         </div>
@@ -352,18 +374,37 @@
   function renderDayView(state) {
     const day = state.selectedDate || state.today || new Date();
     const entries = entriesForDay(state, day);
+    const counts = {
+      out: entries.filter((entry) => entry.status === 'out').length,
+      remote: entries.filter((entry) => entry.status === 'remote').length,
+      traveling: entries.filter((entry) => entry.status === 'traveling').length,
+      meetings: entries.filter((entry) => entry.status === 'meeting_event' || entry.status === 'busy').length,
+    };
     return `
       <div class="day-overview">
-        <div class="day-overview-head">
-          <h2>${escapeHtml(dayLabel(day))}</h2>
-          <div class="day-overview-actions">
-            <span>${entries.length} entries</span>
-            <button class="primary-btn" type="button" data-day-add="${window.CalendarState.isoDate(day)}">Add Schedule</button>
+        <aside class="day-rail">
+          <span class="day-rail-weekday">${escapeHtml(window.CalendarState.DOW[day.getDay()])}</span>
+          <strong>${day.getDate()}</strong>
+          <span>${escapeHtml(window.CalendarState.MONTHS[day.getMonth()])} ${day.getFullYear()}</span>
+          <button class="primary-btn" type="button" data-day-add="${window.CalendarState.isoDate(day)}">Add Schedule</button>
+          <div class="day-rail-counts">
+            <span><b>${counts.out}</b> Out</span>
+            <span><b>${counts.remote}</b> Remote</span>
+            <span><b>${counts.traveling}</b> Traveling</span>
+            <span><b>${counts.meetings}</b> Meetings/Busy</span>
           </div>
-        </div>
-        <div class="day-entry-list">
-          ${entries.length ? entries.map((entry) => renderEntryPill(entry, false)).join('') : '<p class="empty-roster">No visible entries for this day.</p>'}
-        </div>
+        </aside>
+        <section class="day-entry-panel">
+          <div class="day-overview-head">
+            <h2>${escapeHtml(dayLabel(day))}</h2>
+            <div class="day-overview-actions">
+              <span>${entries.length} visible entries</span>
+            </div>
+          </div>
+          <div class="day-entry-list">
+            ${entries.length ? entries.map((entry) => renderEntryPill(entry, false)).join('') : '<p class="empty-roster">No visible entries for this day.</p>'}
+          </div>
+        </section>
       </div>
     `;
   }
@@ -396,7 +437,7 @@
     return `
       <div class="week-overview">
         <div class="timeline-days" style="grid-template-columns:repeat(${days.length}, minmax(0, 1fr));">
-          ${days.map((day) => `<div class="timeline-day-head">${escapeHtml(window.CalendarState.DOW[day.getDay()])} ${day.getDate()}</div>`).join('')}
+          ${days.map((day) => `<button class="timeline-day-head" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true">${escapeHtml(window.CalendarState.DOW[day.getDay()])} ${day.getDate()}</button>`).join('')}
         </div>
         <div class="week-bars" style="grid-template-columns:repeat(${days.length}, minmax(0, 1fr));">
           ${entries.length ? entries.map((entry) => renderWeekSpanningBar(entry, days)).join('') : '<p class="empty-roster">No visible entries this week.</p>'}
@@ -432,7 +473,7 @@
       <div class="all-overview">
         <div class="all-timeline-grid" style="--days:${days.length}">
           <div class="corner-cell">Employee</div>
-          ${days.map((day) => `<div class="day-head ${isToday(state, day) ? 'is-today' : ''}"><span class="day-dow">${escapeHtml(window.CalendarState.DOW[day.getDay()])}</span><span class="day-num">${day.getDate()}</span></div>`).join('')}
+          ${days.map((day) => `<button class="day-head ${isToday(state, day) ? 'is-today' : ''}" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true"><span class="day-dow">${escapeHtml(window.CalendarState.DOW[day.getDay()])}</span><span class="day-num">${day.getDate()}</span></button>`).join('')}
           ${people.length ? people.map((person) => renderPersonTimelineRow(state, person, days)).join('') : '<div class="empty-roster">No people match the current search and filters.</div>'}
         </div>
       </div>
@@ -503,8 +544,8 @@
     if (search) {
       search.addEventListener('input', (event) => actions.setSearch(event.target.value));
     }
-    root.querySelectorAll('[data-status-filter]').forEach((button) => {
-      button.addEventListener('click', () => actions.toggleStatus(button.dataset.statusFilter));
+    root.querySelectorAll('[data-roster-clear-person]').forEach((button) => {
+      button.addEventListener('click', () => actions.setSelectedUser(null));
     });
     root.querySelectorAll('.person-card[data-user-id]').forEach((card) => {
       const activate = () => selectPerson(card.dataset.userId);

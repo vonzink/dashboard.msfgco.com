@@ -30,10 +30,18 @@
   }
 
   function providerMeta(connection) {
-    const parts = [statusLabel(connection)];
-    if (connection?.provider_account_email) parts.push(connection.provider_account_email);
-    if (connection?.last_sync_at) parts.push(`Last sync ${String(connection.last_sync_at).slice(0, 10)}`);
-    return parts.join(' - ');
+    const parts = [];
+    if (connection?.provider_account_email) parts.push(`Account: ${connection.provider_account_email}`);
+    if (connection?.last_sync_at) parts.push(`Last sync: ${String(connection.last_sync_at).slice(0, 10)}`);
+    return parts.join(' · ') || 'Connect to import and manage your company calendar availability.';
+  }
+
+  function statusClass(connection) {
+    if (!connection || connection.sync_status === 'not_connected') return 'not-connected';
+    if (!connection.sync_enabled) return 'paused';
+    if (connection.sync_status === 'syncing') return 'syncing';
+    if (connection.sync_status === 'error') return 'error';
+    return 'connected';
   }
 
   function isConnected(connection) {
@@ -48,9 +56,14 @@
 
     return `
       <div class="sync-provider ${error ? 'is-error' : ''}">
+        <div class="sync-provider-icon" aria-hidden="true">${escapeHtml(provider.label.charAt(0))}</div>
         <div class="sync-provider-copy">
-          <strong>${escapeHtml(provider.label)}</strong>
+          <span class="sync-provider-title">
+            <strong>${escapeHtml(provider.label)}</strong>
+            <span class="sync-status-pill is-${escapeHtml(statusClass(connection))}">${escapeHtml(statusLabel(connection))}</span>
+          </span>
           <small>${escapeHtml(providerMeta(connection))}</small>
+          <span class="sync-provider-note">Synced items import as Hidden from Team by default. Private calendar events never expose details.</span>
           ${error ? `<span class="sync-error">${escapeHtml(error)}</span>` : ''}
         </div>
         <div class="sync-provider-actions">

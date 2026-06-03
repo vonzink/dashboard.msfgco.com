@@ -176,7 +176,7 @@
 
   function renderVisibilityOptions(selected) {
     return VISIBILITY_OPTIONS.map((option) => `
-      <option value="${escapeHtml(option.value)}" ${String(selected || 'shared_details') === option.value ? 'selected' : ''}>
+      <option value="${escapeHtml(option.value)}" ${String(selected || 'availability_only') === option.value ? 'selected' : ''}>
         ${escapeHtml(option.label)}
       </option>
     `).join('');
@@ -239,22 +239,26 @@
                 <select name="visibility" required ${isSaving ? 'disabled' : ''}>
                   ${renderVisibilityOptions(visibility)}
                 </select>
+                <small class="field-help">Hidden means teammates see nothing. Shared lets the selected viewers see details.</small>
               </label>
               <label>
                 <span>Event Color</span>
                 <input name="event_color" type="color" value="${escapeHtml(firstValue(entry.event_color, statusColor(status)))}" ${isSaving ? 'disabled' : ''}>
+                <small class="field-help">Use a status color or choose a custom color for this event.</small>
               </label>
               <label class="editor-attendees">
                 <span>Invite Employees</span>
                 <select name="attendees" multiple ${isSaving ? 'disabled' : ''}>
                   ${renderAttendeeOptions(state, entry.attendees || [])}
                 </select>
+                <small class="field-help">People invited to attend this event, separate from who can view it.</small>
               </label>
               <label class="editor-viewers">
                 <span>Visible To</span>
                 <select name="viewers" multiple ${isSaving ? 'disabled' : ''}>
                   ${renderViewerOptions(state, entry.viewers || [])}
                 </select>
+                <small class="field-help">Leave All Team selected to share with everyone, or choose specific viewers.</small>
               </label>
               <label class="editor-note">
                 <span>Note</span>

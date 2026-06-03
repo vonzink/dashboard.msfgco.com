@@ -89,28 +89,45 @@
     `;
   }
 
+  function renderStatusFilters(state) {
+    const hiddenStatuses = state.hiddenStatuses || new Set();
+    return Object.keys(window.CalendarState.STATUS_META).map((status) => {
+      const meta = window.CalendarState.STATUS_META[status];
+      const hidden = hiddenStatuses.has(status);
+      return `
+        <button class="filter-chip ${hidden ? 'is-muted' : 'is-active'}" type="button" data-status-filter="${escapeHtml(status)}" aria-pressed="${hidden ? 'false' : 'true'}">
+          <span class="status-dot" style="--status-color:${escapeHtml(meta.color)}" aria-hidden="true"></span>
+          ${escapeHtml(meta.label)}
+        </button>
+      `;
+    }).join('');
+  }
+
   function renderHeader(state) {
     return `
-      <header class="schedule-header">
+      <header class="schedule-topbar">
         <div class="brand-mark">
-          <div>
-            <h1 class="brand-title">MSFG Company Schedule</h1>
-            <p class="brand-subtitle">Availability board for ${escapeHtml(monthLabel(state))}</p>
-          </div>
+          <h1 class="brand-title">MSFG Company Schedule</h1>
+          <p class="brand-subtitle">Availability board for ${escapeHtml(monthLabel(state))}</p>
         </div>
+        <img class="schedule-logo" src="${MSFG_LOGO_URL}" alt="MSFG Home Loans" loading="eager">
+      </header>
+      <div class="schedule-toolbar" aria-label="Calendar controls">
         <div class="nav-group" aria-label="Month navigation">
-          <button class="nav-btn" type="button" data-cal-action="prev" aria-label="Previous month">&lt;</button>
-          <div class="month-label" aria-live="polite">${escapeHtml(monthLabel(state))}</div>
-          <button class="nav-btn" type="button" data-cal-action="next" aria-label="Next month">&gt;</button>
+          <button class="nav-btn icon-only" type="button" data-cal-action="prev" aria-label="Previous">&lt;</button>
           <button class="nav-btn" type="button" data-cal-action="today">Today</button>
+          <div class="month-label" aria-live="polite">${escapeHtml(monthLabel(state))}</div>
+          <button class="nav-btn icon-only" type="button" data-cal-action="next" aria-label="Next">&gt;</button>
         </div>
         ${renderViewTabs(state)}
+        <div class="status-filters" aria-label="Status filters">
+          ${renderStatusFilters(state)}
+        </div>
         <div class="schedule-controls">
           ${window.CalendarSync ? window.CalendarSync.renderTrigger(state) : ''}
           <button class="primary-btn" type="button" data-cal-action="add" data-action="new-entry">Add Schedule</button>
-          <img class="schedule-logo" src="${MSFG_LOGO_URL}" alt="MSFG Home Loans" loading="eager">
         </div>
-      </header>
+      </div>
     `;
   }
 
@@ -205,6 +222,9 @@
     }
     root.querySelectorAll('[data-view-mode]').forEach((button) => {
       button.addEventListener('click', () => actions.setViewMode(button.dataset.viewMode));
+    });
+    root.querySelectorAll('[data-status-filter]').forEach((button) => {
+      button.addEventListener('click', () => actions.toggleStatus(button.dataset.statusFilter));
     });
   }
 

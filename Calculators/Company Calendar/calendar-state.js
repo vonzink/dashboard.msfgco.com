@@ -2,12 +2,12 @@
   'use strict';
 
   const STATUS_META = {
-    out: { label: 'Out', color: '#4b7b4d' },
-    remote: { label: 'Remote', color: '#6a9b48' },
-    traveling: { label: 'Traveling', color: '#2f5e4c' },
-    meeting_event: { label: 'Meeting/Event', color: '#b85a2e' },
-    other: { label: 'Other', color: '#404041' },
-    busy: { label: 'Busy', color: '#6a7672' },
+    out: { label: 'Out', color: '#c0492f' },
+    remote: { label: 'Remote', color: '#2f6fb0' },
+    traveling: { label: 'Traveling', color: '#8254c9' },
+    meeting_event: { label: 'Meeting/Event', color: '#1f8a6d' },
+    busy: { label: 'Busy', color: '#d08a2c' },
+    other: { label: 'Other', color: '#6b7280' },
   };
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
