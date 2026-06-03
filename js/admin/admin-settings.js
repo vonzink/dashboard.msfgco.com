@@ -331,6 +331,7 @@
   ═══════════════════════════════════════ */
   let profileUserId = null;
   let profileUserObj = null;
+  let profileData = null;
 
   // --- Show / Hide Profile ---
   function showProfile(userId, users) {
@@ -394,6 +395,7 @@
   async function loadProfileData() {
     try {
       const data = await api('/admin/users/' + profileUserId + '/profile');
+      profileData = data;
       if (!data) return;
 
       // Basic fields
@@ -853,6 +855,69 @@
   setupQrCodeHandlers(2);
 
   // --- Email Signature ---
+
+  // Standard MSFG signature (Seth Angell layout). Fixed parts: company, address,
+  // fax, website, fraud + confidentiality notices. Variable parts come from the
+  // open profile. No DB field exists for job title or the secure-upload link, so
+  // those default to editable placeholders the admin completes before saving.
+  function msfgSignatureHtml(p) {
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const telDigits = String(p.phone || '').replace(/[^\d]/g, '');
+    const website = (p.website && p.website.trim()) || 'https://www.msfg.us';
+    const websiteText = website.replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const photoCell = p.photoUrl
+      ? `<td valign="top" style="padding-right: 14px;"><img src="${esc(p.photoUrl)}" alt="${esc(p.name)}" style="width: 110px; height: auto; border: 0; display: block; border-radius: 6px;"></td>`
+      : '';
+    const infoStyle = p.photoUrl ? 'padding-left: 14px; border-left: 4px solid #8cc63e;' : '';
+    return `<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; font-size: 14px; color: #404041; line-height: 1.5; max-width: 700px;">
+  <tr>
+    ${photoCell}
+    <td valign="top" style="${infoStyle}">
+      <div style="font-size: 18px; font-weight: bold; color: #104547;">${esc(p.name)}</div>
+      <div style="font-size: 14px; font-weight: bold; color: #4b7b4d;">${esc(p.title)}</div>
+      <div style="margin-top: 8px; font-weight: bold; color: #404041;">Mountain State Financial Group, LLC</div>
+      <div>9035 Wadsworth Pkwy., Ste 3400</div>
+      <div>Westminster, CO 80021</div>
+      <div style="margin-top: 8px;"><strong>Ph:</strong> <a href="tel:${esc(telDigits)}" style="color: #104547; text-decoration: none;">${esc(p.phone)}</a> &nbsp;|&nbsp; <strong>Fax:</strong> 720-293-0300</div>
+      <div><a href="mailto:${esc(p.email)}" style="color: #104547; text-decoration: none;">${esc(p.email)}</a></div>
+      <div><a href="${esc(website)}" style="color: #104547; text-decoration: none;" target="_blank">${esc(websiteText)}</a></div>
+      <div style="margin-top: 6px; color: #404041;"><strong>NMLS #${esc(p.nmls)}</strong></div>
+      <div style="margin-top: 10px;"><span style="color: #404041; font-weight: bold;">SECURE LINK FOR UPLOADING FILES:</span> <a href="${esc(p.secureLink || '#')}" style="color: #8cc63e; font-weight: bold; text-decoration: none;" target="_blank">CLICK HERE</a></div>
+      <div style="margin-top: 14px; font-size: 12px; color: #404041;"><strong style="color: #c00000;">WARNING – FRAUDULENT FUNDING INSTRUCTIONS</strong><br>Email hacking and fraud are on the rise to fraudulently misdirect funds. Please call your escrow officer immediately using contact information found from an independent source, such as the sales contract or internet, to verify any funding instruction received. We are not responsible for any wires sent by you to an incorrect bank account.</div>
+      <div style="margin-top: 12px; font-size: 11px; color: #666666;"><strong>IMPORTANT NOTICE:</strong> This message is intended only for the addressee and may contain confidential, privileged information. If you are not the intended recipient, you may not use, copy or disclose any information contained in the message. If you have received this message in error, please notify the sender by reply e-mail and delete the message.</div>
+    </td>
+  </tr>
+</table>`;
+  }
+
+  // Build the public msfg-media URL for a raw S3 key (encodes each path segment).
+  function mediaPublicUrl(key) {
+    if (!key) return '';
+    const path = String(key).split('/').map(encodeURIComponent).join('/');
+    return 'https://msfg-media.s3.us-west-2.amazonaws.com/' + path;
+  }
+
+  document.getElementById('signatureGenerateBtn').addEventListener('click', () => {
+    const ta = document.getElementById('profileSignatureInput');
+    if (ta.value.trim() && !confirm('Replace the current signature with the MSFG template (filled from this profile)? Title and the secure-upload link still need to be filled in.')) return;
+
+    const sig = msfgSignatureHtml({
+      name: (profileUserObj && profileUserObj.name) || '',
+      title: 'Loan Officer', // no DB field — edit per person (e.g. "Executive VP")
+      photoUrl: mediaPublicUrl(profileData && profileData.avatar_s3_key),
+      phone: document.getElementById('profilePhone').value.trim(),
+      email: document.getElementById('profileDisplayEmail').value.trim() || (profileUserObj && profileUserObj.email) || '',
+      website: document.getElementById('profileWebsite').value.trim(),
+      nmls: document.getElementById('profileNmls').value.trim(),
+      secureLink: '#', // no DB field — paste each person's upload link
+    });
+
+    ta.value = sig;
+    document.getElementById('signaturePreviewContent').innerHTML = sig;
+    document.getElementById('signaturePreview').style.display = 'block';
+  });
+
   document.getElementById('signaturePreviewBtn').addEventListener('click', () => {
     const html = document.getElementById('profileSignatureInput').value;
     const preview = document.getElementById('signaturePreview');

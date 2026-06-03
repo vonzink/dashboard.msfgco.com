@@ -393,8 +393,12 @@
             placeholder="Paste your HTML email signature here..."></textarea>
         </div>
         <div class="form-actions">
+          <button class="btn btn-secondary" id="signatureGenerateBtn"><i class="fas fa-wand-magic-sparkles"></i> Generate from MSFG template</button>
           <button class="btn btn-secondary" id="signaturePreviewBtn"><i class="fas fa-eye"></i> Preview</button>
           <button class="btn btn-primary" id="signatureSaveBtn"><i class="fas fa-save"></i> Save</button>
+        </div>
+        <div class="form-help" style="margin-top:8px;">
+          Generate fills name, photo, phone, email &amp; NMLS from this profile. Then set the <strong>job title</strong> (defaults to &ldquo;Loan Officer&rdquo;) and paste the person&rsquo;s <strong>secure upload link</strong> (defaults to <code>#</code>) before saving. Photo comes from the profile avatar.
         </div>
         <div id="signaturePreview" style="display:none; margin-top:16px; border:1px solid #eee; border-radius:8px; background:#fff;">
           <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid #eee;">
@@ -1130,6 +1134,6 @@
     </div>
   </div>
 
-  <script src="/js/admin/admin-settings.js?v=20260522q"></script>
+  <script src="/js/admin/admin-settings.js?v=20260602sig"></script>
 </body>
 </html>
