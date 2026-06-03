@@ -194,6 +194,12 @@ const scheduleAttendee = z.object({
   name: optionalString(255),
 }).strict();
 
+const scheduleViewer = z.object({
+  user_id: z.coerce.number().int().positive(),
+  email: z.string().trim().email().max(255).optional().nullable(),
+  name: optionalString(255),
+}).strict();
+
 const scheduleStatuses = ['out', 'remote', 'traveling', 'meeting_event', 'other', 'busy'];
 const scheduleSources = ['manual', 'outlook', 'google'];
 const scheduleVisibility = ['availability_only', 'shared_details'];
@@ -215,6 +221,7 @@ const scheduleEntryFields = {
   provider_sensitivity: optionalString(40),
   event_color: eventColor,
   attendees: z.array(scheduleAttendee).max(100).optional().default([]),
+  viewers: z.array(scheduleViewer).max(100).optional().default([]),
   send_updates: z.boolean().optional().default(false),
 };
 
@@ -228,6 +235,7 @@ const scheduleEntryBase = z.object({
 const scheduleEntryUpdateBase = z.object({
   ...scheduleEntryFields,
   attendees: z.array(scheduleAttendee).max(100).optional(),
+  viewers: z.array(scheduleViewer).max(100).optional(),
   send_updates: z.boolean().optional(),
 });
 
@@ -299,6 +307,7 @@ const calendarSyncRun = z.object({
 
 const scheduleEntryVisibilityUpdate = z.object({
   visibility: z.enum(scheduleVisibility),
+  viewers: z.array(scheduleViewer).max(100).optional(),
 }).strict();
 
 // ── Tasks ──────────────────────────────────

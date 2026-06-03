@@ -78,6 +78,10 @@
     return new Set((attendees || []).map((attendee) => String(attendee.email || '').toLowerCase()));
   }
 
+  function selectedViewerIds(viewers) {
+    return new Set((viewers || []).map((viewer) => String(viewer.user_id || viewer.userId || viewer.id || '')));
+  }
+
   function renderAttendeeOptions(state, selectedAttendees) {
     const selected = selectedAttendeeEmails(selectedAttendees);
     return (state.peopleDirectory || []).map((person) => {
@@ -89,6 +93,25 @@
         </option>
       `;
     }).join('');
+  }
+
+  function renderViewerOptions(state, selectedViewers) {
+    const selected = selectedViewerIds(selectedViewers);
+    const allSelected = selected.size === 0;
+    const peopleOptions = (state.peopleDirectory || []).map((person) => {
+      const email = person.email || person.display_email || '';
+      const label = email ? `${person.name || email} <${email}>` : (person.name || `Employee ${person.id}`);
+      return `
+        <option value="${escapeHtml(person.id)}" ${selected.has(String(person.id)) ? 'selected' : ''}>
+          ${escapeHtml(label)}
+        </option>
+      `;
+    }).join('');
+
+    return `
+      <option value="__all" ${allSelected ? 'selected' : ''}>All Team</option>
+      ${peopleOptions}
+    `;
   }
 
   function statusColor(status) {
@@ -106,6 +129,20 @@
         user_id: person?.id || null,
         email,
         name: person?.name || email,
+      };
+    });
+  }
+
+  function selectedViewers(form, state) {
+    const selected = Array.from(form.elements.viewers?.selectedOptions || [])
+      .map((option) => option.value)
+      .filter((value) => value && value !== '__all');
+    return selected.map((userId) => {
+      const person = (state.peopleDirectory || []).find((item) => String(item.id) === String(userId));
+      return {
+        user_id: Number(userId),
+        email: person?.email || person?.display_email || null,
+        name: person?.name || null,
       };
     });
   }
@@ -213,6 +250,12 @@
                   ${renderAttendeeOptions(state, entry.attendees || [])}
                 </select>
               </label>
+              <label class="editor-viewers">
+                <span>Visible To</span>
+                <select name="viewers" multiple ${isSaving ? 'disabled' : ''}>
+                  ${renderViewerOptions(state, entry.viewers || [])}
+                </select>
+              </label>
               <label class="editor-note">
                 <span>Note</span>
                 <textarea name="note" rows="4" ${isSaving ? 'disabled' : ''}>${escapeHtml(firstValue(entry.note, ''))}</textarea>
@@ -246,6 +289,7 @@
       visibility: fieldValue(form, 'visibility'),
       event_color: fieldValue(form, 'event_color') || null,
       attendees: selectedAttendees(form, window.MSFGCalendar?.state || {}),
+      viewers: selectedViewers(form, window.MSFGCalendar?.state || {}),
       send_updates: Boolean(form.dataset.sendUpdates === 'true'),
       source: current.source || 'manual',
     };

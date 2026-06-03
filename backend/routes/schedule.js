@@ -10,7 +10,7 @@ const {
   validateQuery,
 } = require('../validation/schemas');
 const { canManageScheduleEntry } = require('../services/schedule/permissions');
-const { presentScheduleEntry } = require('../services/schedule/privacy');
+const { canViewScheduleEntry, presentScheduleEntry } = require('../services/schedule/privacy');
 const outlookProvider = require('../services/calendarSync/providers/outlook');
 const { loadWritableConnection } = require('../services/calendarSync/connections');
 const { replaceEntryAttendees } = require('../services/calendarSync/syncEngine');
@@ -122,6 +122,46 @@ async function attachAttendees(rows) {
   }));
 }
 
+async function attachViewers(rows) {
+  const entries = rows || [];
+  const ids = entries.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return entries;
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const result = await db.query(
+    `SELECT sev.schedule_entry_id, sev.user_id, u.name, u.email
+     FROM schedule_entry_viewers sev
+     JOIN users u ON u.id = sev.user_id
+     WHERE sev.schedule_entry_id IN (${placeholders})
+     ORDER BY u.name ASC, u.email ASC`,
+    ids
+  );
+  const viewerRows = getRows(result) || [];
+  const byEntry = new Map();
+  viewerRows.forEach((row) => {
+    const key = String(row.schedule_entry_id);
+    if (!byEntry.has(key)) byEntry.set(key, []);
+    byEntry.get(key).push({
+      user_id: row.user_id,
+      name: row.name || null,
+      email: row.email || null,
+    });
+  });
+
+  return entries.map((entry) => ({
+    ...entry,
+    viewers: byEntry.get(String(entry.id)) || [],
+  }));
+}
+
+async function attachEntryRelations(rows) {
+  return attachViewers(await attachAttendees(rows));
+}
+
+function visibleEntriesForRequest(rows, req) {
+  return (rows || []).filter((row) => canViewScheduleEntry(row, req));
+}
+
 function requireDateRange(req, res) {
   if (!req.query.start_date || !req.query.end_date) {
     res.status(400).json({
@@ -228,6 +268,24 @@ async function markEntryWriteback(id, status, errorMessage = null) {
      WHERE id = ?`,
     [status, errorMessage, id]
   );
+}
+
+async function replaceEntryViewers(entryId, viewers = []) {
+  await db.query('DELETE FROM schedule_entry_viewers WHERE schedule_entry_id = ?', [entryId]);
+
+  const uniqueViewerIds = Array.from(new Set(
+    (viewers || [])
+      .map((viewer) => Number(viewer?.user_id || viewer?.userId || viewer))
+      .filter((viewerId) => Number.isInteger(viewerId) && viewerId > 0)
+  ));
+
+  for (const viewerId of uniqueViewerIds) {
+    await db.query(
+      `INSERT INTO schedule_entry_viewers (schedule_entry_id, user_id)
+       VALUES (?, ?)`,
+      [entryId, viewerId]
+    );
+  }
 }
 
 function requireProviderVisibilityOwner(entry, req, res) {
@@ -373,8 +431,9 @@ router.get('/entries', validateQuery(scheduleEntryQuery), async (req, res, next)
 
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
-    const rows = await attachAttendees(getRows(result) || []);
-    res.json(rows.map((row) => presentScheduleEntry(row, req)));
+    const rows = await attachEntryRelations(getRows(result) || []);
+    const visibleRows = visibleEntriesForRequest(rows, req);
+    res.json(visibleRows.map((row) => presentScheduleEntry(row, req)));
   } catch (error) {
     next(error);
   }
@@ -386,9 +445,10 @@ router.get('/availability', validateQuery(scheduleEntryQuery), async (req, res, 
 
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
-    const rows = await attachAttendees(getRows(result) || []);
-    const entries = rows.map((row) => presentScheduleEntry(row, req));
-    res.json({ entries, count: rows.length });
+    const rows = await attachEntryRelations(getRows(result) || []);
+    const visibleRows = visibleEntriesForRequest(rows, req);
+    const entries = visibleRows.map((row) => presentScheduleEntry(row, req));
+    res.json({ entries, count: visibleRows.length });
   } catch (error) {
     next(error);
   }
@@ -410,6 +470,9 @@ router.post('/entries', validate(scheduleEntry), async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       toInsertValues(payload, userId)
     );
+    if (result.insertId) {
+      await replaceEntryViewers(result.insertId, payload.viewers || []);
+    }
 
     res.status(201).json({ id: result.insertId });
   } catch (error) {
@@ -472,6 +535,9 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
     if (Array.isArray(req.body.attendees)) {
       await replaceEntryAttendees(existing.id, req.body.attendees);
     }
+    if (Array.isArray(req.body.viewers)) {
+      await replaceEntryViewers(existing.id, req.body.viewers);
+    }
 
     if (isProviderOwned(existing) && existing.source_provider === 'outlook') {
       const connection = await loadWritableConnection(validated.user_id, 'outlook');
@@ -491,7 +557,7 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
       }
 
       const updated = await fetchEntry(req.params.id);
-      const rows = await attachAttendees(updated ? [updated] : []);
+      const rows = await attachEntryRelations(updated ? [updated] : []);
       return res.json({
         success: true,
         entry: presentScheduleEntry(rows[0] || updated || validated, req),
@@ -526,11 +592,15 @@ router.patch('/entries/:id/visibility', validate(scheduleEntryVisibilityUpdate),
        WHERE id = ?`,
       [req.body.visibility, getUserId(req), req.params.id]
     );
+    if (Array.isArray(req.body.viewers)) {
+      await replaceEntryViewers(existing.id, req.body.viewers);
+    }
 
     const updated = await fetchEntry(req.params.id);
+    const rows = await attachEntryRelations(updated ? [updated] : []);
     res.json({
       success: true,
-      entry: presentScheduleEntry(updated || { ...existing, visibility: req.body.visibility }, req),
+      entry: presentScheduleEntry(rows[0] || updated || { ...existing, visibility: req.body.visibility }, req),
     });
   } catch (error) {
     next(error);

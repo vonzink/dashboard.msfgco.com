@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { presentScheduleEntry } from '../../services/schedule/privacy';
+import { canViewScheduleEntry, presentScheduleEntry } from '../../services/schedule/privacy';
 
 function reqFor(user) {
   return { headers: {}, user: { db: user, groups: [] } };
@@ -34,6 +34,23 @@ describe('presentScheduleEntry', () => {
     expect(result.status).toBe('busy');
     expect(result.details_shareable).toBe(true);
     expect(result.provider_sensitivity).toBe('normal');
+  });
+
+  it('blocks hidden entries from other employees entirely', () => {
+    expect(canViewScheduleEntry(entry, reqFor({ id: 11, role: 'user' }))).toBe(false);
+    expect(canViewScheduleEntry(entry, reqFor({ id: 10, role: 'user' }))).toBe(true);
+  });
+
+  it('limits shared entries to selected viewers when an audience is set', () => {
+    const sharedEntry = {
+      ...entry,
+      visibility: 'shared_details',
+      viewers: [{ user_id: 12, name: 'Selected Viewer' }],
+    };
+
+    expect(canViewScheduleEntry(sharedEntry, reqFor({ id: 11, role: 'user' }))).toBe(false);
+    expect(canViewScheduleEntry(sharedEntry, reqFor({ id: 12, role: 'user' }))).toBe(true);
+    expect(canViewScheduleEntry({ ...sharedEntry, viewers: [] }, reqFor({ id: 11, role: 'user' }))).toBe(true);
   });
 
   it('redacts sync diagnostics and attendees when details are hidden', () => {
@@ -88,18 +105,18 @@ describe('presentScheduleEntry', () => {
     expect(result.status).toBe('meeting_event');
   });
 
-  it('shows manual-entry details to admins and managers', () => {
+  it('keeps hidden manual entries private from admins and managers', () => {
     const manualEntry = { ...entry, source: 'manual', note: 'Leadership meeting' };
 
     const adminResult = presentScheduleEntry(manualEntry, reqFor({ id: 11, role: 'admin' }));
     const managerResult = presentScheduleEntry(manualEntry, reqFor({ id: 12, role: 'manager' }));
 
-    expect(adminResult.note).toBe('Leadership meeting');
-    expect(adminResult.private).toBe(false);
-    expect(adminResult.status).toBe('meeting_event');
-    expect(managerResult.note).toBe('Leadership meeting');
-    expect(managerResult.private).toBe(false);
-    expect(managerResult.status).toBe('meeting_event');
+    expect(adminResult.note).toBeNull();
+    expect(adminResult.private).toBe(true);
+    expect(adminResult.status).toBe('busy');
+    expect(managerResult.note).toBeNull();
+    expect(managerResult.private).toBe(true);
+    expect(managerResult.status).toBe('busy');
   });
 
   it('keeps imported availability-only details private from admins and managers', () => {

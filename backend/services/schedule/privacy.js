@@ -1,4 +1,4 @@
-const { getUserId, hasRole } = require('../../middleware/userContext');
+const { getUserId } = require('../../middleware/userContext');
 
 const STATUS_LABELS = {
   out: 'Out',
@@ -9,15 +9,41 @@ const STATUS_LABELS = {
   busy: 'Busy',
 };
 
+function entryViewers(entry) {
+  return (Array.isArray(entry?.viewers) ? entry.viewers : [])
+    .filter((viewer) => viewer && viewer.user_id != null)
+    .map((viewer) => ({
+      user_id: viewer.user_id,
+      name: viewer.name || null,
+      email: viewer.email || null,
+    }));
+}
+
+function isEntryOwner(entry, req) {
+  return Number(entry?.user_id) === Number(getUserId(req));
+}
+
+function canViewScheduleEntry(entry, req) {
+  if (isEntryOwner(entry, req)) return true;
+  if (entry.visibility !== 'shared_details') return false;
+
+  const viewers = entryViewers(entry);
+  if (!viewers.length) return true;
+
+  const viewerId = Number(getUserId(req));
+  return viewers.some((viewer) => Number(viewer.user_id) === viewerId);
+}
+
 function canSeeDetails(entry, req) {
+  if (!canViewScheduleEntry(entry, req)) return false;
   if (entry.visibility === 'shared_details') return true;
-  if (Number(entry.user_id) === Number(getUserId(req))) return true;
-  return hasRole(req, 'admin', 'manager') && entry.source === 'manual';
+  return isEntryOwner(entry, req);
 }
 
 function presentScheduleEntry(entry, req) {
   const visible = canSeeDetails(entry, req);
   const visibleAttendees = visible && Array.isArray(entry.attendees) ? entry.attendees : [];
+  const owner = isEntryOwner(entry, req);
 
   return {
     id: entry.id,
@@ -45,6 +71,7 @@ function presentScheduleEntry(entry, req) {
     sync_write_error: visible && entry.sync_write_status === 'error' ? (entry.sync_write_error || null) : null,
     sync_write_attempted_at: visible ? (entry.sync_write_attempted_at || null) : null,
     attendees: visibleAttendees,
+    viewers: owner ? entryViewers(entry) : [],
     private: !visible,
     created_by: entry.created_by || null,
     updated_by: entry.updated_by || null,
@@ -52,6 +79,7 @@ function presentScheduleEntry(entry, req) {
 }
 
 module.exports = {
+  canViewScheduleEntry,
   canSeeDetails,
   presentScheduleEntry,
 };

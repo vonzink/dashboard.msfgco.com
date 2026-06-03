@@ -374,6 +374,14 @@ input {
   font-weight: 800;
 }
 
+.day-overview-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .day-entry-list {
   display: grid;
   gap: 8px;

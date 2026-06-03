@@ -109,6 +109,7 @@
       visibility: 'availability_only',
       event_color: '',
       attendees: [],
+      viewers: [],
       source: 'manual',
       note: '',
     };
@@ -165,6 +166,7 @@
       visibility: payload.visibility,
       event_color: payload.event_color || null,
       attendees: payload.attendees || [],
+      viewers: payload.viewers || [],
       send_updates: Boolean(payload.send_updates),
       source: payload.source || 'manual',
     };

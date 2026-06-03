@@ -215,14 +215,14 @@
     const hiddenCount = Math.max(entries.length - shown.length, 0);
 
     return `
-      <div class="${classes.join(' ')}" data-date="${window.CalendarState.isoDate(day)}" role="button" tabindex="0" aria-label="${escapeHtml(dayLabel(day))}">
+      <div class="${classes.join(' ')}" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" role="button" tabindex="0" aria-label="${escapeHtml(dayLabel(day))}">
         <div class="calendar-day-head">
           <span>${escapeHtml(window.CalendarState.DOW[day.getDay()])}</span>
           <strong>${day.getDate()}</strong>
         </div>
         <div class="calendar-day-entries">
           ${shown.map((entry) => renderEntryPill(entry, options.compact)).join('')}
-          ${hiddenCount ? `<button class="day-more" type="button" data-date="${window.CalendarState.isoDate(day)}">+${hiddenCount} more</button>` : ''}
+          ${hiddenCount ? `<button class="day-more" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true">+${hiddenCount} more</button>` : ''}
         </div>
       </div>
     `;
@@ -296,7 +296,7 @@
             if (entries.length) classes.push('has-entries');
             if (isToday(state, day)) classes.push('is-today');
             if (isSelectedDate(state, day)) classes.push('is-selected');
-            return `<button class="${classes.join(' ')}" type="button" data-date="${window.CalendarState.isoDate(day)}" title="${escapeHtml(dayLabel(day))}: ${entries.length} entries">${day.getDate()}</button>`;
+            return `<button class="${classes.join(' ')}" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" title="${escapeHtml(dayLabel(day))}: ${entries.length} entries">${day.getDate()}</button>`;
           }).join('')}
         </div>
       </article>
@@ -356,7 +356,10 @@
       <div class="day-overview">
         <div class="day-overview-head">
           <h2>${escapeHtml(dayLabel(day))}</h2>
-          <span>${entries.length} entries</span>
+          <div class="day-overview-actions">
+            <span>${entries.length} entries</span>
+            <button class="primary-btn" type="button" data-day-add="${window.CalendarState.isoDate(day)}">Add Schedule</button>
+          </div>
         </div>
         <div class="day-entry-list">
           ${entries.length ? entries.map((entry) => renderEntryPill(entry, false)).join('') : '<p class="empty-roster">No visible entries for this day.</p>'}
@@ -474,6 +477,16 @@
       actions.setSelectedDate(window.CalendarState.parseDate(date));
     }
 
+    function drillDownToDay(date) {
+      selectDate(date);
+      if (
+        actions.setViewMode &&
+        ['month', 'two_months', 'year'].includes(state.viewMode)
+      ) {
+        actions.setViewMode('day');
+      }
+    }
+
     function findEntry(entryId) {
       return (state.entries || []).find((entry) => String(entry.id) === String(entryId));
     }
@@ -499,9 +512,18 @@
       card.addEventListener('keydown', (event) => activateOnKey(event, activate));
     });
     root.querySelectorAll('.calendar-day[data-date], .mini-day[data-date], .day-more[data-date]').forEach((target) => {
-      const activate = () => selectDate(target.dataset.date);
+      const activate = (event) => {
+        if (event && target.classList && target.classList.contains('day-more')) event.stopPropagation();
+        drillDownToDay(target.dataset.date);
+      };
       target.addEventListener('click', activate);
       target.addEventListener('keydown', (event) => activateOnKey(event, activate));
+    });
+    root.querySelectorAll('[data-day-add]').forEach((button) => {
+      button.addEventListener('click', () => {
+        selectDate(button.dataset.dayAdd);
+        if (actions.openEditor) actions.openEditor();
+      });
     });
     root.querySelectorAll('.entry-bar[data-entry-id], .person-entry[data-entry-id]').forEach((button) => {
       const activate = (event) => {

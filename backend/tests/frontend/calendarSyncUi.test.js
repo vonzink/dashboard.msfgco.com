@@ -145,7 +145,7 @@ describe('calendar API helpers', () => {
 });
 
 describe('calendar editor enhanced fields', () => {
-  it('renders employee names, NMLS numbers, color controls, and attendee picker fields', () => {
+  it('renders employee names, NMLS numbers, color controls, attendee picker fields, and viewer controls', () => {
     const context = { window: {} };
     for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-editor.js']) {
       const source = readFileSync(
@@ -169,6 +169,7 @@ describe('calendar editor enhanced fields', () => {
       source: 'manual',
       event_color: '#0F766E',
       attendees: [{ email: 'assistant@msfg.us', name: 'Assistant User' }],
+      viewers: [{ user_id: 11, name: 'Assistant User' }],
     };
 
     const html = context.window.CalendarEditor.render(state);
@@ -176,6 +177,8 @@ describe('calendar editor enhanced fields', () => {
     expect(html).not.toContain('Employee ID');
     expect(html).toContain('name="event_color"');
     expect(html).toContain('Assistant User');
+    expect(html).toContain('name="viewers"');
+    expect(html).toContain('Visible To');
     expect(html).toContain('Hidden from Team');
   });
 });
@@ -242,6 +245,33 @@ describe('calendar multi-day view rendering', () => {
     const allHtml = context.window.CalendarRoster.render(state);
     expect(allHtml).toContain('all-overview');
     expect(allHtml).toContain('person-timeline-row');
+  });
+});
+
+describe('calendar day drilldown controls', () => {
+  it('marks month and year days as drilldown targets and renders a day add action', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.selectedDate = new Date(2026, 5, 12);
+    state.viewMode = 'month';
+    expect(context.window.CalendarRoster.render(state)).toContain('data-day-drilldown="true"');
+
+    state.viewMode = 'year';
+    expect(context.window.CalendarRoster.render(state)).toContain('data-day-drilldown="true"');
+
+    state.viewMode = 'day';
+    const dayHtml = context.window.CalendarRoster.render(state);
+    expect(dayHtml).toContain('data-day-add="2026-06-12"');
+    expect(dayHtml).toContain('Add Schedule');
   });
 });
 

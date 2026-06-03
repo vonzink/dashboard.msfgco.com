@@ -219,7 +219,95 @@ describe('schedule routes', () => {
     }));
   });
 
-  it('returns presented availability entries with count for a date range', async () => {
+  it('omits hidden team entries and enforces selected viewers in the entries list', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('FROM schedule_entry_attendees')) return [[]];
+      if (String(sql).includes('FROM schedule_entry_viewers')) {
+        return [[
+          {
+            schedule_entry_id: 79,
+            user_id: 20,
+            name: 'Manager User',
+            email: 'manager@msfg.us',
+          },
+        ]];
+      }
+      return [[
+        {
+          id: 78,
+          user_id: 99,
+          employee_name: 'Mike Wilson',
+          employee_initials: 'MW',
+          employee_role: 'employee',
+          status: 'meeting_event',
+          start_date: '2026-06-11',
+          end_date: '2026-06-11',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Private Outlook item',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'outlook-hidden',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+        {
+          id: 79,
+          user_id: 99,
+          employee_name: 'Mike Wilson',
+          employee_initials: 'MW',
+          employee_role: 'employee',
+          status: 'meeting_event',
+          start_date: '2026-06-11',
+          end_date: '2026-06-11',
+          start_time: '11:00:00',
+          end_time: '12:00:00',
+          timezone: 'America/Denver',
+          note: 'Manager-only shared item',
+          visibility: 'shared_details',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'outlook-targeted',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+        {
+          id: 80,
+          user_id: 99,
+          employee_name: 'Mike Wilson',
+          employee_initials: 'MW',
+          employee_role: 'employee',
+          status: 'meeting_event',
+          start_date: '2026-06-11',
+          end_date: '2026-06-11',
+          start_time: '13:00:00',
+          end_time: '14:00:00',
+          timezone: 'America/Denver',
+          note: 'Shared with team',
+          visibility: 'shared_details',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'outlook-shared',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]];
+    });
+
+    const res = await makeRequest(app, '/api/schedule/entries?start_date=2026-06-01&end_date=2026-06-30');
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).map((entry) => entry.id)).toEqual([80]);
+    expect(JSON.parse(res.body)[0]).toEqual(expect.objectContaining({
+      note: 'Shared with team',
+      private: false,
+      visibility: 'shared_details',
+    }));
+  });
+
+  it('returns shared availability entries with count for a date range', async () => {
     db.query.mockResolvedValueOnce([
       [
         {
@@ -234,8 +322,8 @@ describe('schedule routes', () => {
           start_time: null,
           end_time: null,
           timezone: 'America/Denver',
-          note: 'Private appointment',
-          visibility: 'availability_only',
+          note: 'Team appointment',
+          visibility: 'shared_details',
           source: 'manual',
           created_by: 99,
           updated_by: 99,
@@ -252,10 +340,10 @@ describe('schedule routes', () => {
         expect.objectContaining({
           id: 2,
           user_id: 99,
-          status: 'busy',
-          display_label: 'Busy',
-          note: null,
-          private: true,
+          status: 'out',
+          display_label: 'Out',
+          note: 'Team appointment',
+          private: false,
         }),
       ],
     });
@@ -266,7 +354,7 @@ describe('schedule routes', () => {
       [
         {
           id: 3,
-          user_id: 99,
+          user_id: 10,
           employee_name: 'Private User',
           employee_initials: 'PU',
           employee_role: 'employee',
@@ -291,9 +379,9 @@ describe('schedule routes', () => {
 
     expect(res.status).toBe(200);
     expect(JSON.parse(res.body).entries[0]).toEqual(expect.objectContaining({
-      status: 'busy',
-      note: null,
-      private: true,
+      status: 'out',
+      note: 'Doctor',
+      private: false,
       source: 'outlook',
       source_provider: 'outlook',
       provider_owned: true,
