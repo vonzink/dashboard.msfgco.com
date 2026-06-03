@@ -11,6 +11,9 @@ const {
 } = require('../validation/schemas');
 const { canManageScheduleEntry } = require('../services/schedule/permissions');
 const { presentScheduleEntry } = require('../services/schedule/privacy');
+const outlookProvider = require('../services/calendarSync/providers/outlook');
+const { loadWritableConnection } = require('../services/calendarSync/connections');
+const { replaceEntryAttendees } = require('../services/calendarSync/syncEngine');
 
 const router = express.Router();
 
@@ -20,7 +23,8 @@ const SELECT_FIELDS = `
   se.*,
   u.name AS employee_name,
   u.initials AS employee_initials,
-  u.role AS employee_role
+  u.role AS employee_role,
+  p.nmls_number AS employee_nmls_number
 `;
 
 const MAX_QUERY_RANGE_DAYS = 370;
@@ -35,6 +39,7 @@ const EDITABLE_FIELDS = [
   'timezone',
   'note',
   'visibility',
+  'event_color',
 ];
 
 function buildListQuery(query) {
@@ -73,6 +78,7 @@ function buildListQuery(query) {
       SELECT ${SELECT_FIELDS}
       FROM schedule_entries se
       JOIN users u ON u.id = se.user_id
+      LEFT JOIN user_profiles p ON p.user_id = u.id
       ${whereClause}
       ORDER BY se.start_date ASC, se.start_time ASC, u.name ASC
     `,
@@ -82,6 +88,38 @@ function buildListQuery(query) {
 
 function getRows(result) {
   return Array.isArray(result?.[0]) ? result[0] : result;
+}
+
+async function attachAttendees(rows) {
+  const entries = rows || [];
+  const ids = entries.map((row) => row.id).filter(Boolean);
+  if (!ids.length) return entries;
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const result = await db.query(
+    `SELECT schedule_entry_id, user_id, email, name, response_status
+     FROM schedule_entry_attendees
+     WHERE schedule_entry_id IN (${placeholders})
+     ORDER BY name ASC, email ASC`,
+    ids
+  );
+  const attendeeRows = getRows(result) || [];
+  const byEntry = new Map();
+  attendeeRows.forEach((row) => {
+    const key = String(row.schedule_entry_id);
+    if (!byEntry.has(key)) byEntry.set(key, []);
+    byEntry.get(key).push({
+      user_id: row.user_id || null,
+      email: row.email,
+      name: row.name || null,
+      response_status: row.response_status || null,
+    });
+  });
+
+  return entries.map((entry) => ({
+    ...entry,
+    attendees: byEntry.get(String(entry.id)) || [],
+  }));
 }
 
 function requireDateRange(req, res) {
@@ -137,6 +175,7 @@ async function fetchEntry(id) {
     `SELECT ${SELECT_FIELDS}
      FROM schedule_entries se
      JOIN users u ON u.id = se.user_id
+     LEFT JOIN user_profiles p ON p.user_id = u.id
      WHERE se.id = ?`,
     [id]
   );
@@ -166,6 +205,31 @@ function requireEditableEntry(entry, res) {
   return false;
 }
 
+function isProtectedProviderEntry(entry) {
+  return Boolean(
+    isProviderOwned(entry) &&
+    (!entry.details_shareable || (entry.provider_sensitivity && entry.provider_sensitivity !== 'normal'))
+  );
+}
+
+function hasProtectedDetailChanges(body) {
+  return Object.prototype.hasOwnProperty.call(body, 'note') ||
+    (Array.isArray(body.attendees) && body.attendees.length > 0) ||
+    body.visibility === 'shared_details';
+}
+
+async function markEntryWriteback(id, status, errorMessage = null) {
+  await db.query(
+    `UPDATE schedule_entries
+     SET sync_write_status = ?,
+         sync_write_error = ?,
+         sync_write_attempted_at = UTC_TIMESTAMP(),
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [status, errorMessage, id]
+  );
+}
+
 function requireProviderVisibilityOwner(entry, req, res) {
   if (Number(entry.user_id) !== Number(getUserId(req))) {
     res.status(403).json({
@@ -186,6 +250,26 @@ function requireShareableProviderDetails(entry, visibility, res) {
   return false;
 }
 
+function rejectUnsupportedEntryWriteFields(body, res) {
+  if (Array.isArray(body.attendees) && body.attendees.length > 0) {
+    res.status(400).json({
+      error: 'Attendee invites are not supported by this endpoint yet.',
+      field: 'attendees',
+    });
+    return true;
+  }
+
+  if (body.send_updates === true) {
+    res.status(400).json({
+      error: 'Sending calendar invite updates is not supported by this endpoint yet.',
+      field: 'send_updates',
+    });
+    return true;
+  }
+
+  return false;
+}
+
 function toInsertValues(payload, userId) {
   return [
     payload.user_id,
@@ -197,6 +281,7 @@ function toInsertValues(payload, userId) {
     payload.timezone || 'America/Denver',
     payload.note || null,
     payload.visibility || 'availability_only',
+    payload.event_color || null,
     'manual',
     null,
     null,
@@ -216,6 +301,7 @@ function toUpdateValues(entry, userId) {
     entry.timezone || 'America/Denver',
     entry.note || null,
     entry.visibility || 'availability_only',
+    entry.event_color || null,
     'manual',
     null,
     null,
@@ -261,6 +347,7 @@ function schedulePayloadFromEntry(entry) {
     timezone: entry.timezone || 'America/Denver',
     note: entry.note || undefined,
     visibility: entry.visibility || 'availability_only',
+    event_color: entry.event_color || null,
     source: entry.source || 'manual',
     source_provider: entry.source_provider || null,
     source_event_id: entry.source_event_id || undefined,
@@ -286,7 +373,7 @@ router.get('/entries', validateQuery(scheduleEntryQuery), async (req, res, next)
 
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
-    const rows = getRows(result) || [];
+    const rows = await attachAttendees(getRows(result) || []);
     res.json(rows.map((row) => presentScheduleEntry(row, req)));
   } catch (error) {
     next(error);
@@ -299,7 +386,7 @@ router.get('/availability', validateQuery(scheduleEntryQuery), async (req, res, 
 
     const { sql, params } = buildListQuery(req.query);
     const result = await db.query(sql, params);
-    const rows = getRows(result) || [];
+    const rows = await attachAttendees(getRows(result) || []);
     const entries = rows.map((row) => presentScheduleEntry(row, req));
     res.json({ entries, count: rows.length });
   } catch (error) {
@@ -311,14 +398,16 @@ router.post('/entries', validate(scheduleEntry), async (req, res, next) => {
   try {
     const payload = req.body;
 
+    if (rejectUnsupportedEntryWriteFields(payload, res)) return;
+
     if (!requireScheduleAccess(req, res, payload.user_id)) return;
 
     const userId = getUserId(req);
     const [result] = await db.query(
       `INSERT INTO schedule_entries
         (user_id, status, start_date, end_date, start_time, end_time, timezone, note,
-         visibility, source, source_provider, source_event_id, created_by, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         visibility, event_color, source, source_provider, source_event_id, created_by, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       toInsertValues(payload, userId)
     );
 
@@ -342,7 +431,17 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
       return res.status(404).json({ error: 'Schedule entry not found' });
     }
 
-    if (!requireEditableEntry(existing, res)) return;
+    if (isProviderOwned(existing) && existing.source_provider !== 'outlook') {
+      return res.status(409).json({ error: `This schedule entry is managed in ${providerName(existing)}.` });
+    }
+
+    if (isProviderOwned(existing) && isProtectedProviderEntry(existing) && hasProtectedDetailChanges(req.body)) {
+      return res.status(409).json({
+        error: 'This Outlook event is private and cannot update details or attendees from MSFG Calendar.',
+      });
+    }
+
+    if (!isProviderOwned(existing) && !requireEditableEntry(existing, res)) return;
 
     if (!requireScheduleAccess(req, res, existing.user_id)) return;
 
@@ -364,11 +463,40 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
     await db.query(
       `UPDATE schedule_entries
        SET user_id = ?, status = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?,
-           timezone = ?, note = ?, visibility = ?, source = ?, source_provider = ?,
+           timezone = ?, note = ?, visibility = ?, event_color = ?, source = ?, source_provider = ?,
            source_event_id = ?, updated_by = ?
        WHERE id = ?`,
       toUpdateValues(validated, getUserId(req))
     );
+
+    if (Array.isArray(req.body.attendees)) {
+      await replaceEntryAttendees(existing.id, req.body.attendees);
+    }
+
+    if (isProviderOwned(existing) && existing.source_provider === 'outlook') {
+      const connection = await loadWritableConnection(validated.user_id, 'outlook');
+      if (!connection) {
+        await markEntryWriteback(existing.id, 'error', 'Outlook is not connected for this employee.');
+      } else {
+        try {
+          await outlookProvider.updateEvent(connection, existing.source_event_id, {
+            ...validated,
+            id: existing.id,
+            attendees: req.body.attendees || existing.attendees || [],
+          });
+          await markEntryWriteback(existing.id, 'synced');
+        } catch (error) {
+          await markEntryWriteback(existing.id, 'error', error.message || 'Outlook writeback failed');
+        }
+      }
+
+      const updated = await fetchEntry(req.params.id);
+      const rows = await attachAttendees(updated ? [updated] : []);
+      return res.json({
+        success: true,
+        entry: presentScheduleEntry(rows[0] || updated || validated, req),
+      });
+    }
 
     res.json({ success: true });
   } catch (error) {

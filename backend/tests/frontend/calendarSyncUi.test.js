@@ -140,6 +140,43 @@ describe('calendar API helpers', () => {
     expect(calls[0].url).toBe('https://api.msfgco.com/api/schedule/entries/42/visibility');
     expect(calls[0].options.method).toBe('PATCH');
     expect(JSON.parse(calls[0].options.body)).toEqual({ visibility: 'shared_details' });
+    expect(typeof CalendarApi.getUserDirectory).toBe('function');
+  });
+});
+
+describe('calendar editor enhanced fields', () => {
+  it('renders employee names, NMLS numbers, color controls, and attendee picker fields', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-editor.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.peopleDirectory = [
+      { id: 10, name: 'Zachary Zink', email: 'zachary.zink@msfg.us', nmls_number: '451924' },
+      { id: 11, name: 'Assistant User', email: 'assistant@msfg.us', nmls_number: null },
+    ];
+    state.editor = {
+      user_id: 10,
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      visibility: 'availability_only',
+      source: 'manual',
+      event_color: '#0F766E',
+      attendees: [{ email: 'assistant@msfg.us', name: 'Assistant User' }],
+    };
+
+    const html = context.window.CalendarEditor.render(state);
+    expect(html).toContain('Zachary Zink - NMLS 451924');
+    expect(html).not.toContain('Employee ID');
+    expect(html).toContain('name="event_color"');
+    expect(html).toContain('Assistant User');
+    expect(html).toContain('Hidden from Team');
   });
 });
 
@@ -148,11 +185,63 @@ describe('calendar view controls', () => {
     const CalendarRender = loadCalendarRender();
     const html = CalendarRender.renderViewTabs({ viewMode: 'month' });
 
+    expect(html).toContain('data-view-mode="day"');
+    expect(html).toContain('data-view-mode="week"');
     expect(html).toContain('data-view-mode="month"');
     expect(html).toContain('data-view-mode="two_months"');
     expect(html).toContain('data-view-mode="year"');
     expect(html).toContain('data-view-mode="people"');
+    expect(html).toContain('data-view-mode="all"');
     expect(html).toContain('aria-pressed="true"');
+  });
+
+  it('renders the official MSFG logo in the calendar header', () => {
+    const CalendarRender = loadCalendarRender();
+    const html = CalendarRender.renderHeader?.({
+      viewMode: 'month',
+      viewDate: new Date(2026, 5, 1),
+    });
+
+    expect(String(html)).toContain('MSFG-Color-Transparent.png');
+    expect(String(html)).toContain('alt="MSFG Home Loans"');
+  });
+});
+
+describe('calendar multi-day view rendering', () => {
+  it('renders week and all-view multi-day bars with span metadata', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'week';
+    state.entries = [{
+      id: 30,
+      user_id: 10,
+      employee_name: 'Zachary Zink',
+      status: 'out',
+      start_date: '2026-06-02',
+      end_date: '2026-06-05',
+      visibility: 'availability_only',
+      event_color: '#0F766E',
+    }];
+    state.people = context.window.CalendarRender.derivePeople(state.entries);
+
+    const weekHtml = context.window.CalendarRoster.render(state);
+    expect(weekHtml).toContain('week-overview');
+    expect(weekHtml).toContain('grid-column');
+    expect(weekHtml).toContain('is-hidden-details');
+
+    state.viewMode = 'all';
+    const allHtml = context.window.CalendarRoster.render(state);
+    expect(allHtml).toContain('all-overview');
+    expect(allHtml).toContain('person-timeline-row');
   });
 });
 
@@ -210,6 +299,8 @@ describe('calendar detail sharing controls', () => {
 
     const html = CalendarDetail.render(state);
     expect(html).toContain('Private in Outlook');
+    expect(html).toContain('is-readonly');
+    expect(html).not.toContain('Edit Busy');
     expect(html).not.toContain('data-entry-visibility="shared_details"');
   });
 });

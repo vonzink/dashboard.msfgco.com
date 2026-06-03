@@ -1,6 +1,8 @@
 (function() {
   'use strict';
 
+  const MSFG_LOGO_URL = 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG+Home+Loans/MSFG-Color-Transparent.png';
+
   function escapeHtml(value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -65,9 +67,12 @@
   }
 
   function viewModeLabel(mode) {
+    if (mode === 'day') return 'Day';
+    if (mode === 'week') return 'Week';
     if (mode === 'two_months') return '2 Months';
     if (mode === 'year') return 'Year';
     if (mode === 'people') return 'People';
+    if (mode === 'all') return 'All';
     return 'Month';
   }
 
@@ -103,6 +108,7 @@
         <div class="schedule-controls">
           ${window.CalendarSync ? window.CalendarSync.renderTrigger(state) : ''}
           <button class="primary-btn" type="button" data-cal-action="add" data-action="new-entry">Add Schedule</button>
+          <img class="schedule-logo" src="${MSFG_LOGO_URL}" alt="MSFG Home Loans" loading="eager">
         </div>
       </header>
     `;
@@ -152,13 +158,36 @@
     const add = root.querySelector('[data-cal-action="add"], [data-action="new-entry"]');
     const step = state.viewMode === 'year' ? 12 : (state.viewMode === 'two_months' ? 2 : 1);
 
+    function shiftDate(days) {
+      const base = state.selectedDate || state.viewDate || new Date();
+      const nextDate = window.CalendarState.addDays(base, days);
+      actions.setSelectedDate(nextDate);
+      actions.setViewDate(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    }
+
     if (prev) {
       prev.addEventListener('click', () => {
+        if (state.viewMode === 'day') {
+          shiftDate(-1);
+          return;
+        }
+        if (state.viewMode === 'week') {
+          shiftDate(-7);
+          return;
+        }
         actions.setViewDate(new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() - step, 1));
       });
     }
     if (next) {
       next.addEventListener('click', () => {
+        if (state.viewMode === 'day') {
+          shiftDate(1);
+          return;
+        }
+        if (state.viewMode === 'week') {
+          shiftDate(7);
+          return;
+        }
         actions.setViewDate(new Date(state.viewDate.getFullYear(), state.viewDate.getMonth() + step, 1));
       });
     }
@@ -210,6 +239,7 @@
     escapeHtml,
     derivePeople,
     entriesForDay,
+    renderHeader,
     renderViewTabs,
     render,
   };

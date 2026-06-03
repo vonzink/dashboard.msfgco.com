@@ -4,6 +4,20 @@ const { getSyncWindow } = require('../window');
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 const IMPORTABLE_SHOW_AS = new Set(['busy', 'tentative', 'oof', 'workingElsewhere']);
+const OUTLOOK_CATEGORY_BY_STATUS = {
+  meeting_event: 'MSFG Meeting/Event',
+  busy: 'MSFG Busy',
+  out: 'MSFG Out',
+  remote: 'MSFG Remote',
+  traveling: 'MSFG Traveling',
+  other: 'MSFG Other',
+};
+
+const STATUS_BY_OUTLOOK_CATEGORY = Object.entries(OUTLOOK_CATEGORY_BY_STATUS)
+  .reduce((acc, [status, category]) => {
+    acc[category.toLowerCase()] = status;
+    return acc;
+  }, {});
 
 function dateParts(value) {
   const text = String(value || '');
@@ -14,7 +28,11 @@ function dateParts(value) {
   };
 }
 
-function outlookStatus(showAs) {
+function outlookStatus(showAs, categories = []) {
+  const statusCategory = (categories || [])
+    .map((category) => STATUS_BY_OUTLOOK_CATEGORY[String(category || '').toLowerCase()])
+    .find(Boolean);
+  if (statusCategory) return statusCategory;
   if (showAs === 'oof') return 'out';
   if (showAs === 'workingElsewhere') return 'remote';
   if (showAs === 'tentative') return 'meeting_event';
@@ -52,6 +70,16 @@ function canStoreSubject(event) {
   return providerSensitivity(event) === 'normal' && Boolean(event.subject);
 }
 
+function normalizeOutlookAttendees(attendees = []) {
+  return attendees
+    .map((attendee) => ({
+      email: attendee.emailAddress?.address || null,
+      name: attendee.emailAddress?.name || attendee.emailAddress?.address || null,
+      response_status: attendee.status?.response || null,
+    }))
+    .filter((attendee) => attendee.email);
+}
+
 function normalizeOutlookEvent(event, connection) {
   const start = dateParts(event.start?.dateTime);
   const end = dateParts(event.end?.dateTime);
@@ -63,7 +91,7 @@ function normalizeOutlookEvent(event, connection) {
 
   return {
     user_id: connection.user_id,
-    status: outlookStatus(event.showAs || 'busy'),
+    status: outlookStatus(event.showAs || 'busy', event.categories || []),
     start_date: start.date,
     end_date: endDate,
     start_time: event.isAllDay ? null : start.time,
@@ -76,6 +104,7 @@ function normalizeOutlookEvent(event, connection) {
     source_event_id: event.id,
     details_shareable: detailsShareable,
     provider_sensitivity: providerSensitivity(event),
+    attendees: normalizeOutlookAttendees(event.attendees || []),
   };
 }
 
@@ -199,7 +228,7 @@ async function listEvents(connection, syncWindow = getSyncWindow()) {
   const params = new URLSearchParams({
     startDateTime: syncWindow.startDateTime,
     endDateTime: syncWindow.endDateTime,
-    '$select': 'id,subject,start,end,showAs,isCancelled,isAllDay,sensitivity,lastModifiedDateTime,webLink',
+    '$select': 'id,subject,start,end,showAs,isCancelled,isAllDay,sensitivity,lastModifiedDateTime,webLink,categories,attendees',
     '$top': '50',
   });
   let url = `/me/calendarView?${params.toString()}`;
@@ -220,6 +249,18 @@ function showAsForEntry(entry) {
   return 'busy';
 }
 
+function outlookAttendeesPayload(attendees = []) {
+  return attendees
+    .filter((attendee) => attendee && attendee.email)
+    .map((attendee) => ({
+      emailAddress: {
+        address: attendee.email,
+        name: attendee.name || attendee.email,
+      },
+      type: 'required',
+    }));
+}
+
 function outlookEventPayload(entry) {
   const isAllDay = !entry.start_time && !entry.end_time;
   const startDate = dateOnly(entry.start_date);
@@ -230,16 +271,19 @@ function outlookEventPayload(entry) {
   const endDateTime = isAllDay
     ? `${addDays(endDate, 1)}T00:00:00`
     : `${endDate}T${entry.end_time || entry.start_time || '23:59:59'}`;
+  const attendees = outlookAttendeesPayload(entry.attendees || []);
 
-  return {
+  const payload = {
     subject: entry.note || 'MSFG Schedule',
     isAllDay,
     showAs: showAsForEntry(entry),
     sensitivity: entry.visibility === 'availability_only' ? 'private' : 'normal',
-    categories: ['MSFG Schedule'],
+    categories: ['MSFG Schedule', OUTLOOK_CATEGORY_BY_STATUS[entry.status] || OUTLOOK_CATEGORY_BY_STATUS.other],
     start: { dateTime: startDateTime, timeZone: entry.timezone || 'America/Denver' },
     end: { dateTime: endDateTime, timeZone: entry.timezone || 'America/Denver' },
   };
+  if (attendees.length) payload.attendees = attendees;
+  return payload;
 }
 
 async function createEvent(connection, entry) {

@@ -42,17 +42,43 @@
     return Boolean(entry && (entry.private || entry.is_private));
   }
 
-  function isManualEditableEntry(entry) {
-    return Boolean(entry && entry.source === 'manual' && !isPrivateEntry(entry));
+  function isFalseValue(value) {
+    return value === false || value === 0 || value === '0';
+  }
+
+  function isProtectedOutlookEntry(entry) {
+    return Boolean(
+      entry &&
+      (entry.source_provider === 'outlook' || entry.source === 'outlook') &&
+      (isFalseValue(entry.details_shareable) || (entry.provider_sensitivity && entry.provider_sensitivity !== 'normal'))
+    );
+  }
+
+  function isEditableEntry(entry) {
+    return Boolean(
+      entry &&
+      !isPrivateEntry(entry) &&
+      !isProtectedOutlookEntry(entry) &&
+      (entry.source === 'manual' || entry.source_provider === 'outlook' || entry.source === 'outlook')
+    );
   }
 
   function filteredPeople(state) {
     const query = String(state.search || '').trim().toLowerCase();
-    const people = state.people || [];
+    const directory = (state.peopleDirectory || []).map((person) => ({
+      id: person.id,
+      name: person.name || person.email || `Employee ${person.id}`,
+      role: person.role || person.team || '',
+      nmls_number: person.nmls_number || '',
+      email: person.email || person.display_email || '',
+    }));
+    const people = directory.length ? directory : (state.people || []);
     if (!query) return people;
     return people.filter((person) => {
       return String(person.name || '').toLowerCase().includes(query) ||
-        String(person.role || '').toLowerCase().includes(query);
+        String(person.role || '').toLowerCase().includes(query) ||
+        String(person.nmls_number || '').toLowerCase().includes(query) ||
+        String(person.email || '').toLowerCase().includes(query);
     });
   }
 
@@ -153,10 +179,24 @@
     `;
   }
 
+  function entryColor(entry) {
+    return entry.event_color ||
+      (window.CalendarState.STATUS_META[entry.status] && window.CalendarState.STATUS_META[entry.status].color) ||
+      '#404041';
+  }
+
+  function visibilityClass(entry) {
+    return entry.visibility === 'shared_details' ? 'is-shared-details' : 'is-hidden-details';
+  }
+
+  function barStyle(entry) {
+    return `--entry-color:${escapeHtml(entryColor(entry))};`;
+  }
+
   function renderEntryPill(entry, compact) {
     const time = entryTimeLabel(entry);
     return `
-      <button class="entry-bar ${compact ? 'is-compact' : ''}" type="button" data-entry-id="${escapeHtml(entry.id)}" data-status="${escapeHtml(entry.status || 'other')}" title="${escapeHtml(entryLabel(entry))}">
+      <button class="entry-bar ${compact ? 'is-compact' : ''} ${visibilityClass(entry)}" type="button" data-entry-id="${escapeHtml(entry.id)}" data-status="${escapeHtml(entry.status || 'other')}" style="${barStyle(entry)}" title="${escapeHtml(entryLabel(entry))}">
         ${compact ? '' : `<span class="entry-time">${escapeHtml(time)}</span>`}
         <span class="entry-name">${escapeHtml(entryLabel(entry))}</span>
         ${compact ? '' : `<span class="entry-person">${escapeHtml(entryUserName(entry))}</span>`}
@@ -309,10 +349,100 @@
     `;
   }
 
+  function renderDayView(state) {
+    const day = state.selectedDate || state.today || new Date();
+    const entries = entriesForDay(state, day);
+    return `
+      <div class="day-overview">
+        <div class="day-overview-head">
+          <h2>${escapeHtml(dayLabel(day))}</h2>
+          <span>${entries.length} entries</span>
+        </div>
+        <div class="day-entry-list">
+          ${entries.length ? entries.map((entry) => renderEntryPill(entry, false)).join('') : '<p class="empty-roster">No visible entries for this day.</p>'}
+        </div>
+      </div>
+    `;
+  }
+
+  function daysForWeek(state) {
+    const start = window.CalendarState.startOfWeek(state.selectedDate || state.today || new Date());
+    return Array.from({ length: 7 }, (_, index) => window.CalendarState.addDays(start, index));
+  }
+
+  function dayIndexInRange(iso, days) {
+    const dateIso = String(iso || '').slice(0, 10);
+    return days.findIndex((day) => window.CalendarState.isoDate(day) === dateIso);
+  }
+
+  function renderWeekSpanningBar(entry, days) {
+    const startIndex = Math.max(dayIndexInRange(entryStartIso(entry), days), 0);
+    const rawEndIndex = dayIndexInRange(entryEndIso(entry), days);
+    const endIndex = rawEndIndex < 0 ? days.length - 1 : rawEndIndex;
+    return `
+      <button class="entry-bar timeline-bar ${visibilityClass(entry)}" type="button" data-entry-id="${escapeHtml(entry.id)}" data-status="${escapeHtml(entry.status || 'other')}" style="grid-column:${startIndex + 1} / ${endIndex + 2}; ${barStyle(entry)}" title="${escapeHtml(entryLabel(entry))}">
+        <span class="entry-name">${escapeHtml(entryLabel(entry))}</span>
+        <span class="entry-person">${escapeHtml(entryUserName(entry))}</span>
+      </button>
+    `;
+  }
+
+  function renderWeekView(state) {
+    const days = daysForWeek(state);
+    const entries = visibleEntries(state);
+    return `
+      <div class="week-overview">
+        <div class="timeline-days" style="grid-template-columns:repeat(${days.length}, minmax(0, 1fr));">
+          ${days.map((day) => `<div class="timeline-day-head">${escapeHtml(window.CalendarState.DOW[day.getDay()])} ${day.getDate()}</div>`).join('')}
+        </div>
+        <div class="week-bars" style="grid-template-columns:repeat(${days.length}, minmax(0, 1fr));">
+          ${entries.length ? entries.map((entry) => renderWeekSpanningBar(entry, days)).join('') : '<p class="empty-roster">No visible entries this week.</p>'}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderPersonTimelineRow(state, person, days) {
+    const entries = entriesForPerson(state, person.id);
+    return `
+      <div class="person-cell person-timeline-row" data-user-id="${escapeHtml(person.id)}">
+        <span class="avatar" aria-hidden="true">${escapeHtml(initials(person.name))}</span>
+        <span class="person-text">
+          <span class="person-name">${escapeHtml(person.name)}</span>
+          <span class="person-role">${escapeHtml(person.role || (person.nmls_number ? `NMLS ${person.nmls_number}` : 'Team'))}</span>
+        </span>
+      </div>
+      <div class="person-timeline-bars" style="grid-column:2 / span ${days.length}; grid-template-columns:repeat(${days.length}, var(--day-w));">
+        ${entries.map((entry) => renderWeekSpanningBar(entry, days)).join('')}
+      </div>
+    `;
+  }
+
+  function renderAllView(state) {
+    const range = window.CalendarState.visibleRange(state);
+    const start = window.CalendarState.parseDate(range.start_date);
+    const totalDays = Math.round((window.CalendarState.parseDate(range.end_date) - start) / 86400000) + 1;
+    const days = Array.from({ length: totalDays }, (_, index) => window.CalendarState.addDays(start, index));
+    const people = filteredPeople(state);
+
+    return `
+      <div class="all-overview">
+        <div class="all-timeline-grid" style="--days:${days.length}">
+          <div class="corner-cell">Employee</div>
+          ${days.map((day) => `<div class="day-head ${isToday(state, day) ? 'is-today' : ''}"><span class="day-dow">${escapeHtml(window.CalendarState.DOW[day.getDay()])}</span><span class="day-num">${day.getDate()}</span></div>`).join('')}
+          ${people.length ? people.map((person) => renderPersonTimelineRow(state, person, days)).join('') : '<div class="empty-roster">No people match the current search and filters.</div>'}
+        </div>
+      </div>
+    `;
+  }
+
   function renderBoard(state) {
+    if (state.viewMode === 'day') return renderDayView(state);
+    if (state.viewMode === 'week') return renderWeekView(state);
     if (state.viewMode === 'two_months') return renderTwoMonthsView(state);
     if (state.viewMode === 'year') return renderYearView(state);
     if (state.viewMode === 'people') return renderPeopleView(state);
+    if (state.viewMode === 'all') return renderAllView(state);
     return renderMonthView(state);
   }
 
@@ -353,7 +483,7 @@
       const entryDate = date || (entry ? entryStartIso(entry) : '');
       if (entryDate) selectDate(entryDate);
       if (entry) selectPerson(entryUserId(entry));
-      if (entry && isManualEditableEntry(entry) && actions.openEditor) actions.openEditor(entry);
+      if (entry && isEditableEntry(entry) && actions.openEditor) actions.openEditor(entry);
     }
 
     const search = root.querySelector('.schedule-search');

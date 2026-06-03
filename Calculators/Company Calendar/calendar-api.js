@@ -42,6 +42,7 @@
 
   window.CalendarApi = {
     getMe: () => request('/me'),
+    getUserDirectory: () => request('/users/directory'),
     getEntries: (params) => request(`/schedule/entries${toQuery(params)}`),
     createEntry: (payload) => request('/schedule/entries', { method: 'POST', body: JSON.stringify(payload) }),
     updateEntry: (id, payload) => request(`/schedule/entries/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),

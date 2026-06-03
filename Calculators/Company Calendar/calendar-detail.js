@@ -25,8 +25,25 @@
     return Boolean(entry && (entry.private || entry.is_private));
   }
 
-  function isManualEditableEntry(entry) {
-    return Boolean(entry && entry.source === 'manual' && !isPrivateEntry(entry));
+  function isFalseValue(value) {
+    return value === false || value === 0 || value === '0';
+  }
+
+  function isProtectedOutlookEntry(entry) {
+    return Boolean(
+      entry &&
+      (entry.source_provider === 'outlook' || entry.source === 'outlook') &&
+      (isFalseValue(entry.details_shareable) || (entry.provider_sensitivity && entry.provider_sensitivity !== 'normal'))
+    );
+  }
+
+  function isEditableEntry(entry) {
+    return Boolean(
+      entry &&
+      !isPrivateEntry(entry) &&
+      !isProtectedOutlookEntry(entry) &&
+      (entry.source === 'manual' || entry.source_provider === 'outlook' || entry.source === 'outlook')
+    );
   }
 
   function isOutlookOwnedEntry(entry) {
@@ -166,7 +183,7 @@
   }
 
   function renderEntry(entry, state) {
-    const editable = isManualEditableEntry(entry);
+    const editable = isEditableEntry(entry);
     const tag = editable ? 'button' : 'div';
     const attrs = editable
       ? `type="button" data-entry-id="${escapeHtml(entry.id)}" aria-label="Edit ${escapeHtml(entryTitle(entry))}"`

@@ -12,7 +12,7 @@
 
   const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const VIEW_MODES = ['month', 'two_months', 'year', 'people'];
+  const VIEW_MODES = ['day', 'week', 'month', 'two_months', 'year', 'people', 'all'];
 
   function pad(n) {
     return String(n).padStart(2, '0');
@@ -25,6 +25,15 @@
   function parseDate(value) {
     const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
     return new Date(year, month - 1, day);
+  }
+
+  function addDays(date, days) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+  }
+
+  function startOfWeek(date) {
+    const value = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    return addDays(value, -value.getDay());
   }
 
   function daysInMonth(year, monthIndex) {
@@ -40,6 +49,17 @@
   function visibleRange(state) {
     const viewDate = state.viewDate || new Date();
     const viewMode = state.viewMode || 'month';
+
+    if (viewMode === 'day') {
+      const day = state.selectedDate || viewDate;
+      return { start_date: isoDate(day), end_date: isoDate(day) };
+    }
+
+    if (viewMode === 'week') {
+      const start = startOfWeek(state.selectedDate || viewDate);
+      const end = addDays(start, 6);
+      return { start_date: isoDate(start), end_date: isoDate(end) };
+    }
 
     if (viewMode === 'two_months') {
       const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
@@ -66,6 +86,8 @@
       me: null,
       entries: [],
       people: [],
+      peopleDirectory: [],
+      directoryError: null,
       search: '',
       hiddenStatuses: new Set(),
       selectedUserId: null,
@@ -86,10 +108,12 @@
     VIEW_MODES,
     pad,
     createState,
+    addDays,
     daysInMonth,
     isoDate,
     parseDate,
     monthRange,
+    startOfWeek,
     visibleRange,
   };
 })();

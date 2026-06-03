@@ -40,6 +40,16 @@
     }
   }
 
+  async function loadPeopleDirectory() {
+    try {
+      state.peopleDirectory = await CalendarApi.getUserDirectory();
+      state.directoryError = null;
+    } catch (err) {
+      state.peopleDirectory = state.me ? [state.me] : [];
+      state.directoryError = err.message || 'Unable to load employee directory.';
+    }
+  }
+
   function handleSyncReturnParams() {
     const params = new URLSearchParams(window.location.search || '');
     const syncStatus = params.get('sync');
@@ -62,6 +72,7 @@
   async function boot() {
     try {
       state.me = await CalendarApi.getMe();
+      await loadPeopleDirectory();
       const loaded = await loadEntries();
       if (!loaded) return;
       await loadSyncStatus();
@@ -95,7 +106,9 @@
       start_time: '',
       end_time: '',
       timezone: 'America/Denver',
-      visibility: 'shared_details',
+      visibility: 'availability_only',
+      event_color: '',
+      attendees: [],
       source: 'manual',
       note: '',
     };
@@ -105,8 +118,27 @@
     return Boolean(entry && (entry.private || entry.is_private));
   }
 
-  function isManualEditableEntry(entry) {
-    return !entry || (entry.source === 'manual' && !isPrivateEntry(entry));
+  function isProviderOwnedEntry(entry) {
+    return Boolean(entry && (entry.provider_owned || entry.source_provider || entry.source === 'outlook' || entry.source === 'google'));
+  }
+
+  function isFalseValue(value) {
+    return value === false || value === 0 || value === '0';
+  }
+
+  function isProtectedOutlookEntry(entry) {
+    return Boolean(
+      entry &&
+      (entry.source_provider === 'outlook' || entry.source === 'outlook') &&
+      (isFalseValue(entry.details_shareable) || (entry.provider_sensitivity && entry.provider_sensitivity !== 'normal'))
+    );
+  }
+
+  function isEditableEntry(entry) {
+    if (!entry || isPrivateEntry(entry)) return false;
+    if (entry.source === 'manual') return true;
+    if (isProtectedOutlookEntry(entry)) return false;
+    return Boolean(isProviderOwnedEntry(entry) && (entry.source_provider === 'outlook' || entry.source === 'outlook'));
   }
 
   function restoreEditorFocus() {
@@ -131,7 +163,10 @@
       timezone: payload.timezone || 'America/Denver',
       note: payload.note || '',
       visibility: payload.visibility,
-      source: 'manual',
+      event_color: payload.event_color || null,
+      attendees: payload.attendees || [],
+      send_updates: Boolean(payload.send_updates),
+      source: payload.source || 'manual',
     };
   }
 
@@ -237,7 +272,7 @@
     },
     openEditor(entry) {
       if (state.editorSaving) return;
-      if (entry && !isManualEditableEntry(entry)) {
+      if (entry && !isEditableEntry(entry)) {
         showToast('Synced/private entries can only be viewed as availability.', 'info');
         return;
       }
@@ -256,7 +291,7 @@
       if (state.editorSaving) return;
       const current = state.editor;
       if (!current) return;
-      if (!isManualEditableEntry(current)) {
+      if (!isEditableEntry(current)) {
         showToast('Synced/private entries can only be viewed as availability.', 'info');
         return;
       }
@@ -310,8 +345,12 @@
       if (state.editorSaving) return;
       const current = state.editor;
       if (!current || !current.id) return;
-      if (!isManualEditableEntry(current)) {
+      if (!isEditableEntry(current)) {
         showToast('Synced/private entries can only be viewed as availability.', 'info');
+        return;
+      }
+      if (current.source !== 'manual') {
+        showToast('Synced Outlook entries can be edited, but deletion stays in Outlook.', 'info');
         return;
       }
       if (id && String(id) !== String(current.id)) {

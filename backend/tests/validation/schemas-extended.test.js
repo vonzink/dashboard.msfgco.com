@@ -128,6 +128,45 @@ describe('scheduleEntry schema', () => {
     expect(result.data.provider_sensitivity).toBe('normal');
   });
 
+  it('accepts event color, attendees, and send_updates on schedule entries', () => {
+    const result = scheduleEntry.safeParse({
+      user_id: 10,
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      event_color: '#0F766E',
+      attendees: [
+        { user_id: 11, email: 'assistant@msfg.us', name: 'Assistant User' },
+      ],
+      send_updates: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data.event_color).toBe('#0F766E');
+    expect(result.data.attendees).toEqual([
+      { user_id: 11, email: 'assistant@msfg.us', name: 'Assistant User' },
+    ]);
+    expect(result.data.send_updates).toBe(true);
+  });
+
+  it('rejects invalid event colors and attendee emails', () => {
+    expect(scheduleEntry.safeParse({
+      user_id: 10,
+      status: 'busy',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      event_color: 'red',
+    }).success).toBe(false);
+
+    expect(scheduleEntry.safeParse({
+      user_id: 10,
+      status: 'busy',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      attendees: [{ email: 'not-an-email', name: 'Bad Email' }],
+    }).success).toBe(false);
+  });
+
   it('rejects PTO as a status', () => {
     expect(scheduleEntry.safeParse({ ...valid, status: 'pto' }).success).toBe(false);
   });

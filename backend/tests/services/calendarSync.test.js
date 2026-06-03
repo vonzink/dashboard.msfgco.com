@@ -288,6 +288,64 @@ describe('Outlook provider adapter', () => {
     expect(events.map((event) => event.provider_sensitivity)).toEqual(['private', 'normal']);
   });
 
+  it('exports MSFG status categories and attendee payloads to Outlook', () => {
+    const { outlookEventPayload } = require('../../services/calendarSync/providers/outlook');
+    const payload = outlookEventPayload({
+      status: 'meeting_event',
+      start_date: '2026-06-10',
+      end_date: '2026-06-10',
+      start_time: '09:00:00',
+      end_time: '10:00:00',
+      timezone: 'America/Denver',
+      note: 'Borrower call',
+      visibility: 'shared_details',
+      attendees: [
+        { email: 'assistant@msfg.us', name: 'Assistant User' },
+      ],
+    });
+
+    expect(payload.showAs).toBe('busy');
+    expect(payload.sensitivity).toBe('normal');
+    expect(payload.categories).toEqual(['MSFG Schedule', 'MSFG Meeting/Event']);
+    expect(payload.attendees).toEqual([
+      {
+        emailAddress: {
+          address: 'assistant@msfg.us',
+          name: 'Assistant User',
+        },
+        type: 'required',
+      },
+    ]);
+  });
+
+  it('imports Outlook category labels back into MSFG statuses', () => {
+    const { normalizeOutlookEvent } = require('../../services/calendarSync/providers/outlook');
+    const event = normalizeOutlookEvent({
+      id: 'event-99',
+      subject: 'Borrower call',
+      sensitivity: 'normal',
+      showAs: 'busy',
+      categories: ['MSFG Schedule', 'MSFG Meeting/Event'],
+      start: { dateTime: '2026-06-10T09:00:00', timeZone: 'Mountain Standard Time' },
+      end: { dateTime: '2026-06-10T10:00:00', timeZone: 'Mountain Standard Time' },
+      attendees: [
+        {
+          emailAddress: { address: 'assistant@msfg.us', name: 'Assistant User' },
+          status: { response: 'accepted' },
+        },
+      ],
+    }, { user_id: 10, provider: 'outlook' });
+
+    expect(event.status).toBe('meeting_event');
+    expect(event.attendees).toEqual([
+      {
+        email: 'assistant@msfg.us',
+        name: 'Assistant User',
+        response_status: 'accepted',
+      },
+    ]);
+  });
+
   it('exports all-day entries with Graph exclusive next-day midnight end dates', () => {
     const { outlookEventPayload } = require('../../services/calendarSync/providers/outlook');
     const payload = outlookEventPayload({
@@ -459,6 +517,60 @@ describe('calendar sync engine', () => {
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM schedule_entries'),
       expect.arrayContaining([7, 'outlook', '2026-11-23', '2026-04-27', 'imported-event', 'exported-event'])
+    );
+  });
+
+  it('persists imported provider attendees with imported schedule entries', async () => {
+    db.query.mockImplementation(async (sql) => {
+      if (sql.includes('INSERT INTO calendar_sync_runs')) return [{ insertId: 12 }];
+      if (sql.includes('SELECT provider_event_id')) return [[]];
+      if (sql.includes('SELECT id FROM schedule_entries')) return [[{ id: 88 }]];
+      return [{ affectedRows: 1, insertId: 88 }];
+    });
+
+    const adapter = {
+      listEvents: vi.fn().mockResolvedValue([
+        {
+          user_id: 7,
+          status: 'meeting_event',
+          start_date: '2026-06-10',
+          end_date: '2026-06-10',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Borrower call',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'outlook-88',
+          details_shareable: true,
+          provider_sensitivity: 'normal',
+          attendees: [
+            { email: 'assistant@msfg.us', name: 'Assistant User', response_status: 'accepted' },
+          ],
+        },
+      ]),
+    };
+
+    const { runSyncForConnection } = require('../../services/calendarSync/syncEngine');
+    await runSyncForConnection(
+      { id: 4, user_id: 7, provider: 'outlook', sync_enabled: 1 },
+      adapter,
+      {
+        startDate: '2026-04-27',
+        endDate: '2026-11-23',
+        startDateTime: '2026-04-27T06:00:00.000Z',
+        endDateTime: '2026-11-24T06:59:59.999Z',
+      }
+    );
+
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('DELETE FROM schedule_entry_attendees WHERE schedule_entry_id = ?'),
+      [88]
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO schedule_entry_attendees'),
+      [88, null, 'assistant@msfg.us', 'Assistant User', 'accepted']
     );
   });
 

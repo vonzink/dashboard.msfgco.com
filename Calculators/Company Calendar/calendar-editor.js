@@ -1,10 +1,10 @@
 (function() {
   'use strict';
 
-  const STATUS_OPTIONS = Object.keys(window.CalendarState.STATUS_META).filter((status) => status !== 'busy');
+  const STATUS_OPTIONS = Object.keys(window.CalendarState.STATUS_META);
   const VISIBILITY_OPTIONS = [
+    { value: 'availability_only', label: 'Hidden from Team' },
     { value: 'shared_details', label: 'Shared Details' },
-    { value: 'availability_only', label: 'Availability Only' },
   ];
 
   function escapeHtml(value) {
@@ -55,6 +55,61 @@
     return Boolean(entry && entry.source === 'manual' && !isPrivateEntry(entry));
   }
 
+  function personOptionLabel(person) {
+    const nmls = person.nmls_number ? ` - NMLS ${person.nmls_number}` : '';
+    return `${person.name || person.email || `Employee ${person.id}`}${nmls}`;
+  }
+
+  function renderEmployeeOptions(state, selectedUserId) {
+    const directory = state.peopleDirectory || [];
+    const hasSelected = directory.some((person) => String(person.id) === String(selectedUserId));
+    const fallback = selectedUserId && !hasSelected
+      ? [{ id: selectedUserId, name: `Employee ${selectedUserId}` }]
+      : [];
+
+    return directory.concat(fallback).map((person) => `
+      <option value="${escapeHtml(person.id)}" ${String(selectedUserId) === String(person.id) ? 'selected' : ''}>
+        ${escapeHtml(personOptionLabel(person))}
+      </option>
+    `).join('');
+  }
+
+  function selectedAttendeeEmails(attendees) {
+    return new Set((attendees || []).map((attendee) => String(attendee.email || '').toLowerCase()));
+  }
+
+  function renderAttendeeOptions(state, selectedAttendees) {
+    const selected = selectedAttendeeEmails(selectedAttendees);
+    return (state.peopleDirectory || []).map((person) => {
+      const email = person.email || person.display_email || '';
+      const label = email ? `${person.name || email} <${email}>` : (person.name || `Employee ${person.id}`);
+      return `
+        <option value="${escapeHtml(email)}" ${selected.has(String(email).toLowerCase()) ? 'selected' : ''}>
+          ${escapeHtml(label)}
+        </option>
+      `;
+    }).join('');
+  }
+
+  function statusColor(status) {
+    const meta = window.CalendarState.STATUS_META[status] || window.CalendarState.STATUS_META.other;
+    return meta.color || '#404041';
+  }
+
+  function selectedAttendees(form, state) {
+    const selected = Array.from(form.elements.attendees?.selectedOptions || []).map((option) => option.value);
+    return selected.map((email) => {
+      const person = (state.peopleDirectory || []).find((item) => (
+        String(item.email || item.display_email || '').toLowerCase() === String(email).toLowerCase()
+      ));
+      return {
+        user_id: person?.id || null,
+        email,
+        name: person?.name || email,
+      };
+    });
+  }
+
   function focusableElements(container) {
     return Array.from(container.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'))
       .filter((element) => !element.disabled && element.offsetParent !== null);
@@ -99,7 +154,8 @@
     const isSaving = Boolean(state.editorSaving);
     const title = isExisting ? 'Edit Schedule' : 'Add Schedule';
     const status = firstValue(entry.status, 'out');
-    const visibility = firstValue(entry.visibility, 'shared_details');
+    const visibility = firstValue(entry.visibility, 'availability_only');
+    const sourceNote = entry.source === 'manual' || !entry.source ? 'Manual availability entry' : 'Synced Outlook entry';
 
     return `
       <div class="editor-backdrop" role="presentation" data-editor-close>
@@ -108,14 +164,16 @@
             <div class="editor-head">
               <div>
                 <h2 id="scheduleEditorTitle">${escapeHtml(title)}</h2>
-                <p>Manual availability entry</p>
+                <p>${escapeHtml(sourceNote)}</p>
               </div>
               <button class="icon-btn" type="button" aria-label="Close editor" data-editor-close ${isSaving ? 'disabled' : ''}>&times;</button>
             </div>
             <div class="editor-grid">
               <label>
-                <span>Employee ID</span>
-                <input name="user_id" type="text" value="${escapeHtml(entryUserId(entry))}" required ${isSaving ? 'disabled' : ''}>
+                <span>Employee</span>
+                <select name="user_id" required ${isSaving ? 'disabled' : ''}>
+                  ${renderEmployeeOptions(state, entryUserId(entry))}
+                </select>
               </label>
               <label>
                 <span>Status</span>
@@ -145,6 +203,16 @@
                   ${renderVisibilityOptions(visibility)}
                 </select>
               </label>
+              <label>
+                <span>Event Color</span>
+                <input name="event_color" type="color" value="${escapeHtml(firstValue(entry.event_color, statusColor(status)))}" ${isSaving ? 'disabled' : ''}>
+              </label>
+              <label class="editor-attendees">
+                <span>Invite Employees</span>
+                <select name="attendees" multiple ${isSaving ? 'disabled' : ''}>
+                  ${renderAttendeeOptions(state, entry.attendees || [])}
+                </select>
+              </label>
               <label class="editor-note">
                 <span>Note</span>
                 <textarea name="note" rows="4" ${isSaving ? 'disabled' : ''}>${escapeHtml(firstValue(entry.note, ''))}</textarea>
@@ -154,7 +222,8 @@
               ${canDelete ? `<button class="danger-btn" type="button" data-editor-delete="${escapeHtml(entry.id)}" ${isSaving ? 'disabled' : ''}>Delete</button>` : ''}
               <span class="editor-action-spacer"></span>
               <button class="nav-btn" type="button" data-editor-close ${isSaving ? 'disabled' : ''}>Cancel</button>
-              <button class="primary-btn" type="submit" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Saving...' : 'Save Schedule'}</button>
+              <button class="primary-btn" type="submit" data-save-mode="normal" ${isSaving ? 'disabled' : ''}>${isSaving ? 'Saving...' : 'Save'}</button>
+              <button class="primary-btn send-btn" type="submit" data-save-mode="send" ${isSaving ? 'disabled' : ''}>Save and send updates</button>
             </div>
           </form>
         </section>
@@ -175,6 +244,9 @@
       timezone: 'America/Denver',
       note: fieldValue(form, 'note'),
       visibility: fieldValue(form, 'visibility'),
+      event_color: fieldValue(form, 'event_color') || null,
+      attendees: selectedAttendees(form, window.MSFGCalendar?.state || {}),
+      send_updates: Boolean(form.dataset.sendUpdates === 'true'),
       source: current.source || 'manual',
     };
   }
@@ -204,6 +276,12 @@
           actions.showToast(err.message || 'Unable to delete schedule entry.', 'error');
         }
       });
+    });
+
+    form.addEventListener('click', (event) => {
+      const saveButton = event.target.closest ? event.target.closest('[data-save-mode]') : null;
+      if (!saveButton) return;
+      form.dataset.sendUpdates = saveButton.dataset.saveMode === 'send' ? 'true' : 'false';
     });
 
     form.addEventListener('submit', async (event) => {
