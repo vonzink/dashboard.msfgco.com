@@ -396,8 +396,12 @@ async function updatePipelineItem(token, pipelineRecord, updatedFields) {
     mappedFields: Object.keys(reverseMap),
   }, 'Pipeline write-through: checking field mappings');
 
-  // Stage = Monday.com group (not a column) — move item to matching group
-  if (updatedFields.stage) {
+  // Stage: on boards where it maps to a status column (e.g. "Loan Status"), the
+  // change_multiple_column_values write below handles it. Only move Monday groups
+  // when stage is NOT a mapped column (legacy group-based stage) — on the pipeline
+  // boards the groups are LO/team names, so moving to a group titled like a stage
+  // value can never match and just logs noise.
+  if (updatedFields.stage && !reverseMap.stage) {
     try {
       await moveItemToStageGroup(token, source_board_id, monday_item_id, updatedFields.stage);
     } catch (err) {
