@@ -144,6 +144,7 @@
       loan_sifter: "https://loansifternow.optimalblue.com/",
       listreports: "https://listreports.com/login?redirect=https%253A%252F%252Flistreports.com%252Fagent-intel%253Ftab%253Dlistside",
       passport: "https://v3.titlepro247.com/Account",
+      fidelity_live_farm: "https://fidelitylivefarm.com/index_fidelity.shtml",
       flueid: "https://pro.flueid.com/auth/sign-in",
       scanner: "/scanner.html",
       kbase_docs: "/Calculators/File%20Browser/file-browser.html?library=forms",
