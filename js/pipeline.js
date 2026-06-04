@@ -101,7 +101,7 @@ const Pipeline = {
   _statusLabelsByBoard: null,
 
   // Fields rendered as Monday-style colored-pill dropdowns (rolled out one field at a time).
-  PILL_FIELDS: ['stage', 'prelims_status'],
+  PILL_FIELDS: ['stage', 'prelims_status', 'mini_set_status', 'appraisal_status'],
 
   // ========================================
   // COLUMN MANAGEMENT
@@ -580,7 +580,10 @@ const Pipeline = {
           panel.hidden = false;
           const r = cell.getBoundingClientRect();
           const pw = panel.offsetWidth || 380;
-          panel.style.top = (r.bottom + 6) + 'px';
+          const ph = panel.offsetHeight || 320;
+          let top = r.bottom + 6;
+          if (top + ph > window.innerHeight - 8) top = Math.max(8, window.innerHeight - ph - 8);
+          panel.style.top = top + 'px';
           panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8)) + 'px';
         }
       });
