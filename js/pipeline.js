@@ -415,17 +415,10 @@ const Pipeline = {
     const detailRow = (label, value) => value && value !== '--'
       ? `<div class="pa-detail-row"><span class="pa-detail-label">${esc(label)}</span><span class="pa-detail-value">${value}</span></div>`
       : '';
-    // Editable date row (writes through to Monday's mapped date column on change)
-    const toDateInput = (v) => {
-      if (!v) return '';
-      const s = String(v);
-      if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-      const d = new Date(s);
-      return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
-    };
-    const dateRow = (field, label, currentVal) => `<div class="pa-detail-row">
+    // Read-only timeline date row — always shown so the dates are viewable (not editable for now)
+    const dateView = (label, val) => `<div class="pa-detail-row">
         <span class="pa-detail-label">${esc(label)}</span>
-        <span class="pa-detail-value"><input type="date" class="pipeline-date-input" data-field="${field}" data-item-id="${item.id}" value="${toDateInput(currentVal)}"></span>
+        <span class="pa-detail-value">${val ? esc(fmtDate(val)) : '<span style="opacity:.45">—</span>'}</span>
       </div>`;
 
     // Colored-pill helpers: render a status field as a Monday-style pill dropdown
@@ -524,15 +517,15 @@ const Pipeline = {
         </div>
         <div class="pa-detail-section">
           <h3 class="pa-detail-section-title"><i class="fas fa-calendar-alt"></i> Timeline</h3>
-          ${dateRow('application_date', 'Application Date', item.application_date)}
-          ${dateRow('target_close_date', 'Target Close', item.target_close_date)}
-          ${dateRow('closing_date', 'Closing Date', item.closing_date)}
-          ${dateRow('funding_date', 'Funding Date', item.funding_date)}
-          ${dateRow('lock_expiration_date', 'Lock Date', item.lock_expiration_date)}
-          ${dateRow('payoff_date', 'Payoff Date', item.payoff_date)}
-          ${dateRow('appraisal_due_date', 'Appraisal Due Date', item.appraisal_due_date)}
-          ${dateRow('appraisal_deadline', 'Appraisal Deadline', item.appraisal_deadline)}
-          ${dateRow('estimated_fund_date', 'Est. Funding Date', item.estimated_fund_date)}
+          ${dateView('Application Date', item.application_date)}
+          ${dateView('Target Close', item.target_close_date)}
+          ${dateView('Closing Date', item.closing_date)}
+          ${dateView('Funding Date', item.funding_date)}
+          ${dateView('Lock Date', item.lock_expiration_date)}
+          ${dateView('Payoff Date', item.payoff_date)}
+          ${dateView('Appraisal Due Date', item.appraisal_due_date)}
+          ${dateView('Appraisal Deadline', item.appraisal_deadline)}
+          ${dateView('Est. Funding Date', item.estimated_fund_date)}
         </div>
         <div class="pa-detail-section full-width">
           <h3 class="pa-detail-section-title"><i class="fas fa-tasks"></i> Status Tracking</h3>
@@ -582,11 +575,6 @@ const Pipeline = {
     // Status field change handlers — prompt for optional comment, then save
     modal.querySelectorAll('.pipeline-status-select').forEach(select => {
       select.addEventListener('change', () => this._onStatusChange(id, select));
-    });
-
-    // Editable Timeline date inputs — save (write-through to Monday) on change
-    modal.querySelectorAll('.pipeline-date-input').forEach(inp => {
-      inp.addEventListener('change', () => this._saveField(id, inp.dataset.field, inp.value || null));
     });
 
     // Colored-pill status dropdowns (e.g. Current Stage)
