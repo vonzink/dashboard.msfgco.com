@@ -865,17 +865,37 @@
     position: fixed;
     z-index: 1200;
     display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
-    gap: 6px;
-    padding: 10px;
+    flex-direction: column;
     border-radius: 12px;
+    overflow: hidden;
     background: var(--card-bg, #20242e);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
     width: max-content;          /* compact for few labels … */
     max-width: min(94vw, 740px); /* … wraps into more columns for many */
     max-height: 80vh;            /* use most of the viewport height */
+}
+.status-pill-panel-bar {
+    flex: 0 0 auto;
+    cursor: move;
+    user-select: none;
+    text-align: center;
+    padding: 5px;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-secondary, #8a96a8);
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.status-pill-panel-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    gap: 6px;
+    padding: 10px;
     overflow-y: auto;
 }
 .status-pill-panel[hidden] { display: none; }

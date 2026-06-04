@@ -437,7 +437,10 @@ const Pipeline = {
       ).join('');
       return `<div class="status-pill-wrap" data-field="${field}" data-item-id="${item.id}">
         <button type="button" class="status-pill ${currentVal ? '' : 'is-empty'}" ${currentVal ? `style="background:${colorOf(currentVal)}"` : ''} data-field="${field}" data-item-id="${item.id}">${currentVal ? esc(currentVal) : '— not set —'} <i class="fas fa-caret-down"></i></button>
-        <div class="status-pill-panel" hidden>${opts}</div>
+        <div class="status-pill-panel" hidden>
+          <div class="status-pill-panel-bar"><i class="fas fa-grip-lines"></i> drag</div>
+          <div class="status-pill-panel-grid">${opts}</div>
+        </div>
       </div>`;
     };
 
@@ -605,6 +608,19 @@ const Pipeline = {
           cell.classList.remove('is-empty');
           this._onStatusPillPick(id, opt.dataset.field, opt.dataset.value, wrap);
         });
+      });
+      // Drag the floating panel by its grip bar
+      wrap.querySelector('.status-pill-panel-bar')?.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const pr = panel.getBoundingClientRect();
+        const offX = e.clientX - pr.left, offY = e.clientY - pr.top;
+        const onMove = (ev) => {
+          panel.style.left = (ev.clientX - offX) + 'px';
+          panel.style.top = (ev.clientY - offY) + 'px';
+        };
+        const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
       });
     });
     if (!this._pillOutsideBound) {
