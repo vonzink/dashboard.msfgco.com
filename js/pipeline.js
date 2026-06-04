@@ -440,7 +440,7 @@ const Pipeline = {
       if (!labels) return null;
       const colorOf = (name) => { const m = labels.find(l => l.name === name); return m ? m.color : '#c4c4c4'; };
       const opts = labels.map(l =>
-        `<button type="button" class="status-pill-option" style="background:${l.color}" data-field="${field}" data-item-id="${item.id}" data-value="${esc(l.name)}">${esc(l.name)}</button>`
+        `<button type="button" class="status-pill-option" title="${esc(l.name)}" style="background:${l.color}" data-field="${field}" data-item-id="${item.id}" data-value="${esc(l.name)}">${esc(l.name)}</button>`
       ).join('');
       return `<div class="status-pill-wrap" data-field="${field}" data-item-id="${item.id}">
         <button type="button" class="status-pill ${currentVal ? '' : 'is-empty'}" ${currentVal ? `style="background:${colorOf(currentVal)}"` : ''} data-field="${field}" data-item-id="${item.id}">${currentVal ? esc(currentVal) : '— not set —'} <i class="fas fa-caret-down"></i></button>

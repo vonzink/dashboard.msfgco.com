@@ -864,19 +864,28 @@
 .status-pill-panel {
     position: fixed;
     z-index: 1200;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(125px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
     gap: 6px;
     padding: 10px;
     border-radius: 12px;
     background: var(--card-bg, #20242e);
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
-    max-height: 340px;
-    overflow: auto;
+    width: max-content;          /* compact for few labels … */
+    max-width: min(94vw, 740px); /* … wraps into more columns for many */
+    max-height: 80vh;            /* use most of the viewport height */
+    overflow-y: auto;
 }
 .status-pill-panel[hidden] { display: none; }
 .status-pill-option {
+    flex: 0 0 auto;
+    width: 140px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     border: none;
     border-radius: 7px;
     padding: 10px;
