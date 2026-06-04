@@ -338,6 +338,7 @@ router.put('/:id', validate(pipelineUpdate), async (req, res, next) => {
       'loan_number', 'loan_status', 'lender', 'subject_property', 'rate',
       'appraisal_status', 'loan_purpose', 'occupancy', 'title_status', 'hoi_status',
       'loan_estimate', 'application_date', 'lock_expiration_date', 'closing_date', 'funding_date',
+      'payoff_date', 'appraisal_due_date', 'appraisal_deadline', 'estimated_fund_date',
       'prelims_status', 'mini_set_status', 'cd_status',
       'payoffs', 'wvoes', 'vvoes', 'hoa', 'dpa', 'cd_info',
       'closing_details', 'closing_docs', 'send_to_compliance',

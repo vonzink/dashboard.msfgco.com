@@ -891,6 +891,20 @@
 }
 .status-pill-option:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0, 0, 0, 0.4); }
 
+/* Editable Timeline date inputs */
+.pipeline-date-input {
+    background: var(--input-bg, #2a2f3a);
+    color: var(--text-primary, #e8eef5);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+    color-scheme: dark;
+    cursor: pointer;
+}
+.pipeline-date-input:focus { outline: none; border-color: var(--green-bright, #8cc63e); }
+
 /* Section title hint — clarifies what each notes section does */
 .pa-detail-section-hint {
     font-size: 0.7rem;
