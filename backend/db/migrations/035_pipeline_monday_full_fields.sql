@@ -184,6 +184,6 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 -- auto-mapper regenerates with all new fields on next sync.
 -- Only clears pipeline-section boards; pre_approvals/funded_loans untouched.
 -- ============================================================
-DELETE mcm FROM monday_column_mappings mcm
-  INNER JOIN monday_boards mb ON mcm.board_id = mb.board_id
-  WHERE mb.target_section = 'pipeline';
+-- DELETE removed 2026-06-03: migrations.js re-runs every file on every boot (no
+-- applied-tracking), so this wiped all pipeline column mappings on every restart.
+-- One-time re-map purpose is done; the auto-mapper now produces correct mappings.
