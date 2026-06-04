@@ -131,6 +131,8 @@ const Pipeline = {
   async _loadStatusLabels() {
     try {
       this._statusLabelsByBoard = await ServerAPI.getStatusLabels('pipeline');
+      // If the table already rendered before labels arrived, recolor its badges.
+      if (Array.isArray(this.data) && this.data.length) this.render(this.data);
     } catch (e) {
       this._statusLabelsByBoard = null; // fall back to STATUS_OPTIONS
     }
@@ -228,6 +230,16 @@ const Pipeline = {
   // ========================================
   _statusBadgeClass(val) { return Utils.statusBadgeClass(val); },
 
+  // The loan's-board Monday color for a status value (matches the detail pill), or null.
+  _statusColor(field, val, item) {
+    const bl = this._statusLabelsByBoard && item && item.source_board_id
+      ? this._statusLabelsByBoard[item.source_board_id] : null;
+    const labels = bl && bl[field];
+    if (!Array.isArray(labels)) return null;
+    const m = labels.find(l => l && l.name === val);
+    return m ? m.color : null;
+  },
+
   _formatAddress(addr) {
     if (!addr) return '';
     return String(addr).replace(/([A-Za-z.'\- ]+?)([A-Z]{2})(\s+\d{5}(?:-\d{4})?)/g, (m, city, state, zip) => {
@@ -288,6 +300,10 @@ const Pipeline = {
           return `<td class="nowrap">${Utils.formatDate(val, 'short')}</td>`;
         }
         if (this.STATUS_FIELDS.includes(col.field) && val) {
+          const color = this._statusColor(col.field, val, item);
+          if (color) {
+            return `<td><span class="pipeline-badge" style="background:${color};color:#fff;border-color:transparent;text-shadow:0 1px 1px rgba(0,0,0,.18)">${Utils.escapeHtml(val)}</span></td>`;
+          }
           const cls = this._statusBadgeClass(val);
           return `<td><span class="pipeline-badge ${cls}">${Utils.escapeHtml(val)}</span></td>`;
         }
