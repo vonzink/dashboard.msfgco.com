@@ -44,8 +44,22 @@ const {
   mondayQuery,
   syncAllBoards,
 } = require('../services/monday');
+const { getStatusLabelsBySection } = require('../services/monday/statusLabels');
 
 router.use(requireDbUser);
+
+// ── GET /status-labels — per-board live Monday status labels (cached) ──
+// Query: ?section=pipeline|funded_loans|pre_approvals (default pipeline)
+router.get('/status-labels', async (req, res, next) => {
+  try {
+    const validSections = ['pipeline', 'funded_loans', 'pre_approvals'];
+    const section = validSections.includes(req.query.section) ? req.query.section : 'pipeline';
+    const labels = await getStatusLabelsBySection(section);
+    res.json(labels);
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ── GET /boards — list all registered boards (with assigned users) ──
 router.get('/boards', async (req, res, next) => {
