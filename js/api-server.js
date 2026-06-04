@@ -735,6 +735,10 @@ const ServerAPI = {
         return this.get(`/monday/view-config?section=${section}`);
     },
 
+    getStatusLabels(section = 'pipeline') {
+        return this.get(`/monday/status-labels?section=${encodeURIComponent(section)}`);
+    },
+
     getMondayMyBoards() {
         return this.get('/monday/boards/my-boards');
     },

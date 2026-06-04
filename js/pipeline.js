@@ -97,6 +97,9 @@ const Pipeline = {
     'hoi_status', 'title_status', 'loan_status', 'status', 'payoffs', 'wvoes', 'vvoes',
     'closing_details', 'closing_docs', 'cd_info', 'dpa', 'hoa', 'send_to_compliance'],
 
+  // Per-board live Monday status labels { board_id: { field: [labels] } }; overrides STATUS_OPTIONS per loan's board.
+  _statusLabelsByBoard: null,
+
   // ========================================
   // COLUMN MANAGEMENT
   // ========================================
@@ -122,11 +125,20 @@ const Pipeline = {
   // ========================================
   // CONFIG & DATA LOADING
   // ========================================
+  async _loadStatusLabels() {
+    try {
+      this._statusLabelsByBoard = await ServerAPI.getStatusLabels('pipeline');
+    } catch (e) {
+      this._statusLabelsByBoard = null; // fall back to STATUS_OPTIONS
+    }
+  },
+
   async loadConfig() {
     try {
       const [config, prefs] = await Promise.all([
         ServerAPI.getMondayViewConfig(),
         API._loadDisplayPrefs(),
+        this._loadStatusLabels(),
       ]);
       let cols = (config.columns || []).filter(c => c.visible !== false);
       if (cols.length > 1) {
@@ -402,7 +414,9 @@ const Pipeline = {
       : '';
 
     const statusSelect = (field, label, currentVal) => {
-      const presets = this.STATUS_OPTIONS[field] || [];
+      const boardLabels = this._statusLabelsByBoard && item.source_board_id
+        ? this._statusLabelsByBoard[item.source_board_id] : null;
+      const presets = (boardLabels && boardLabels[field]) || this.STATUS_OPTIONS[field] || [];
       const hasCurrentInPresets = !currentVal || presets.includes(currentVal);
       const opts = presets.map(o =>
         `<option value="${esc(o)}" ${o === currentVal ? 'selected' : ''}>${esc(o)}</option>`
@@ -421,7 +435,8 @@ const Pipeline = {
     };
 
     // Stage promoted to a prominent header pill above the grid
-    const stagePresets = this.STATUS_OPTIONS.stage || [];
+    const _bl = this._statusLabelsByBoard && item.source_board_id ? this._statusLabelsByBoard[item.source_board_id] : null;
+    const stagePresets = (_bl && _bl.stage) || this.STATUS_OPTIONS.stage || [];
     const currentStage = item.stage || '';
     const stageHasInPresets = !currentStage || stagePresets.includes(currentStage);
     const stageOpts = stagePresets.map(o =>
