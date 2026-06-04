@@ -5,7 +5,9 @@ require('dotenv').config({ path: require('path').join(__dirname, '../../.env') }
 const db = require('../db/connection');
 const { getStatusLabelsBySection } = require('../services/monday/statusLabels');
 
-const FIELDS = ['prelims_status', 'mini_set_status', 'appraisal_status'];
+// Pass field names as args, e.g. `node check-pill-labels.js cd_status title_status`.
+const FIELDS = process.argv.slice(2).length ? process.argv.slice(2)
+  : ['prelims_status', 'mini_set_status', 'appraisal_status'];
 
 (async () => {
   try {
