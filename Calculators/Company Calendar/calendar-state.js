@@ -94,6 +94,7 @@
       selectedCalendarKeys: new Set(),
       selectedUserId: null,
       syncConnections: [],
+      teamSyncConnections: [],
       syncSettingsOpen: false,
       editor: null,
       editorSaving: false,

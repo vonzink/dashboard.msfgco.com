@@ -71,8 +71,27 @@ router.get('/status', async (req, res, next) => {
        ORDER BY provider ASC`,
       [getUserId(req)]
     );
+    const teamResult = await db.query(
+      `SELECT c.user_id,
+              u.name,
+              u.email,
+              c.provider,
+              c.provider_account_email,
+              c.sync_enabled,
+              c.privacy_default,
+              c.last_sync_at,
+              c.sync_status
+       FROM calendar_sync_connections c
+       JOIN users u ON u.id = c.user_id
+       WHERE c.sync_enabled = 1
+         AND c.sync_status IN ('connected', 'syncing', 'error')
+       ORDER BY u.name ASC, c.provider ASC`
+    );
 
-    res.json({ connections: getRows(result) || [] });
+    res.json({
+      connections: getRows(result) || [],
+      team_connections: getRows(teamResult) || [],
+    });
   } catch (error) {
     next(error);
   }

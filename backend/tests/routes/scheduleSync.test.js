@@ -123,26 +123,49 @@ describe('schedule sync routes', () => {
   });
 
   it('returns current user sync status', async () => {
-    db.query.mockResolvedValueOnce([[
-      {
-        id: 1,
-        provider: 'outlook',
-        provider_account_email: 'user@msfg.us',
-        sync_enabled: 1,
-        privacy_default: 'availability_only',
-        sync_status: 'connected',
-        last_sync_at: null,
-        sync_error: null,
-      },
-    ]]);
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 1,
+          provider: 'outlook',
+          provider_account_email: 'user@msfg.us',
+          sync_enabled: 1,
+          privacy_default: 'availability_only',
+          sync_status: 'connected',
+          last_sync_at: null,
+          sync_error: null,
+        },
+      ]])
+      .mockResolvedValueOnce([[
+        {
+          user_id: 12,
+          name: 'Mike Wilson',
+          email: 'mike.wilson@msfg.us',
+          provider: 'outlook',
+          sync_status: 'connected',
+        },
+        {
+          user_id: 14,
+          name: 'Robert Hoff',
+          email: 'robert.hoff@msfg.us',
+          provider: 'outlook',
+          sync_status: 'connected',
+        },
+      ]]);
 
     const res = await makeRequest(app, '/api/schedule/sync/status');
+    const body = JSON.parse(res.body);
     expect(res.status).toBe(200);
-    expect(JSON.parse(res.body).connections[0]).toEqual(expect.objectContaining({
+    expect(body.connections[0]).toEqual(expect.objectContaining({
       provider: 'outlook',
       sync_status: 'connected',
     }));
+    expect(body.team_connections).toEqual([
+      expect.objectContaining({ user_id: 12, name: 'Mike Wilson', provider: 'outlook' }),
+      expect.objectContaining({ user_id: 14, name: 'Robert Hoff', provider: 'outlook' }),
+    ]);
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('FROM calendar_sync_connections'), [7]);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('JOIN users u ON u.id = c.user_id'));
   });
 
   it('returns an Outlook authorization URL on connection start', async () => {

@@ -35,8 +35,10 @@
     try {
       const status = await CalendarApi.getSyncStatus();
       state.syncConnections = status.connections || [];
+      state.teamSyncConnections = status.team_connections || status.teamConnections || [];
     } catch (err) {
       state.syncConnections = [];
+      state.teamSyncConnections = [];
     }
   }
 

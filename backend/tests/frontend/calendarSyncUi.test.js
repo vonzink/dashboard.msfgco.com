@@ -356,6 +356,48 @@ describe('calendar categories and filtering', () => {
     expect(multiCalendarHtml).toContain('Mike Outlook item');
     expect(multiCalendarHtml).not.toContain('Manual company note');
   });
+
+  it('renders selectable synced calendars from team connection status without visible entries', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.peopleDirectory = [
+      { id: 12, name: 'Mike Wilson', role: 'Loan Officer' },
+      { id: 14, name: 'Robert Hoff', role: 'Loan Officer' },
+    ];
+    state.teamSyncConnections = [
+      {
+        user_id: 12,
+        name: 'Mike Wilson',
+        provider: 'outlook',
+        sync_enabled: 1,
+        sync_status: 'connected',
+      },
+      {
+        user_id: 14,
+        name: 'Robert Hoff',
+        provider: 'outlook',
+        sync_enabled: 1,
+        sync_status: 'connected',
+      },
+    ];
+    state.entries = [];
+
+    const headerHtml = context.window.CalendarRender.renderHeader(state);
+    expect(headerHtml).toContain('data-calendar-filter="outlook:12"');
+    expect(headerHtml).toContain('data-calendar-filter="outlook:14"');
+    expect(headerHtml).toContain('Mike Wilson Outlook');
+    expect(headerHtml).toContain('Robert Hoff Outlook');
+  });
 });
 
 describe('calendar view controls', () => {

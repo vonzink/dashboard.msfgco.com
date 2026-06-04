@@ -62,6 +62,11 @@
     return ['outlook', 'google'].includes(provider) ? provider : '';
   }
 
+  function connectionProviderId(connection) {
+    const provider = String(connection.provider || connection.source_provider || connection.source || '').toLowerCase();
+    return ['outlook', 'google'].includes(provider) ? provider : '';
+  }
+
   function providerLabel(provider) {
     if (provider === 'google') return 'Google';
     if (provider === 'outlook') return 'Outlook';
@@ -74,13 +79,66 @@
     return provider && userId ? `${provider}:${userId}` : '';
   }
 
+  function connectionUserId(connection) {
+    return String(connection.user_id || connection.userId || connection.employee_id || connection.employeeId || connection.owner_id || connection.ownerId || '');
+  }
+
+  function connectionCalendarKey(connection) {
+    const provider = connectionProviderId(connection);
+    const userId = connectionUserId(connection);
+    return provider && userId ? `${provider}:${userId}` : '';
+  }
+
   function personForEntry(state, entry) {
     const id = String(entryUserId(entry) || '');
     return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === id) || null;
   }
 
+  function personForConnection(state, connection) {
+    const id = connectionUserId(connection);
+    return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === id) || null;
+  }
+
+  function connectionPersonName(state, connection) {
+    const person = personForConnection(state, connection);
+    return person?.name ||
+      connection.name ||
+      connection.user_name ||
+      connection.userName ||
+      connection.employee_name ||
+      connection.employeeName ||
+      connection.email ||
+      connection.provider_account_email ||
+      'Unassigned';
+  }
+
+  function connectionIsSelectable(connection) {
+    const key = connectionCalendarKey(connection);
+    if (!key) return false;
+
+    const enabled = connection.sync_enabled == null ||
+      connection.sync_enabled === true ||
+      connection.sync_enabled === 1 ||
+      connection.sync_enabled === '1';
+    const status = String(connection.sync_status || 'connected').toLowerCase();
+    return enabled && status !== 'not_connected';
+  }
+
   function calendarOptions(state) {
     const byKey = new Map();
+    (state.teamSyncConnections || []).forEach((connection) => {
+      if (!connectionIsSelectable(connection)) return;
+      const key = connectionCalendarKey(connection);
+      if (byKey.has(key)) return;
+      const provider = connectionProviderId(connection);
+      const personName = connectionPersonName(state, connection);
+      byKey.set(key, {
+        key,
+        label: `${personName} ${providerLabel(provider)}`,
+        provider,
+        personName,
+      });
+    });
     (state.entries || []).forEach((entry) => {
       const key = calendarKey(entry);
       if (!key || byKey.has(key)) return;
