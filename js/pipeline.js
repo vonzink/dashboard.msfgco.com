@@ -101,7 +101,7 @@ const Pipeline = {
   _statusLabelsByBoard: null,
 
   // Fields rendered as Monday-style colored-pill dropdowns (rolled out one field at a time).
-  PILL_FIELDS: ['stage', 'prelims_status', 'mini_set_status', 'appraisal_status', 'cd_status', 'cd_info', 'closing_details'],
+  PILL_FIELDS: ['stage', 'prelims_status', 'mini_set_status', 'appraisal_status', 'cd_status', 'cd_info', 'closing_details', 'hoi_status'],
 
   // ========================================
   // COLUMN MANAGEMENT
