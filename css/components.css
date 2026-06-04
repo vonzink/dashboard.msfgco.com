@@ -836,6 +836,63 @@
     margin-left: auto;
 }
 
+/* ── Colored status-pill dropdown (resembles Monday.com) ── */
+.status-pill-wrap { position: relative; display: inline-block; }
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 200px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0.55rem 1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.95rem;
+    font-family: inherit;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+}
+.status-pill.is-empty {
+    background: #3a3f4b;
+    color: var(--text-secondary, #a8b8c8);
+    text-shadow: none;
+}
+.status-pill .fa-caret-down { opacity: 0.85; font-size: 0.7rem; }
+.status-pill-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 1200;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(125px, 1fr));
+    gap: 6px;
+    padding: 10px;
+    border-radius: 12px;
+    background: var(--card-bg, #20242e);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+    max-height: 340px;
+    overflow: auto;
+}
+.status-pill-panel[hidden] { display: none; }
+.status-pill-option {
+    border: none;
+    border-radius: 7px;
+    padding: 10px;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.78rem;
+    font-family: inherit;
+    text-align: center;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+    transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+.status-pill-option:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0, 0, 0, 0.4); }
+
 /* Section title hint — clarifies what each notes section does */
 .pa-detail-section-hint {
     font-size: 0.7rem;

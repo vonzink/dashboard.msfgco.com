@@ -49,10 +49,28 @@ describe('statusLabels service', () => {
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('labels_json IS NOT NULL'), ['pipeline']);
   });
 
-  it('refreshStatusLabels writes parsed labels for status columns only', async () => {
+  it('parseLabelsWithColors returns {name,color} ordered by position, grey default, drops empties', () => {
+    const { parseLabelsWithColors } = loadService();
+    const s = JSON.stringify({
+      labels: { '0': 'A', '1': 'B', '2': '' },
+      labels_colors: { '1': { color: '#5559df' } },   // A has no color -> grey
+      labels_positions_v2: { '0': 2, '1': 0 },         // B(pos0) before A(pos2)
+    });
+    expect(parseLabelsWithColors(s)).toEqual([
+      { name: 'B', color: '#5559df' },
+      { name: 'A', color: '#c4c4c4' },
+    ]);
+    expect(parseLabelsWithColors('bad')).toEqual([]);
+  });
+
+  it('refreshStatusLabels writes [{name,color}] ordered by position, status cols only', async () => {
     const { refreshStatusLabels } = loadService();
     client.mondayQuery.mockResolvedValueOnce({ boards: [{ columns: [
-      { id: 'status69', type: 'status', settings_str: '{"labels":{"0":"Please Order","1":"Done"}}' },
+      { id: 'status69', type: 'status', settings_str: JSON.stringify({
+          labels: { '0': 'Please Order', '1': 'Done' },
+          labels_colors: { '0': { color: '#fdab3d' } },     // Done has no color -> grey
+          labels_positions_v2: { '0': 5, '1': 1 },          // Done(pos1) before Please Order(pos5)
+        }) },
       { id: 'text9', type: 'text', settings_str: '{}' },
     ] }] });
     db.query.mockResolvedValue([{ affectedRows: 1 }]);
@@ -60,7 +78,7 @@ describe('statusLabels service', () => {
     expect(n).toBe(1);
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE monday_column_mappings SET labels_json'),
-      ['["Please Order","Done"]', '1', 'status69']
+      [JSON.stringify([{ name: 'Done', color: '#c4c4c4' }, { name: 'Please Order', color: '#fdab3d' }]), '1', 'status69']
     );
     expect(db.query).toHaveBeenCalledTimes(1);
   });

@@ -13,6 +13,28 @@ function parseLabels(settingsStr) {
   } catch { return []; }
 }
 
+// Parse labels with their Monday colors, ordered by labels_positions_v2.
+// Returns [{ name, color }]. Default color #c4c4c4 when a label has no color.
+function parseLabelsWithColors(settingsStr) {
+  try {
+    const s = JSON.parse(settingsStr || '{}');
+    if (!s.labels) return [];
+    const colors = s.labels_colors || {};
+    const positions = s.labels_positions_v2 || {};
+    const out = [];
+    for (const [idx, name] of Object.entries(s.labels)) {
+      if (!name || !String(name).trim()) continue;
+      out.push({
+        name: String(name),
+        color: (colors[idx] && colors[idx].color) || '#c4c4c4',
+        _pos: positions[idx] != null ? Number(positions[idx]) : 9999,
+      });
+    }
+    out.sort((a, b) => a._pos - b._pos);
+    return out.map(({ name, color }) => ({ name, color }));
+  } catch { return []; }
+}
+
 // Pull a board's live status-column labels and cache into labels_json.
 async function refreshStatusLabels(token, boardId) {
   const data = await mondayQuery(token,
@@ -21,7 +43,7 @@ async function refreshStatusLabels(token, boardId) {
   let updated = 0;
   for (const c of cols) {
     if (c.type !== 'status') continue;
-    const labels = parseLabels(c.settings_str);
+    const labels = parseLabelsWithColors(c.settings_str);
     const [res] = await db.query(
       'UPDATE monday_column_mappings SET labels_json = ? WHERE board_id = ? AND monday_column_id = ?',
       [JSON.stringify(labels), String(boardId), c.id]
@@ -50,4 +72,4 @@ async function getStatusLabelsBySection(section) {
   return out;
 }
 
-module.exports = { refreshStatusLabels, getStatusLabelsBySection, parseLabels };
+module.exports = { refreshStatusLabels, getStatusLabelsBySection, parseLabels, parseLabelsWithColors };
