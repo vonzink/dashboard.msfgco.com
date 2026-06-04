@@ -68,6 +68,13 @@ const { VALID_FIELDS_BY_SECTION, DEFAULT_TITLE_MAP, FIELD_LABELS } = require('..
       }
     }
 
+    // Refresh cached status labels for all boards we just (re)mapped
+    try {
+      const { refreshStatusLabels } = require('../services/monday/statusLabels');
+      for (const b of boards) await refreshStatusLabels(token, b.board_id);
+      console.log('Refreshed status labels for all active boards.');
+    } catch (e) { console.error('Label refresh failed:', e.message); }
+
     console.log(`\nDone! Added ${totalAdded} new column mappings.`);
   } catch (e) { console.error('ERROR:', e.message); }
   process.exit(0);
