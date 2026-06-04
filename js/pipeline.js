@@ -100,6 +100,9 @@ const Pipeline = {
   // Per-board live Monday status labels { board_id: { field: [labels] } }; overrides STATUS_OPTIONS per loan's board.
   _statusLabelsByBoard: null,
 
+  // Fields rendered as Monday-style colored-pill dropdowns (rolled out one field at a time).
+  PILL_FIELDS: ['stage', 'prelims_status'],
+
   // ========================================
   // COLUMN MANAGEMENT
   // ========================================
@@ -413,7 +416,37 @@ const Pipeline = {
       ? `<div class="pa-detail-row"><span class="pa-detail-label">${esc(label)}</span><span class="pa-detail-value">${value}</span></div>`
       : '';
 
+    // Colored-pill helpers: render a status field as a Monday-style pill dropdown
+    // when the board provides labels-with-colors; otherwise callers fall back to <select>.
+    const boardLabelsFor = (field) => {
+      const bl = this._statusLabelsByBoard && item.source_board_id ? this._statusLabelsByBoard[item.source_board_id] : null;
+      const v = bl && bl[field];
+      return (Array.isArray(v) && v.length && typeof v[0] === 'object') ? v : null;
+    };
+    const pillHtml = (field, currentVal) => {
+      const labels = boardLabelsFor(field);
+      if (!labels) return null;
+      const colorOf = (name) => { const m = labels.find(l => l.name === name); return m ? m.color : '#c4c4c4'; };
+      const opts = labels.map(l =>
+        `<button type="button" class="status-pill-option" style="background:${l.color}" data-field="${field}" data-item-id="${item.id}" data-value="${esc(l.name)}">${esc(l.name)}</button>`
+      ).join('');
+      return `<div class="status-pill-wrap" data-field="${field}" data-item-id="${item.id}">
+        <button type="button" class="status-pill ${currentVal ? '' : 'is-empty'}" ${currentVal ? `style="background:${colorOf(currentVal)}"` : ''} data-field="${field}" data-item-id="${item.id}">${currentVal ? esc(currentVal) : '— not set —'} <i class="fas fa-caret-down"></i></button>
+        <div class="status-pill-panel" hidden>${opts}</div>
+      </div>`;
+    };
+
     const statusSelect = (field, label, currentVal) => {
+      // Opted-in fields render as a colored-pill dropdown (when board labels exist)
+      if (this.PILL_FIELDS.includes(field)) {
+        const pill = pillHtml(field, currentVal);
+        if (pill) {
+          return `<div class="pa-detail-row">
+            <span class="pa-detail-label">${esc(label)}</span>
+            <span class="pa-detail-value">${pill}</span>
+          </div>`;
+        }
+      }
       const boardLabels = this._statusLabelsByBoard && item.source_board_id
         ? this._statusLabelsByBoard[item.source_board_id] : null;
       const rawPresets = (boardLabels && boardLabels[field]) || this.STATUS_OPTIONS[field] || [];
@@ -435,23 +468,11 @@ const Pipeline = {
       </div>`;
     };
 
-    // Stage promoted to a prominent header pill above the grid. When the board's
-    // labels (with Monday colors) are available, render a colored-pill dropdown
-    // resembling Monday.com; otherwise fall back to a plain <select>.
-    const _bl = this._statusLabelsByBoard && item.source_board_id ? this._statusLabelsByBoard[item.source_board_id] : null;
+    // Stage promoted to a prominent header pill above the grid (colored pill, or <select> fallback).
     const currentStage = item.stage || '';
-    const stageLabels = (_bl && Array.isArray(_bl.stage) && _bl.stage.length && typeof _bl.stage[0] === 'object') ? _bl.stage : null;
-    let stageControl;
-    if (stageLabels) {
-      const colorOf = (name) => { const m = stageLabels.find(l => l.name === name); return m ? m.color : '#c4c4c4'; };
-      const pillOpts = stageLabels.map(l =>
-        `<button type="button" class="status-pill-option" style="background:${l.color}" data-field="stage" data-item-id="${item.id}" data-value="${esc(l.name)}">${esc(l.name)}</button>`
-      ).join('');
-      stageControl = `<div class="status-pill-wrap" data-field="stage" data-item-id="${item.id}">
-        <button type="button" class="status-pill ${currentStage ? '' : 'is-empty'}" ${currentStage ? `style="background:${colorOf(currentStage)}"` : ''} data-field="stage" data-item-id="${item.id}">${currentStage ? esc(currentStage) : '— not set —'} <i class="fas fa-caret-down"></i></button>
-        <div class="status-pill-panel" hidden>${pillOpts}</div>
-      </div>`;
-    } else {
+    let stageControl = pillHtml('stage', currentStage);
+    if (!stageControl) {
+      const _bl = this._statusLabelsByBoard && item.source_board_id ? this._statusLabelsByBoard[item.source_board_id] : null;
       const sp = ((_bl && _bl.stage) || this.STATUS_OPTIONS.stage || []).map(o => (typeof o === 'string' ? o : o.name));
       const hasIn = !currentStage || sp.includes(currentStage);
       const sOpts = sp.map(o => `<option value="${esc(o)}" ${o === currentStage ? 'selected' : ''}>${esc(o)}</option>`).join('');
@@ -555,7 +576,13 @@ const Pipeline = {
         e.stopPropagation();
         const willOpen = panel.hidden;
         modal.querySelectorAll('.status-pill-panel').forEach(p => { p.hidden = true; });
-        panel.hidden = !willOpen;
+        if (willOpen) {
+          panel.hidden = false;
+          const r = cell.getBoundingClientRect();
+          const pw = panel.offsetWidth || 380;
+          panel.style.top = (r.bottom + 6) + 'px';
+          panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - pw - 8)) + 'px';
+        }
       });
       panel?.querySelectorAll('.status-pill-option').forEach(opt => {
         opt.addEventListener('click', (e) => {
@@ -570,14 +597,10 @@ const Pipeline = {
     });
     if (!this._pillOutsideBound) {
       this._pillOutsideBound = true;
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('.status-pill-wrap')) {
-          document.querySelectorAll('.status-pill-panel').forEach(p => { p.hidden = true; });
-        }
-      });
-      document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') document.querySelectorAll('.status-pill-panel').forEach(p => { p.hidden = true; });
-      });
+      const closeAllPills = () => document.querySelectorAll('.status-pill-panel').forEach(p => { p.hidden = true; });
+      document.addEventListener('click', (e) => { if (!e.target.closest('.status-pill-wrap')) closeAllPills(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAllPills(); });
+      document.addEventListener('scroll', closeAllPills, true);
     }
 
     // Post comment to Monday.com item
@@ -599,7 +622,9 @@ const Pipeline = {
   },
 
   _onStatusPillPick(itemId, field, newValue, wrapEl) {
-    this._promptCommentAndSave(itemId, field, newValue, 'Current Stage', wrapEl.parentElement || wrapEl);
+    const row = wrapEl.closest('.pa-detail-row');
+    const label = row?.querySelector('.pa-detail-label')?.textContent || (field === 'stage' ? 'Current Stage' : field);
+    this._promptCommentAndSave(itemId, field, newValue, label, row || wrapEl.parentElement || wrapEl);
   },
 
   // Shared by the status <select>s and the colored-pill dropdown: optional inline

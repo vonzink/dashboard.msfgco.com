@@ -862,9 +862,7 @@
 }
 .status-pill .fa-caret-down { opacity: 0.85; font-size: 0.7rem; }
 .status-pill-panel {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
+    position: fixed;
     z-index: 1200;
     display: grid;
     grid-template-columns: repeat(3, minmax(125px, 1fr));
