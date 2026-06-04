@@ -7,6 +7,7 @@
     traveling: { label: 'Traveling', color: '#8254c9' },
     meeting_event: { label: 'Meeting/Event', color: '#1f8a6d' },
     busy: { label: 'Busy', color: '#d08a2c' },
+    bday: { label: 'B-Day', color: '#d4578f' },
     other: { label: 'Other', color: '#6b7280' },
   };
 
@@ -90,6 +91,7 @@
       directoryError: null,
       search: '',
       hiddenStatuses: new Set(),
+      selectedCalendarKeys: new Set(),
       selectedUserId: null,
       syncConnections: [],
       syncSettingsOpen: false,

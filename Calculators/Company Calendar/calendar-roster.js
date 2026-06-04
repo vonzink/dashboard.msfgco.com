@@ -64,7 +64,6 @@
   }
 
   function filteredPeople(state) {
-    const query = String(state.search || '').trim().toLowerCase();
     const directory = (state.peopleDirectory || []).map((person) => ({
       id: person.id,
       name: person.name || person.email || `Employee ${person.id}`,
@@ -72,29 +71,15 @@
       nmls_number: person.nmls_number || '',
       email: person.email || person.display_email || '',
     }));
+    const selectedUserId = String(state.selectedUserId || '');
     const people = directory.length ? directory : (state.people || []);
-    if (!query) return people;
-    return people.filter((person) => {
-      return String(person.name || '').toLowerCase().includes(query) ||
-        String(person.role || '').toLowerCase().includes(query) ||
-        String(person.nmls_number || '').toLowerCase().includes(query) ||
-        String(person.email || '').toLowerCase().includes(query);
-    });
+    if (!selectedUserId) return people;
+    return people.filter((person) => String(person.id) === selectedUserId);
   }
 
   function filteredPersonIds(state) {
     const ids = filteredPeople(state).map((person) => String(person.id));
     return new Set(ids);
-  }
-
-  function selectedPerson(state) {
-    const selectedUserId = String(state.selectedUserId || '');
-    if (!selectedUserId) return null;
-    return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === selectedUserId) || {
-      id: selectedUserId,
-      name: `Employee ${selectedUserId}`,
-      role: '',
-    };
   }
 
   function entryOverlapsDate(entry, iso) {
@@ -109,12 +94,66 @@
     return Boolean(start && range && start <= range.end_date && end >= range.start_date);
   }
 
+  function providerId(entry) {
+    const provider = String(entry.source_provider || entry.source || '').toLowerCase();
+    return ['outlook', 'google'].includes(provider) ? provider : '';
+  }
+
+  function calendarKey(entry) {
+    const provider = providerId(entry);
+    const userId = entryUserId(entry);
+    return provider && userId ? `${provider}:${userId}` : '';
+  }
+
+  function entryMatchesCalendarFilter(state, entry) {
+    const selected = state.selectedCalendarKeys || new Set();
+    if (!selected.size) return true;
+    const key = calendarKey(entry);
+    return Boolean(key && selected.has(key));
+  }
+
+  function personForEntry(state, entry) {
+    const id = entryUserId(entry);
+    return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === id) || null;
+  }
+
+  function keywordText(state, entry) {
+    const person = personForEntry(state, entry) || {};
+    const status = window.CalendarState.STATUS_META[entry.status] || {};
+    return [
+      entryLabel(entry),
+      entry.note,
+      entry.display_label,
+      status.label,
+      entry.status,
+      entryUserName(entry),
+      person.name,
+      person.role,
+      person.team,
+      person.nmls_number,
+      person.email,
+      person.display_email,
+      entry.source,
+      entry.source_provider,
+      entryStartIso(entry),
+      entryEndIso(entry),
+    ].filter(Boolean).join(' ').toLowerCase();
+  }
+
+  function entryMatchesKeyword(state, entry) {
+    const query = String(state.search || '').trim().toLowerCase();
+    if (!query) return true;
+    return query.split(/\s+/).every((term) => keywordText(state, entry).includes(term));
+  }
+
   function visibleEntries(state) {
     const ids = filteredPersonIds(state);
     const range = window.CalendarState.visibleRange(state);
     return (state.entries || [])
       .filter((entry) => !state.hiddenStatuses.has(entry.status))
       .filter((entry) => ids.has(entryUserId(entry)))
+      .filter((entry) => entryMatchesKeyword(state, entry))
+      .filter((entry) => entryMatchesCalendarFilter(state, entry))
       .filter((entry) => entryOverlapsRange(entry, range))
       .sort((a, b) => {
         return entryStartIso(a).localeCompare(entryStartIso(b)) ||
@@ -166,32 +205,35 @@
       .join('') || '?';
   }
 
-  function renderStatusFilters(state) {
-    const hiddenStatuses = state.hiddenStatuses || new Set();
-    return Object.keys(window.CalendarState.STATUS_META).map((status) => {
-      const meta = window.CalendarState.STATUS_META[status];
-      const hidden = hiddenStatuses.has(status);
-      return `
-        <button class="filter-chip ${hidden ? 'is-muted' : 'is-active'}" type="button" data-status-filter="${escapeHtml(status)}" aria-pressed="${hidden ? 'false' : 'true'}">
-          <span class="status-dot" style="--status-color:${escapeHtml(meta.color)}" aria-hidden="true"></span>
-          ${escapeHtml(meta.label)}
-        </button>
-      `;
-    }).join('');
-  }
-
   function renderToolbar(state) {
-    const selected = selectedPerson(state);
     return `
       <div class="roster-toolbar">
-        <input class="schedule-search" type="search" placeholder="Search names, roles, or NMLS" value="${escapeHtml(state.search || '')}" aria-label="Search names, roles, or NMLS">
-        ${selected ? `
-          <button class="selected-person-chip" type="button" data-roster-clear-person>
-            Viewing ${escapeHtml(selected.name)}
-            <span aria-hidden="true">&times;</span>
-          </button>
-        ` : ''}
+        <input class="schedule-search" type="search" placeholder="Keyword search" value="${escapeHtml(state.search || '')}" aria-label="Keyword search">
+        <select class="user-filter" data-user-filter aria-label="Filter by employee">
+          ${renderUserFilterOptions(state)}
+        </select>
       </div>
+    `;
+  }
+
+  function personFilterLabel(person) {
+    const nmls = person.nmls_number ? ` - NMLS ${person.nmls_number}` : '';
+    return `${person.name || person.email || `Employee ${person.id}`}${nmls}`;
+  }
+
+  function renderUserFilterOptions(state) {
+    const selectedUserId = String(state.selectedUserId || '');
+    const people = (state.peopleDirectory && state.peopleDirectory.length ? state.peopleDirectory : state.people || [])
+      .slice()
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+    return `
+      <option value="" ${selectedUserId ? '' : 'selected'}>All Employees</option>
+      ${people.map((person) => `
+        <option value="${escapeHtml(person.id)}" ${selectedUserId === String(person.id) ? 'selected' : ''}>
+          ${escapeHtml(personFilterLabel(person))}
+        </option>
+      `).join('')}
     `;
   }
 
@@ -378,7 +420,7 @@
       out: entries.filter((entry) => entry.status === 'out').length,
       remote: entries.filter((entry) => entry.status === 'remote').length,
       traveling: entries.filter((entry) => entry.status === 'traveling').length,
-      meetings: entries.filter((entry) => entry.status === 'meeting_event' || entry.status === 'busy').length,
+      meetings: entries.filter((entry) => entry.status === 'meeting_event' || entry.status === 'busy' || entry.status === 'bday').length,
     };
     return `
       <div class="day-overview">
@@ -391,7 +433,7 @@
             <span><b>${counts.out}</b> Out</span>
             <span><b>${counts.remote}</b> Remote</span>
             <span><b>${counts.traveling}</b> Traveling</span>
-            <span><b>${counts.meetings}</b> Meetings/Busy</span>
+            <span><b>${counts.meetings}</b> Events/Busy</span>
           </div>
         </aside>
         <section class="day-entry-panel">
@@ -544,8 +586,8 @@
     if (search) {
       search.addEventListener('input', (event) => actions.setSearch(event.target.value));
     }
-    root.querySelectorAll('[data-roster-clear-person]').forEach((button) => {
-      button.addEventListener('click', () => actions.setSelectedUser(null));
+    root.querySelectorAll('[data-user-filter]').forEach((select) => {
+      select.addEventListener('change', () => actions.setSelectedUser(select.value || null));
     });
     root.querySelectorAll('.person-card[data-user-id]').forEach((card) => {
       const activate = () => selectPerson(card.dataset.userId);

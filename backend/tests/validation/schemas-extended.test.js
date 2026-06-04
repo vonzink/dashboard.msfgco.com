@@ -171,6 +171,16 @@ describe('scheduleEntry schema', () => {
     expect(scheduleEntry.safeParse({ ...valid, status: 'pto' }).success).toBe(false);
   });
 
+  it('accepts B-Day schedule entries', () => {
+    const result = scheduleEntry.safeParse({
+      ...valid,
+      status: 'bday',
+      note: 'Birthday lunch',
+    });
+
+    expect(result.success).toBe(true);
+  });
+
   it('rejects an end date before the start date', () => {
     const result = scheduleEntry.safeParse({
       ...valid,
@@ -216,6 +226,10 @@ describe('scheduleEntryUpdate schema', () => {
     expect(scheduleEntryUpdate.safeParse({ status: 'remote' }).success).toBe(true);
   });
 
+  it('accepts B-Day status updates', () => {
+    expect(scheduleEntryUpdate.safeParse({ status: 'bday' }).success).toBe(true);
+  });
+
   it('does not apply create defaults to partial updates', () => {
     const result = scheduleEntryUpdate.safeParse({ status: 'remote' });
     expect(result.success).toBe(true);
@@ -247,7 +261,7 @@ describe('scheduleEntryQuery schema', () => {
       start_date: '2026-06-01',
       end_date: '2026-06-30',
       user_id: '7',
-      status: 'busy',
+      status: 'bday',
       source: 'outlook',
     });
     expect(result.success).toBe(true);

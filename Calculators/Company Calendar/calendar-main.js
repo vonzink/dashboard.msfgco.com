@@ -272,6 +272,18 @@
       else state.hiddenStatuses.add(status);
       CalendarRender.render(app, state, actions);
     },
+    toggleCalendarFilter(key) {
+      if (!key) return;
+      const selected = state.selectedCalendarKeys || new Set();
+      if (selected.has(key)) selected.delete(key);
+      else selected.add(key);
+      state.selectedCalendarKeys = selected;
+      CalendarRender.render(app, state, actions);
+    },
+    clearCalendarFilters() {
+      state.selectedCalendarKeys = new Set();
+      CalendarRender.render(app, state, actions);
+    },
     openEditor(entry) {
       if (state.editorSaving) return;
       if (entry && !isEditableEntry(entry)) {

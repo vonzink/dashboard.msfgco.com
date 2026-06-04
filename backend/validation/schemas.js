@@ -200,7 +200,7 @@ const scheduleViewer = z.object({
   name: optionalString(255),
 }).strict();
 
-const scheduleStatuses = ['out', 'remote', 'traveling', 'meeting_event', 'other', 'busy'];
+const scheduleStatuses = ['out', 'remote', 'traveling', 'meeting_event', 'busy', 'bday', 'other'];
 const scheduleSources = ['manual', 'outlook', 'google'];
 const scheduleVisibility = ['availability_only', 'shared_details'];
 

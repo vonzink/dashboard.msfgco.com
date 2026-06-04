@@ -253,7 +253,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 CREATE TABLE IF NOT EXISTS schedule_entries (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    status ENUM('out','remote','traveling','meeting_event','other','busy') NOT NULL,
+    status ENUM('out','remote','traveling','meeting_event','busy','bday','other') NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
     start_time TIME NULL,

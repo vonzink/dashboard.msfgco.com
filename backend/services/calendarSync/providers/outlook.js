@@ -10,6 +10,7 @@ const OUTLOOK_CATEGORY_BY_STATUS = {
   out: 'MSFG Out',
   remote: 'MSFG Remote',
   traveling: 'MSFG Traveling',
+  bday: 'MSFG B-Day',
   other: 'MSFG Other',
 };
 

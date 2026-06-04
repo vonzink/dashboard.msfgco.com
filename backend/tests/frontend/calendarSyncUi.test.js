@@ -183,6 +183,181 @@ describe('calendar editor enhanced fields', () => {
   });
 });
 
+describe('calendar categories and filtering', () => {
+  it('renders B-Day as a supported status in filters, event chips, and the editor', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-roster.js', 'calendar-editor.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.peopleDirectory = [{ id: 10, name: 'Zachary Zink', role: 'Loan Officer' }];
+    state.people = state.peopleDirectory;
+    state.entries = [{
+      id: 70,
+      user_id: 10,
+      employee_name: 'Zachary Zink',
+      status: 'bday',
+      start_date: '2026-06-12',
+      end_date: '2026-06-12',
+      visibility: 'shared_details',
+      source: 'manual',
+    }];
+    state.editor = state.entries[0];
+
+    expect(context.window.CalendarState.STATUS_META.bday.label).toBe('B-Day');
+    expect(context.window.CalendarRender.renderHeader(state)).toContain('data-status-filter="bday"');
+    expect(context.window.CalendarRoster.render(state)).toContain('data-status="bday"');
+    expect(context.window.CalendarRoster.render(state)).toContain('B-Day');
+    expect(context.window.CalendarEditor.render(state)).toContain('value="bday"');
+  });
+
+  it('uses the search box as an event keyword filter and the dropdown as the employee filter', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.peopleDirectory = [
+      { id: 10, name: 'Zachary Zink', role: 'Loan Officer', nmls_number: '451924' },
+      { id: 11, name: 'Mike Wilson', role: 'Loan Officer', nmls_number: '248560' },
+    ];
+    state.people = state.peopleDirectory;
+    state.entries = [
+      {
+        id: 71,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Client review',
+        visibility: 'shared_details',
+      },
+      {
+        id: 72,
+        user_id: 11,
+        employee_name: 'Mike Wilson',
+        status: 'bday',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Birthday lunch',
+        visibility: 'shared_details',
+      },
+    ];
+
+    const toolbarHtml = context.window.CalendarRoster.render(state);
+    expect(toolbarHtml).toContain('placeholder="Keyword search"');
+    expect(toolbarHtml).toContain('data-user-filter');
+    expect(toolbarHtml).toContain('All Employees');
+
+    state.search = 'birthday';
+    const keywordHtml = context.window.CalendarRoster.render(state);
+    expect(keywordHtml).toContain('Birthday lunch');
+    expect(keywordHtml).not.toContain('Client review');
+
+    state.search = '';
+    state.selectedUserId = 10;
+    const userHtml = context.window.CalendarRoster.render(state);
+    expect(userHtml).toContain('Client review');
+    expect(userHtml).not.toContain('Birthday lunch');
+  });
+
+  it('renders synced calendar filter chips and filters one or multiple synced calendars', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.peopleDirectory = [
+      { id: 10, name: 'Zachary Zink', role: 'Loan Officer', nmls_number: '451924' },
+      { id: 11, name: 'Mike Wilson', role: 'Loan Officer', nmls_number: '248560' },
+    ];
+    state.people = state.peopleDirectory;
+    state.entries = [
+      {
+        id: 81,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Zachary Outlook item',
+        visibility: 'shared_details',
+        source: 'outlook',
+        source_provider: 'outlook',
+      },
+      {
+        id: 82,
+        user_id: 11,
+        employee_name: 'Mike Wilson',
+        status: 'busy',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Mike Outlook item',
+        visibility: 'shared_details',
+        source: 'outlook',
+        source_provider: 'outlook',
+      },
+      {
+        id: 83,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'other',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Manual company note',
+        visibility: 'shared_details',
+        source: 'manual',
+      },
+    ];
+
+    const headerHtml = context.window.CalendarRender.renderHeader(state);
+    expect(headerHtml).toContain('Calendar filters');
+    expect(headerHtml).toContain('data-calendar-filter="outlook:10"');
+    expect(headerHtml).toContain('data-calendar-filter="outlook:11"');
+    expect(headerHtml).toContain('Zachary Zink Outlook');
+    expect(headerHtml).toContain('Mike Wilson Outlook');
+
+    const defaultHtml = context.window.CalendarRoster.render(state);
+    expect(defaultHtml).toContain('Zachary Outlook item');
+    expect(defaultHtml).toContain('Mike Outlook item');
+    expect(defaultHtml).toContain('Manual company note');
+
+    state.selectedCalendarKeys = new Set(['outlook:11']);
+    const oneCalendarHtml = context.window.CalendarRoster.render(state);
+    expect(oneCalendarHtml).not.toContain('Zachary Outlook item');
+    expect(oneCalendarHtml).toContain('Mike Outlook item');
+    expect(oneCalendarHtml).not.toContain('Manual company note');
+
+    state.selectedCalendarKeys = new Set(['outlook:10', 'outlook:11']);
+    const multiCalendarHtml = context.window.CalendarRoster.render(state);
+    expect(multiCalendarHtml).toContain('Zachary Outlook item');
+    expect(multiCalendarHtml).toContain('Mike Outlook item');
+    expect(multiCalendarHtml).not.toContain('Manual company note');
+  });
+});
+
 describe('calendar view controls', () => {
   it('renders segmented view buttons for the supported calendar views', () => {
     const CalendarRender = loadCalendarRender();

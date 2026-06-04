@@ -18,6 +18,7 @@
   --status-traveling: #8254c9;
   --status-meeting-event: #1f8a6d;
   --status-busy: #d08a2c;
+  --status-bday: #d4578f;
   --status-other: #6b7280;
   --danger: #b34332;
   --row-h: 52px;
@@ -122,6 +123,7 @@ input {
 .nav-group,
 .view-tabs,
 .status-filters,
+.calendar-filters,
 .schedule-controls {
   display: flex;
   align-items: center;
@@ -781,6 +783,7 @@ input {
 .entry-bar[data-status="meeting_event"] { --entry-color: var(--status-meeting-event); }
 .entry-bar[data-status="other"] { --entry-color: var(--status-other); }
 .entry-bar[data-status="busy"] { --entry-color: var(--status-busy); }
+.entry-bar[data-status="bday"] { --entry-color: var(--status-bday); }
 
 .entry-bar:hover {
   filter: brightness(.94);
@@ -1004,6 +1007,7 @@ button.detail-entry:hover {
 .detail-status[data-status="meeting_event"] { background: var(--status-meeting-event); }
 .detail-status[data-status="other"] { background: var(--status-other); }
 .detail-status[data-status="busy"] { background: var(--status-busy); }
+.detail-status[data-status="bday"] { background: var(--status-bday); }
 
 .detail-entry-body {
   min-width: 0;
@@ -1682,7 +1686,8 @@ body.calendar-page {
   box-shadow: var(--shadow);
 }
 
-.status-filters {
+.status-filters,
+.calendar-filters {
   gap: 6px;
 }
 
@@ -1772,7 +1777,19 @@ body.calendar-page {
   background: var(--surface);
 }
 
+.user-filter {
+  width: min(280px, 100%);
+  height: 38px;
+  padding: 0 34px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .schedule-search:focus,
+.user-filter:focus,
 .schedule-editor input:focus,
 .schedule-editor select:focus,
 .schedule-editor textarea:focus {
@@ -2317,7 +2334,8 @@ button.detail-entry:hover {
     align-items: flex-start;
   }
 
-  .status-filters {
+  .status-filters,
+  .calendar-filters {
     flex-basis: 100%;
   }
 
@@ -2358,6 +2376,7 @@ button.detail-entry:hover {
 
   .nav-group,
   .view-tabs,
+  .calendar-filters,
   .schedule-controls {
     justify-content: flex-start;
     flex-wrap: wrap;

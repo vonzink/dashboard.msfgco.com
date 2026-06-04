@@ -5,8 +5,9 @@ const STATUS_LABELS = {
   remote: 'Remote',
   traveling: 'Traveling',
   meeting_event: 'Meeting/Event',
-  other: 'Unavailable',
   busy: 'Busy',
+  bday: 'B-Day',
+  other: 'Unavailable',
 };
 
 function entryViewers(entry) {

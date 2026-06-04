@@ -57,6 +57,48 @@
     return (entries || []).filter((entry) => entryOverlapsDate(entry, iso));
   }
 
+  function providerId(entry) {
+    const provider = String(entry.source_provider || entry.source || '').toLowerCase();
+    return ['outlook', 'google'].includes(provider) ? provider : '';
+  }
+
+  function providerLabel(provider) {
+    if (provider === 'google') return 'Google';
+    if (provider === 'outlook') return 'Outlook';
+    return 'Calendar';
+  }
+
+  function calendarKey(entry) {
+    const provider = providerId(entry);
+    const userId = String(entryUserId(entry) || '');
+    return provider && userId ? `${provider}:${userId}` : '';
+  }
+
+  function personForEntry(state, entry) {
+    const id = String(entryUserId(entry) || '');
+    return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === id) || null;
+  }
+
+  function calendarOptions(state) {
+    const byKey = new Map();
+    (state.entries || []).forEach((entry) => {
+      const key = calendarKey(entry);
+      if (!key || byKey.has(key)) return;
+      const provider = providerId(entry);
+      const person = personForEntry(state, entry);
+      const personName = person?.name || entryUserName(entry);
+      byKey.set(key, {
+        key,
+        label: `${personName} ${providerLabel(provider)}`,
+        provider,
+        personName,
+      });
+    });
+    return Array.from(byKey.values()).sort((a, b) => (
+      a.personName.localeCompare(b.personName) || a.provider.localeCompare(b.provider)
+    ));
+  }
+
   function monthLabel(state) {
     if (state.viewMode === 'year') return `${state.viewDate.getFullYear()}`;
     if (state.viewMode === 'two_months') {
@@ -103,6 +145,28 @@
     }).join('');
   }
 
+  function renderCalendarFilters(state) {
+    const options = calendarOptions(state);
+    if (!options.length) return '';
+    const selected = state.selectedCalendarKeys || new Set();
+    const allActive = selected.size === 0;
+    return `
+      <div class="calendar-filters" aria-label="Calendar filters">
+        <button class="filter-chip calendar-filter-chip ${allActive ? 'is-active' : ''}" type="button" data-calendar-filter-all aria-pressed="${allActive ? 'true' : 'false'}">
+          All Calendars
+        </button>
+        ${options.map((option) => {
+          const active = selected.has(option.key);
+          return `
+            <button class="filter-chip calendar-filter-chip ${active ? 'is-active' : 'is-muted'}" type="button" data-calendar-filter="${escapeHtml(option.key)}" aria-pressed="${active ? 'true' : 'false'}">
+              ${escapeHtml(option.label)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
   function renderHeader(state) {
     return `
       <header class="schedule-topbar">
@@ -123,6 +187,7 @@
         <div class="status-filters" aria-label="Status filters">
           ${renderStatusFilters(state)}
         </div>
+        ${renderCalendarFilters(state)}
         <div class="schedule-controls">
           ${window.CalendarSync ? window.CalendarSync.renderTrigger(state) : ''}
           <button class="primary-btn" type="button" data-cal-action="add" data-action="new-entry">Add Schedule</button>
@@ -225,6 +290,16 @@
     });
     root.querySelectorAll('[data-status-filter]').forEach((button) => {
       button.addEventListener('click', () => actions.toggleStatus(button.dataset.statusFilter));
+    });
+    root.querySelectorAll('[data-calendar-filter]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (actions.toggleCalendarFilter) actions.toggleCalendarFilter(button.dataset.calendarFilter);
+      });
+    });
+    root.querySelectorAll('[data-calendar-filter-all]').forEach((button) => {
+      button.addEventListener('click', () => {
+        if (actions.clearCalendarFilters) actions.clearCalendarFilters();
+      });
     });
   }
 
