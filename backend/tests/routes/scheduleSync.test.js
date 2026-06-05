@@ -291,6 +291,52 @@ describe('schedule sync routes', () => {
     }));
   });
 
+  it('returns admin sync overview with shared hidden private and total counts', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 1,
+          user_id: 7,
+          name: 'Test User',
+          email: 'user@msfg.us',
+          provider: 'outlook',
+          provider_account_email: 'user@msfg.us',
+          sync_enabled: 1,
+          sync_status: 'connected',
+          last_sync_at: '2026-06-05T14:00:00.000Z',
+          sync_error: null,
+        },
+      ]])
+      .mockResolvedValueOnce([[
+        {
+          user_id: 7,
+          provider: 'outlook',
+          shared_event_count: 3,
+          hidden_event_count: 2,
+          protected_event_count: 1,
+          total_synced_event_count: 6,
+        },
+      ]]);
+
+    const res = await makeRequest(app, '/api/schedule/sync/admin/status?start_date=2026-06-01&end_date=2026-06-30', {
+      headers: { 'x-test-user': 'admin' },
+    });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body).connections[0]).toEqual(expect.objectContaining({
+      user_id: 7,
+      provider: 'outlook',
+      shared_event_count: 3,
+      hidden_event_count: 2,
+      protected_event_count: 1,
+      total_synced_event_count: 6,
+    }));
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('COUNT(*) AS total_synced_event_count'),
+      ['2026-06-30', '2026-06-01']
+    );
+  });
+
   it('handles Outlook OAuth callback without app authentication', async () => {
     oauthState.consumeOAuthState.mockResolvedValueOnce({ id: 4, user_id: 7, provider: 'outlook' });
     outlookProvider.exchangeCodeForTokens.mockResolvedValueOnce({

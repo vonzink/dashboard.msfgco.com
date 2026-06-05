@@ -25,6 +25,19 @@ function getAdapter(provider) {
   return null;
 }
 
+function defaultSyncOverviewCounts() {
+  return {
+    shared_event_count: 0,
+    hidden_event_count: 0,
+    protected_event_count: 0,
+    total_synced_event_count: 0,
+  };
+}
+
+function syncOverviewKey(row) {
+  return `${row.user_id}:${row.provider}`;
+}
+
 async function disconnectProviderConnection(userId, provider) {
   const connection = await db.getConnection();
   try {
@@ -184,7 +197,7 @@ router.post('/run', validate(calendarSyncRun), async (req, res, next) => {
   }
 });
 
-router.get('/admin/status', requireManagerOrAdmin, async (_req, res, next) => {
+router.get('/admin/status', requireManagerOrAdmin, async (req, res, next) => {
   try {
     const result = await db.query(
       `SELECT c.id,
@@ -203,7 +216,44 @@ router.get('/admin/status', requireManagerOrAdmin, async (_req, res, next) => {
        ORDER BY c.sync_status DESC, u.name ASC, c.provider ASC`
     );
 
-    return res.json({ connections: getRows(result) || [] });
+    const connections = (getRows(result) || []).map((row) => ({
+      ...row,
+      ...defaultSyncOverviewCounts(),
+    }));
+
+    if (req.query.start_date && req.query.end_date) {
+      const overviewResult = await db.query(
+        `SELECT se.user_id,
+                se.source_provider AS provider,
+                SUM(CASE WHEN se.visibility = 'shared_details' THEN 1 ELSE 0 END) AS shared_event_count,
+                SUM(CASE WHEN se.visibility <> 'shared_details' THEN 1 ELSE 0 END) AS hidden_event_count,
+                SUM(CASE WHEN se.details_shareable = 0
+                          OR (se.provider_sensitivity IS NOT NULL AND se.provider_sensitivity <> 'normal')
+                         THEN 1 ELSE 0 END) AS protected_event_count,
+                COUNT(*) AS total_synced_event_count
+         FROM schedule_entries se
+         WHERE se.source_provider IS NOT NULL
+           AND se.source_event_id IS NOT NULL
+           AND se.start_date <= ?
+           AND se.end_date >= ?
+         GROUP BY se.user_id, se.source_provider`,
+        [req.query.end_date, req.query.start_date]
+      );
+      const overviewByConnection = new Map(
+        (getRows(overviewResult) || []).map((row) => [syncOverviewKey(row), {
+          shared_event_count: Number(row.shared_event_count) || 0,
+          hidden_event_count: Number(row.hidden_event_count) || 0,
+          protected_event_count: Number(row.protected_event_count) || 0,
+          total_synced_event_count: Number(row.total_synced_event_count) || 0,
+        }])
+      );
+
+      connections.forEach((connection) => {
+        Object.assign(connection, overviewByConnection.get(syncOverviewKey(connection)) || defaultSyncOverviewCounts());
+      });
+    }
+
+    return res.json({ connections });
   } catch (error) {
     return next(error);
   }

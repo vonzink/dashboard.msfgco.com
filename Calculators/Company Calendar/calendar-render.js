@@ -89,6 +89,33 @@
     return provider && userId ? `${provider}:${userId}` : '';
   }
 
+  function formatSyncDate(value) {
+    if (!value) return '';
+    return String(value).slice(0, 10);
+  }
+
+  function syncHealth(connection) {
+    const status = String(connection?.sync_status || 'connected').toLowerCase();
+    if (status === 'error') return 'error';
+    if (status === 'syncing') return 'syncing';
+    if (status === 'not_connected') return 'not-connected';
+    if (!connection?.last_sync_at) return 'connected';
+
+    const lastSync = new Date(connection.last_sync_at);
+    if (Number.isNaN(lastSync.getTime())) return 'connected';
+    const ageMs = Date.now() - lastSync.getTime();
+    return ageMs > 1000 * 60 * 60 * 24 * 7 ? 'stale' : 'connected';
+  }
+
+  function syncHealthLabel(connection) {
+    const health = syncHealth(connection);
+    if (health === 'error') return 'Error';
+    if (health === 'syncing') return 'Syncing';
+    if (health === 'stale') return 'Needs sync';
+    if (health === 'not-connected') return 'Not connected';
+    return 'Connected';
+  }
+
   function personForEntry(state, entry) {
     const id = String(entryUserId(entry) || '');
     return (state.peopleDirectory || state.people || []).find((person) => String(person.id) === id) || null;
@@ -137,6 +164,9 @@
         label: `${personName} ${providerLabel(provider)}`,
         provider,
         personName,
+        health: syncHealth(connection),
+        healthLabel: syncHealthLabel(connection),
+        lastSync: formatSyncDate(connection.last_sync_at),
       });
     });
     (state.entries || []).forEach((entry) => {
@@ -150,6 +180,9 @@
         label: `${personName} ${providerLabel(provider)}`,
         provider,
         personName,
+        health: 'connected',
+        healthLabel: 'Connected',
+        lastSync: '',
       });
     });
     return Array.from(byKey.values()).sort((a, b) => (
@@ -215,9 +248,15 @@
         </button>
         ${options.map((option) => {
           const active = selected.has(option.key);
+          const syncMeta = [
+            option.healthLabel,
+            option.lastSync ? `Last synced ${option.lastSync}` : '',
+          ].filter(Boolean).join(' - ');
           return `
-            <button class="filter-chip calendar-filter-chip ${active ? 'is-active' : 'is-muted'}" type="button" data-calendar-filter="${escapeHtml(option.key)}" aria-pressed="${active ? 'true' : 'false'}">
-              ${escapeHtml(option.label)}
+            <button class="filter-chip calendar-filter-chip ${active ? 'is-active' : 'is-muted'}" type="button" data-calendar-filter="${escapeHtml(option.key)}" aria-pressed="${active ? 'true' : 'false'}" title="${escapeHtml(`${option.label} - ${syncMeta}`)}">
+              <span class="sync-health is-${escapeHtml(option.health)}" aria-label="${escapeHtml(syncMeta)}"></span>
+              <span>${escapeHtml(option.label)}</span>
+              ${option.lastSync ? `<small class="sync-last">Last synced ${escapeHtml(option.lastSync)}</small>` : ''}
             </button>
           `;
         }).join('')}
@@ -376,6 +415,7 @@
       ${renderHeader(state, actions)}
       ${renderSummary(state)}
       ${window.CalendarRoster ? window.CalendarRoster.render(state) : ''}
+      ${window.CalendarPanels ? window.CalendarPanels.render(state) : ''}
       ${window.CalendarDetail ? window.CalendarDetail.render(state) : ''}
       ${window.CalendarEditor ? window.CalendarEditor.render(state) : ''}
       ${window.CalendarSync ? window.CalendarSync.render(state) : ''}
@@ -383,6 +423,7 @@
 
     bindShellActions(root, state, actions);
     if (window.CalendarRoster) window.CalendarRoster.bind(root, state, actions);
+    if (window.CalendarPanels && window.CalendarPanels.bind) window.CalendarPanels.bind(root, state, actions);
     if (window.CalendarDetail && window.CalendarDetail.bind) window.CalendarDetail.bind(root, state, actions);
     if (window.CalendarEditor && window.CalendarEditor.bind) window.CalendarEditor.bind(root, state, actions);
     if (window.CalendarSync && window.CalendarSync.bind) window.CalendarSync.bind(root, state, actions);

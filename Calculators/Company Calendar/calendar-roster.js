@@ -147,6 +147,9 @@
   }
 
   function visibleEntries(state) {
+    if (window.CalendarFilters && window.CalendarFilters.visibleEntries) {
+      return window.CalendarFilters.visibleEntries(state);
+    }
     const ids = filteredPersonIds(state);
     const range = window.CalendarState.visibleRange(state);
     return (state.entries || [])
@@ -164,6 +167,9 @@
 
   function entriesForDay(state, day) {
     const iso = window.CalendarState.isoDate(day);
+    if (window.CalendarFilters && window.CalendarFilters.entriesForDate) {
+      return window.CalendarFilters.entriesForDate(state, iso);
+    }
     return visibleEntries(state).filter((entry) => entryOverlapsDate(entry, iso));
   }
 
@@ -247,22 +253,43 @@
     return entry.visibility === 'shared_details' ? 'is-shared-details' : 'is-hidden-details';
   }
 
-  function visibilityLabel(entry) {
-    return entry.visibility === 'shared_details' ? 'Shared' : 'Hidden';
+  function visibilityLabel(entry, state) {
+    if (window.CalendarFilters && window.CalendarFilters.entryPrivacyState) {
+      return window.CalendarFilters.entryPrivacyState(entry, state && state.me).label;
+    }
+    return entry.visibility === 'shared_details' ? 'Shared with Team' : 'Hidden from Team';
   }
 
   function barStyle(entry) {
     return `--entry-color:${escapeHtml(entryColor(entry))};`;
   }
 
-  function renderEntryPill(entry, compact) {
+  function renderDensityIndicators(entries) {
+    if (!entries.length) return '';
+    const dots = entries.slice(0, 3).map((entry) => (
+      `<i class="density-dot" style="--pip-color:${escapeHtml(entryColor(entry))}" aria-hidden="true"></i>`
+    )).join('');
+    const hasShared = entries.some((entry) => entry.visibility === 'shared_details' && !isPrivateEntry(entry));
+    const hasHidden = entries.some((entry) => entry.visibility !== 'shared_details' || isPrivateEntry(entry));
+    const privacy = hasShared && hasHidden ? '<span class="density-privacy" aria-label="Mixed shared and hidden entries"></span>' : '';
+    return `
+      <span class="day-density" title="${entries.length} visible entries">
+        <span class="density-dots">${dots}</span>
+        <b>${entries.length}</b>
+        ${privacy}
+      </span>
+    `;
+  }
+
+  function renderEntryPill(entry, compact, state) {
     const time = entryTimeLabel(entry);
+    const privacyLabel = visibilityLabel(entry, state);
     return `
       <button class="entry-bar ${compact ? 'is-compact' : ''} ${visibilityClass(entry)}" type="button" data-entry-id="${escapeHtml(entry.id)}" data-status="${escapeHtml(entry.status || 'other')}" style="${barStyle(entry)}" title="${escapeHtml(entryLabel(entry))}">
         ${compact ? '' : `<span class="entry-time">${escapeHtml(time)}</span>`}
         <span class="entry-name">${escapeHtml(entryLabel(entry))}</span>
         ${compact ? '' : `<span class="entry-person">${escapeHtml(entryUserName(entry))}</span>`}
-        ${compact ? '' : `<span class="entry-visibility">${escapeHtml(visibilityLabel(entry))}</span>`}
+        ${compact ? '' : `<span class="entry-visibility">${escapeHtml(privacyLabel)}</span>`}
       </button>
     `;
   }
@@ -278,14 +305,15 @@
     const hiddenCount = Math.max(entries.length - shown.length, 0);
 
     return `
-      <div class="${classes.join(' ')}" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" role="button" tabindex="0" aria-label="${escapeHtml(dayLabel(day))}">
+      <div class="${classes.join(' ')}" data-date="${window.CalendarState.isoDate(day)}" data-day-open="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" role="button" tabindex="0" aria-label="${escapeHtml(dayLabel(day))}">
         <div class="calendar-day-head">
           <span>${escapeHtml(window.CalendarState.DOW[day.getDay()])}</span>
           <strong>${day.getDate()}</strong>
         </div>
         <div class="calendar-day-entries">
-          ${shown.map((entry) => renderEntryPill(entry, options.compact)).join('')}
-          ${hiddenCount ? `<button class="day-more" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true">+${hiddenCount} more</button>` : ''}
+          ${shown.map((entry) => renderEntryPill(entry, options.compact, state)).join('')}
+          ${hiddenCount ? renderDensityIndicators(entries) : ''}
+          ${hiddenCount ? `<button class="day-more" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-open="${window.CalendarState.isoDate(day)}" data-day-drilldown="true">+${hiddenCount} more</button>` : ''}
         </div>
       </div>
     `;
@@ -359,8 +387,8 @@
             if (entries.length) classes.push('has-entries');
             if (isToday(state, day)) classes.push('is-today');
             if (isSelectedDate(state, day)) classes.push('is-selected');
-            const pips = entries.slice(0, 3).map((entry) => `<i style="--pip-color:${escapeHtml(entryColor(entry))}" aria-hidden="true"></i>`).join('');
-            return `<button class="${classes.join(' ')}" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" title="${escapeHtml(dayLabel(day))}: ${entries.length} entries"><span>${day.getDate()}</span>${pips ? `<span class="mini-pips">${pips}</span>` : ''}</button>`;
+            const density = entries.length ? renderDensityIndicators(entries) : '';
+            return `<button class="${classes.join(' ')}" type="button" data-date="${window.CalendarState.isoDate(day)}" data-day-open="${window.CalendarState.isoDate(day)}" data-day-drilldown="true" title="${escapeHtml(dayLabel(day))}: ${entries.length} entries"><span>${day.getDate()}</span>${density}</button>`;
           }).join('')}
         </div>
       </article>
@@ -444,7 +472,7 @@
             </div>
           </div>
           <div class="day-entry-list">
-            ${entries.length ? entries.map((entry) => renderEntryPill(entry, false)).join('') : '<p class="empty-roster">No visible entries for this day.</p>'}
+            ${entries.length ? entries.map((entry) => renderEntryPill(entry, false, state)).join('') : '<p class="empty-roster">No visible entries for this day.</p>'}
           </div>
         </section>
       </div>
@@ -563,9 +591,13 @@
     function drillDownToDay(date) {
       selectDate(date);
       if (
-        actions.setViewMode &&
+        actions.openDayDrawer &&
         ['month', 'two_months', 'year'].includes(state.viewMode)
       ) {
+        actions.openDayDrawer(date);
+        return;
+      }
+      if (actions.setViewMode) {
         actions.setViewMode('day');
       }
     }
@@ -602,7 +634,7 @@
       target.addEventListener('click', activate);
       target.addEventListener('keydown', (event) => activateOnKey(event, activate));
     });
-    root.querySelectorAll('[data-day-add]').forEach((button) => {
+    root.querySelectorAll('.roster-card [data-day-add]').forEach((button) => {
       button.addEventListener('click', () => {
         selectDate(button.dataset.dayAdd);
         if (actions.openEditor) actions.openEditor();

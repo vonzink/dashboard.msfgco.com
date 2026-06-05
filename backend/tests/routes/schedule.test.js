@@ -1031,6 +1031,204 @@ describe('schedule routes', () => {
     expect(db.query.mock.calls[2][0]).toContain('LEFT JOIN user_profiles p ON p.user_id = u.id');
   });
 
+  it('bulk updates visibility for owned shareable Outlook entries', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Client review',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          start_time: '09:00:00',
+          end_time: '10:00:00',
+          timezone: 'America/Denver',
+          note: 'Client review',
+          visibility: 'shared_details',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([[
+        {
+          id: 10,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'meeting_event',
+          start_date: '2026-06-02',
+          end_date: '2026-06-02',
+          start_time: '13:00:00',
+          end_time: '14:00:00',
+          timezone: 'America/Denver',
+          note: 'Team meeting',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-2',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[
+        {
+          id: 10,
+          user_id: 10,
+          employee_name: 'Employee User',
+          employee_initials: 'EU',
+          employee_role: 'employee',
+          status: 'meeting_event',
+          start_date: '2026-06-02',
+          end_date: '2026-06-02',
+          start_time: '13:00:00',
+          end_time: '14:00:00',
+          timezone: 'America/Denver',
+          note: 'Team meeting',
+          visibility: 'shared_details',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-2',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/visibility/bulk', {
+      entry_ids: [9, 10],
+      visibility: 'shared_details',
+    }, {}, 'PATCH');
+
+    expect(res.status).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.failures).toEqual([]);
+    expect(body.updated_entries).toEqual([
+      expect.objectContaining({ id: 9, visibility: 'shared_details', private: false }),
+      expect.objectContaining({ id: 10, visibility: 'shared_details', private: false }),
+    ]);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET visibility = ?'),
+      ['shared_details', 10, 9]
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('SET visibility = ?'),
+      ['shared_details', 10, 10]
+    );
+  });
+
+  it('reports blocked private and non-owned entries during bulk visibility updates', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          visibility: 'availability_only',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([[
+        {
+          id: 9,
+          user_id: 10,
+          employee_name: 'Employee User',
+          status: 'busy',
+          start_date: '2026-06-01',
+          end_date: '2026-06-01',
+          visibility: 'shared_details',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-1',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([[
+        {
+          id: 11,
+          user_id: 10,
+          status: 'busy',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-private',
+          details_shareable: 0,
+          provider_sensitivity: 'private',
+        },
+      ]])
+      .mockResolvedValueOnce([[
+        {
+          id: 12,
+          user_id: 99,
+          status: 'busy',
+          source: 'outlook',
+          source_provider: 'outlook',
+          source_event_id: 'event-other',
+          details_shareable: 1,
+          provider_sensitivity: 'normal',
+        },
+      ]])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]]);
+
+    const res = await makeJsonRequest(app, '/api/schedule/entries/visibility/bulk', {
+      entry_ids: [9, 11, 12],
+      visibility: 'shared_details',
+    }, {}, 'PATCH');
+
+    expect(res.status).toBe(207);
+    const body = JSON.parse(res.body);
+    expect(body.updated_entries).toEqual([
+      expect.objectContaining({ id: 9, visibility: 'shared_details' }),
+    ]);
+    expect(body.failures).toEqual([
+      { id: 11, error: 'This Outlook event is private and cannot be shared.' },
+      { id: 12, error: "Only the connected calendar owner can change this event's sharing." },
+    ]);
+  });
+
   it('blocks non-owners from changing provider event sharing', async () => {
     db.query.mockResolvedValueOnce([[
       {
