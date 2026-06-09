@@ -1,0 +1,20 @@
+{
+  "name": "msfg-dashboard-ios",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Private iOS shell for the MSFG dashboard.",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "sync:ios": "npm run build && cap sync ios",
+    "open:ios": "cap open ios",
+    "doctor": "cap doctor"
+  },
+  "dependencies": {
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/ios": "^7.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0"
+  }
+}
