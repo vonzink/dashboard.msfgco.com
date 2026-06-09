@@ -19,7 +19,7 @@
 - Create `mobile/scripts/build.js`: copies `mobile/src/` into `mobile/www/` for Capacitor.
 - Create `mobile/README.md`: documents local build, Xcode open, Simulator run, and iPhone install notes.
 - Generate `mobile/package-lock.json`: locks installed Capacitor package versions.
-- Generate `mobile/ios/`: Xcode iOS project created by `npx cap add ios`.
+- Generate `mobile/ios/`: Xcode iOS project created by `npx cap add ios --packagemanager SPM`.
 
 Existing dashboard source files outside `mobile/` must not be edited in this first milestone.
 
@@ -212,7 +212,7 @@ Private iOS shell for personal MSFG dashboard use.
 cd mobile
 npm install
 npm run build
-npx cap add ios
+npx cap add ios --packagemanager SPM
 npm run sync:ios
 npm run open:ios
 ```
@@ -295,7 +295,7 @@ Run:
 
 ```bash
 cd mobile
-npx cap add ios
+npx cap add ios --packagemanager SPM
 ```
 
 Expected: command exits 0 and creates `mobile/ios/App/App.xcodeproj`.

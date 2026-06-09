@@ -8,7 +8,7 @@ Private iOS shell for personal MSFG dashboard use.
 cd mobile
 npm install
 npm run build
-npx cap add ios
+npx cap add ios --packagemanager SPM
 npm run sync:ios
 npm run open:ios
 ```
@@ -31,3 +31,14 @@ npm run open:ios
 ## Current Scope
 
 This first shell proof loads `https://dashboard.msfgco.com` from the Capacitor config. Secure native Cognito auth, Keychain token storage, bundled dashboard assets, and mobile UI fixes are later milestones.
+
+## Verified Locally
+
+- `npm run build`
+- `npm run doctor`
+- `npx cap add ios --packagemanager SPM`
+- `npm run sync:ios`
+- `xcodebuild -list -project mobile/ios/App/App.xcodeproj`
+- `xcodebuild -project mobile/ios/App/App.xcodeproj -scheme App -configuration Debug -destination 'generic/platform=iOS Simulator' build`
+
+This project uses Swift Package Manager for Capacitor iOS dependencies, so CocoaPods is not required for the current shell proof.
