@@ -15,14 +15,14 @@ npm run open:ios
 
 ## Xcode Simulator
 
-1. Open `mobile/ios/App/App.xcworkspace`.
+1. Open `mobile/ios/App/App.xcodeproj`.
 2. Select an iPhone simulator.
 3. Press Run.
 
 ## iPhone Install
 
 1. Connect the iPhone to the Mac and trust the computer.
-2. Open `mobile/ios/App/App.xcworkspace`.
+2. Open `mobile/ios/App/App.xcodeproj`.
 3. Select the physical iPhone as the run target.
 4. In Xcode, set the signing team for the `App` target.
 5. Press Run.

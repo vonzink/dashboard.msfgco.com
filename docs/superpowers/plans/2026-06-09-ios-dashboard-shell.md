@@ -53,11 +53,12 @@ Create `mobile/package.json`:
     "doctor": "cap doctor"
   },
   "dependencies": {
-    "@capacitor/core": "^7.0.0",
-    "@capacitor/ios": "^7.0.0"
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/ios": "^8.4.0"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7.0.0"
+    "@capacitor/cli": "^8.4.0",
+    "typescript": "^6.0.3"
   }
 }
 ```
@@ -218,14 +219,14 @@ npm run open:ios
 
 ## Xcode Simulator
 
-1. Open `mobile/ios/App/App.xcworkspace`.
+1. Open `mobile/ios/App/App.xcodeproj`.
 2. Select an iPhone simulator.
 3. Press Run.
 
 ## iPhone Install
 
 1. Connect the iPhone to the Mac and trust the computer.
-2. Open `mobile/ios/App/App.xcworkspace`.
+2. Open `mobile/ios/App/App.xcodeproj`.
 3. Select the physical iPhone as the run target.
 4. In Xcode, set the signing team for the `App` target.
 5. Press Run.
@@ -297,7 +298,7 @@ cd mobile
 npx cap add ios
 ```
 
-Expected: command exits 0 and creates `mobile/ios/App/App.xcworkspace`.
+Expected: command exits 0 and creates `mobile/ios/App/App.xcodeproj`.
 
 - [ ] **Step 4: Sync web assets into iOS**
 
@@ -315,7 +316,7 @@ Expected: command exits 0 and copies `mobile/www/` assets into the iOS project.
 Run:
 
 ```bash
-xcodebuild -list -workspace mobile/ios/App/App.xcworkspace
+xcodebuild -list -project mobile/ios/App/App.xcodeproj
 ```
 
 Expected: output includes scheme `App`.
@@ -354,7 +355,7 @@ Run:
 
 ```bash
 xcodebuild \
-  -workspace mobile/ios/App/App.xcworkspace \
+  -project mobile/ios/App/App.xcodeproj \
   -scheme App \
   -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
@@ -390,8 +391,8 @@ Append a `Verified Locally` section to `mobile/README.md`:
 
 - `npm run build`
 - `npm run sync:ios`
-- `xcodebuild -list -workspace mobile/ios/App/App.xcworkspace`
-- `xcodebuild -workspace mobile/ios/App/App.xcworkspace -scheme App -configuration Debug -destination 'generic/platform=iOS Simulator' build`
+- `xcodebuild -list -project mobile/ios/App/App.xcodeproj`
+- `xcodebuild -project mobile/ios/App/App.xcodeproj -scheme App -configuration Debug -destination 'generic/platform=iOS Simulator' build`
 ```
 
 - [ ] **Step 2: Commit documentation update**
