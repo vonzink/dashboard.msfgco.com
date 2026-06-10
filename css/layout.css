@@ -525,6 +525,82 @@
     }
 }
 
+@media (max-width: 700px) {
+    .header {
+        padding-top: env(safe-area-inset-top, 0px);
+    }
+
+    .header-top {
+        gap: 0.5rem;
+        padding: 0.55rem 0.65rem;
+    }
+
+    .logo {
+        height: 34px;
+        max-width: 96px;
+        object-fit: contain;
+    }
+
+    .header-right {
+        gap: 0.35rem;
+        min-width: 0;
+        max-width: calc(100vw - 116px);
+        margin-left: auto;
+    }
+
+    .header-utils {
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .header-util-btn {
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        padding: 0;
+        font-size: 0.85rem;
+        flex: 0 0 32px;
+    }
+
+    .header-divider {
+        display: none;
+    }
+
+    .user-info {
+        gap: 0;
+        flex: 0 0 auto;
+    }
+
+    .user-info > div:not(.user-avatar):not(.role-switcher) {
+        display: none;
+    }
+
+    .user-avatar,
+    .theme-toggle {
+        width: 32px;
+        height: 32px;
+        font-size: 0.78rem;
+        border-radius: var(--radius-md);
+        flex: 0 0 32px;
+    }
+
+    .theme-toggle {
+        font-size: 0.9rem;
+    }
+
+    .nav-container {
+        padding: 0 0.65rem;
+    }
+
+    .main-content {
+        padding: 0.75rem;
+        padding-bottom: 5rem;
+        gap: 0.875rem;
+        width: 100%;
+        min-width: 0;
+    }
+}
+
 /* ========================================
    FOOTER
 ======================================== */
@@ -572,4 +648,10 @@
 
 .footer .link-item:hover {
     text-decoration: underline;
+}
+
+@media (max-width: 700px) {
+    .footer {
+        padding: 1.5rem 1rem calc(6rem + env(safe-area-inset-bottom, 0px));
+    }
 }

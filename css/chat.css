@@ -925,10 +925,15 @@
 }
 
 @media (max-width: 480px) {
+    .chat-fab {
+        right: 1rem;
+        bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+    }
+
     .chat-float-panel {
         width: calc(100vw - 2rem);
         right: 1rem;
-        bottom: 4.5rem;
+        bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
         height: 60vh;
     }
 }

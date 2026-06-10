@@ -592,6 +592,19 @@
     .news-carousel .news-card {
         min-width: 240px;
     }
+
+    .news-filter-tabs {
+        max-width: 100%;
+        gap: 0.3rem;
+        padding-bottom: 0.75rem;
+        scroll-padding-inline: 0.25rem;
+        overscroll-behavior-x: contain;
+    }
+
+    .news-tab {
+        padding: 0.35rem 0.75rem;
+        font-size: 0.74rem;
+    }
 }
 
 /* ========================================

@@ -368,3 +368,57 @@
         padding: 0.75rem;
     }
 }
+
+@media (max-width: 700px) {
+    .table-responsive,
+    .table-scroll {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+    }
+
+    .data-table {
+        width: max-content;
+        min-width: 100%;
+        font-size: 0.78rem;
+    }
+
+    .data-table th,
+    .data-table td,
+    #pipelineTable th,
+    #pipelineTable td,
+    #preApprovalsTable th,
+    #preApprovalsTable td,
+    #fundedLoansTable th,
+    #fundedLoansTable td {
+        padding: 0.55rem 0.65rem;
+    }
+
+    .sync-status-bar {
+        align-items: flex-start;
+        line-height: 1.35;
+    }
+
+    #pipelineSection .section-actions {
+        width: 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    #pipelineSection .search-input {
+        width: 100%;
+        flex: 1 1 100%;
+    }
+
+    #pipelineSection .filter-select {
+        min-width: 0;
+        flex: 1 1 150px;
+    }
+
+    .empty-state,
+    .empty-state-enhanced {
+        white-space: normal;
+    }
+}

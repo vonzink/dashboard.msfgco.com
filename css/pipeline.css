@@ -33,6 +33,29 @@
     color: var(--green-forest);
 }
 
+@media (max-width: 700px) {
+    .funded-summary-bar {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.85rem;
+    }
+
+    .funded-stat {
+        min-width: 0;
+        flex: 1 1 120px;
+    }
+
+    .funded-stat-label {
+        font-size: 0.68rem;
+        line-height: 1.25;
+    }
+
+    .funded-stat-value {
+        font-size: 1.15rem;
+        line-height: 1.2;
+    }
+}
+
 /* ── Performance Snapshot Gauges ── */
 .gauges-grid {
     display: grid;

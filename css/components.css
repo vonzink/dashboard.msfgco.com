@@ -95,6 +95,71 @@
     opacity: 0;
 }
 
+@media (max-width: 700px) {
+    .section-card {
+        border-radius: var(--radius-lg);
+        min-width: 0;
+    }
+
+    .section-header {
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+
+    .section-title {
+        min-width: 0;
+        flex: 1 1 0;
+        font-size: 1rem;
+        line-height: 1.2;
+    }
+
+    .section-title i {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        flex: 0 0 32px;
+    }
+
+    .section-actions {
+        flex: 0 1 auto;
+        max-width: 100%;
+        min-width: 0;
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    #pipelineSection .section-actions,
+    #fundedLoansSection .section-actions {
+        width: 100%;
+        flex-basis: 100%;
+    }
+
+    .section-actions .filter-select,
+    .section-actions .search-input {
+        width: auto;
+        max-width: 100%;
+        min-width: 0;
+        flex: 1 1 140px;
+    }
+
+    .section-actions .btn,
+    .section-actions .section-collapse-btn {
+        flex: 0 0 auto;
+    }
+
+    .section-collapse-btn {
+        margin-left: 0;
+    }
+
+    .section-body {
+        padding: 1rem;
+        min-width: 0;
+    }
+}
+
 /* ── Collapse Toggle Button ── */
 .section-collapse-btn {
     background: transparent;
@@ -111,6 +176,12 @@
     flex-shrink: 0;
     order: 99; /* push to end of section-actions */
     margin-left: var(--spacing-sm);
+}
+
+@media (max-width: 700px) {
+    .section-collapse-btn {
+        margin-left: 0;
+    }
 }
 
 .section-collapse-btn:hover {
