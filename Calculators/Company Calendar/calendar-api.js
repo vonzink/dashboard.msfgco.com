@@ -53,6 +53,14 @@
         ...(Array.isArray(viewers) ? { viewers } : {}),
       }),
     }),
+    updateEntryVisibilityBulk: (entryIds, visibility, viewers) => request('/schedule/entries/visibility/bulk', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        entry_ids: entryIds,
+        visibility,
+        viewers: Array.isArray(viewers) ? viewers : [],
+      }),
+    }),
     deleteEntry: (id) => request(`/schedule/entries/${id}`, { method: 'DELETE' }),
     getSyncStatus: () => request('/schedule/sync/status'),
     startSyncConnection: (provider, payload) => request(`/schedule/sync/connections/${encodeURIComponent(provider)}/start`, {
@@ -66,6 +74,6 @@
     disconnectSyncConnection: (provider) => request(`/schedule/sync/connections/${encodeURIComponent(provider)}/disconnect`, {
       method: 'POST',
     }),
-    getAdminSyncStatus: () => request('/schedule/sync/admin/status'),
+    getAdminSyncStatus: (params) => request(`/schedule/sync/admin/status${toQuery(params)}`),
   };
 })();

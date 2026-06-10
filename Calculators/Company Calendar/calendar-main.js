@@ -94,6 +94,12 @@
     return me.id || me.user_id || me.userId || me.employee_id || me.employeeId || '';
   }
 
+  function isAdminUser() {
+    const role = String(state.me?.role || state.me?.user_role || '').toLowerCase();
+    const groups = Array.isArray(state.me?.groups) ? state.me.groups.map((group) => String(group).toLowerCase()) : [];
+    return role === 'admin' || role === 'manager' || groups.includes('admin') || groups.includes('manager');
+  }
+
   function selectedIsoDate() {
     return CalendarState.isoDate(state.selectedDate || state.today || new Date());
   }
@@ -229,10 +235,94 @@
     openSyncSettings() {
       state.syncSettingsOpen = true;
       CalendarRender.render(app, state, actions);
+      if (isAdminUser()) actions.loadAdminSyncOverview();
     },
     closeSyncSettings() {
       state.syncSettingsOpen = false;
       CalendarRender.render(app, state, actions);
+    },
+    async loadAdminSyncOverview() {
+      if (!isAdminUser() || state.adminSyncLoading) return;
+      state.adminSyncLoading = true;
+      state.adminSyncError = null;
+      CalendarRender.render(app, state, actions);
+      try {
+        const result = await CalendarApi.getAdminSyncStatus(CalendarState.visibleRange(state));
+        state.adminSyncOverview = result.connections || [];
+        state.adminSyncLoading = false;
+        state.adminSyncError = null;
+      } catch (err) {
+        state.adminSyncOverview = [];
+        state.adminSyncLoading = false;
+        state.adminSyncError = err.message || 'Unable to load admin sync overview.';
+      }
+      CalendarRender.render(app, state, actions);
+    },
+    openDayDrawer(date, focusEntryId) {
+      const iso = typeof date === 'string' ? date.slice(0, 10) : CalendarState.isoDate(date || state.selectedDate || new Date());
+      state.drawerDate = iso;
+      state.drawerFocusEntryId = focusEntryId || null;
+      state.sidePanelMode = 'day';
+      state.selectedDate = CalendarState.parseDate(iso);
+      CalendarRender.render(app, state, actions);
+    },
+    closeSidePanel() {
+      state.drawerDate = null;
+      state.drawerFocusEntryId = null;
+      state.sidePanelMode = null;
+      state.selectedBulkEntryIds = new Set();
+      CalendarRender.render(app, state, actions);
+    },
+    focusEntryInDrawer(entryId) {
+      state.drawerFocusEntryId = entryId || null;
+      const entry = (state.entries || []).find((item) => String(item.id) === String(entryId));
+      if (entry && isEditableEntry(entry)) {
+        actions.openEditor(entry);
+        return;
+      }
+      CalendarRender.render(app, state, actions);
+    },
+    toggleBulkEntry(entryId, checked) {
+      const selected = state.selectedBulkEntryIds || new Set();
+      const key = Number.isNaN(Number(entryId)) ? String(entryId) : Number(entryId);
+      const hasEntry = selected.has(key) || selected.has(String(entryId));
+      if (checked == null ? !hasEntry : checked) selected.add(key);
+      else {
+        selected.delete(key);
+        selected.delete(String(entryId));
+      }
+      state.selectedBulkEntryIds = selected;
+      CalendarRender.render(app, state, actions);
+    },
+    clearBulkSelection() {
+      state.selectedBulkEntryIds = new Set();
+      CalendarRender.render(app, state, actions);
+    },
+    async bulkUpdateVisibility(visibility, viewers) {
+      const selectedIds = Array.from(state.selectedBulkEntryIds || []);
+      if (!selectedIds.length) return;
+      try {
+        const result = await CalendarApi.updateEntryVisibilityBulk(selectedIds, visibility, viewers || []);
+        const updatedEntries = result.updated_entries || result.updatedEntries || [];
+        const updatedById = new Map(updatedEntries.map((entry) => [String(entry.id), entry]));
+        state.entries = (state.entries || []).map((entry) => updatedById.get(String(entry.id)) || entry);
+        updatedEntries.forEach((entry) => {
+          if (!(state.entries || []).some((item) => String(item.id) === String(entry.id))) {
+            state.entries.push(entry);
+          }
+        });
+        const successfulIds = new Set(updatedEntries.map((entry) => String(entry.id)));
+        state.selectedBulkEntryIds = new Set(selectedIds.filter((id) => !successfulIds.has(String(id))));
+        state.people = CalendarRender.derivePeople(state.entries);
+        CalendarRender.render(app, state, actions);
+        const failures = result.failures || [];
+        const message = failures.length
+          ? `${updatedEntries.length} updated, ${failures.length} blocked.`
+          : `${updatedEntries.length} events updated.`;
+        showToast(message, failures.length ? 'info' : 'success');
+      } catch (err) {
+        showToast(err.message || 'Unable to update selected events.', 'error');
+      }
     },
     setSearch(value) {
       const active = document.activeElement;
@@ -240,6 +330,11 @@
       const selectionStart = shouldRestoreSearch ? active.selectionStart : null;
       const selectionEnd = shouldRestoreSearch ? active.selectionEnd : null;
       state.search = value;
+      if (String(value || '').trim()) {
+        state.sidePanelMode = 'search';
+      } else if (state.sidePanelMode === 'search') {
+        state.sidePanelMode = state.drawerDate ? 'day' : null;
+      }
       CalendarRender.render(app, state, actions);
       if (!shouldRestoreSearch) return;
       const search = app.querySelector('.schedule-search');

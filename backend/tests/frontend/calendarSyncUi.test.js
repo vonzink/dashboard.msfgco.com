@@ -70,6 +70,30 @@ function loadCalendarRender() {
   return context.window.CalendarRender;
 }
 
+function loadCalendarFilters() {
+  const context = { window: {} };
+  for (const file of ['calendar-state.js', 'calendar-filters.js']) {
+    const source = readFileSync(
+      resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+      'utf8'
+    );
+    vm.runInNewContext(source, context);
+  }
+  return context.window;
+}
+
+function loadCalendarPanels() {
+  const context = { window: {} };
+  for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-filters.js', 'calendar-panels.js']) {
+    const source = readFileSync(
+      resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+      'utf8'
+    );
+    vm.runInNewContext(source, context);
+  }
+  return context.window;
+}
+
 function loadCalendarDetail() {
   const context = { window: {} };
   for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-detail.js']) {
@@ -122,6 +146,140 @@ describe('calendar state view ranges', () => {
   });
 });
 
+describe('calendar shared filter helpers', () => {
+  it('filters visible entries by keyword employee status synced calendar and range', () => {
+    const { CalendarState, CalendarFilters } = loadCalendarFilters();
+    const state = CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.peopleDirectory = [
+      { id: 10, name: 'Zachary Zink', role: 'Loan Officer', nmls_number: '451924' },
+      { id: 11, name: 'Mike Wilson', role: 'Loan Officer', nmls_number: '248560' },
+      { id: 14, name: 'Robert Hoff', role: 'Loan Officer' },
+    ];
+    state.people = state.peopleDirectory;
+    state.entries = [
+      {
+        id: 101,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        start_time: '09:00:00',
+        note: 'Client review',
+        visibility: 'shared_details',
+        source: 'outlook',
+        source_provider: 'outlook',
+      },
+      {
+        id: 102,
+        user_id: 11,
+        employee_name: 'Mike Wilson',
+        status: 'bday',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        start_time: '12:00:00',
+        note: 'Birthday lunch',
+        visibility: 'shared_details',
+        source: 'outlook',
+        source_provider: 'outlook',
+      },
+      {
+        id: 103,
+        user_id: 14,
+        employee_name: 'Robert Hoff',
+        status: 'busy',
+        start_date: '2026-06-20',
+        end_date: '2026-06-20',
+        note: 'Pipeline review',
+        visibility: 'availability_only',
+        source: 'google',
+        source_provider: 'google',
+      },
+      {
+        id: 104,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'out',
+        start_date: '2026-07-04',
+        end_date: '2026-07-04',
+        note: 'Outside current range',
+        visibility: 'shared_details',
+        source: 'manual',
+      },
+    ];
+
+    expect(CalendarFilters.visibleEntries(state).map((entry) => entry.id)).toEqual([101, 102, 103]);
+
+    state.search = 'client';
+    expect(CalendarFilters.visibleEntries(state).map((entry) => entry.id)).toEqual([101]);
+
+    state.search = '';
+    state.selectedUserId = 11;
+    expect(CalendarFilters.visibleEntries(state).map((entry) => entry.id)).toEqual([102]);
+
+    state.selectedUserId = null;
+    state.hiddenStatuses.add('bday');
+    expect(CalendarFilters.visibleEntries(state).map((entry) => entry.id)).toEqual([101, 103]);
+
+    state.hiddenStatuses.clear();
+    state.selectedCalendarKeys = new Set(['outlook:11', 'google:14']);
+    expect(CalendarFilters.visibleEntries(state).map((entry) => entry.id)).toEqual([102, 103]);
+  });
+
+  it('returns date entries search results privacy state and bulk eligibility', () => {
+    const { CalendarState, CalendarFilters } = loadCalendarFilters();
+    const state = CalendarState.createState();
+    state.me = { id: 10 };
+    state.viewDate = new Date(2026, 5, 1);
+    state.entries = [
+      {
+        id: 201,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-12',
+        end_date: '2026-06-13',
+        start_time: '09:00:00',
+        note: 'Client planning',
+        visibility: 'shared_details',
+        viewers: [],
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: true,
+        provider_sensitivity: 'normal',
+      },
+      {
+        id: 202,
+        user_id: 11,
+        employee_name: 'Mike Wilson',
+        status: 'busy',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: null,
+        visibility: 'availability_only',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: false,
+        provider_sensitivity: 'private',
+      },
+    ];
+
+    expect(CalendarFilters.entriesForDate(state, '2026-06-13').map((entry) => entry.id)).toEqual([201]);
+
+    state.search = 'planning';
+    expect(CalendarFilters.searchResults(state).map((entry) => entry.id)).toEqual([201]);
+    expect(CalendarFilters.entryPrivacyState(state.entries[0], 10).label).toBe('Shared with Team');
+    expect(CalendarFilters.entryPrivacyState({ ...state.entries[0], viewers: [{ user_id: 11 }] }, 10).label).toBe('Shared with Selected People');
+    expect(CalendarFilters.entryPrivacyState(state.entries[1], 10).label).toBe('Private Provider Event');
+    expect(CalendarFilters.isBulkShareEligible(state.entries[0], 10)).toBe(true);
+    expect(CalendarFilters.isBulkShareEligible(state.entries[1], 10)).toBe(false);
+  });
+});
+
 describe('calendar API helpers', () => {
   it('sends imported event visibility updates to the schedule visibility endpoint', async () => {
     const calls = [];
@@ -141,6 +299,87 @@ describe('calendar API helpers', () => {
     expect(calls[0].options.method).toBe('PATCH');
     expect(JSON.parse(calls[0].options.body)).toEqual({ visibility: 'shared_details' });
     expect(typeof CalendarApi.getUserDirectory).toBe('function');
+  });
+
+  it('sends bulk imported event visibility updates to the bulk endpoint', async () => {
+    const calls = [];
+    const CalendarApi = loadCalendarApi(async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ success: true, updated_entries: [], failures: [] }),
+      };
+    });
+
+    await CalendarApi.updateEntryVisibilityBulk([9, 10], 'shared_details', [{ user_id: 12 }]);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://api.msfgco.com/api/schedule/entries/visibility/bulk');
+    expect(calls[0].options.method).toBe('PATCH');
+    expect(JSON.parse(calls[0].options.body)).toEqual({
+      entry_ids: [9, 10],
+      visibility: 'shared_details',
+      viewers: [{ user_id: 12 }],
+    });
+  });
+
+  it('requests admin sync status for the visible calendar range', async () => {
+    const calls = [];
+    const CalendarApi = loadCalendarApi(async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ connections: [] }),
+      };
+    });
+
+    await CalendarApi.getAdminSyncStatus({ start_date: '2026-06-01', end_date: '2026-06-30' });
+
+    expect(calls[0].url).toBe('https://api.msfgco.com/api/schedule/sync/admin/status?start_date=2026-06-01&end_date=2026-06-30');
+  });
+});
+
+describe('calendar admin sync overview UI', () => {
+  it('renders admin sync overview only for managers and admins', () => {
+    const CalendarSync = loadCalendarSync();
+    const adminState = {
+      syncSettingsOpen: true,
+      me: { id: 1, role: 'admin' },
+      syncConnections: [],
+      adminSyncOverview: [
+        {
+          user_id: 12,
+          name: 'Mike Wilson',
+          email: 'mike.wilson@msfg.us',
+          provider: 'outlook',
+          provider_account_email: 'mike.wilson@msfg.us',
+          sync_enabled: 1,
+          sync_status: 'connected',
+          last_sync_at: '2026-06-05T14:00:00.000Z',
+          sync_error: null,
+          shared_event_count: 4,
+          hidden_event_count: 7,
+          protected_event_count: 1,
+          total_synced_event_count: 12,
+        },
+      ],
+      adminSyncLoading: false,
+      adminSyncError: null,
+    };
+    const nonAdminState = {
+      ...adminState,
+      me: { id: 2, role: 'employee' },
+    };
+
+    const adminHtml = CalendarSync.render(adminState);
+    expect(adminHtml).toContain('Admin Sync Overview');
+    expect(adminHtml).toContain('hidden synced');
+    expect(adminHtml).toContain('Mike Wilson');
+    expect(adminHtml).toContain('connected');
+
+    expect(CalendarSync.render(nonAdminState)).not.toContain('Admin Sync Overview');
   });
 });
 
@@ -400,6 +639,222 @@ describe('calendar categories and filtering', () => {
   });
 });
 
+describe('calendar sync health and privacy labels', () => {
+  it('renders sync health indicators for synced calendar filter chips', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.teamSyncConnections = [
+      {
+        user_id: 12,
+        name: 'Mike Wilson',
+        provider: 'outlook',
+        sync_enabled: 1,
+        sync_status: 'connected',
+        last_sync_at: '2026-06-05T14:00:00.000Z',
+      },
+      {
+        user_id: 14,
+        name: 'Robert Hoff',
+        provider: 'outlook',
+        sync_enabled: 1,
+        sync_status: 'error',
+        last_sync_at: '2026-06-03T14:00:00.000Z',
+      },
+    ];
+
+    const headerHtml = context.window.CalendarRender.renderHeader(state);
+    expect(headerHtml).toContain('sync-health is-connected');
+    expect(headerHtml).toContain('sync-health is-error');
+    expect(headerHtml).toContain('Last synced');
+    expect(headerHtml).toContain('Mike Wilson Outlook');
+  });
+
+  it('renders explicit privacy badges on synced entries', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-filters.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.me = { id: 10 };
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.people = [
+      { id: 10, name: 'Zachary Zink' },
+      { id: 11, name: 'Mike Wilson' },
+    ];
+    state.entries = [
+      {
+        id: 301,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'busy',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        visibility: 'availability_only',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: true,
+        provider_sensitivity: 'normal',
+      },
+      {
+        id: 302,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-13',
+        end_date: '2026-06-13',
+        visibility: 'shared_details',
+        viewers: [],
+        note: 'Team review',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: true,
+        provider_sensitivity: 'normal',
+      },
+      {
+        id: 303,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'busy',
+        start_date: '2026-06-14',
+        end_date: '2026-06-14',
+        visibility: 'shared_details',
+        viewers: [{ user_id: 11, name: 'Mike Wilson' }],
+        note: 'Selected viewer review',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: true,
+        provider_sensitivity: 'normal',
+      },
+      {
+        id: 304,
+        user_id: 11,
+        employee_name: 'Mike Wilson',
+        status: 'busy',
+        start_date: '2026-06-15',
+        end_date: '2026-06-15',
+        visibility: 'availability_only',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: false,
+        provider_sensitivity: 'private',
+        private: true,
+      },
+    ];
+
+    const html = context.window.CalendarRoster.render(state);
+    expect(html).toContain('Hidden from Team');
+    expect(html).toContain('Shared with Team');
+    expect(html).toContain('Shared with Selected People');
+    expect(html).toContain('Private Provider Event');
+  });
+});
+
+describe('calendar side panels', () => {
+  it('renders a day drawer and search results panel from shared filters', () => {
+    const { CalendarState, CalendarPanels } = loadCalendarPanels();
+    const state = CalendarState.createState();
+    state.me = { id: 10 };
+    state.viewDate = new Date(2026, 5, 1);
+    state.drawerDate = '2026-06-12';
+    state.entries = [
+      {
+        id: 401,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        start_time: '09:00:00',
+        note: 'Client review',
+        visibility: 'shared_details',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: true,
+        provider_sensitivity: 'normal',
+      },
+    ];
+
+    const drawerHtml = CalendarPanels.render(state);
+    expect(drawerHtml).toContain('schedule-day-drawer');
+    expect(drawerHtml).toContain('data-day-add="2026-06-12"');
+    expect(drawerHtml).toContain('Client review');
+
+    state.search = 'client';
+    const searchHtml = CalendarPanels.render(state);
+    expect(searchHtml).toContain('schedule-search-panel');
+    expect(searchHtml).toContain('1 result');
+    expect(searchHtml).toContain('data-search-result="401"');
+  });
+
+  it('renders bulk controls only for eligible synced Outlook entries', () => {
+    const { CalendarState, CalendarPanels } = loadCalendarPanels();
+    const state = CalendarState.createState();
+    state.me = { id: 10 };
+    state.drawerDate = '2026-06-12';
+    state.selectedBulkEntryIds = new Set([501]);
+    state.entries = [
+      {
+        id: 501,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'meeting_event',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Eligible Outlook item',
+        visibility: 'availability_only',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: true,
+        provider_sensitivity: 'normal',
+      },
+      {
+        id: 502,
+        user_id: 10,
+        employee_name: 'Zachary Zink',
+        status: 'busy',
+        start_date: '2026-06-12',
+        end_date: '2026-06-12',
+        note: 'Private Outlook item',
+        visibility: 'availability_only',
+        source: 'outlook',
+        source_provider: 'outlook',
+        provider_owned: true,
+        details_shareable: false,
+        provider_sensitivity: 'private',
+      },
+    ];
+
+    const html = CalendarPanels.render(state);
+    expect(html).toContain('Bulk sharing');
+    expect(html).toContain('data-bulk-entry="501"');
+    expect(html).toContain('checked');
+    expect(html).toContain('data-bulk-entry-disabled="502"');
+    expect(html).toContain('data-bulk-visibility="shared_details"');
+    expect(html).toContain('data-bulk-visibility="availability_only"');
+  });
+});
+
 describe('calendar view controls', () => {
   it('renders segmented view buttons for the supported calendar views', () => {
     const CalendarRender = loadCalendarRender();
@@ -465,6 +920,48 @@ describe('calendar multi-day view rendering', () => {
   });
 });
 
+describe('calendar density indicators', () => {
+  it('renders compact density indicators without exposing private titles in year view', () => {
+    const context = { window: {} };
+    for (const file of ['calendar-state.js', 'calendar-render.js', 'calendar-filters.js', 'calendar-roster.js']) {
+      const source = readFileSync(
+        resolve(process.cwd(), `../Calculators/Company Calendar/${file}`),
+        'utf8'
+      );
+      vm.runInNewContext(source, context);
+    }
+
+    const state = context.window.CalendarState.createState();
+    state.viewDate = new Date(2026, 5, 1);
+    state.viewMode = 'month';
+    state.people = [{ id: 10, name: 'Zachary Zink' }];
+    state.entries = Array.from({ length: 7 }, (_, index) => ({
+      id: 600 + index,
+      user_id: 10,
+      employee_name: 'Zachary Zink',
+      status: index % 2 ? 'busy' : 'meeting_event',
+      start_date: '2026-06-12',
+      end_date: '2026-06-12',
+      note: index === 6 ? 'Private appointment title' : `Visible item ${index}`,
+      visibility: index === 6 ? 'availability_only' : 'shared_details',
+      private: index === 6,
+      source: index === 6 ? 'outlook' : 'manual',
+      source_provider: index === 6 ? 'outlook' : null,
+      provider_owned: index === 6,
+      details_shareable: index !== 6,
+      provider_sensitivity: index === 6 ? 'private' : 'normal',
+    }));
+
+    const monthHtml = context.window.CalendarRoster.render(state);
+    expect(monthHtml).toContain('day-density');
+
+    state.viewMode = 'year';
+    const yearHtml = context.window.CalendarRoster.render(state);
+    expect(yearHtml).toContain('density-dot');
+    expect(yearHtml).not.toContain('Private appointment title');
+  });
+});
+
 describe('calendar day drilldown controls', () => {
   it('marks month and year days as drilldown targets and renders a day add action', () => {
     const context = { window: {} };
@@ -480,7 +977,9 @@ describe('calendar day drilldown controls', () => {
     state.viewDate = new Date(2026, 5, 1);
     state.selectedDate = new Date(2026, 5, 12);
     state.viewMode = 'month';
-    expect(context.window.CalendarRoster.render(state)).toContain('data-day-drilldown="true"');
+    const monthHtml = context.window.CalendarRoster.render(state);
+    expect(monthHtml).toContain('data-day-drilldown="true"');
+    expect(monthHtml).toContain('data-day-open="2026-06-12"');
 
     state.viewMode = 'year';
     expect(context.window.CalendarRoster.render(state)).toContain('data-day-drilldown="true"');

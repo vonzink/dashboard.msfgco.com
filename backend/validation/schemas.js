@@ -310,6 +310,12 @@ const scheduleEntryVisibilityUpdate = z.object({
   viewers: z.array(scheduleViewer).max(100).optional(),
 }).strict();
 
+const scheduleEntryBulkVisibilityUpdate = z.object({
+  entry_ids: z.array(z.coerce.number().int().positive()).min(1).max(100),
+  visibility: z.enum(scheduleVisibility),
+  viewers: z.array(scheduleViewer).max(100).optional().default([]),
+}).strict();
+
 // ── Tasks ──────────────────────────────────
 const task = z.object({
   title: trimmedString(200),
@@ -609,6 +615,7 @@ module.exports = {
   scheduleEntryUpdate,
   scheduleEntryQuery,
   scheduleEntryVisibilityUpdate,
+  scheduleEntryBulkVisibilityUpdate,
   calendarSyncConnectionStart,
   calendarSyncRun,
   task,

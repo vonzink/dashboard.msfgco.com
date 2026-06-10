@@ -48,6 +48,12 @@
     return Boolean(connection && connection.sync_enabled && connection.sync_status !== 'not_connected');
   }
 
+  function isAdminUser(state) {
+    const role = String(state.me?.role || state.me?.user_role || '').toLowerCase();
+    const groups = Array.isArray(state.me?.groups) ? state.me.groups.map((group) => String(group).toLowerCase()) : [];
+    return role === 'admin' || role === 'manager' || groups.includes('admin') || groups.includes('manager');
+  }
+
   function renderProvider(state, provider) {
     const connection = providerStatus(state, provider.id);
     const connected = isConnected(connection);
@@ -103,6 +109,52 @@
     `;
   }
 
+  function renderAdminOverviewRow(connection) {
+    const provider = connection.provider === 'google' ? 'Google' : 'Outlook';
+    const lastSync = connection.last_sync_at ? String(connection.last_sync_at).slice(0, 10) : 'Never';
+    const status = connection.sync_status || 'not_connected';
+    return `
+      <div class="admin-sync-row">
+        <div class="admin-sync-person">
+          <strong>${escapeHtml(connection.name || connection.email || 'Employee')}</strong>
+          <small>${escapeHtml(connection.email || connection.provider_account_email || '')}</small>
+        </div>
+        <div class="admin-sync-meta">
+          <span>${escapeHtml(provider)}</span>
+          <span>${escapeHtml(status)}</span>
+          <span>Last synced ${escapeHtml(lastSync)}</span>
+        </div>
+        <div class="admin-sync-counts">
+          <span><b>${Number(connection.shared_event_count) || 0}</b> shared</span>
+          <span><b>${Number(connection.hidden_event_count) || 0}</b> hidden synced</span>
+          <span><b>${Number(connection.protected_event_count) || 0}</b> private</span>
+          <span><b>${Number(connection.total_synced_event_count) || 0}</b> total</span>
+        </div>
+        ${connection.sync_error ? `<span class="sync-error">${escapeHtml(connection.sync_error)}</span>` : ''}
+      </div>
+    `;
+  }
+
+  function renderAdminOverview(state) {
+    if (!isAdminUser(state)) return '';
+    const rows = state.adminSyncOverview || [];
+    return `
+      <section class="admin-sync-overview" aria-label="Admin sync overview">
+        <div class="admin-sync-head">
+          <div>
+            <p class="detail-eyebrow">Admin</p>
+            <h3>Admin Sync Overview</h3>
+          </div>
+          ${state.adminSyncLoading ? '<span class="sync-status-pill is-syncing">Loading</span>' : ''}
+        </div>
+        ${state.adminSyncError ? `<p class="sync-error">${escapeHtml(state.adminSyncError)}</p>` : ''}
+        <div class="admin-sync-list">
+          ${rows.length ? rows.map(renderAdminOverviewRow).join('') : '<p class="empty-detail">No synced company calendars in this range.</p>'}
+        </div>
+      </section>
+    `;
+  }
+
   function render(state) {
     if (!state.syncSettingsOpen) return '';
 
@@ -119,6 +171,7 @@
           <div class="sync-list">
             ${providers().map((provider) => renderProvider(state, provider)).join('')}
           </div>
+          ${renderAdminOverview(state)}
         </section>
       </div>
     `;

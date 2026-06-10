@@ -6,6 +6,7 @@ const {
   scheduleEntryUpdate,
   scheduleEntryQuery,
   scheduleEntryVisibilityUpdate,
+  scheduleEntryBulkVisibilityUpdate,
   validate,
   validateQuery,
 } = require('../validation/schemas');
@@ -308,6 +309,25 @@ function requireShareableProviderDetails(entry, visibility, res) {
   return false;
 }
 
+function bulkVisibilityError(entry, req, visibility) {
+  if (!entry) {
+    return 'Schedule entry not found';
+  }
+  if (!isProviderOwned(entry)) {
+    return 'Only connected calendar events can use this sharing control.';
+  }
+  if (entry.source_provider !== 'outlook') {
+    return `This schedule entry is managed in ${providerName(entry)}.`;
+  }
+  if (Number(entry.user_id) !== Number(getUserId(req))) {
+    return "Only the connected calendar owner can change this event's sharing.";
+  }
+  if (visibility === 'shared_details' && isProtectedProviderEntry(entry)) {
+    return `This ${providerName(entry)} event is private and cannot be shared.`;
+  }
+  return null;
+}
+
 function rejectUnsupportedEntryWriteFields(body, res) {
   if (Array.isArray(body.attendees) && body.attendees.length > 0) {
     res.status(400).json({
@@ -567,6 +587,45 @@ router.put('/entries/:id', validate(scheduleEntryUpdate), async (req, res, next)
     res.json({ success: true });
   } catch (error) {
     next(error);
+  }
+});
+
+router.patch('/entries/visibility/bulk', validate(scheduleEntryBulkVisibilityUpdate), async (req, res, next) => {
+  try {
+    const updatedRows = [];
+    const failures = [];
+    const viewerRows = req.body.visibility === 'shared_details' ? req.body.viewers : [];
+
+    for (const entryId of req.body.entry_ids) {
+      const existing = await fetchEntry(entryId);
+      const error = bulkVisibilityError(existing, req, req.body.visibility);
+      if (error) {
+        failures.push({ id: entryId, error });
+        continue;
+      }
+
+      await db.query(
+        `UPDATE schedule_entries
+         SET visibility = ?,
+             updated_by = ?,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [req.body.visibility, getUserId(req), entryId]
+      );
+      await replaceEntryViewers(existing.id, viewerRows);
+
+      const updated = await fetchEntry(entryId);
+      if (updated) updatedRows.push(updated);
+    }
+
+    const rows = await attachEntryRelations(updatedRows);
+    return res.status(failures.length ? 207 : 200).json({
+      success: failures.length === 0,
+      updated_entries: rows.map((row) => presentScheduleEntry(row, req)),
+      failures,
+    });
+  } catch (error) {
+    return next(error);
   }
 });
 
