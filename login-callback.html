@@ -17,9 +17,21 @@
   const domain = "https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com";
   const clientId = "2t9edrhu5crf8vq3ivigv6jopf";
   const redirectUri = "https://dashboard.msfgco.com/login-callback.html";
+  const verifierKey = "pkce_verifier";
 
   const statusEl = document.getElementById("status");
   const detailsEl = document.getElementById("details");
+
+  function getCookie(name) {
+    const match = document.cookie.match(new RegExp("(?:^|;\\s*)" + name + "=([^;]*)"));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
+  function clearVerifier() {
+    localStorage.removeItem(verifierKey);
+    sessionStorage.removeItem(verifierKey);
+    document.cookie = verifierKey + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; Secure";
+  }
 
   (async () => {
     try {
@@ -33,10 +45,13 @@
         return;
       }
 
-      const verifier = localStorage.getItem("pkce_verifier");
+      const verifier =
+        localStorage.getItem(verifierKey) ||
+        sessionStorage.getItem(verifierKey) ||
+        getCookie(verifierKey);
       if (!verifier) {
-        statusEl.textContent = "Missing PKCE verifier (localStorage).";
-        detailsEl.textContent = "This usually means you didn’t arrive here from /login.html on the same domain.";
+        statusEl.textContent = "Missing PKCE verifier.";
+        detailsEl.textContent = "This usually means you didn’t arrive here from /login.html in the same browser session.";
         return;
       }
 
@@ -72,7 +87,7 @@
       // Cognito access tokens do NOT include email — only ID tokens do.
       var authToken = tokens.id_token || tokens.access_token;
       localStorage.setItem("auth_token", authToken);
-      localStorage.removeItem("pkce_verifier");
+      clearVerifier();
 
       // Store refresh token for silent renewal (tokens expire after ~1 hour)
       if (tokens.refresh_token) {

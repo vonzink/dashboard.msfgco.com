@@ -9,6 +9,7 @@
   const domain = "https://us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com";
   const clientId = "2t9edrhu5crf8vq3ivigv6jopf";
   const redirectUri = "https://dashboard.msfgco.com/login-callback.html";
+  const verifierKey = "pkce_verifier";
 
   function base64urlencode(a) {
     return btoa(String.fromCharCode.apply(null, new Uint8Array(a)))
@@ -32,7 +33,9 @@
 
   (async () => {
     const verifier = randomString();
-    localStorage.setItem("pkce_verifier", verifier);
+    localStorage.setItem(verifierKey, verifier);
+    sessionStorage.setItem(verifierKey, verifier);
+    document.cookie = verifierKey + "=" + encodeURIComponent(verifier) + "; path=/; max-age=600; SameSite=Lax; Secure";
 
     const challenge = base64urlencode(await sha256(verifier));
 
