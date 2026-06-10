@@ -10,7 +10,7 @@ const config: CapacitorConfig = {
     allowNavigation: [
       'dashboard.msfgco.com',
       'api.msfgco.com',
-      '*.amazoncognito.com'
+      'us-west-1s6ie2uego.auth.us-west-1.amazoncognito.com'
     ]
   },
   ios: {
