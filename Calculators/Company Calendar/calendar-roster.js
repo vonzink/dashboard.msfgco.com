@@ -442,7 +442,7 @@
   }
 
   function renderDayView(state) {
-    const day = state.selectedDate || state.today || new Date();
+    const day = state.selectedDate || state.viewDate || state.today || new Date();
     const entries = entriesForDay(state, day);
     const counts = {
       out: entries.filter((entry) => entry.status === 'out').length,
@@ -480,7 +480,7 @@
   }
 
   function daysForWeek(state) {
-    const start = window.CalendarState.startOfWeek(state.selectedDate || state.today || new Date());
+    const start = window.CalendarState.startOfWeek(state.selectedDate || state.viewDate || state.today || new Date());
     return Array.from({ length: 7 }, (_, index) => window.CalendarState.addDays(start, index));
   }
 

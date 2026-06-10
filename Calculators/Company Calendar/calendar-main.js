@@ -101,7 +101,7 @@
   }
 
   function selectedIsoDate() {
-    return CalendarState.isoDate(state.selectedDate || state.today || new Date());
+    return CalendarState.isoDate(state.selectedDate || state.viewDate || state.today || new Date());
   }
 
   function newManualEntry() {
@@ -259,7 +259,7 @@
       CalendarRender.render(app, state, actions);
     },
     openDayDrawer(date, focusEntryId) {
-      const iso = typeof date === 'string' ? date.slice(0, 10) : CalendarState.isoDate(date || state.selectedDate || new Date());
+      const iso = typeof date === 'string' ? date.slice(0, 10) : CalendarState.isoDate(date || state.selectedDate || state.viewDate || new Date());
       state.drawerDate = iso;
       state.drawerFocusEntryId = focusEntryId || null;
       state.sidePanelMode = 'day';

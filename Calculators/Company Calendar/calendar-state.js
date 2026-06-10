@@ -83,7 +83,7 @@
       today,
       viewDate: new Date(today.getFullYear(), today.getMonth(), 1),
       viewMode: 'month',
-      selectedDate: today,
+      selectedDate: null,
       me: null,
       entries: [],
       people: [],

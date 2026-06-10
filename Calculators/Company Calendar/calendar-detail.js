@@ -82,7 +82,7 @@
   }
 
   function selectedIso(state) {
-    return window.CalendarState.isoDate(state.selectedDate || state.today || new Date());
+    return window.CalendarState.isoDate(state.selectedDate || state.viewDate || state.today || new Date());
   }
 
   function selectedPerson(state) {
@@ -118,7 +118,7 @@
   }
 
   function dateLabel(state) {
-    const date = state.selectedDate || state.today || new Date();
+    const date = state.selectedDate || state.viewDate || state.today || new Date();
     return `${window.CalendarState.MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   }
 
