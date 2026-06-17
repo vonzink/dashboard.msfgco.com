@@ -39,7 +39,12 @@ const announcementAttachment = z.object({
 
 const announcement = z.object({
   title: trimmedString(200),
-  content: trimmedString(5000),
+  // Limit is on the rich-text HTML markup, not visible characters. The editor
+  // caps visible text at 5,000 chars; formatted/pasted content (font tags,
+  // nested lists, inline styles from Word/Docs) inflates the markup well past
+  // that. Give the markup generous headroom — the `content` column is TEXT
+  // (65,535) and sanitizeHtml() runs after validation and only shrinks it.
+  content: z.string().trim().min(1).max(50000, 'Announcement content is too large. Try pasting as plain text or reducing formatting.'),
   link: optionalString(500),
   links: z.array(announcementLink).max(10).optional().default([]),
   icon: optionalString(50),

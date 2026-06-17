@@ -282,7 +282,7 @@ const Announcements = {
       this.hideAnnouncementModal();
     } catch (error) {
       console.error('Failed to save announcement:', error);
-      alert('Failed to save announcement. Please try again.');
+      alert(error.message || 'Failed to save announcement. Please try again.');
     }
   },
 
