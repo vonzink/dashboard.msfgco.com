@@ -645,6 +645,16 @@ textarea.form-input {
     color: #8cc63e;
 }
 
+/* Clickable pills: click to drop the tag into the investor search box */
+.dropdown-pill.pill-clickable {
+    cursor: pointer;
+    transition: filter 0.12s ease, box-shadow 0.12s ease;
+}
+.dropdown-pill.pill-clickable:hover {
+    filter: brightness(0.96) saturate(1.2);
+    box-shadow: 0 0 0 1px currentColor inset;
+}
+
 /* Per-category dropdown pill colors */
 .dropdown-pill-agency    { background: rgba(34, 139, 230, 0.12); color: #1864ab; border-color: rgba(34, 139, 230, 0.3); }
 .dropdown-pill-nonagency { background: rgba(155, 89, 182, 0.12); color: #6c2bb3; border-color: rgba(155, 89, 182, 0.3); }

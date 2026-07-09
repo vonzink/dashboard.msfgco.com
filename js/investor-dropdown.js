@@ -62,7 +62,7 @@ const InvestorDropdown = {
       if (activePills.length > 0) {
         pillsHtml = '<div class="investor-card-pills">';
         activePills.forEach(t => {
-          pillsHtml += '<span class="dropdown-pill dropdown-pill-' + t.cat + '">' + esc(t.label) + '</span>';
+          pillsHtml += '<span class="dropdown-pill pill-clickable dropdown-pill-' + t.cat + '" title="Click to search this tag">' + esc(t.label) + '</span>';
         });
         pillsHtml += '</div>';
       }
@@ -102,6 +102,22 @@ const InvestorDropdown = {
         });
       });
       searchInput.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    // Click a product/service pill to search by that tag. Pills live inside the
+    // open-investor card button, so stop the click here (before it reaches the
+    // document-level action dispatcher) to filter instead of opening the card.
+    const itemsContainer = document.getElementById('investorDropdownItems');
+    if (itemsContainer && searchInput) {
+      itemsContainer.addEventListener('click', (e) => {
+        const pill = e.target.closest('.dropdown-pill');
+        if (!pill) return;
+        e.preventDefault();
+        e.stopPropagation();
+        searchInput.value = pill.textContent.trim();
+        searchInput.dispatchEvent(new Event('input'));
+        searchInput.focus();
+      });
     }
   },
 
@@ -177,7 +193,7 @@ const InvestorDropdown = {
         });
         if (activePills.length > 0) {
           pillsHtml = '<div class="inv-dir-pills">' +
-            activePills.map(t => '<span class="dropdown-pill dropdown-pill-' + t.cat + '">' + esc(t.label) + '</span>').join('') +
+            activePills.map(t => '<span class="dropdown-pill pill-clickable dropdown-pill-' + t.cat + '" title="Click to search this tag">' + esc(t.label) + '</span>').join('') +
           '</div>';
         }
 
@@ -217,6 +233,17 @@ const InvestorDropdown = {
           });
         });
       }
+
+      // Click a product/service pill to search by that tag. Assign (not add) so
+      // reopening the directory doesn't stack duplicate handlers on this tbody.
+      tbody.onclick = (e) => {
+        const pill = e.target.closest('.dropdown-pill');
+        if (!pill || !searchInput) return;
+        e.stopPropagation();
+        searchInput.value = pill.textContent.trim();
+        searchInput.dispatchEvent(new Event('input'));
+        searchInput.focus();
+      };
     } catch (err) {
       console.error('Failed to load all investors:', err);
       tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#e74c3c;">Failed to load investors.</td></tr>';
