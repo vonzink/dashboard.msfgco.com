@@ -453,26 +453,13 @@
         removeBtn.style.display = 'none';
       }
 
-      // Business card
-      const bcImg = document.getElementById('businessCardImg');
-      const bcPlaceholder = document.getElementById('businessCardPlaceholder');
-      const bcRemoveBtn = document.getElementById('businessCardRemoveBtn');
-      const bcDownloadBtn = document.getElementById('businessCardDownloadBtn');
-      const bcContainer = document.getElementById('businessCardContainer');
-      if (data.business_card_url) {
-        bcImg.src = data.business_card_url;
-        bcImg.style.display = 'block';
-        bcPlaceholder.style.display = 'none';
-        bcRemoveBtn.style.display = '';
-        bcDownloadBtn.style.display = '';
-        bcContainer.style.borderStyle = 'solid';
-      } else {
-        bcImg.style.display = 'none';
-        bcPlaceholder.style.display = '';
-        bcRemoveBtn.style.display = 'none';
-        bcDownloadBtn.style.display = 'none';
-        bcContainer.style.borderStyle = 'dashed';
-      }
+      // Business card — uploaded image wins, else generated HTML card, else placeholder
+      renderBusinessCardSlot(data.business_card_url, data.business_card_html);
+
+      // Business Card tab: load stored HTML
+      document.getElementById('bizcardHtmlInput').value = data.business_card_html || '';
+      document.getElementById('bizcardPreview').style.display = 'none';
+      document.getElementById('bizcardMissing').style.display = 'none';
 
       // QR Codes
       loadQrCodeState(1, data.qr_code_1_url, data.qr_code_1_label);
@@ -489,6 +476,43 @@
       }
     } catch (err) {
       console.error('Load profile error:', err);
+    }
+  }
+
+  // Render the Basic Info "Business Card" slot. Precedence: an uploaded card
+  // image wins; otherwise a generated/saved HTML card renders in an isolated
+  // scaled iframe; otherwise the dashed "No business card" placeholder shows.
+  // Remove/Download buttons apply to the uploaded image only.
+  function renderBusinessCardSlot(imageUrl, html) {
+    const bcImg = document.getElementById('businessCardImg');
+    const bcFrame = document.getElementById('businessCardHtmlFrame');
+    const bcPlaceholder = document.getElementById('businessCardPlaceholder');
+    const bcRemoveBtn = document.getElementById('businessCardRemoveBtn');
+    const bcDownloadBtn = document.getElementById('businessCardDownloadBtn');
+    const bcContainer = document.getElementById('businessCardContainer');
+    if (imageUrl) {
+      bcImg.src = imageUrl;
+      bcImg.style.display = 'block';
+      bcFrame.style.display = 'none';
+      bcPlaceholder.style.display = 'none';
+      bcRemoveBtn.style.display = '';
+      bcDownloadBtn.style.display = '';
+      bcContainer.style.borderStyle = 'solid';
+    } else if (html) {
+      bcFrame.srcdoc = html;
+      bcFrame.style.display = 'block';
+      bcImg.style.display = 'none';
+      bcPlaceholder.style.display = 'none';
+      bcRemoveBtn.style.display = 'none';
+      bcDownloadBtn.style.display = 'none';
+      bcContainer.style.borderStyle = 'solid';
+    } else {
+      bcImg.style.display = 'none';
+      bcFrame.style.display = 'none';
+      bcPlaceholder.style.display = '';
+      bcRemoveBtn.style.display = 'none';
+      bcDownloadBtn.style.display = 'none';
+      bcContainer.style.borderStyle = 'dashed';
     }
   }
 
@@ -728,12 +752,8 @@
 
       const reader = new FileReader();
       reader.onload = (ev) => {
-        document.getElementById('businessCardImg').src = ev.target.result;
-        document.getElementById('businessCardImg').style.display = 'block';
-        document.getElementById('businessCardPlaceholder').style.display = 'none';
-        document.getElementById('businessCardRemoveBtn').style.display = '';
-        document.getElementById('businessCardDownloadBtn').style.display = '';
-        document.getElementById('businessCardContainer').style.borderStyle = 'solid';
+        // Uploaded image wins over any generated HTML card
+        renderBusinessCardSlot(ev.target.result, null);
       };
       reader.readAsDataURL(file);
     } catch (err) {
@@ -748,11 +768,8 @@
     if (!confirm('Remove business card?')) return;
     try {
       await api('/admin/users/' + profileUserId + '/business-card', { method: 'DELETE' });
-      document.getElementById('businessCardImg').style.display = 'none';
-      document.getElementById('businessCardPlaceholder').style.display = '';
-      document.getElementById('businessCardRemoveBtn').style.display = 'none';
-      document.getElementById('businessCardDownloadBtn').style.display = 'none';
-      document.getElementById('businessCardContainer').style.borderStyle = 'dashed';
+      // Fall back to the generated HTML card if one is saved, else the placeholder
+      renderBusinessCardSlot(null, profileData && profileData.business_card_html);
     } catch (err) {
       alert('Error: ' + err.message);
     }
@@ -972,20 +989,36 @@
 
   // Print-ready 3.5x2in business card (approved MSFG layout). Fixed parts: side
   // logo, fax number, Equal Housing logo. Variable parts come from the open
-  // profile: headshot (avatar), QR Code 2, phone, email, website, NMLS. Job
-  // title has no DB field — it comes from the editable input on the tab.
+  // profile: headshot (avatar), phone, email, website, NMLS, and optionally a
+  // QR code (p.showQr toggles it; p.qrSlot / p.qrUrl pick which one). Job title
+  // has no DB field — it comes from the editable input on the tab.
   function msfgBusinessCardHtml(p) {
     const esc = (s) => String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     const websiteText = ((p.website && p.website.trim()) || 'https://www.msfg.us')
       .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
     const nmlsText = String(p.nmls || '').replace(/^#/, '');
+    const showQr = p.showQr !== false;
+    const qrSlot = p.qrSlot || 2;
     const headshotImg = p.photoUrl
       ? `<img class="headshot" src="${esc(p.photoUrl)}" alt="${esc(p.name)}" />`
       : '';
     const qrImg = p.qrUrl
       ? `<img class="qr-code" src="${esc(p.qrUrl)}" alt="Scan ${esc(p.name)} QR code" />`
-      : '<div style="display:grid; place-items:center; height:100%; color:#9ab0b0; font-size:20px; text-align:center;">QR Code 2<br />not uploaded</div>';
+      : `<div style="display:grid; place-items:center; height:100%; color:#9ab0b0; font-size:20px; text-align:center;">QR Code ${qrSlot}<br />not uploaded</div>`;
+    // When the QR is hidden, drop the panel and let the contact block span full width.
+    const bottomStyle = showQr ? '' : ' style="grid-template-columns: minmax(0, 1fr);"';
+    const qrPanel = showQr ? `<div class="qr-panel">
+
+        <div class="qr-frame">
+          ${qrImg}
+        </div>
+
+        <div class="qr-caption">
+          Scan to connect
+        </div>
+
+      </div>` : '';
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -1313,7 +1346,7 @@
 
     </section>
 
-    <section class="bottom">
+    <section class="bottom"${bottomStyle}>
 
       <div>
 
@@ -1358,17 +1391,7 @@
 
       </div>
 
-      <div class="qr-panel">
-
-        <div class="qr-frame">
-          ${qrImg}
-        </div>
-
-        <div class="qr-caption">
-          Scan to connect
-        </div>
-
-      </div>
+      ${qrPanel}
 
     </section>
 
@@ -1378,16 +1401,41 @@
 </html>`;
   }
 
-  let bizcardHtml = '';
+  // Everything (Preview / Save / Print / Download) reads the editable textarea,
+  // so manual edits to the generated HTML are always honored.
+  function currentBizcardHtml() {
+    return document.getElementById('bizcardHtmlInput').value;
+  }
+
+  // Grey out the QR-slot selector when "Show QR code" is unchecked.
+  (function () {
+    const showQr = document.getElementById('bizcardShowQr');
+    const qrSelect = document.getElementById('bizcardQrSelect');
+    const sync = () => {
+      qrSelect.disabled = !showQr.checked;
+      qrSelect.style.opacity = showQr.checked ? '1' : '0.5';
+    };
+    showQr.addEventListener('change', sync);
+    sync();
+  })();
 
   document.getElementById('bizcardGenerateBtn').addEventListener('click', () => {
-    const photoUrl = mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key);
-    const qrUrl = mediaUrlOrPassthrough(profileData && profileData.qr_code_2_s3_key);
+    const ta = document.getElementById('bizcardHtmlInput');
+    if (ta.value.trim() && !confirm('Replace the current business-card HTML with a freshly generated one from this profile?')) return;
 
-    bizcardHtml = msfgBusinessCardHtml({
+    const showQr = document.getElementById('bizcardShowQr').checked;
+    const qrSlot = document.getElementById('bizcardQrSelect').value === '1' ? 1 : 2;
+    const photoUrl = mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key);
+    const qrUrl = showQr
+      ? mediaUrlOrPassthrough(profileData && profileData['qr_code_' + qrSlot + '_s3_key'])
+      : '';
+
+    const html = msfgBusinessCardHtml({
       name: (profileUserObj && profileUserObj.name) || '',
       title: document.getElementById('bizcardTitleInput').value.trim() || 'Mortgage Loan Originator',
       photoUrl,
+      showQr,
+      qrSlot,
       qrUrl,
       phone: document.getElementById('profilePhone').value.trim(),
       email: document.getElementById('profileDisplayEmail').value.trim() || (profileUserObj && profileUserObj.email) || '',
@@ -1397,7 +1445,7 @@
 
     const missing = [];
     if (!photoUrl) missing.push('profile photo (Basic Info tab)');
-    if (!qrUrl) missing.push('QR Code 2 (Basic Info tab)');
+    if (showQr && !qrUrl) missing.push('QR Code ' + qrSlot + ' (Basic Info tab)');
     if (!document.getElementById('profilePhone').value.trim()) missing.push('phone');
     if (!document.getElementById('profileNmls').value.trim()) missing.push('NMLS #');
     const missingEl = document.getElementById('bizcardMissing');
@@ -1408,22 +1456,49 @@
       missingEl.style.display = 'none';
     }
 
-    document.getElementById('bizcardPreviewFrame').srcdoc = bizcardHtml;
+    ta.value = html;
+    document.getElementById('bizcardPreviewFrame').srcdoc = html;
     document.getElementById('bizcardPreview').style.display = 'block';
   });
 
+  document.getElementById('bizcardPreviewBtn').addEventListener('click', () => {
+    const html = currentBizcardHtml();
+    if (!html.trim()) { alert('Nothing to preview yet — click Generate first.'); return; }
+    const preview = document.getElementById('bizcardPreview');
+    document.getElementById('bizcardPreviewFrame').srcdoc = html;
+    preview.style.display = preview.style.display === 'none' ? 'block' : 'none';
+  });
+
+  document.getElementById('bizcardSaveBtn').addEventListener('click', async () => {
+    const html = currentBizcardHtml();
+    try {
+      await api('/admin/users/' + profileUserId + '/profile', {
+        method: 'PUT',
+        body: JSON.stringify({ business_card_html: html }),
+      });
+      if (profileData) profileData.business_card_html = html;
+      // Reflect immediately in the Basic Info slot (an uploaded image still wins)
+      renderBusinessCardSlot(profileData && profileData.business_card_url, html);
+      alert('Business card saved!');
+    } catch (err) {
+      alert('Error saving: ' + err.message);
+    }
+  });
+
   document.getElementById('bizcardPrintBtn').addEventListener('click', () => {
-    if (!bizcardHtml) return;
+    const html = currentBizcardHtml();
+    if (!html.trim()) return;
     const w = window.open('', '_blank');
     if (!w) { alert('Popup blocked — allow popups for this site to print.'); return; }
-    w.document.write(bizcardHtml);
+    w.document.write(html);
     w.document.close();
   });
 
   document.getElementById('bizcardDownloadBtn').addEventListener('click', () => {
-    if (!bizcardHtml) return;
+    const html = currentBizcardHtml();
+    if (!html.trim()) return;
     const name = (profileUserObj?.name || 'business-card').replace(/\s+/g, '-').toLowerCase();
-    const blob = new Blob([bizcardHtml], { type: 'text/html' });
+    const blob = new Blob([html], { type: 'text/html' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name + '-business-card.html';

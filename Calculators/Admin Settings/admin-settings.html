@@ -135,8 +135,9 @@
           <!-- Business Card -->
           <div style="flex-shrink:0; text-align:center; min-width:200px;">
             <label style="font-size:12px; color:#999; text-transform:uppercase; letter-spacing:.5px; display:block; margin-bottom:8px;">Business Card</label>
-            <div id="businessCardContainer" style="width:200px; height:120px; border:2px dashed #ddd; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#f9f9f9; cursor:pointer;" title="Click to upload business card">
+            <div id="businessCardContainer" style="position:relative; width:200px; height:120px; border:2px dashed #ddd; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:#f9f9f9; cursor:pointer;" title="Click to upload business card">
               <img id="businessCardImg" src="" alt="" style="display:none; width:100%; height:100%; object-fit:contain;" />
+              <iframe id="businessCardHtmlFrame" title="Business card" style="display:none; position:absolute; top:0; left:0; width:1050px; height:600px; border:0; transform:scale(0.19); transform-origin:top left; pointer-events:none;"></iframe>
               <div id="businessCardPlaceholder" style="color:#bbb; font-size:12px; text-align:center;">
                 <i class="fas fa-id-card" style="font-size:28px; display:block; margin-bottom:4px;"></i>
                 No business card
@@ -420,12 +421,32 @@
             <label>Job Title (printed on card)</label>
             <input type="text" id="bizcardTitleInput" value="Mortgage Loan Originator" />
           </div>
+          <div class="form-group">
+            <label>QR Code</label>
+            <div style="display:flex; align-items:center; gap:16px; padding-top:6px; flex-wrap:wrap;">
+              <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:normal; text-transform:none; letter-spacing:0; cursor:pointer;">
+                <input type="checkbox" id="bizcardShowQr" checked style="width:auto; margin:0;" /> Show QR code
+              </label>
+              <select id="bizcardQrSelect" style="padding:8px 12px; border:1px solid #ddd; border-radius:8px; font-family:inherit; font-size:13px;">
+                <option value="2">QR Code 2</option>
+                <option value="1">QR Code 1</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Business Card (HTML)</label>
+          <textarea id="bizcardHtmlInput" rows="6"
+            style="width:100%; max-height:200px; font-family:'Courier New',monospace; font-size:11px; padding:10px; border:1px solid #ddd; border-radius:8px; resize:vertical; overflow:auto;"
+            placeholder="Click Generate to build the card from this profile, then edit the HTML here if needed..."></textarea>
         </div>
         <div class="form-actions">
           <button class="btn btn-secondary" id="bizcardGenerateBtn"><i class="fas fa-wand-magic-sparkles"></i> Generate from MSFG template</button>
+          <button class="btn btn-secondary" id="bizcardPreviewBtn"><i class="fas fa-eye"></i> Preview</button>
+          <button class="btn btn-primary" id="bizcardSaveBtn"><i class="fas fa-save"></i> Save</button>
         </div>
         <div class="form-help" style="margin-top:8px;">
-          Pulls the <strong>profile photo</strong>, <strong>QR Code 2</strong>, phone, email, website &amp; NMLS from this profile. Fax is fixed at 720-293-0300. Use <strong>Open &amp; Print</strong> for the 3.5&times;2&Prime; print layout (print to PDF works too), or <strong>Download</strong> the HTML file.
+          Generate pulls the <strong>profile photo</strong>, <strong>QR Code 2</strong>, phone, email, website &amp; NMLS from this profile (fax is fixed at 720-293-0300). Edit the HTML above if you like, then <strong>Save</strong> to store it and show the card in the Business Card slot on Basic Info. Use <strong>Open &amp; Print</strong> for the 3.5&times;2&Prime; print layout, or <strong>Download</strong> the HTML file.
         </div>
         <div id="bizcardMissing" style="display:none; margin-top:8px; font-size:12px; color:#c0392b;"></div>
         <div id="bizcardPreview" style="display:none; margin-top:16px; border:1px solid #eee; border-radius:8px; background:#fff; overflow:hidden;">
@@ -1165,6 +1186,6 @@
     </div>
   </div>
 
-  <script src="/js/admin/admin-settings.js?v=20260717card"></script>
+  <script src="/js/admin/admin-settings.js?v=20260717card3"></script>
 </body>
 </html>
