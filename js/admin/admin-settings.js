@@ -959,6 +959,478 @@
     }
   });
 
+  // --- Business Card Generator ---
+
+  const BIZCARD_LOGO_URL = 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG%20Home%20Loans/MSFGHL-LLC-side.png';
+  const BIZCARD_EQ_HOUSING_URL = 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/EQ-Housing/equal-housing-lender-logogreen.png';
+
+  // Resolve a stored value that may be a raw msfg-media key OR an external URL.
+  function mediaUrlOrPassthrough(value) {
+    if (!value) return '';
+    return /^https?:\/\//.test(value) ? value : mediaPublicUrl(value);
+  }
+
+  // Print-ready 3.5x2in business card (approved MSFG layout). Fixed parts: side
+  // logo, fax number, Equal Housing logo. Variable parts come from the open
+  // profile: headshot (avatar), QR Code 2, phone, email, website, NMLS. Job
+  // title has no DB field — it comes from the editable input on the tab.
+  function msfgBusinessCardHtml(p) {
+    const esc = (s) => String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const websiteText = ((p.website && p.website.trim()) || 'https://www.msfg.us')
+      .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+    const nmlsText = String(p.nmls || '').replace(/^#/, '');
+    const headshotImg = p.photoUrl
+      ? `<img class="headshot" src="${esc(p.photoUrl)}" alt="${esc(p.name)}" />`
+      : '';
+    const qrImg = p.qrUrl
+      ? `<img class="qr-code" src="${esc(p.qrUrl)}" alt="Scan ${esc(p.name)} QR code" />`
+      : '<div style="display:grid; place-items:center; height:100%; color:#9ab0b0; font-size:20px; text-align:center;">QR Code 2<br />not uploaded</div>';
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>${esc(p.name)} Business Card</title>
+
+  <style>
+    :root {
+      --lime: #8cc63e;
+      --green: #4b7b4d;
+      --dark-green: #104547;
+      --charcoal: #404041;
+      --white: #ffffff;
+
+      --card-width: 1050px;
+      --card-height: 600px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+      background: #e9eeee;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--charcoal);
+    }
+
+    .card {
+      width: var(--card-width);
+      height: var(--card-height);
+      background: var(--white);
+      box-shadow: 0 18px 55px rgba(16, 69, 71, 0.22);
+      overflow: hidden;
+      border-radius: 8px;
+
+      /*
+        Increase the first percentage if you want
+        the white section to be taller.
+      */
+      display: grid;
+      grid-template-rows: 46% 54%;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 230px;
+      align-items: center;
+      gap: 30px;
+
+      /*
+        The last value controls the space between
+        the content and the green divider line.
+      */
+      padding: 22px 48px 34px;
+
+      border-bottom: 5px solid var(--lime);
+    }
+
+    .identity {
+      min-width: 0;
+    }
+
+    .company-logo {
+      display: block;
+      width: 100%;
+
+      /*
+        Increase these values to make the logo larger.
+      */
+      max-width: 720px;
+      max-height: 150px;
+
+      object-fit: contain;
+      object-position: left center;
+      margin-bottom: 12px;
+    }
+
+    .name {
+      margin: 0;
+      color: var(--dark-green);
+      font-size: 44px;
+      line-height: 1;
+      letter-spacing: 1px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 8px 0 0;
+      color: var(--charcoal);
+      font-size: 25px;
+      line-height: 1.2;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .headshot-wrap {
+      width: 210px;
+      height: 210px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 4px solid var(--lime);
+      justify-self: end;
+      background: #d8e6e6;
+
+      /*
+        Use a more negative number to move
+        the picture farther upward.
+      */
+      transform: translateY(-10px);
+    }
+
+    .headshot {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .bottom {
+      background: var(--dark-green);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      align-items: center;
+      gap: 42px;
+      padding: 28px 48px;
+      color: var(--white);
+    }
+
+    .contact-list {
+      display: grid;
+      gap: 14px;
+    }
+
+    .contact-row {
+      display: grid;
+      grid-template-columns: 115px 1fr;
+      align-items: baseline;
+      column-gap: 12px;
+      font-size: 28px;
+      line-height: 1.05;
+    }
+
+    .label {
+      color: var(--lime);
+      font-size: 25px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .value {
+      color: var(--white);
+      font-weight: 400;
+      overflow-wrap: anywhere;
+    }
+
+    .legal {
+      margin-top: 14px;
+    }
+
+    .equal-housing-logo {
+      display: block;
+      width: 88px;
+      height: auto;
+      object-fit: contain;
+    }
+
+    .qr-panel {
+      justify-self: end;
+      text-align: center;
+    }
+
+    .qr-frame {
+      width: 285px;
+      height: 285px;
+      padding: 8px;
+      background: var(--white);
+      border: 5px solid var(--lime);
+      border-radius: 16px;
+    }
+
+    .qr-code {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .qr-caption {
+      margin-top: 8px;
+      color: var(--white);
+      font-size: 15px;
+      letter-spacing: 0.6px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    /*
+      Standard 3.5 x 2-inch business card printing.
+    */
+    @media print {
+      @page {
+        size: 3.5in 2in;
+        margin: 0;
+      }
+
+      body {
+        padding: 0;
+        background: transparent;
+      }
+
+      .card {
+        width: 3.5in;
+        height: 2in;
+        border-radius: 0;
+        box-shadow: none;
+      }
+
+      .top {
+        grid-template-columns: minmax(0, 1fr) 0.72in;
+        gap: 0.08in;
+        padding: 0.08in 0.16in 0.11in;
+        border-bottom-width: 0.018in;
+      }
+
+      .company-logo {
+        max-width: 2.25in;
+        max-height: 0.47in;
+        margin-bottom: 0.03in;
+      }
+
+      .name {
+        font-size: 0.145in;
+        letter-spacing: 0.002in;
+      }
+
+      .title {
+        margin-top: 0.025in;
+        font-size: 0.082in;
+      }
+
+      .headshot-wrap {
+        width: 0.68in;
+        height: 0.68in;
+        border-width: 0.012in;
+        transform: translateY(-0.04in);
+      }
+
+      .bottom {
+        grid-template-columns: minmax(0, 1fr) 0.95in;
+        gap: 0.10in;
+        padding: 0.08in 0.16in;
+      }
+
+      .contact-list {
+        gap: 0.025in;
+      }
+
+      .contact-row {
+        grid-template-columns: 0.40in 1fr;
+        column-gap: 0.025in;
+        font-size: 0.087in;
+      }
+
+      .label {
+        font-size: 0.076in;
+      }
+
+      .legal {
+        margin-top: 0.025in;
+      }
+
+      .equal-housing-logo {
+        width: 0.27in;
+      }
+
+      .qr-frame {
+        width: 0.88in;
+        height: 0.88in;
+        padding: 0.018in;
+        border-width: 0.014in;
+        border-radius: 0.035in;
+      }
+
+      .qr-caption {
+        margin-top: 0.015in;
+        font-size: 0.038in;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <article class="card">
+
+    <section class="top">
+
+      <div class="identity">
+
+        <img
+          class="company-logo"
+          src="${BIZCARD_LOGO_URL}"
+          alt="Mountain State Financial Group, LLC Home Loans"
+        />
+
+        <h1 class="name">${esc(p.name)}</h1>
+
+        <p class="title">
+          ${esc(p.title)}
+        </p>
+
+      </div>
+
+      <div class="headshot-wrap">
+        ${headshotImg}
+      </div>
+
+    </section>
+
+    <section class="bottom">
+
+      <div>
+
+        <div class="contact-list">
+
+          <div class="contact-row">
+            <span class="label">Phone</span>
+            <span class="value">${esc(p.phone)}</span>
+          </div>
+
+          <div class="contact-row">
+            <span class="label">Fax</span>
+            <span class="value">720-293-0300</span>
+          </div>
+
+          <div class="contact-row">
+            <span class="label">Email</span>
+            <span class="value">${esc(p.email)}</span>
+          </div>
+
+          <div class="contact-row">
+            <span class="label">Web</span>
+            <span class="value">${esc(websiteText)}</span>
+          </div>
+
+          <div class="contact-row">
+            <span class="label">NMLS</span>
+            <span class="value">#${esc(nmlsText)}</span>
+          </div>
+
+        </div>
+
+        <div class="legal">
+
+          <img
+            class="equal-housing-logo"
+            src="${BIZCARD_EQ_HOUSING_URL}"
+            alt="Equal Housing Lender"
+          />
+
+        </div>
+
+      </div>
+
+      <div class="qr-panel">
+
+        <div class="qr-frame">
+          ${qrImg}
+        </div>
+
+        <div class="qr-caption">
+          Scan to connect
+        </div>
+
+      </div>
+
+    </section>
+
+  </article>
+
+</body>
+</html>`;
+  }
+
+  let bizcardHtml = '';
+
+  document.getElementById('bizcardGenerateBtn').addEventListener('click', () => {
+    const photoUrl = mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key);
+    const qrUrl = mediaUrlOrPassthrough(profileData && profileData.qr_code_2_s3_key);
+
+    bizcardHtml = msfgBusinessCardHtml({
+      name: (profileUserObj && profileUserObj.name) || '',
+      title: document.getElementById('bizcardTitleInput').value.trim() || 'Mortgage Loan Originator',
+      photoUrl,
+      qrUrl,
+      phone: document.getElementById('profilePhone').value.trim(),
+      email: document.getElementById('profileDisplayEmail').value.trim() || (profileUserObj && profileUserObj.email) || '',
+      website: document.getElementById('profileWebsite').value.trim(),
+      nmls: document.getElementById('profileNmls').value.trim(),
+    });
+
+    const missing = [];
+    if (!photoUrl) missing.push('profile photo (Basic Info tab)');
+    if (!qrUrl) missing.push('QR Code 2 (Basic Info tab)');
+    if (!document.getElementById('profilePhone').value.trim()) missing.push('phone');
+    if (!document.getElementById('profileNmls').value.trim()) missing.push('NMLS #');
+    const missingEl = document.getElementById('bizcardMissing');
+    if (missing.length) {
+      missingEl.textContent = 'Missing from this profile: ' + missing.join(', ') + '. Fill in and regenerate.';
+      missingEl.style.display = 'block';
+    } else {
+      missingEl.style.display = 'none';
+    }
+
+    document.getElementById('bizcardPreviewFrame').srcdoc = bizcardHtml;
+    document.getElementById('bizcardPreview').style.display = 'block';
+  });
+
+  document.getElementById('bizcardPrintBtn').addEventListener('click', () => {
+    if (!bizcardHtml) return;
+    const w = window.open('', '_blank');
+    if (!w) { alert('Popup blocked — allow popups for this site to print.'); return; }
+    w.document.write(bizcardHtml);
+    w.document.close();
+  });
+
+  document.getElementById('bizcardDownloadBtn').addEventListener('click', () => {
+    if (!bizcardHtml) return;
+    const name = (profileUserObj?.name || 'business-card').replace(/\s+/g, '-').toLowerCase();
+    const blob = new Blob([bizcardHtml], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name + '-business-card.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
   // --- AI Keys ---
   // Capitalize the first letter so 'openai' -> 'Openai', 'deepseek' -> 'Deepseek'
   // — matches the DOM id convention (aiOpenaiStatus, aiAnthropicStatus, aiDeepseekStatus).
