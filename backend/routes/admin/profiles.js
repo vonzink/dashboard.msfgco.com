@@ -17,7 +17,8 @@ router.get('/:id/profile', async (req, res, next) => {
       team: null, phone: null, display_email: null, website: null, online_app_url: null,
       facebook_url: null, instagram_url: null, twitter_url: null, linkedin_url: null, tiktok_url: null,
       youtube_url: null,
-      avatar_s3_key: null, business_card_s3_key: null, business_card_html: null,
+      avatar_s3_key: null, business_card_s3_key: null,
+      business_card_html: null, business_card_back_html: null, business_card_brand: null,
       qr_code_1_s3_key: null, qr_code_1_label: null,
       qr_code_2_s3_key: null, qr_code_2_label: null,
       nmls_number: null,
@@ -85,7 +86,7 @@ router.put('/:id/profile', async (req, res, next) => {
       'bond_company', 'bond_number', 'bond_expiration', 'computer_id',
       'client_dropbox_location',
       'email_signature',
-      'business_card_html',
+      'business_card_html', 'business_card_back_html', 'business_card_brand',
     ];
 
     const setClauses = [];
