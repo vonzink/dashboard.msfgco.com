@@ -870,15 +870,16 @@
 
   // Company NMLS printed on every card back — compliance requirement.
   const BIZCARD_COMPANY_NMLS = '1314257';
-  // Black, transparent-background EHL (derived from equal-housing-lender-1.png).
-  const BIZCARD_EQ_HOUSING_BLACK = 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/EQ-Housing/equal-housing-lender-black.png';
+  // Black EHL (Zack's pick). White-background file — rendered with multiply
+  // blending so the white disappears on the dark card sections.
+  const BIZCARD_EQ_HOUSING = 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/EQ-Housing/EQUAL%20HOUSING%20LENDER.png';
   const BIZCARD_BRANDS = {
     msfg: {
       frontLogo: 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG%20Home%20Loans/MSFGHL-LLC-side.png',
       frontLogoAlt: 'Mountain State Financial Group, LLC Home Loans',
-      backLogo: 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG-LLC/Double%20Size/Full%20Color%20Clear%20Background%20LLC%20-%202x.png',
-      backLogoAlt: 'Mountain State Financial Group, LLC',
-      backLogoMaxH: 400,
+      backLogo: 'https://msfg-media.s3.us-west-2.amazonaws.com/Assets/LOGOS/MSFG%20Home%20Loans/MSFGHL-LLC-side.png',
+      backLogoAlt: 'Mountain State Financial Group, LLC Home Loans',
+      backLogoMaxH: 300,
       dark: '#104547',
       lime: '#8cc63e',
       divider: 'border-top: 5px solid #8cc63e;',
@@ -1054,6 +1055,7 @@
       width: 150px;
       height: auto;
       object-fit: contain;
+      mix-blend-mode: multiply; /* white box vanishes on the dark section */
     }
     @media print {
       @page { size: 3.5in 2in; margin: 0; }
@@ -1082,7 +1084,7 @@
       ${headshotImg}
     </div>
 
-    <img class="equal-housing-logo" src="${BIZCARD_EQ_HOUSING_BLACK}" alt="Equal Housing Lender" />
+    <img class="equal-housing-logo" src="${BIZCARD_EQ_HOUSING}" alt="Equal Housing Lender" />
 
   </article>
 
@@ -1239,40 +1241,39 @@ ${qrPanel}
     document.getElementById('bizcardPreviewBackFrame').srcdoc = currentBizcardBack();
   }
 
+  // Single source for template inputs — used by Generate and the PNG export.
+  function bizcardBuildParams() {
+    const showQr = document.getElementById('bizcardShowQr').checked;
+    const qrSlot = document.getElementById('bizcardQrSelect').value === '1' ? 1 : 2;
+    return {
+      brand: document.getElementById('bizcardBrandSelect').value === 'compass' ? 'compass' : 'msfg',
+      name: (profileUserObj && profileUserObj.name) || '',
+      title: document.getElementById('bizcardTitleInput').value.trim() || 'Mortgage Loan Originator',
+      photoUrl: mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key),
+      showQr,
+      qrSlot,
+      qrUrl: showQr ? mediaUrlOrPassthrough(profileData && profileData['qr_code_' + qrSlot + '_s3_key']) : '',
+      phone: document.getElementById('profilePhone').value.trim(),
+      email: document.getElementById('profileDisplayEmail').value.trim() || (profileUserObj && profileUserObj.email) || '',
+      website: document.getElementById('profileWebsite').value.trim(),
+      nmls: document.getElementById('profileNmls').value.trim(),
+    };
+  }
+
   document.getElementById('bizcardGenerateBtn').addEventListener('click', () => {
     const frontTa = document.getElementById('bizcardFrontInput');
     const backTa = document.getElementById('bizcardBackInput');
     if ((frontTa.value.trim() || backTa.value.trim()) &&
         !confirm('Replace the current front & back HTML with freshly generated cards from this profile?')) return;
 
-    const brandKey = document.getElementById('bizcardBrandSelect').value === 'compass' ? 'compass' : 'msfg';
-    const showQr = document.getElementById('bizcardShowQr').checked;
-    const qrSlot = document.getElementById('bizcardQrSelect').value === '1' ? 1 : 2;
-    const photoUrl = mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key);
-    const qrUrl = showQr
-      ? mediaUrlOrPassthrough(profileData && profileData['qr_code_' + qrSlot + '_s3_key'])
-      : '';
-
-    const p = {
-      brand: brandKey,
-      name: (profileUserObj && profileUserObj.name) || '',
-      title: document.getElementById('bizcardTitleInput').value.trim() || 'Mortgage Loan Originator',
-      photoUrl,
-      showQr,
-      qrSlot,
-      qrUrl,
-      phone: document.getElementById('profilePhone').value.trim(),
-      email: document.getElementById('profileDisplayEmail').value.trim() || (profileUserObj && profileUserObj.email) || '',
-      website: document.getElementById('profileWebsite').value.trim(),
-      nmls: document.getElementById('profileNmls').value.trim(),
-    };
+    const p = bizcardBuildParams();
 
     frontTa.value = bizcardFrontHtml(p);
     backTa.value = bizcardBackHtml(p);
 
     const missing = [];
-    if (!photoUrl) missing.push('profile photo (Basic Info tab)');
-    if (showQr && !qrUrl) missing.push('QR Code ' + qrSlot + ' (Basic Info tab)');
+    if (!p.photoUrl) missing.push('profile photo (Basic Info tab)');
+    if (p.showQr && !p.qrUrl) missing.push('QR Code ' + p.qrSlot + ' (Basic Info tab)');
     if (!p.phone) missing.push('phone');
     if (!p.nmls) missing.push('NMLS #');
     const missingEl = document.getElementById('bizcardMissing');
@@ -1366,63 +1367,160 @@ ${qrPanel}
     URL.revokeObjectURL(a.href);
   });
 
-  // Render one side to a high-res PNG (2100x1200 = 600dpi at 3.5x2in). Every
-  // <img> is inlined as a data URI first (msfg-media CORS allows this origin),
-  // then the .card node is rasterized through an SVG foreignObject canvas.
-  async function bizcardPngBlob(html) {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const imgs = Array.prototype.slice.call(doc.querySelectorAll('img'));
-    await Promise.all(imgs.map(async (img) => {
-      const src = img.getAttribute('src');
-      if (!src || src.indexOf('data:') === 0) return;
-      const resp = await fetch(src, { mode: 'cors' });
-      if (!resp.ok) throw new Error('Could not load image: ' + src);
-      const blob = await resp.blob();
-      const dataUri = await new Promise((resolve, reject) => {
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.onerror = () => reject(new Error('Could not read image data'));
-        fr.readAsDataURL(blob);
-      });
-      img.setAttribute('src', dataUri);
-    }));
-    const styles = Array.prototype.map.call(doc.querySelectorAll('style'), (s) => s.textContent).join('\n');
-    const card = doc.querySelector('.card');
-    if (!card) throw new Error('No .card element found in the HTML');
-    const cardXml = new XMLSerializer().serializeToString(card);
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1050" height="600">' +
-      '<foreignObject width="100%" height="100%">' +
-      '<div xmlns="http://www.w3.org/1999/xhtml"><style>' + styles +
-      '\n.card { box-shadow: none; border-radius: 0; margin: 0; }</style>' + cardXml + '</div>' +
-      '</foreignObject></svg>';
-    const svgUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
-    try {
-      const imgEl = await new Promise((resolve, reject) => {
-        const i = new Image();
-        i.onload = () => resolve(i);
-        i.onerror = () => reject(new Error('Could not rasterize the card'));
-        i.src = svgUrl;
-      });
-      const canvas = document.createElement('canvas');
-      canvas.width = 2100;
-      canvas.height = 1200;
-      canvas.getContext('2d').drawImage(imgEl, 0, 0, canvas.width, canvas.height);
-      return await new Promise((resolve, reject) =>
-        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'));
-    } finally {
-      URL.revokeObjectURL(svgUrl);
+  // --- PNG export: native canvas rendering ---
+  // Deliberately NOT an HTML rasterization: SVG foreignObject taints the
+  // canvas in WebKit (and some embedded engines), which kills toBlob(). The
+  // card geometry is fixed, so each side is drawn directly with 2D canvas
+  // calls mirroring the template layout. PNG renders the standard template
+  // from profile data — hand-edits to the HTML boxes affect Print/HTML only.
+
+  function loadBizImage(url) {
+    return fetch(url, { mode: 'cors' })
+      .then((r) => { if (!r.ok) throw new Error('Could not load image: ' + url); return r.blob(); })
+      .then((b) => createImageBitmap(b));
+  }
+
+  // CSS max-width/max-height contain behavior (never upscales).
+  function bizContain(img, maxW, maxH) {
+    const s = Math.min(maxW / img.width, maxH / img.height, 1);
+    return { w: img.width * s, h: img.height * s };
+  }
+
+  // All coordinates in card space (1050x600) — caller pre-scales the context.
+  async function bizcardDrawFront(ctx, p) {
+    const brand = BIZCARD_BRANDS[p.brand] || BIZCARD_BRANDS.msfg;
+    const [logo, ehl, photo] = await Promise.all([
+      loadBizImage(brand.frontLogo),
+      loadBizImage(BIZCARD_EQ_HOUSING),
+      p.photoUrl ? loadBizImage(p.photoUrl) : Promise.resolve(null),
+    ]);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1050, 600);
+    if (brand.divider) {
+      ctx.fillStyle = brand.lime;
+      ctx.fillRect(0, 330, 1050, 5);
+      ctx.fillStyle = brand.dark;
+      ctx.fillRect(0, 335, 1050, 265);
+    } else {
+      ctx.fillStyle = brand.dark;
+      ctx.fillRect(0, 330, 1050, 270);
+    }
+
+    const lg = bizContain(logo, 560, 168);
+    ctx.drawImage(logo, 48, 36, lg.w, lg.h);
+
+    const nameY = 36 + lg.h + 18;
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = brand.dark;
+    ctx.font = '800 46px Arial';
+    ctx.fillText(String(p.name || '').toUpperCase(), 48, nameY);
+    ctx.fillStyle = '#404041';
+    ctx.font = '700 24px Arial';
+    ctx.fillText(String(p.title || '').toUpperCase(), 48, nameY + 46 + 8);
+
+    const websiteText = ((p.website && p.website.trim()) || brand.defaultWebsite)
+      .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+    const rows = [['PHONE', formatPhoneDashes(p.phone)]];
+    if (brand.fax) rows.push(['FAX', brand.fax]);
+    rows.push(
+      ['EMAIL', p.email],
+      ['WEB', websiteText],
+      ['NMLS', '#' + String(p.nmls || '').replace(/^#/, '')]
+    );
+    const rowsTop = (brand.divider ? 335 : 330) + 30;
+    ctx.textBaseline = 'alphabetic';
+    rows.forEach(([label, value], i) => {
+      const baseY = rowsTop + i * 42.5 + 24;
+      ctx.fillStyle = brand.lime;
+      ctx.font = '800 24px Arial';
+      ctx.fillText(label, 48, baseY);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '400 29px Arial';
+      ctx.fillText(String(value == null ? '' : value), 192, baseY);
+    });
+
+    // EHL: multiply drops its white background into the dark band. Drawn
+    // before the headshot so the photo never gets blended.
+    const ehW = 150;
+    const ehH = 150 * (ehl.height / ehl.width);
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.drawImage(ehl, 744, 600 - 32 - ehH, ehW, ehH);
+    ctx.restore();
+
+    // Headshot: white ring circle straddling the boundary, cover-cropped.
+    const cx = 1050 - 64 - 170;
+    const cy = 78 + 170;
+    const r = 170;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r - 6, 0, Math.PI * 2);
+    ctx.clip();
+    if (photo) {
+      const d = (r - 6) * 2;
+      const s = Math.max(d / photo.width, d / photo.height);
+      ctx.drawImage(photo, cx - (photo.width * s) / 2, cy - (photo.height * s) / 2, photo.width * s, photo.height * s);
+    } else {
+      ctx.fillStyle = '#d8e6e6';
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    }
+    ctx.restore();
+  }
+
+  async function bizcardDrawBack(ctx, p) {
+    const brand = BIZCARD_BRANDS[p.brand] || BIZCARD_BRANDS.msfg;
+    const showQr = p.showQr === true;
+    const [logo, qr] = await Promise.all([
+      loadBizImage(brand.backLogo),
+      showQr && p.qrUrl ? loadBizImage(p.qrUrl) : Promise.resolve(null),
+    ]);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1050, 600);
+
+    const drawBrandBlock = (centerX, maxW) => {
+      const lg = bizContain(logo, maxW, brand.backLogoMaxH);
+      const blockH = lg.h + 16 + 34;
+      const top = (600 - blockH) / 2;
+      ctx.drawImage(logo, centerX - lg.w / 2, top, lg.w, lg.h);
+      ctx.fillStyle = brand.dark;
+      ctx.font = '700 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('NMLS #' + BIZCARD_COMPANY_NMLS, centerX, top + lg.h + 16 + 28);
+      ctx.textAlign = 'left';
+    };
+
+    if (showQr) {
+      // wrap-qr: padding 44/80, columns 1fr 380px, gap 40 -> left col 80..550
+      drawBrandBlock(315, 470);
+      if (qr) ctx.drawImage(qr, 610, 130, 340, 340);
+    } else {
+      drawBrandBlock(525, 962);
     }
   }
 
   async function downloadBizcardPng(side) {
-    const html = side === 'front' ? currentBizcardFront() : currentBizcardBack();
-    if (!html.trim()) { alert('Nothing to export — click Generate first.'); return; }
     const btn = document.getElementById(side === 'front' ? 'bizcardPngFrontBtn' : 'bizcardPngBackBtn');
     const orig = btn.innerHTML;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering...';
     btn.disabled = true;
     try {
-      const blob = await bizcardPngBlob(html);
+      const p = bizcardBuildParams();
+      const canvas = document.createElement('canvas');
+      canvas.width = 2100;  // 600dpi at 3.5in
+      canvas.height = 1200;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(2, 2);
+      if (side === 'front') await bizcardDrawFront(ctx, p);
+      else await bizcardDrawBack(ctx, p);
+      const blob = await new Promise((resolve, reject) =>
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png'));
       const name = (profileUserObj?.name || 'business-card').replace(/\s+/g, '-').toLowerCase();
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
