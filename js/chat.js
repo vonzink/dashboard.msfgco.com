@@ -311,11 +311,15 @@ const Chat = {
 
     if (!fab || !panel) return;
 
+    this._restoreFabPosition();
+    this._bindFabDrag(fab);
+
     if (Utils.getStorage('msfg_chat_open', false) === true) {
       this._openPanel();
     }
 
     fab.addEventListener('click', () => {
+      if (this._fabDragged) { this._fabDragged = false; return; }
       if (panel.classList.contains('is-open')) {
         this._closePanel();
       } else {
@@ -326,6 +330,126 @@ const Chat = {
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this._closePanel());
     }
+
+    window.addEventListener('resize', () => {
+      this._restoreFabPosition();
+      if (panel.classList.contains('is-open')) this._positionPanel();
+    });
+  },
+
+  // ========================================
+  // FAB DRAG (movable assistant button)
+  // ========================================
+  _fabDragged: false,   // set on drag end; the click that follows is swallowed
+
+  _bindFabDrag(fab) {
+    let startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    let dragging = false, pointerId = null;
+
+    fab.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const r = fab.getBoundingClientRect();
+      startX = e.clientX; startY = e.clientY;
+      origLeft = r.left; origTop = r.top;
+      dragging = false; pointerId = e.pointerId;
+      fab.setPointerCapture(e.pointerId);
+    });
+
+    fab.addEventListener('pointermove', (e) => {
+      if (pointerId === null || e.pointerId !== pointerId) return;
+      const dx = e.clientX - startX, dy = e.clientY - startY;
+      if (!dragging) {
+        if (Math.hypot(dx, dy) < 6) return;  // click, not drag, until threshold
+        dragging = true;
+        fab.classList.add('is-dragging');
+      }
+      this._placeFab(origLeft + dx, origTop + dy);
+    });
+
+    const end = (e) => {
+      if (pointerId === null || e.pointerId !== pointerId) return;
+      pointerId = null;
+      fab.classList.remove('is-dragging');
+      if (dragging) {
+        dragging = false;
+        this._fabDragged = true;
+        this._saveFabPosition();
+        const panel = document.getElementById('chatFloatPanel');
+        if (panel && panel.classList.contains('is-open')) this._positionPanel();
+      }
+    };
+    fab.addEventListener('pointerup', end);
+    fab.addEventListener('pointercancel', end);
+  },
+
+  /** Viewport size, 0×0 when the tab is hidden/prerendered — callers must bail on that. */
+  _viewport() {
+    return {
+      w: window.innerWidth || document.documentElement.clientWidth,
+      h: window.innerHeight || document.documentElement.clientHeight
+    };
+  },
+
+  _placeFab(left, top) {
+    const fab = document.getElementById('chatFab');
+    if (!fab) return;
+    const { w: vw, h: vh } = this._viewport();
+    if (vw < 100 || vh < 100) return;
+    const m = 8;
+    const w = fab.offsetWidth || 56, h = fab.offsetHeight || 56;
+    left = Math.max(m, Math.min(left, vw - w - m));
+    top = Math.max(m, Math.min(top, vh - h - m));
+    fab.style.left = left + 'px';
+    fab.style.top = top + 'px';
+    fab.style.right = 'auto';
+    fab.style.bottom = 'auto';
+  },
+
+  _saveFabPosition() {
+    const fab = document.getElementById('chatFab');
+    if (!fab) return;
+    const { w: vw, h: vh } = this._viewport();
+    if (vw < 100 || vh < 100) return;
+    const r = fab.getBoundingClientRect();
+    // Store as fractions of the available space so the position survives resizes
+    const availW = Math.max(1, vw - r.width);
+    const availH = Math.max(1, vh - r.height);
+    Utils.setStorage('msfg_chat_fab_pos', { fx: r.left / availW, fy: r.top / availH });
+  },
+
+  _restoreFabPosition() {
+    const pos = Utils.getStorage('msfg_chat_fab_pos', null);
+    if (!pos || typeof pos.fx !== 'number' || typeof pos.fy !== 'number') return;
+    const fab = document.getElementById('chatFab');
+    if (!fab) return;
+    const { w: vw, h: vh } = this._viewport();
+    if (vw < 100 || vh < 100) return;  // hidden tab: resize listener re-runs this when visible
+    const w = fab.offsetWidth || 56, h = fab.offsetHeight || 56;
+    this._placeFab(pos.fx * (vw - w), pos.fy * (vh - h));
+  },
+
+  /** Anchor the panel next to the FAB once the FAB has been moved off its default corner. */
+  _positionPanel() {
+    const { w: vw, h: vh } = this._viewport();
+    if (vw < 100 || vh < 100) return;
+    if (vw <= 600) return;  // mobile CSS owns the layout
+    if (Utils.getStorage('msfg_chat_fab_pos', null) === null) return;  // default corner: CSS handles it
+    const fab = document.getElementById('chatFab');
+    const panel = document.getElementById('chatFloatPanel');
+    if (!fab || !panel) return;
+    const fr = fab.getBoundingClientRect();
+    const pw = panel.offsetWidth || 400, ph = panel.offsetHeight || 520;
+    const m = 12;
+    let top = fr.top - ph - m;                     // prefer above the FAB
+    if (top < m) top = Math.min(fr.bottom + m, vh - ph - m);
+    let left = fr.right - pw;                      // right edges aligned
+    if (left < m) left = Math.min(fr.left, vw - pw - m);
+    left = Math.max(m, Math.min(left, vw - pw - m));
+    top = Math.max(m, Math.min(top, vh - ph - m));
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+    panel.style.right = 'auto';
+    panel.style.bottom = 'auto';
   },
 
   _openPanel() {
@@ -333,6 +457,7 @@ const Chat = {
     const panel = document.getElementById('chatFloatPanel');
     if (!panel) return;
 
+    this._positionPanel();
     panel.classList.add('is-open');
     panel.setAttribute('aria-hidden', 'false');
     if (fab) fab.classList.add('is-open');

@@ -807,6 +807,12 @@
     box-shadow: 0 4px 16px rgba(140, 198, 62, 0.4);
     transition: all var(--transition-fast);
     z-index: 998;
+    touch-action: none; /* draggable: without this, touch drags scroll the page instead */
+}
+
+.chat-fab.is-dragging {
+    transition: none;
+    cursor: grabbing;
 }
 
 .chat-fab:hover {
@@ -1008,6 +1014,7 @@
 }
 
 .ask-ai-bubble p { margin: 0 0 0.5rem; }
+.ask-ai-bubble a { color: var(--accent-primary, #8cc63e); word-break: break-all; }
 .ask-ai-bubble p:last-child { margin-bottom: 0; }
 
 .ask-ai-goto {

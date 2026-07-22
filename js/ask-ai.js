@@ -176,9 +176,14 @@
       const el = document.createElement('div');
       el.className = 'ask-ai-msg ask-ai-msg-assistant';
 
+      // esc() first, then light formatting: **bold** and clickable bare URLs
+      const fmt = (p) => esc(p)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>')
+        .replace(/\n/g, '<br>');
       const paragraphs = String(resp.answer || 'No answer returned.')
         .split(/\n{2,}/)
-        .map((p) => '<p>' + esc(p).replace(/\n/g, '<br>') + '</p>')
+        .map((p) => '<p>' + fmt(p) + '</p>')
         .join('');
 
       let html = '<div class="ask-ai-bubble">' + paragraphs;
