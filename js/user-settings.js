@@ -184,6 +184,9 @@ const UserSettings = {
 
     const p = this._profile;
     const esc = Utils.escapeHtml;
+    // Admin-set crop position for the circular avatar (strict format check
+    // since it's injected into a style attribute)
+    const avatarPos = /^[\d.]+% [\d.]+%$/.test(p.avatar_position || '') ? p.avatar_position : '';
 
     container.innerHTML = `
       <div class="settings-profile-layout">
@@ -191,7 +194,7 @@ const UserSettings = {
         <div class="settings-avatar-section">
           <div class="settings-avatar" id="settingsAvatarPreview">
             ${p.avatar_url
-              ? `<img src="${esc(p.avatar_url)}" alt="Avatar" />`
+              ? `<img src="${esc(p.avatar_url)}"${avatarPos ? ` style="object-position:${avatarPos};"` : ''} alt="Avatar" />`
               : `<span class="avatar-initials">${esc(CONFIG.currentUser?.initials || '?')}</span>`
             }
           </div>
