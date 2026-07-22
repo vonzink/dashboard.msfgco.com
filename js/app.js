@@ -246,8 +246,10 @@ const App = {
         if (role === 'external') {
             const hiddenSections = [
                 'preApprovalsSection', 'applicationsSection', 'pipelineSection', 'fundedLoansSection',
-                'goalsSection', 'chatSection', 'investorsSection',
+                'goalsSection', 'investorsSection',
                 'processingSection', 'contentSection',
+                // Ask AI + Team Chat FAB — both /api/ask-ai and /api/chat are requireNonExternal
+                'chatFab', 'chatFloatPanel',
             ];
             hiddenSections.forEach(id => {
                 const el = document.getElementById(id);
