@@ -974,8 +974,8 @@
     }
     .bc-front .company-logo {
       display: block;
-      max-width: 560px;
-      max-height: 168px;
+      max-width: 640px;
+      max-height: 190px;
       object-fit: contain;
       object-position: left center;
       margin-bottom: 18px;
@@ -1032,7 +1032,7 @@
     }
     .bc-front .headshot-wrap {
       position: absolute;
-      top: 78px;
+      top: 58px;
       right: 64px;
       width: 340px;
       height: 340px;
@@ -1050,9 +1050,9 @@
     }
     .bc-front .equal-housing-logo {
       position: absolute;
-      right: 156px;
-      bottom: 32px;
-      width: 150px;
+      right: 48px;
+      bottom: 22px;
+      width: 120px;
       height: auto;
       object-fit: contain;
       mix-blend-mode: multiply; /* white box vanishes on the dark section */
@@ -1407,7 +1407,7 @@ ${qrPanel}
       ctx.fillRect(0, 330, 1050, 270);
     }
 
-    const lg = bizContain(logo, 560, 168);
+    const lg = bizContain(logo, 640, 190);
     ctx.drawImage(logo, 48, 36, lg.w, lg.h);
 
     const nameY = 36 + lg.h + 18;
@@ -1442,16 +1442,16 @@ ${qrPanel}
 
     // EHL: multiply drops its white background into the dark band. Drawn
     // before the headshot so the photo never gets blended.
-    const ehW = 150;
-    const ehH = 150 * (ehl.height / ehl.width);
+    const ehW = 120;
+    const ehH = 120 * (ehl.height / ehl.width);
     ctx.save();
     ctx.globalCompositeOperation = 'multiply';
-    ctx.drawImage(ehl, 744, 600 - 32 - ehH, ehW, ehH);
+    ctx.drawImage(ehl, 1050 - 48 - ehW, 600 - 22 - ehH, ehW, ehH);
     ctx.restore();
 
     // Headshot: white ring circle straddling the boundary, cover-cropped.
     const cx = 1050 - 64 - 170;
-    const cy = 78 + 170;
+    const cy = 58 + 170;
     const r = 170;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
