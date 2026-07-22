@@ -15,6 +15,42 @@ Dashboard section: (none — site-wide navigation reference)
 
 Captured from dashboard.msfgco.com on 2026-07-22T16:04:27.645Z. Use this document when the user asks for a direct dashboard link, where a dashboard control lives, or which dashboard action opens a workflow.
 
+## Top Navigation — Systems Dropdown (external tools and systems)
+
+All external system and tool links live in the **Systems** dropdown in the dashboard's
+top navigation bar (the button with the laptop icon labeled "Systems"). Click **Systems**,
+then click the tool name — each opens in a new tab. If someone asks "where is the link
+to X" for any tool below, the answer is: **the Systems dropdown in the top navigation**.
+
+**Core Systems**
+- Go High Level — https://app.gohighlevel.com/
+- LendingPad — https://prod.lendingpad.com/web/#/dashboard
+- Monday.com — https://msfg-squad.monday.com/
+
+**Tools & Services**
+- MMI — https://new.mmi.run/login
+- List Reports (ListReports) — https://listreports.com/login?redirect=https%253A%252F%252Flistreports.com%252Fagent-intel%253Ftab%253Dlistside
+- Loan Sifter — https://loansifternow.optimalblue.com/
+- Passport (TitlePro247) — https://v3.titlepro247.com/Account
+- Fidelity Live Farm — https://fidelitylivefarm.com/index_fidelity.shtml
+- Flueid — https://pro.flueid.com/auth/sign-in
+- Document Scanner — https://dashboard.msfgco.com/scanner.html
+- KBase Docs — https://dashboard.msfgco.com/Calculators/File%20Browser/file-browser.html?library=forms
+
+**Storage & Credit**
+- Dropbox — https://www.dropbox.com/
+- Advantage Credit — https://credit.advcredit.com/custom/login.aspx
+- Microsoft — https://microsoft.com/
+
+**AI Tools**
+- AngelAI — https://www.swmc.com/angelai
+- ChatGPT — https://chatgpt.com/
+- Claude — https://claude.ai/
+
+**Example — Where is the List Reports link?** Open the **Systems** dropdown in the top
+navigation, look under "Tools & Services", and click **List Reports**. Direct link:
+https://listreports.com/login?redirect=https%253A%252F%252Flistreports.com%252Fagent-intel%253Ftab%253Dlistside
+
 ## Direct Links By Captured Page
 
 ### Main Dashboard
