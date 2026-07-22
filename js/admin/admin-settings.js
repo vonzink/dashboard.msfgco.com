@@ -1020,9 +1020,9 @@
     const websiteText = ((p.website && p.website.trim()) || brand.defaultWebsite)
       .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
     const nmlsText = String(p.nmls || '').replace(/^#/, '');
-    const headshotImg = p.photoUrl
-      ? `<img class="headshot" src="${esc(p.photoUrl)}" alt="${esc(p.name)}" />`
-      : '';
+    const headshotWrap = p.showPhoto === false ? '' : `<div class="headshot-wrap">
+      ${p.photoUrl ? `<img class="headshot" src="${esc(p.photoUrl)}" alt="${esc(p.name)}" />` : ''}
+    </div>`;
     const rows = [['Phone', formatPhoneDashes(p.phone)]];
     if (brand.fax) rows.push(['Fax', brand.fax]);
     rows.push(['Email', p.email], ['Web', websiteText], ['NMLS', '#' + nmlsText]);
@@ -1170,9 +1170,7 @@
       </div>
     </section>
 
-    <div class="headshot-wrap">
-      ${headshotImg}
-    </div>
+    ${headshotWrap}
 
     <img class="equal-housing-logo" src="${BIZCARD_EQ_HOUSING}" alt="Equal Housing Lender" />
 
@@ -1340,6 +1338,7 @@ ${qrPanel}
       name: (profileUserObj && profileUserObj.name) || '',
       title: document.getElementById('bizcardTitleInput').value.trim() || 'Mortgage Loan Originator',
       photoUrl: mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key),
+      showPhoto: document.getElementById('bizcardShowPhoto').checked,
       showQr,
       qrSlot,
       qrUrl: showQr ? mediaUrlOrPassthrough(profileData && profileData['qr_code_' + qrSlot + '_s3_key']) : '',
@@ -1362,7 +1361,7 @@ ${qrPanel}
     backTa.value = bizcardBackHtml(p);
 
     const missing = [];
-    if (!p.photoUrl) missing.push('profile photo (Basic Info tab)');
+    if (p.showPhoto !== false && !p.photoUrl) missing.push('profile photo (Basic Info tab)');
     if (p.showQr && !p.qrUrl) missing.push('QR Code ' + p.qrSlot + ' (Basic Info tab)');
     if (!p.phone) missing.push('phone');
     if (!p.nmls) missing.push('NMLS #');
@@ -1482,7 +1481,7 @@ ${qrPanel}
     const [logo, ehl, photo] = await Promise.all([
       loadBizImage(brand.frontLogo),
       loadBizImage(BIZCARD_EQ_HOUSING),
-      p.photoUrl ? loadBizImage(p.photoUrl) : Promise.resolve(null),
+      p.showPhoto !== false && p.photoUrl ? loadBizImage(p.photoUrl) : Promise.resolve(null),
     ]);
 
     ctx.fillStyle = '#ffffff';
@@ -1540,26 +1539,29 @@ ${qrPanel}
     ctx.restore();
 
     // Headshot: white ring circle straddling the boundary, cover-cropped.
-    const cx = 1050 - 64 - 170;
-    const cy = 58 + 170;
-    const r = 170;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffffff';
-    ctx.fill();
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, r - 6, 0, Math.PI * 2);
-    ctx.clip();
-    if (photo) {
-      const d = (r - 6) * 2;
-      const s = Math.max(d / photo.width, d / photo.height);
-      ctx.drawImage(photo, cx - (photo.width * s) / 2, cy - (photo.height * s) / 2, photo.width * s, photo.height * s);
-    } else {
-      ctx.fillStyle = '#d8e6e6';
-      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    // Skipped entirely when the photo option is off.
+    if (p.showPhoto !== false) {
+      const cx = 1050 - 64 - 170;
+      const cy = 58 + 170;
+      const r = 170;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r - 6, 0, Math.PI * 2);
+      ctx.clip();
+      if (photo) {
+        const d = (r - 6) * 2;
+        const s = Math.max(d / photo.width, d / photo.height);
+        ctx.drawImage(photo, cx - (photo.width * s) / 2, cy - (photo.height * s) / 2, photo.width * s, photo.height * s);
+      } else {
+        ctx.fillStyle = '#d8e6e6';
+        ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      }
+      ctx.restore();
     }
-    ctx.restore();
   }
 
   async function bizcardDrawBack(ctx, p) {
