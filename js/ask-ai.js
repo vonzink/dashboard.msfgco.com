@@ -225,7 +225,9 @@
       // if section deep-linking is ever added).
       const target = document.getElementById(id) || document.getElementById(id + 'Section');
       if (target && typeof target.scrollIntoView === 'function') {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Instant (not smooth) — smooth scrolling silently no-ops in some
+        // embedded/throttled browser contexts, and a jump is always visible.
+        target.scrollIntoView({ block: 'start' });
       } else {
         window.location.hash = id;
       }
