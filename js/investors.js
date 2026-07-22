@@ -381,11 +381,13 @@ const Investors = {
       docs.forEach(doc => {
         const icon = DOC_ICONS[doc.file_type] || 'fas fa-file';
         const sizeStr = doc.file_size ? this._formatFileSize(doc.file_size) : '';
+        const uploadedStr = doc.created_at ? 'Uploaded ' + Utils.formatDate(doc.created_at, 'medium') : '';
+        const metaStr = [sizeStr, uploadedStr].filter(Boolean).join(' · ');
         docsHtml += '<div class="investor-doc-item">' +
           '<div style="display:flex;align-items:center;gap:8px;min-width:0;">' +
             '<i class="' + icon + '" style="color:var(--green-bright);flex-shrink:0;"></i>' +
             '<div style="min-width:0;"><div class="investor-doc-name">' + esc(doc.file_name) + '</div>' +
-              (sizeStr ? '<div class="investor-doc-meta">' + sizeStr + '</div>' : '') +
+              (metaStr ? '<div class="investor-doc-meta">' + esc(metaStr) + '</div>' : '') +
             '</div></div>' +
           (doc.download_url ? '<a href="' + doc.download_url + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-secondary" style="flex-shrink:0;"><i class="fas fa-download"></i></a>' : '') +
         '</div>';
@@ -656,11 +658,15 @@ const Investors = {
           '</div>';
       }
 
+      // Admin-set crop position for the circular avatar (strict format check
+      // since it's injected into a style attribute)
+      const avatarPos = /^[\d.]+% [\d.]+%$/.test(user.avatar_position || '') ? user.avatar_position : '';
+
       content.innerHTML =
         '<button type="button" class="contacts-modal-close">&times;</button>' +
         '<div class="contact-card-header">' +
           (user.avatar_url
-            ? '<img class="contact-card-avatar" src="' + user.avatar_url + '" alt="' + esc(user.name) + '" />'
+            ? '<img class="contact-card-avatar" src="' + user.avatar_url + '"' + (avatarPos ? ' style="object-position:' + avatarPos + ';"' : '') + ' alt="' + esc(user.name) + '" />'
             : '<div class="contact-card-avatar-initials">' + esc(initials) + '</div>') +
           '<h3 class="contact-card-name">' + esc(user.name) + '</h3>' +
           '<p class="contact-card-role">' + esc(user.role || '') + (user.team ? ' \u2022 ' + esc(user.team) : '') + '</p>' +
