@@ -86,3 +86,26 @@ describe('POST /api/ask-ai/ask', () => {
     expect(body).toEqual({ error: 'Ask AI is temporarily unavailable' });
   });
 });
+
+describe('POST /api/ask-ai/ask without a usable email', () => {
+  beforeEach(async () => {
+    askAiService.ask.mockReset();
+    const app = buildApp({ sub: 'abc', db: {} }); // authenticated but no email anywhere
+    await new Promise((resolve) => { server = app.listen(0, resolve); });
+    baseUrl = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  afterEach(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    if (originalServiceCacheEntry) require.cache[servicePath] = originalServiceCacheEntry;
+    else delete require.cache[servicePath];
+    delete require.cache[routePath];
+  });
+
+  it('returns 401 and never calls the service', async () => {
+    const { status, body } = await post({ question: 'q' });
+    expect(status).toBe(401);
+    expect(body).toEqual({ error: 'User identity unavailable' });
+    expect(askAiService.ask).not.toHaveBeenCalled();
+  });
+});
