@@ -728,24 +728,45 @@
       </div>
     </div>
 
-    <!-- Floating Chat FAB + Panel -->
-    <button type="button" class="chat-fab" id="chatFab" title="Team Chat" aria-label="Toggle chat panel">
-      <i class="fas fa-comments" id="chatFabIcon"></i>
+    <!-- Floating Ask AI / Team Chat FAB + Panel -->
+    <button type="button" class="chat-fab" id="chatFab" title="Ask AI / Team Chat" aria-label="Toggle assistant panel">
+      <i class="fas fa-robot" id="chatFabIcon"></i>
       <span class="chat-fab-badge" id="chatFabBadge" style="display:none;">0</span>
     </button>
 
-    <div class="chat-float-panel" id="chatFloatPanel" aria-hidden="true">
+    <div class="chat-float-panel tab-ask" id="chatFloatPanel" aria-hidden="true">
       <div class="chat-float-header">
-        <h3 class="chat-float-title"><i class="fas fa-comments"></i> Team Chat</h3>
+        <div class="fab-tabs" role="tablist" aria-label="Assistant panel tabs">
+          <button type="button" class="fab-tab is-active" id="fabTabAsk" role="tab" aria-selected="true">
+            <i class="fas fa-robot"></i> Ask AI
+          </button>
+          <button type="button" class="fab-tab" id="fabTabChat" role="tab" aria-selected="false">
+            <i class="fas fa-comments"></i> Team Chat
+          </button>
+        </div>
         <div class="chat-float-actions">
           <button type="button" class="btn btn-sm btn-outline" id="chatManageTagsBtn" title="Manage Tags">
             <i class="fas fa-tags"></i>
           </button>
-          <button type="button" class="chat-float-close" id="chatFloatClose" title="Close chat" aria-label="Close chat">
+          <button type="button" class="chat-float-close" id="chatFloatClose" title="Close" aria-label="Close panel">
             <i class="fas fa-times"></i>
           </button>
         </div>
       </div>
+
+      <!-- Ask AI tab pane -->
+      <div class="ask-ai-pane" id="askAiPane">
+        <div class="ask-ai-messages" id="askAiMessages" aria-live="polite"></div>
+        <form class="ask-ai-input-row" id="askAiForm">
+          <input type="text" id="askAiInput" class="chat-input" placeholder="Ask about the dashboard..." maxlength="2000" autocomplete="off" />
+          <button type="submit" class="btn btn-primary" id="askAiSendBtn" title="Ask"><i class="fas fa-paper-plane"></i></button>
+        </form>
+        <div class="ask-ai-footer">
+          <button type="button" class="ask-ai-new-btn" id="askAiNewBtn"><i class="fas fa-rotate-left"></i> New conversation</button>
+        </div>
+      </div>
+
+      <!-- Team Chat tab pane — everything inside .chat-container is UNCHANGED -->
       <div class="chat-container">
         <div class="chat-tag-filter-bar" id="chatTagFilter"></div>
         <div class="chat-messages" id="chatMessages" aria-live="polite"></div>
@@ -1487,6 +1508,7 @@
   <script src="js/theme.js?v=20260410"></script>
   <script src="js/tables.js?v=20260410"></script>
   <script src="js/chat.js?v=20260410"></script>
+  <script src="js/ask-ai.js?v=20260722"></script>
   <script src="js/pre-approvals.js?v=20260410"></script>
   <script src="js/applications.js?v=20260410"></script>
   <script src="js/pipeline.js?v=20260513h"></script>
