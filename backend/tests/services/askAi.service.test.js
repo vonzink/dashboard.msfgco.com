@@ -103,4 +103,17 @@ describe('askAi.service ask()', () => {
     await expect(service.ask({ email: 'z@x.com', question: 'q' }))
       .rejects.toMatchObject({ status: 502 });
   });
+
+  it('maps a malformed-JSON 200 response to 502', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => { throw new SyntaxError('Unexpected token <'); } });
+    await expect(service.ask({ email: 'z@x.com', question: 'q' }))
+      .rejects.toMatchObject({ status: 502 });
+  });
+
+  it('maps a fetch timeout (TimeoutError) to 502', async () => {
+    const timeoutErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+    fetchMock.mockRejectedValue(timeoutErr);
+    await expect(service.ask({ email: 'z@x.com', question: 'q' }))
+      .rejects.toMatchObject({ status: 502 });
+  });
 });

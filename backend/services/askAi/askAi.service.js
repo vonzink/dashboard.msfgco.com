@@ -74,7 +74,12 @@ async function ask({ email, question, conversationId, pageRoute }) {
     throw serviceError('Ask AI is temporarily unavailable', 502);
   }
 
-  return res.json();
+  try {
+    return await res.json();
+  } catch (e) {
+    logger.error({ err: e }, 'Ask AI engine returned malformed JSON');
+    throw serviceError('Ask AI is temporarily unavailable', 502);
+  }
 }
 
 module.exports = { ask };
