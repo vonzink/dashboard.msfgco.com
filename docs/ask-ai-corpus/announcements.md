@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # News & Announcements
 
 Dashboard section: news

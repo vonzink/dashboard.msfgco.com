@@ -4,7 +4,7 @@ doc_type: faq
 area: dashboard-admin
 status: captured
 confidence: high
-visibility: INTERNAL
+visibility: PUBLIC
 tags: [suite, dashboard, dashboard-msfgco, admin-settings, employees, investors, forms, processors, system, monday]
 ---
 # MSFG Dashboard Admin Settings

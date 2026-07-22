@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Admin Settings
 
 Dashboard section: (none — reached via the shield-icon "Admin" button in the header toolbar, Admin role only)

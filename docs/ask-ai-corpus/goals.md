@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Goals
 
 Dashboard section: goals

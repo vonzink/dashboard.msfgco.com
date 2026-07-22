@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # MSFG Dashboard — Overview
 
 ## What it is

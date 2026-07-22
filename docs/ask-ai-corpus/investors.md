@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Investors
 
 Dashboard section: (none — reached via the "Investors" menu in the top nav)

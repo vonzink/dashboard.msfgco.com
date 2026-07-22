@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Loan Pipeline
 
 Dashboard section: pipeline

@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Content Studio
 
 Dashboard section: (none — top nav "Marketing" menu → "Content Studio")

@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Loans Funded
 
 Dashboard section: fundedLoans

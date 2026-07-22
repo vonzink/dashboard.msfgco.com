@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Pre-Approvals
 
 Dashboard section: preApprovals

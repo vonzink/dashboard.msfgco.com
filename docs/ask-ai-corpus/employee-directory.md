@@ -1,3 +1,10 @@
+---
+document_id: dashboard_employee_directory
+doc_type: guide
+area: dashboard-tools
+visibility: PUBLIC
+tags: [employee-directory, team-directory, contact-card, profiles, hr]
+---
 # Employee Directory & Profiles
 
 Dashboard section: (none — reached via the "HR" menu's Team Directory, or your own profile via the header Settings gear icon)
@@ -10,7 +17,10 @@ Open the "HR" menu in the top nav — the "Team Directory" list at the bottom sh
 
 ## Common tasks
 
-### Look up a coworker's contact info
+### Look up a coworker's contact info (pull up a person's info, find someone's phone or email)
+To pull up any employee's info — for example "pull up Jane Smith's info" — open
+the HR menu → click their name in Team Directory. Ask AI itself cannot display
+a person's contact details; the Team Directory Contact Card is where they live.
 HR menu → click a name in Team Directory. The Contact Card shows their avatar, name, role/team, phone, display email, website, online application link, NMLS #, social icons, any custom links, a downloadable business card image (if one is set), QR codes (if set), and their email signature with a "Copy for Outlook" button that copies it as rich HTML (with a plain-text fallback) so it pastes into an email with formatting intact.
 
 ### Edit your own contact info, social links, or signature

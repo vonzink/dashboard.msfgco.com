@@ -4,7 +4,7 @@ doc_type: faq
 area: dashboard
 status: captured
 confidence: high
-visibility: INTERNAL
+visibility: PUBLIC
 tags: [suite, dashboard, dashboard-msfgco, links, direct-links, actions, settings, calculators, docs, scanner]
 ---
 # MSFG Dashboard Direct Links and Actions

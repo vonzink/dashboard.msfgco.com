@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Notifications & Reminders
 
 Dashboard section: (none — bell icon in the header → Notifications modal)

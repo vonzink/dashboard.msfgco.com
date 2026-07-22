@@ -7,7 +7,7 @@ web_component: external-dashboard.msfgco.com
 backend_module: dashboard.msfgco.com
 status: captured
 confidence: high
-visibility: INTERNAL
+visibility: PUBLIC
 tags: [suite, dashboard, dashboard-msfgco, links, goals, announcements, pre-approvals, pipeline, funded-loans]
 ---
 # MSFG Dashboard (dashboard.msfgco.com)

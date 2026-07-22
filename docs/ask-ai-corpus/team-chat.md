@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Team Chat
 
 Dashboard section: (none — bottom-right floating button → Team Chat tab)

@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # File Browser (Forms Library & Logos)
 
 Dashboard section: (none — reached via the "Tools" menu's "MSFG Docs" button, or the "Marketing" menu's "Logos" button)

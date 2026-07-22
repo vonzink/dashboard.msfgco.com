@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Company Calendar / Schedule
 
 Dashboard section: (none — top nav "Schedule" menu → "Company Calendar")

@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Document Scanner
 
 Dashboard section: (none — reached via the "Systems" menu's "Document Scanner" link; opens scanner.html as its own full page, not a dashboard section)

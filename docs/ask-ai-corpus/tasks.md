@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Tasks
 
 Dashboard section: (none — no dashboard UI currently displays tasks; they're created and managed through the API and the Zapier/n8n webhook endpoint)

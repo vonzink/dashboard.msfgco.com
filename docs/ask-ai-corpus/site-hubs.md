@@ -4,7 +4,7 @@ doc_type: faq
 area: dashboard-tools
 status: captured
 confidence: high
-visibility: INTERNAL
+visibility: PUBLIC
 tags: [suite, dashboard, dashboard-msfgco, calculator-hub, document-hub, scanner, forms-library, kbase]
 ---
 # MSFG Dashboard Tool Hubs

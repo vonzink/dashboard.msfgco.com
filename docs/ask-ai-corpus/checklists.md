@@ -1,3 +1,6 @@
+---
+visibility: PUBLIC
+---
 # Loan Checklists
 
 Dashboard section: (none — opened from a loan row in the Pipeline)
