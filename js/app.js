@@ -125,6 +125,7 @@ const App = {
             ['Theme',          () => ThemeManager.init()],
             ['Tables',         () => TableManager.init()],
             ['Chat',           () => Chat.init()],
+            ['AskAI',          () => typeof AskAI !== 'undefined' && AskAI.init()],
             ['Investors',      () => Investors.init()],
             ['Applications',   () => typeof Applications !== 'undefined' && Applications.init()],
             ['Funded Loans',   () => typeof FundedLoans !== 'undefined' && FundedLoans.init()],
