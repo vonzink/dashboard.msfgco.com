@@ -1021,7 +1021,7 @@
       .replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
     const nmlsText = String(p.nmls || '').replace(/^#/, '');
     const headshotWrap = p.showPhoto === false ? '' : `<div class="headshot-wrap">
-      ${p.photoUrl ? `<img class="headshot" src="${esc(p.photoUrl)}" alt="${esc(p.name)}" />` : ''}
+      ${p.photoUrl ? `<img class="headshot" src="${esc(p.photoUrl)}"${p.photoPos ? ` style="object-position: ${p.photoPos};"` : ''} alt="${esc(p.name)}" />` : ''}
     </div>`;
     const rows = [['Phone', formatPhoneDashes(p.phone)]];
     if (brand.fax) rows.push(['Fax', brand.fax]);
@@ -1338,6 +1338,10 @@ ${qrPanel}
       name: (profileUserObj && profileUserObj.name) || '',
       title: document.getElementById('bizcardTitleInput').value.trim() || 'Mortgage Loan Originator',
       photoUrl: mediaUrlOrPassthrough(profileData && profileData.avatar_s3_key),
+      // Stored circle-crop position ("50% 30%"); strict format check since it
+      // lands in a style attribute and in canvas math. Empty = centered.
+      photoPos: /^[\d.]+% [\d.]+%$/.test((profileData && profileData.avatar_position) || '')
+        ? profileData.avatar_position : '',
       showPhoto: document.getElementById('bizcardShowPhoto').checked,
       showQr,
       qrSlot,
@@ -1555,7 +1559,14 @@ ${qrPanel}
       if (photo) {
         const d = (r - 6) * 2;
         const s = Math.max(d / photo.width, d / photo.height);
-        ctx.drawImage(photo, cx - (photo.width * s) / 2, cy - (photo.height * s) / 2, photo.width * s, photo.height * s);
+        const dw = photo.width * s;
+        const dh = photo.height * s;
+        // Same semantics as CSS object-position: the stored fraction of the
+        // cover-overflow is hidden on the leading edge (0.5 = centered).
+        const m = /^([\d.]+)% ([\d.]+)%$/.exec(p.photoPos || '');
+        const fx = m ? Math.min(100, parseFloat(m[1])) / 100 : 0.5;
+        const fy = m ? Math.min(100, parseFloat(m[2])) / 100 : 0.5;
+        ctx.drawImage(photo, (cx - d / 2) - (dw - d) * fx, (cy - d / 2) - (dh - d) * fy, dw, dh);
       } else {
         ctx.fillStyle = '#d8e6e6';
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
