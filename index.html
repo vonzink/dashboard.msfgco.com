@@ -132,9 +132,6 @@
             <button type="button" class="dropdown-item" data-action="open-handbook">
               <i class="fas fa-book"></i> Handbook
             </button>
-            <button type="button" class="dropdown-item" data-action="open-forms-library">
-              <i class="fas fa-file-pdf"></i> HR Forms
-            </button>
             <div class="dropdown-divider"></div>
             <button type="button" class="dropdown-item" data-action="open-training">
               <i class="fas fa-graduation-cap"></i> Training
@@ -143,6 +140,10 @@
             <button type="button" class="dropdown-item" data-action="open-hr-resource" data-category="famli">
               <i class="fas fa-umbrella-beach"></i> FAMLI
             </button>
+
+            <a href="https://mandatoryview.com/productview" target="_blank" rel="noopener" class="dropdown-item">
+              <i class="fas fa-thumbtack"></i> Employee Posters
+            </a>
 
             <div class="dropdown-divider"></div>
             <div class="dropdown-header">Team Directory</div>
@@ -291,12 +292,22 @@
             <div class="dropdown-header">Calculators</div>
             <a data-link-key="loan_calc_hub" class="dropdown-item"><i class="fas fa-calculator"></i> Loan Calculator Hub</a>
             <a data-link-key="docs_hub" class="dropdown-item"><i class="fas fa-file-signature"></i> Document Creator</a>
-            <button type="button" class="dropdown-item" data-action="open-mil-levy"><i class="fas fa-percentage"></i> Mil Levy Calculator</button>
-            <button type="button" class="dropdown-item" data-action="open-time-calculator"><i class="fas fa-calendar-alt"></i> Time Calculator</button>
+            <button type="button" class="dropdown-item" data-action="open-forms-library"><i class="fas fa-file-pdf"></i> MSFG Docs</button>
 
             <div class="dropdown-divider"></div>
             <button type="button" class="dropdown-item" data-action="open-processing" data-type="title"><i class="fas fa-clipboard-check"></i> Processing</button>
-            <a data-link-key="scanner" class="dropdown-item"><i class="fas fa-qrcode"></i> Scanner</a>
+
+            <div class="dropdown-submenu">
+              <button type="button" class="dropdown-item dropdown-submenu-trigger" aria-haspopup="true" aria-expanded="false">
+                <i class="fas fa-ellipsis-h"></i> More..
+                <i class="fas fa-chevron-right dropdown-submenu-caret"></i>
+              </button>
+              <div class="dropdown-submenu-menu">
+                <button type="button" class="dropdown-item" data-action="open-mil-levy"><i class="fas fa-percentage"></i> Mil Levy Calculator</button>
+                <button type="button" class="dropdown-item" data-action="open-time-calculator"><i class="fas fa-calendar-alt"></i> Time Calculator</button>
+                <a data-link-key="scanner" class="dropdown-item"><i class="fas fa-qrcode"></i> Scanner</a>
+              </div>
+            </div>
           </div>
         </li>
 

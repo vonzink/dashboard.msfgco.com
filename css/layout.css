@@ -506,6 +506,59 @@
 }
 
 /* ========================================
+   DROPDOWN SUBMENU ("More.." flyout)
+======================================== */
+.dropdown-submenu {
+    position: relative;
+}
+
+.dropdown-submenu-trigger {
+    width: 100%;
+}
+
+.dropdown-submenu-caret {
+    margin-left: auto;
+    min-width: auto !important;
+    width: auto !important;
+    font-size: 0.65rem !important;
+    transition: transform var(--transition-fast);
+}
+
+.dropdown-submenu-menu {
+    max-height: 0;
+    overflow: hidden;
+    background: var(--bg-tertiary);
+    transition: max-height var(--transition-normal);
+}
+
+.dropdown-submenu:hover .dropdown-submenu-menu {
+    max-height: 240px;
+}
+
+.dropdown-submenu:hover .dropdown-submenu-caret {
+    transform: rotate(90deg);
+}
+
+.dropdown-submenu-menu .dropdown-item {
+    padding-left: calc(var(--spacing-md) + 1.25rem);
+}
+
+@media (max-width: 1300px) {
+    /* Inline (always-visible) nesting inside the mobile accordion */
+    .main-nav .dropdown-submenu-menu {
+        max-height: none;
+        overflow: visible;
+        background: transparent;
+    }
+    .main-nav .dropdown-submenu-trigger {
+        pointer-events: none;
+    }
+    .main-nav .dropdown-submenu-caret {
+        display: none;
+    }
+}
+
+/* ========================================
    MAIN CONTENT
 ======================================== */
 .main-content {
