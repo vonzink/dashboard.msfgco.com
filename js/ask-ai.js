@@ -186,8 +186,12 @@
       if (resp.humanEscalationRequired) {
         html += '<div class="ask-ai-escalation"><i class="fas fa-user-friends"></i> Worth confirming with a teammate — I\'m not fully sure on this one.</div>';
       }
-      if (resp.recommendedPage) {
-        html += '<button type="button" class="btn btn-sm btn-primary ask-ai-goto" data-page="' + esc(resp.recommendedPage) + '"><i class="fas fa-arrow-right"></i> Take me there</button>';
+      // Public route returns recommendedPages: [{label, url, reason}] (array);
+      // older docs described a singular recommendedPage slug — accept both.
+      const rec = (Array.isArray(resp.recommendedPages) && resp.recommendedPages[0]) ||
+        (resp.recommendedPage ? { url: resp.recommendedPage, label: null } : null);
+      if (rec && rec.url) {
+        html += '<button type="button" class="btn btn-sm btn-primary ask-ai-goto" data-page="' + esc(rec.url) + '"><i class="fas fa-arrow-right"></i> ' + esc(rec.label || 'Take me there') + '</button>';
       }
       if (Array.isArray(resp.citations) && resp.citations.length) {
         const items = resp.citations.map((c) => {
@@ -214,7 +218,12 @@
     },
 
     goTo(page) {
-      const id = String(page || '').replace(/^#/, '').trim();
+      // Accept a slug ("pipeline"), a hash ("#pipeline"), a path ("/pipeline"),
+      // or a full same-site URL — reduce all of them to the bare slug.
+      const id = String(page || '')
+        .replace(/^https?:\/\/[^/]+/, '')
+        .replace(/^[/#]+/, '')
+        .trim();
       if (!id) return;
       // No client-side router exists on this dashboard (single long-scroll
       // page), and recommendedPage is a short engine slug (e.g. "pipeline"
