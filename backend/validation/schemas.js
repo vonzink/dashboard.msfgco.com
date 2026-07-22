@@ -547,6 +547,11 @@ const handbookSectionCreate = z.object({
 // require touching this file.
 const checklistSchemas = require('./schemas/checklists');
 
+// ── Ask AI ───────────────────────────────────────
+// Lives in ./schemas/askAi.js. Spread into module.exports below, same
+// pattern as checklistSchemas — do NOT destructure individual names here.
+const askAiSchemas = require('./schemas/askAi');
+
 // ── Validate helper ─────────────────────────────
 function validate(schema) {
   return (req, res, next) => {
@@ -644,6 +649,8 @@ module.exports = {
   // Checklist schemas — single source of truth in ./schemas/checklists.js.
   // Any export from that file is automatically exposed here.
   ...checklistSchemas,
+  // Ask AI schemas — single source of truth in ./schemas/askAi.js.
+  ...askAiSchemas,
   validate,
   validateQuery,
 };
