@@ -12,7 +12,7 @@ router.get('/directory', async (req, res, next) => {
   try {
     const [users] = await db.query(
       `SELECT u.id, u.name, u.email, u.initials, u.role,
-              p.phone, p.display_email, p.team, p.avatar_s3_key, p.nmls_number
+              p.phone, p.display_email, p.team, p.avatar_s3_key, p.avatar_position, p.nmls_number
        FROM users u
        LEFT JOIN user_profiles p ON u.id = p.user_id
        WHERE u.is_active = 1
@@ -34,7 +34,7 @@ router.get('/:id/contact-card', async (req, res, next) => {
               p.team, p.phone, p.display_email, p.website, p.online_app_url,
               p.facebook_url, p.instagram_url, p.twitter_url, p.linkedin_url, p.tiktok_url,
               p.youtube_url,
-              p.avatar_s3_key, p.business_card_s3_key,
+              p.avatar_s3_key, p.avatar_position, p.business_card_s3_key,
               p.qr_code_1_s3_key, p.qr_code_1_label,
               p.qr_code_2_s3_key, p.qr_code_2_label,
               p.nmls_number,

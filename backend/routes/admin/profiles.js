@@ -17,7 +17,7 @@ router.get('/:id/profile', async (req, res, next) => {
       team: null, phone: null, display_email: null, website: null, online_app_url: null,
       facebook_url: null, instagram_url: null, twitter_url: null, linkedin_url: null, tiktok_url: null,
       youtube_url: null,
-      avatar_s3_key: null, business_card_s3_key: null,
+      avatar_s3_key: null, avatar_position: null, business_card_s3_key: null,
       business_card_html: null, business_card_back_html: null, business_card_brand: null,
       qr_code_1_s3_key: null, qr_code_1_label: null,
       qr_code_2_s3_key: null, qr_code_2_label: null,
@@ -87,6 +87,7 @@ router.put('/:id/profile', async (req, res, next) => {
       'client_dropbox_location',
       'email_signature',
       'business_card_html', 'business_card_back_html', 'business_card_brand',
+      'avatar_position',
     ];
 
     const setClauses = [];
@@ -143,9 +144,10 @@ router.put('/:id/avatar/confirm', async (req, res, next) => {
     if (!fileKey) return res.status(400).json({ error: 'fileKey is required' });
     const [old] = await db.query('SELECT avatar_s3_key FROM user_profiles WHERE user_id = ?', [userId]);
     const oldKey = old[0]?.avatar_s3_key;
+    // New photo → old crop position no longer applies
     await db.query(
       `INSERT INTO user_profiles (user_id, avatar_s3_key) VALUES (?, ?)
-       ON DUPLICATE KEY UPDATE avatar_s3_key = ?`,
+       ON DUPLICATE KEY UPDATE avatar_s3_key = ?, avatar_position = NULL`,
       [userId, fileKey, fileKey]
     );
     if (oldKey && oldKey !== fileKey) await deleteObject(BUCKETS.media, oldKey);
@@ -159,7 +161,7 @@ router.delete('/:id/avatar', async (req, res, next) => {
     const [rows] = await db.query('SELECT avatar_s3_key FROM user_profiles WHERE user_id = ?', [userId]);
     const key = rows[0]?.avatar_s3_key;
     if (key) await deleteObject(BUCKETS.media, key);
-    await db.query('UPDATE user_profiles SET avatar_s3_key = NULL WHERE user_id = ?', [userId]);
+    await db.query('UPDATE user_profiles SET avatar_s3_key = NULL, avatar_position = NULL WHERE user_id = ?', [userId]);
     res.json({ success: true });
   } catch (error) { next(error); }
 });

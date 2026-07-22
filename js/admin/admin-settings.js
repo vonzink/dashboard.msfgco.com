@@ -442,15 +442,19 @@
       const img = document.getElementById('profileAvatarImg');
       const initials = document.getElementById('profileAvatarInitials');
       const removeBtn = document.getElementById('avatarRemoveBtn');
+      const adjustBtn = document.getElementById('avatarAdjustBtn');
+      img.style.objectPosition = data.avatar_position || '50% 50%';
       if (data.avatar_url) {
         img.src = data.avatar_url;
         img.style.display = 'block';
         initials.style.display = 'none';
         removeBtn.style.display = '';
+        adjustBtn.style.display = '';
       } else {
         img.style.display = 'none';
         initials.style.display = '';
         removeBtn.style.display = 'none';
+        adjustBtn.style.display = 'none';
       }
 
       // Business Card tab: load stored front/back HTML + brand (persists until re-saved)
@@ -650,13 +654,16 @@
         body: JSON.stringify({ fileKey: urlData.fileKey }),
       });
 
-      // 4. Show preview
+      // 4. Show preview (backend resets avatar_position for the new photo)
       const reader = new FileReader();
       reader.onload = (ev) => {
-        document.getElementById('profileAvatarImg').src = ev.target.result;
-        document.getElementById('profileAvatarImg').style.display = 'block';
+        const img = document.getElementById('profileAvatarImg');
+        img.src = ev.target.result;
+        img.style.objectPosition = '50% 50%';
+        img.style.display = 'block';
         document.getElementById('profileAvatarInitials').style.display = 'none';
         document.getElementById('avatarRemoveBtn').style.display = '';
+        document.getElementById('avatarAdjustBtn').style.display = '';
       };
       reader.readAsDataURL(file);
     } catch (err) {
@@ -674,10 +681,93 @@
       document.getElementById('profileAvatarImg').style.display = 'none';
       document.getElementById('profileAvatarInitials').style.display = '';
       document.getElementById('avatarRemoveBtn').style.display = 'none';
+      document.getElementById('avatarAdjustBtn').style.display = 'none';
     } catch (err) {
       alert('Error: ' + err.message);
     }
   });
+
+  // --- Avatar Reposition (drag the photo inside the circle) ---
+  (function setupAvatarReposition() {
+    const container = document.getElementById('profileAvatar');
+    const img = document.getElementById('profileAvatarImg');
+    const actionRow = document.getElementById('avatarActionRow');
+    const controls = document.getElementById('avatarAdjustControls');
+    const hint = document.getElementById('avatarAdjustHint');
+    let adjusting = false;
+    let posBeforeAdjust = '50% 50%';
+    let dragStart = null;
+
+    img.draggable = false; // no ghost-image drag while repositioning
+
+    function parsePos(str) {
+      const m = /^([\d.]+)%\s+([\d.]+)%$/.exec(str || '');
+      return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 50, y: 50 };
+    }
+
+    function setAdjustMode(on) {
+      adjusting = on;
+      actionRow.style.display = on ? 'none' : 'flex';
+      controls.style.display = on ? 'flex' : 'none';
+      hint.style.display = on ? '' : 'none';
+      container.style.cursor = on ? 'grab' : '';
+      container.style.touchAction = on ? 'none' : '';
+    }
+
+    document.getElementById('avatarAdjustBtn').addEventListener('click', () => {
+      posBeforeAdjust = img.style.objectPosition || '50% 50%';
+      setAdjustMode(true);
+    });
+
+    document.getElementById('avatarAdjustCancelBtn').addEventListener('click', () => {
+      img.style.objectPosition = posBeforeAdjust;
+      setAdjustMode(false);
+    });
+
+    document.getElementById('avatarAdjustSaveBtn').addEventListener('click', async () => {
+      try {
+        await api('/admin/users/' + profileUserId + '/profile', {
+          method: 'PUT',
+          body: JSON.stringify({ avatar_position: img.style.objectPosition || '50% 50%' }),
+        });
+        setAdjustMode(false);
+      } catch (err) {
+        alert('Error saving position: ' + err.message);
+      }
+    });
+
+    container.addEventListener('pointerdown', (e) => {
+      if (!adjusting) return;
+      e.preventDefault();
+      dragStart = { px: e.clientX, py: e.clientY, ...parsePos(img.style.objectPosition) };
+      container.setPointerCapture(e.pointerId);
+      container.style.cursor = 'grabbing';
+    });
+
+    container.addEventListener('pointermove', (e) => {
+      if (!adjusting || !dragStart) return;
+      const cw = img.clientWidth, ch = img.clientHeight;
+      const nw = img.naturalWidth, nh = img.naturalHeight;
+      if (!nw || !nh || !cw || !ch) return;
+      // object-fit: cover — only the overflowing axis can pan; map cursor
+      // pixels 1:1 onto the hidden overflow so the photo tracks the pointer.
+      const scale = Math.max(cw / nw, ch / nh);
+      const overX = nw * scale - cw;
+      const overY = nh * scale - ch;
+      const dx = e.clientX - dragStart.px;
+      const dy = e.clientY - dragStart.py;
+      const nx = overX > 0 ? Math.min(100, Math.max(0, dragStart.x - (dx / overX) * 100)) : 50;
+      const ny = overY > 0 ? Math.min(100, Math.max(0, dragStart.y - (dy / overY) * 100)) : 50;
+      img.style.objectPosition = nx.toFixed(1) + '% ' + ny.toFixed(1) + '%';
+    });
+
+    const endDrag = () => {
+      dragStart = null;
+      if (adjusting) container.style.cursor = 'grab';
+    };
+    container.addEventListener('pointerup', endDrag);
+    container.addEventListener('pointercancel', endDrag);
+  })();
 
   // --- QR Code Upload/Remove/Download (generic for slots 1 & 2) ---
   function setupQrCodeHandlers(num) {
