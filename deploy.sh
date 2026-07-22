@@ -73,9 +73,32 @@ if [ "$DEPLOY_FRONTEND" = true ]; then
   echo ""
 
   echo -e "${YELLOW}▸ Syncing dist/ to S3...${NC}"
-  # --delete removes orphaned old hashed files so we don't accumulate them.
-  # Brief 404 window for in-flight users between sync + CloudFront invalidation
-  # is acceptable; HTML is invalidated immediately and clients re-fetch.
+  # Cache-Control matters here: with no header, browsers heuristically cache
+  # index.html and can keep serving a stale copy that references hashed
+  # bundles a previous --delete removed — the 404'd scripts make every
+  # data-action no-op silently (this broke the HR employee cards 2026-07-21).
+  # HTML must always revalidate (no-cache + ETag = cheap 304); content-hashed
+  # js/css never change under the same name, so they cache for a year.
+  # Ordered so new HTML never references a not-yet-uploaded asset.
+
+  # 1. Content-hashed js/css → long immutable cache
+  aws s3 sync dist/ "$S3_BUCKET" \
+    --exclude "*" \
+    --include "js/*.??????????.js" \
+    --include "css/*.??????????.css" \
+    --cache-control "public,max-age=31536000,immutable"
+
+  # 2. Everything else except HTML (vendor, assets, un-hashed scanner js, ...)
+  aws s3 sync dist/ "$S3_BUCKET" --exclude "*.html"
+
+  # 3. HTML → force-upload every deploy (sync would skip unchanged files,
+  #    leaving stale metadata) with always-revalidate caching
+  aws s3 cp dist/ "$S3_BUCKET" --recursive \
+    --exclude "*" \
+    --include "*.html" \
+    --cache-control "no-cache"
+
+  # 4. Remove orphaned files from previous deploys (old hashed bundles)
   aws s3 sync dist/ "$S3_BUCKET" --delete
   echo -e "${GREEN}✓ S3 sync complete${NC}"
   echo ""
