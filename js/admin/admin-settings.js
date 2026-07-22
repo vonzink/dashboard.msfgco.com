@@ -1468,7 +1468,12 @@ ${qrPanel}
   // from profile data — hand-edits to the HTML boxes affect Print/HTML only.
 
   function loadBizImage(url) {
-    return fetch(url, { mode: 'cors' })
+    // cache: 'no-store' is load-bearing. The preview iframes fetch these same
+    // S3 URLs via plain <img> (no Origin header), and S3 serves those with no
+    // CORS headers and no Vary: Origin — so the browser caches a header-less
+    // response. A cached-hit CORS fetch then fails ("Failed to fetch").
+    // Bypassing the cache guarantees a fresh request WITH Origin.
+    return fetch(url, { mode: 'cors', cache: 'no-store' })
       .then((r) => { if (!r.ok) throw new Error('Could not load image: ' + url); return r.blob(); })
       .then((b) => createImageBitmap(b));
   }
