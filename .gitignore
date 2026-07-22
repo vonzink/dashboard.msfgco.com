@@ -30,3 +30,8 @@ build/
 
 # Test/debug scripts (may contain secrets)
 tools/
+
+# Agent tooling workspaces (session-local, not project source)
+.planning/
+.superpowers/
+.understand-anything/
