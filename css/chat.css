@@ -1125,6 +1125,37 @@
 
 .ask-ai-new-btn:hover { color: var(--text-primary); }
 
+/* Dashboard | Assistant mode pill (top of the Ask AI pane) */
+.ask-ai-modes {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem 0;
+    flex-shrink: 0;
+}
+
+.ask-ai-mode-btn {
+    flex: 1;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.ask-ai-mode-btn:hover {
+    color: var(--text-primary);
+}
+
+.ask-ai-mode-btn.is-active {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--green-bright);
+}
+
 @media (max-width: 480px) {
     .chat-fab {
         right: 1rem;
