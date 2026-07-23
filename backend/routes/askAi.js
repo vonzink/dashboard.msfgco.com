@@ -15,8 +15,8 @@ router.post('/ask', validate(askAiQuestion), async (req, res, next) => {
     const email = req.user?.db?.email || req.user?.email || req.user?.claims?.email;
     if (!email) return fail(res, 'User identity unavailable', 401);
 
-    const { question, conversationId, pageRoute } = req.body;
-    ok(res, await askAi.ask({ email, question, conversationId, pageRoute }));
+    const { question, conversationId, pageRoute, mode } = req.body;
+    ok(res, await askAi.ask({ email, question, conversationId, pageRoute, mode }));
   } catch (err) {
     if (err.status) return fail(res, err.message, err.status);
     next(err);
