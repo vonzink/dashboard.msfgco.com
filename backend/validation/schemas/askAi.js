@@ -12,6 +12,8 @@ const askAiQuestion = z.object({
   conversationId: z.string().trim().min(1).max(64).optional().nullable(),
   // Current SPA section id, for page-aware answers.
   pageRoute: z.string().trim().max(200).optional().nullable(),
+  // Which brain answers: dashboard help (default) or the internal-open assistant.
+  mode: z.enum(['dashboard', 'open']).default('dashboard'),
 });
 
 module.exports = { askAiQuestion };
