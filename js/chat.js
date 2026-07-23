@@ -313,6 +313,7 @@ const Chat = {
 
     this._restoreFabPosition();
     this._bindFabDrag(fab);
+    this._bindPanelResize(panel);
 
     if (Utils.getStorage('msfg_chat_open', false) === true) {
       this._openPanel();
@@ -333,7 +334,10 @@ const Chat = {
 
     window.addEventListener('resize', () => {
       this._restoreFabPosition();
-      if (panel.classList.contains('is-open')) this._positionPanel();
+      if (panel.classList.contains('is-open')) {
+        this._restorePanelSize();   // re-clamp a saved size to the new viewport
+        this._positionPanel();
+      }
     });
   },
 
@@ -380,6 +384,95 @@ const Chat = {
     };
     fab.addEventListener('pointerup', end);
     fab.addEventListener('pointercancel', end);
+  },
+
+  // ========================================
+  // PANEL RESIZE (drag-to-stretch)
+  // ========================================
+  _PANEL_MIN_W: 320,
+  _PANEL_MIN_H: 420,
+
+  /** Max panel size: 92% of the viewport. */
+  _panelMax() {
+    const { w: vw, h: vh } = this._viewport();
+    return { maxW: Math.round(vw * 0.92), maxH: Math.round(vh * 0.92) };
+  },
+
+  /**
+   * Grip at the top-left corner resizes the panel while the bottom-right
+   * corner stays put. In the default corner state, CSS `bottom/right` hold the
+   * anchor automatically (only width/height change). When the FAB has been
+   * moved the panel is inline-positioned, so we also pin `left/top` so that
+   * `right`/`bottom` don't shift. Size persists in `msfg_chat_panel_size`.
+   */
+  _bindPanelResize(panel) {
+    let grip = panel.querySelector('.chat-float-resize');
+    if (!grip) {
+      grip = document.createElement('div');
+      grip.className = 'chat-float-resize';
+      grip.setAttribute('aria-hidden', 'true');
+      panel.appendChild(grip);
+    }
+
+    let anchorRight = 0, anchorBottom = 0, pointerId = null, resizing = false;
+
+    grip.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      if (this._viewport().w <= 600) return;   // mobile: CSS owns the layout
+      const r = panel.getBoundingClientRect();
+      anchorRight = r.right;
+      anchorBottom = r.bottom;
+      pointerId = e.pointerId;
+      resizing = true;
+      panel.classList.add('is-resizing');
+      grip.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+
+    grip.addEventListener('pointermove', (e) => {
+      if (!resizing || e.pointerId !== pointerId) return;
+      const m = 8;
+      const { maxW, maxH } = this._panelMax();
+      // Top-left grip: width/height grow as the pointer moves toward top-left.
+      let w = Math.max(this._PANEL_MIN_W, Math.min(anchorRight - e.clientX, maxW, anchorRight - m));
+      let h = Math.max(this._PANEL_MIN_H, Math.min(anchorBottom - e.clientY, maxH, anchorBottom - m));
+      panel.style.width = w + 'px';
+      panel.style.height = h + 'px';
+      // Inline-positioned (FAB moved): pin the fixed corner ourselves.
+      if (Utils.getStorage('msfg_chat_fab_pos', null) !== null) {
+        panel.style.left = (anchorRight - w) + 'px';
+        panel.style.top = (anchorBottom - h) + 'px';
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+      }
+    });
+
+    const end = (e) => {
+      if (!resizing || e.pointerId !== pointerId) return;
+      resizing = false;
+      pointerId = null;
+      panel.classList.remove('is-resizing');
+      const r = panel.getBoundingClientRect();
+      Utils.setStorage('msfg_chat_panel_size', { w: Math.round(r.width), h: Math.round(r.height) });
+    };
+    grip.addEventListener('pointerup', end);
+    grip.addEventListener('pointercancel', end);
+  },
+
+  /** Apply the saved panel size, re-clamped to the current viewport. */
+  _restorePanelSize() {
+    const panel = document.getElementById('chatFloatPanel');
+    if (!panel) return;
+    if (this._viewport().w <= 600) {   // mobile: let CSS size the panel
+      panel.style.width = '';
+      panel.style.height = '';
+      return;
+    }
+    const size = Utils.getStorage('msfg_chat_panel_size', null);
+    if (!size || typeof size.w !== 'number' || typeof size.h !== 'number') return;
+    const { maxW, maxH } = this._panelMax();
+    panel.style.width = Math.max(this._PANEL_MIN_W, Math.min(size.w, maxW)) + 'px';
+    panel.style.height = Math.max(this._PANEL_MIN_H, Math.min(size.h, maxH)) + 'px';
   },
 
   /** Viewport size, 0×0 when the tab is hidden/prerendered — callers must bail on that. */
@@ -457,6 +550,7 @@ const Chat = {
     const panel = document.getElementById('chatFloatPanel');
     if (!panel) return;
 
+    this._restorePanelSize();   // apply saved size before anchoring to the FAB
     this._positionPanel();
     panel.classList.add('is-open');
     panel.setAttribute('aria-hidden', 'false');

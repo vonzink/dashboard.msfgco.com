@@ -873,6 +873,43 @@
     transform: translateY(0) scale(1);
 }
 
+/* Drag-to-resize grip. Top-left corner: the panel is anchored bottom-right
+   (CSS default, or pinned there by JS when the FAB has been moved), so the
+   top-left is the corner that grows into open screen space. */
+.chat-float-resize {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 18px;
+    height: 18px;
+    z-index: 3;
+    cursor: nwse-resize;
+    touch-action: none;
+    opacity: 0;
+    transition: opacity var(--transition-fast);
+    border-top-left-radius: var(--radius-xl);
+    background-image:
+        linear-gradient(135deg, transparent 45%, var(--text-muted) 45%, var(--text-muted) 55%, transparent 55%),
+        linear-gradient(135deg, transparent 62%, var(--text-muted) 62%, var(--text-muted) 72%, transparent 72%);
+    background-size: 100% 100%;
+}
+
+.chat-float-panel:hover .chat-float-resize,
+.chat-float-panel.is-resizing .chat-float-resize {
+    opacity: 0.6;
+}
+
+/* No width/height transition mid-drag (the panel's `transition: all` would
+   lag the resize), and no text selection while dragging. */
+.chat-float-panel.is-resizing {
+    transition: none;
+    user-select: none;
+}
+
+@media (max-width: 600px) {
+    .chat-float-resize { display: none; }
+}
+
 .chat-float-header {
     display: flex;
     align-items: center;
