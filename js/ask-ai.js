@@ -17,16 +17,65 @@
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
   const AskAI = {
-    conversationId: null,
+    mode: 'dashboard',
+    threads: { dashboard: { conversationId: null }, open: { conversationId: null } },
     pending: false,
 
     init() {
       const panel = document.getElementById('chatFloatPanel');
       if (!panel || !document.getElementById('askAiPane')) return;
       this.bindTabs();
+      this.bindModes();
       this.bindForm();
       this.restoreTab();
       this.appendIntro();
+      this.restoreMode();
+    },
+
+    bindModes() {
+      document.querySelectorAll('.ask-ai-mode-btn').forEach((btn) => {
+        btn.addEventListener('click', () => this.setMode(btn.getAttribute('data-mode')));
+      });
+    },
+
+    restoreMode() {
+      const saved = Utils.getStorage('msfg_askai_mode', 'dashboard');
+      if (saved === 'open') this.setMode('open');
+    },
+
+    setMode(mode) {
+      if (mode !== 'dashboard' && mode !== 'open') return;
+      if (mode === this.mode) return;
+      const list = document.getElementById('askAiMessages');
+      if (list) this.threads[this.mode].messagesHTML = list.innerHTML;  // save outgoing
+      this.mode = mode;
+      Utils.setStorage('msfg_askai_mode', mode);
+
+      document.querySelectorAll('.ask-ai-mode-btn').forEach((b) => {
+        const on = b.getAttribute('data-mode') === mode;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+
+      if (list) {
+        const saved = this.threads[mode].messagesHTML;
+        if (saved != null) {
+          list.innerHTML = saved;                       // restore incoming thread
+        } else {
+          list.innerHTML = '';
+          this.appendIntro();                           // first visit to this mode
+        }
+        list.scrollTop = list.scrollHeight;
+      }
+
+      const input = document.getElementById('askAiInput');
+      if (input) {
+        input.placeholder = mode === 'open'
+          ? 'Ask a mortgage question or brainstorm…'
+          : 'Ask about the dashboard...';
+        const panel = document.getElementById('chatFloatPanel');
+        if (panel && panel.classList.contains('is-open')) input.focus();
+      }
     },
 
     // ── Tabs ────────────────────────────────────
@@ -75,7 +124,7 @@
     },
 
     reset() {
-      this.conversationId = null;
+      this.threads[this.mode].conversationId = null;
       const list = document.getElementById('askAiMessages');
       if (list) list.innerHTML = '';
       this.appendIntro();
@@ -84,9 +133,12 @@
     appendIntro() {
       const list = document.getElementById('askAiMessages');
       if (!list || list.children.length) return;
+      const text = this.mode === 'open'
+        ? 'Internal assistant — think out loud about loans, scenarios, and MSFG knowledge. Answers lean on our guides; double-check specific numbers.'
+        : 'Hi! Ask me how to do anything in the dashboard — or where to find it.';
       const el = document.createElement('div');
       el.className = 'ask-ai-msg ask-ai-msg-assistant';
-      el.innerHTML = '<div class="ask-ai-bubble">Hi! Ask me how to do anything in the dashboard — or where to find it.</div>';
+      el.innerHTML = '<div class="ask-ai-bubble">' + esc(text) + '</div>';
       list.appendChild(el);
     },
 
@@ -113,12 +165,13 @@
       this.appendUser(question);
       this.setPending(true);
       try {
-        const body = { question };
+        const body = { question, mode: this.mode };
         const pageRoute = this.currentPageRoute();
         if (pageRoute) body.pageRoute = pageRoute;
-        if (this.conversationId) body.conversationId = this.conversationId;
+        const thread = this.threads[this.mode];
+        if (thread.conversationId) body.conversationId = thread.conversationId;
         const resp = await ServerAPI.post('/ask-ai/ask', body);
-        this.conversationId = resp.conversationId || this.conversationId;
+        thread.conversationId = resp.conversationId || thread.conversationId;
         this.appendAnswer(resp);
       } catch (err) {
         this.appendError((err && err.message) || 'Something went wrong. Try again.');
