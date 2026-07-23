@@ -116,4 +116,41 @@ describe('askAi.service ask()', () => {
     await expect(service.ask({ email: 'z@x.com', question: 'q' }))
       .rejects.toMatchObject({ status: 502 });
   });
+
+  it('routes mode=open to the internal brain with its own token', async () => {
+    vi.stubEnv('RAG_BRAIN_OPEN_SLUG', 'msfg-internal');
+    vi.stubEnv('RAG_BRAIN_OPEN_TOKEN', 'open-tok');
+    fetchMock.mockResolvedValue(fetchResponse(200, okPayload));
+
+    await service.ask({ email: 'z@x.com', question: 'gift funds on 5% down?', mode: 'open' });
+
+    const [url, opts] = fetchMock.mock.calls[0];
+    expect(url).toBe('https://los.example.com/rag/api/ai/public/msfg-internal/ask');
+    expect(opts.headers['X-Public-Brain-Token']).toBe('open-tok');
+    expect(opts.headers.Origin).toBe('https://dashboard.msfgco.com');
+  });
+
+  it('defaults to the dashboard brain when mode is omitted or "dashboard"', async () => {
+    fetchMock.mockResolvedValue(fetchResponse(200, okPayload));
+
+    await service.ask({ email: 'z@x.com', question: 'q' });                      // omitted
+    await service.ask({ email: 'z@x.com', question: 'q', mode: 'dashboard' });   // explicit
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://los.example.com/rag/api/ai/public/msfg-dashboard/ask');
+    expect(fetchMock.mock.calls[1][0]).toBe('https://los.example.com/rag/api/ai/public/msfg-dashboard/ask');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).message).toBe('q');
+  });
+
+  it('mode=open with no open token → 503 and never calls fetch', async () => {
+    await expect(service.ask({ email: 'z@x.com', question: 'q', mode: 'open' }))
+      .rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses RAG_BRAIN_OPEN_SLUG default (msfg-internal) when slug env is unset but token is set', async () => {
+    vi.stubEnv('RAG_BRAIN_OPEN_TOKEN', 'open-tok');   // no RAG_BRAIN_OPEN_SLUG
+    fetchMock.mockResolvedValue(fetchResponse(200, okPayload));
+    await service.ask({ email: 'z@x.com', question: 'q', mode: 'open' });
+    expect(fetchMock.mock.calls[0][0]).toBe('https://los.example.com/rag/api/ai/public/msfg-internal/ask');
+  });
 });

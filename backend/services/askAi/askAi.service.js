@@ -21,11 +21,19 @@ function serviceError(message, status) {
   return err;
 }
 
-async function ask({ email, question, conversationId, pageRoute }) {
+// Per-mode brain resolution. Base URL + origin are shared (same engine, same
+// allowed domain); only the brain slug + public token differ.
+const BRAINS = {
+  dashboard: { slugEnv: 'RAG_BRAIN_SLUG',      slugDefault: 'msfg-dashboard', tokenEnv: 'RAG_BRAIN_PUBLIC_TOKEN' },
+  open:      { slugEnv: 'RAG_BRAIN_OPEN_SLUG', slugDefault: 'msfg-internal',  tokenEnv: 'RAG_BRAIN_OPEN_TOKEN' },
+};
+
+async function ask({ email, question, conversationId, pageRoute, mode }) {
   const baseUrl = process.env.RAG_BRAIN_BASE_URL;
-  const token = process.env.RAG_BRAIN_PUBLIC_TOKEN;
-  const slug = process.env.RAG_BRAIN_SLUG || 'msfg-dashboard';
   const origin = process.env.RAG_BRAIN_ORIGIN || 'https://dashboard.msfgco.com';
+  const brain = BRAINS[mode] || BRAINS.dashboard;
+  const slug = process.env[brain.slugEnv] || brain.slugDefault;
+  const token = process.env[brain.tokenEnv];
 
   if (!baseUrl || !token) {
     throw serviceError('Ask AI is not configured on the server yet', 503);
