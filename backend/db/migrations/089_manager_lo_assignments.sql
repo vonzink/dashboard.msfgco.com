@@ -4,7 +4,10 @@
 -- Controls which employees' loans each Manager can view/edit/work on in the
 -- pipeline, funded loans, and pre-approvals. A manager with no rows here sees
 -- nothing (strict scoping, same as processors).
--- One manager can have many LOs; one LO can be under many managers.
+-- One manager can have many LOs. One LO can be under many managers.
+-- NOTE: never use a semicolon inside these comments. migrations.js splits the
+-- file on the statement separator BEFORE stripping comments, so a semicolon in
+-- a comment truncates the statement that follows and the migration fails.
 -- ========================================
 CREATE TABLE IF NOT EXISTS manager_lo_assignments (
     id INT AUTO_INCREMENT PRIMARY KEY,
