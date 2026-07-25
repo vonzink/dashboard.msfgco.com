@@ -71,7 +71,7 @@
       if (tabName === 'processors') loadProcessorAssignments();
       if (tabName === 'managers') loadManagerAssignments();
       if (tabName === 'system') loadSystem();
-      if (tabName === 'monday') loadMondayTab();
+      if (tabName === 'integrations') loadIntegrationsTab();
     });
   });
 
@@ -3029,12 +3029,20 @@ ${qrPanel}
   document.getElementById('refreshSystemBtn').addEventListener('click', loadSystem);
 
   /* ═══════════════════════════════════════
-     MONDAY.COM TAB
+     INTEGRATIONS TAB — MONDAY.COM SECTION
   ═══════════════════════════════════════ */
   let mondayBoards = [];
   let mondayBoardColumns = [];
   let mondayCurrentBoardId = null;
   let mondayEditingBoardId = null;
+
+  /**
+   * Entry point for the Integrations tab. Each integration owns a loader;
+   * add new ones here as they are built (Suite lands with the Suite sync).
+   */
+  function loadIntegrationsTab() {
+    loadMondayTab();
+  }
 
   function loadMondayTab() {
     loadMondayBoards();
@@ -3629,8 +3637,8 @@ ${qrPanel}
   // Initial population of header status + setup flow (fire-and-forget)
   refreshHeaderSyncStatus();
   refreshSetupFlow();
-  // Refresh setup flow whenever Monday tab is activated
-  document.querySelectorAll('.admin-tab[data-tab="monday"]').forEach(tab => {
+  // Refresh setup flow whenever the Integrations tab is activated
+  document.querySelectorAll('.admin-tab[data-tab="integrations"]').forEach(tab => {
     tab.addEventListener('click', () => { refreshHeaderSyncStatus(); refreshSetupFlow(); });
   });
 
@@ -3892,10 +3900,11 @@ ${qrPanel}
         return;
       }
 
-      // Hash-based deep linking
+      // Hash-based deep linking. '#monday' is the pre-rename hash — keep honouring it
+      // so existing bookmarks and any stale cached HTML still land on the right tab.
       var hash = window.location.hash;
-      if (hash === '#monday') {
-        document.querySelector('[data-tab="monday"]').click();
+      if (hash === '#integrations' || hash === '#monday') {
+        document.querySelector('[data-tab="integrations"]').click();
       } else if (hash === '#investors') {
         document.querySelector('[data-tab="investors"]').click();
       } else if (hash === '#processors') {
