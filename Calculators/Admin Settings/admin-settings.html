@@ -31,6 +31,9 @@
     <button class="admin-tab" data-tab="processors">
       <i class="fas fa-user-cog"></i> Processors
     </button>
+    <button class="admin-tab" data-tab="managers">
+      <i class="fas fa-user-tie"></i> Managers
+    </button>
     <button class="admin-tab" data-tab="system">
       <i class="fas fa-server"></i> System
     </button>
@@ -964,6 +967,25 @@
       Assign which Loan Officers each Processor can see in their pipeline, funded loans, and pre-approvals.
     </p>
     <div id="processorAssignmentsContainer">
+      <div style="text-align:center; padding:30px; color:#999;">
+        <i class="fas fa-spinner fa-spin"></i> Loading...
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================
+       TAB: Managers (LO Assignments)
+  ================================================ -->
+  <div class="admin-panel" id="panel-managers">
+    <div class="toolbar">
+      <h3 style="margin:0; font-size:16px; color:#104547;">
+        <i class="fas fa-user-tie"></i> Manager — Loan Officer Assignments
+      </h3>
+    </div>
+    <p style="font-size:13px; color:#666; margin:8px 0 16px;">
+      Assign which Loan Officers each Manager can view, edit, and work on in their pipeline, funded loans, and pre-approvals. A manager with no assignments sees nothing.
+    </p>
+    <div id="managerAssignmentsContainer">
       <div style="text-align:center; padding:30px; color:#999;">
         <i class="fas fa-spinner fa-spin"></i> Loading...
       </div>

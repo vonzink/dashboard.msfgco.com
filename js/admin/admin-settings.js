@@ -69,6 +69,7 @@
       if (tabName === 'employees') loadUsers();
       if (tabName === 'investors') loadInvestors();
       if (tabName === 'processors') loadProcessorAssignments();
+      if (tabName === 'managers') loadManagerAssignments();
       if (tabName === 'system') loadSystem();
       if (tabName === 'monday') loadMondayTab();
     });
@@ -3697,27 +3698,32 @@ ${qrPanel}
   /* ═══════════════════════════════════════
      PROCESSORS TAB
   ═══════════════════════════════════════ */
-  async function loadProcessorAssignments() {
-    const container = document.getElementById('processorAssignmentsContainer');
+  // Generic renderer for the Processor and Manager "LO assignment" panels.
+  // cfg: { containerId, endpoint, entitiesKey, assignmentFk, headerIcon, emptyMsg }
+  async function renderAssignmentPanel(cfg) {
+    const container = document.getElementById(cfg.containerId);
     container.innerHTML = '<div style="text-align:center; padding:30px; color:#999;"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
 
     try {
-      const data = await api('/admin/processor-assignments');
+      const data = await api(cfg.endpoint);
       if (!data) return;
 
-      const { processors, los, assignments } = data;
+      const los = data.los;
+      const assignments = data.assignments;
+      const processors = data[cfg.entitiesKey];  // entities: processors or managers
 
       if (processors.length === 0) {
-        container.innerHTML = '<div style="text-align:center; padding:30px; color:#999;">No processors found. Add a user with the "processor" role first.</div>';
+        container.innerHTML = cfg.emptyMsg;
         return;
       }
 
-      // Build a map of processor -> Set of assigned LO ids
+      // Build a map of entity -> Set of assigned LO ids
       const assignmentMap = {};
       processors.forEach(p => { assignmentMap[p.id] = new Set(); });
       assignments.forEach(a => {
-        if (assignmentMap[a.processor_user_id]) {
-          assignmentMap[a.processor_user_id].add(a.lo_user_id);
+        const entityId = a[cfg.assignmentFk];
+        if (assignmentMap[entityId]) {
+          assignmentMap[entityId].add(a.lo_user_id);
         }
       });
 
@@ -3730,7 +3736,7 @@ ${qrPanel}
         html += '<div class="processor-card" data-processor-id="' + proc.id + '">' +
           '<div class="processor-header">' +
             '<div>' +
-              '<div class="proc-name"><i class="fas fa-user-shield" style="margin-right:6px; opacity:.7;"></i>' + escHtml(cleanProcName) + '</div>' +
+              '<div class="proc-name"><i class="fas ' + cfg.headerIcon + '" style="margin-right:6px; opacity:.7;"></i>' + escHtml(cleanProcName) + '</div>' +
               '<div class="proc-email">' + escHtml(proc.email) + '</div>' +
             '</div>' +
             '<button class="btn btn-sm proc-save-btn" data-processor-id="' + proc.id + '">' +
@@ -3827,7 +3833,7 @@ ${qrPanel}
           btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
           try {
-            const result = await api('/admin/processor-assignments/' + processorId, {
+            const result = await api(cfg.endpoint + '/' + processorId, {
               method: 'PUT',
               body: JSON.stringify({ lo_ids: loIds }),
             });
@@ -3855,6 +3861,28 @@ ${qrPanel}
     }
   }
 
+  function loadProcessorAssignments() {
+    return renderAssignmentPanel({
+      containerId: 'processorAssignmentsContainer',
+      endpoint: '/admin/processor-assignments',
+      entitiesKey: 'processors',
+      assignmentFk: 'processor_user_id',
+      headerIcon: 'fa-user-shield',
+      emptyMsg: '<div style="text-align:center; padding:30px; color:#999;">No processors found. Add a user with the "processor" role first.</div>',
+    });
+  }
+
+  function loadManagerAssignments() {
+    return renderAssignmentPanel({
+      containerId: 'managerAssignmentsContainer',
+      endpoint: '/admin/manager-assignments',
+      entitiesKey: 'managers',
+      assignmentFk: 'manager_user_id',
+      headerIcon: 'fa-user-tie',
+      emptyMsg: '<div style="text-align:center; padding:30px; color:#999;">No managers found. Add a user with the "manager" role first.</div>',
+    });
+  }
+
   /* ── Init ── */
   document.addEventListener('DOMContentLoaded', () => {
     // Verify admin access
@@ -3872,6 +3900,8 @@ ${qrPanel}
         document.querySelector('[data-tab="investors"]').click();
       } else if (hash === '#processors') {
         document.querySelector('[data-tab="processors"]').click();
+      } else if (hash === '#managers') {
+        document.querySelector('[data-tab="managers"]').click();
       } else {
         loadUsers();
       }

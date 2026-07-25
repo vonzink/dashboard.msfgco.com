@@ -106,6 +106,80 @@ router.put('/processor-assignments/:processorId', requireAdmin, async (req, res,
   }
 });
 
+// ── Manager → LO assignments (mirrors processor-assignments) ──────
+router.get('/manager-assignments', requireAdmin, async (req, res, next) => {
+  try {
+    // Get all managers (by role)
+    const [managers] = await db.query(
+      `SELECT id, name, email, role FROM users
+       WHERE LOWER(role) IN ('manager') AND is_active = 1
+       ORDER BY name`
+    );
+
+    // Get ALL active employees as assignable options (not just LOs)
+    const [los] = await db.query(
+      `SELECT id, name, email, role FROM users
+       WHERE is_active = 1
+       ORDER BY name`
+    );
+
+    // Get current assignments
+    const [assignments] = await db.query(
+      `SELECT mla.id, mla.manager_user_id, mla.lo_user_id,
+              m.name as manager_name, lo.name as lo_name
+       FROM manager_lo_assignments mla
+       JOIN users m ON mla.manager_user_id = m.id
+       JOIN users lo ON mla.lo_user_id = lo.id
+       ORDER BY m.name, lo.name`
+    );
+
+    res.json({ managers, los, assignments });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put('/manager-assignments/:managerId', requireAdmin, async (req, res, next) => {
+  try {
+    const { managerId } = req.params;
+    const { lo_ids } = req.body;
+
+    if (!Array.isArray(lo_ids)) {
+      return res.status(400).json({ error: 'lo_ids must be an array' });
+    }
+
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      // Remove existing assignments for this manager
+      await connection.query(
+        'DELETE FROM manager_lo_assignments WHERE manager_user_id = ?',
+        [managerId]
+      );
+
+      // Insert new assignments
+      for (const loId of lo_ids) {
+        await connection.query(
+          'INSERT INTO manager_lo_assignments (manager_user_id, lo_user_id) VALUES (?, ?)',
+          [managerId, loId]
+        );
+      }
+
+      await connection.commit();
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+
+    res.json({ success: true, message: `Updated ${lo_ids.length} LO assignments` });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // ── System info ─────────────────────────────────
 router.get('/system', requireAdmin, async (req, res, next) => {
   try {

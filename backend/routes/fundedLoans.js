@@ -6,7 +6,7 @@ const router = express.Router();
 const db = require('../db/connection');
 const logger = require('../lib/logger');
 const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = require('../middleware/userContext');
-const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
+const { getAccessibleBoardIds, getManagerLOIds, getAssignedLOIds } = require('../utils/boardAccess');
 const { getMondayToken } = require('../services/monday/sync');
 const { archiveFundedLoan } = require('../services/monday/writer');
 
@@ -95,16 +95,16 @@ router.get('/', async (req, res, next) => {
     // ROLE-BASED + BOARD-ACCESS DATA FILTERING
     // ========================================
 
-    if (hasRole(req, 'admin', 'manager')) {
-      // Admin/Manager: See all funded loans
+    if (hasRole(req, 'admin')) {
+      // Admin: See all funded loans
       // Optional filter by specific board
       if (board_id) {
         whereClause += ' AND fl.source_board_id = ?';
         params.push(board_id);
       }
-    } else if (userGroup === 'processor') {
-      // Processor: See loans from their assigned LOs + accessible boards
-      const loIds = await getProcessorLOIds(userId);
+    } else if (userGroup === 'processor' || userGroup === 'manager') {
+      // Processor/Manager: See loans from their assigned LOs + accessible boards
+      const loIds = await getAssignedLOIds(userGroup, userId);
       const boardIds = await getAccessibleBoardIds(userId);
 
       const conditions = [];
@@ -248,7 +248,7 @@ router.get('/', async (req, res, next) => {
     // AVAILABLE BOARDS (for filter dropdown)
     // ========================================
     let boardsForFilter;
-    if (hasRole(req, 'admin', 'manager')) {
+    if (hasRole(req, 'admin')) {
       [boardsForFilter] = await db.query(
         `SELECT DISTINCT mb.board_id, mb.board_name
          FROM monday_boards mb
@@ -302,8 +302,8 @@ router.get('/summary', async (req, res, next) => {
     const params = [];
 
     // Role-based + board-access filtering
-    if (hasRole(req, 'admin', 'manager')) {
-      // Admin/Manager can filter by specific LO for goals view
+    if (hasRole(req, 'admin')) {
+      // Admin can filter by specific LO for goals view
       if (lo_id) {
         whereClause += ' AND assigned_lo_id = ?';
         params.push(lo_id);
@@ -312,8 +312,8 @@ router.get('/summary', async (req, res, next) => {
         whereClause += ' AND source_board_id = ?';
         params.push(board_id);
       }
-    } else if (userGroup === 'processor') {
-      const loIds = await getProcessorLOIds(userId);
+    } else if (userGroup === 'processor' || userGroup === 'manager') {
+      const loIds = await getAssignedLOIds(userGroup, userId);
       const boardIds = await getAccessibleBoardIds(userId);
       const conditions = [];
       if (loIds.length > 0) {
@@ -395,6 +395,16 @@ router.get('/by-lo/summary', async (req, res, next) => {
       params.push(dateFilter.start, dateFilter.end);
     }
 
+    // A non-admin manager only sees the by-LO breakdown for their assigned LOs.
+    if (!hasRole(req, 'admin') && hasRole(req, 'manager')) {
+      const loIds = await getManagerLOIds(getUserId(req));
+      if (loIds.length === 0) {
+        return res.json({ data: [], period: period || 'ytd' });
+      }
+      whereClause += `${whereClause ? ' AND' : 'WHERE'} fl.assigned_lo_id IN (${loIds.map(() => '?').join(',')})`;
+      params.push(...loIds);
+    }
+
     const [summary] = await db.query(
       `SELECT
         fl.assigned_lo_id,
@@ -444,10 +454,10 @@ router.get('/:id', async (req, res, next) => {
     const loan = loans[0];
 
     // Check access based on role + board access
-    if (hasRole(req, 'admin', 'manager')) {
+    if (hasRole(req, 'admin')) {
       // Full access
-    } else if (userGroup === 'processor') {
-      const loIds = await getProcessorLOIds(userId);
+    } else if (userGroup === 'processor' || userGroup === 'manager') {
+      const loIds = await getAssignedLOIds(userGroup, userId);
       const boardIds = await getAccessibleBoardIds(userId);
       if (!loIds.includes(loan.assigned_lo_id) && !boardIds.includes(loan.source_board_id)) {
         return res.status(403).json({ error: 'Access denied to this loan' });

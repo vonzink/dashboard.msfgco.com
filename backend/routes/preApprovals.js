@@ -8,7 +8,7 @@ const logger = require('../lib/logger');
 const { getMondayToken } = require('../services/monday/sync');
 const { createPreApproval, updatePreApproval, archivePreApproval } = require('../services/monday/writer');
 
-const { getAccessibleBoardIds } = require('../utils/boardAccess');
+const { getAccessibleBoardIds, getManagerLOIds } = require('../utils/boardAccess');
 
 router.use(requireDbUser);
 
@@ -23,12 +23,29 @@ router.get('/', async (req, res, next) => {
                  WHERE 1=1`;
     const params = [];
 
-    if (!isAdmin(req) && !hasRole(req, 'manager')) {
+    if (!isAdmin(req)) {
       const currentUserId = getUserId(req);
       const role = getUserRole(req);
       const boardIds = await getAccessibleBoardIds(currentUserId);
 
-      if (role === 'processor') {
+      if (hasRole(req, 'manager')) {
+        // Manager: pre-approvals for their assigned LOs + accessible boards.
+        // Unassigned (no LOs, no boards) sees nothing.
+        const loIds = await getManagerLOIds(currentUserId);
+        const conditions = [];
+        if (loIds.length > 0) {
+          conditions.push(`pa.assigned_lo_id IN (${loIds.map(() => '?').join(',')})`);
+          params.push(...loIds);
+        }
+        if (boardIds.length > 0) {
+          conditions.push(`pa.source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+          params.push(...boardIds);
+        }
+        if (conditions.length === 0) {
+          return res.json({ data: [], boards: [], groups: [] });
+        }
+        query += ` AND (${conditions.join(' OR ')})`;
+      } else if (role === 'processor') {
         // Processor: board-based access only
         if (boardIds.length === 0) {
           return res.json({ data: [], boards: [], groups: [] });
@@ -149,8 +166,8 @@ router.get('/summary', async (req, res, next) => {
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (hasRole(req, 'admin', 'manager')) {
-      // Admin/Manager can filter by specific LO for goals view
+    if (hasRole(req, 'admin')) {
+      // Admin can filter by specific LO for goals view
       if (lo_id) {
         whereClause += ' AND assigned_lo_id = ?';
         params.push(lo_id);
@@ -159,7 +176,24 @@ router.get('/summary', async (req, res, next) => {
       const currentUserId = getUserId(req);
       const role = getUserRole(req);
 
-      if (role === 'processor') {
+      if (hasRole(req, 'manager')) {
+        // Manager: scope to assigned LOs + accessible boards
+        const loIds = await getManagerLOIds(currentUserId);
+        const boardIds = await getAccessibleBoardIds(currentUserId);
+        const conditions = [];
+        if (loIds.length > 0) {
+          conditions.push(`assigned_lo_id IN (${loIds.map(() => '?').join(',')})`);
+          params.push(...loIds);
+        }
+        if (boardIds.length > 0) {
+          conditions.push(`source_board_id IN (${boardIds.map(() => '?').join(',')})`);
+          params.push(...boardIds);
+        }
+        if (conditions.length === 0) {
+          return res.json({ units: 0, total_amount: 0, active_count: 0 });
+        }
+        whereClause += ` AND (${conditions.join(' OR ')})`;
+      } else if (role === 'processor') {
         // Processor: board-based access
         const boardIds = await getAccessibleBoardIds(currentUserId);
         if (boardIds.length === 0) {
@@ -215,11 +249,20 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Pre-approval not found' });
     }
 
-    if (!isAdmin(req) && !hasRole(req, 'manager')) {
+    if (!isAdmin(req)) {
       const currentUserId = getUserId(req);
       const item = preApprovals[0];
       // Allow access if the LO is assigned to this item (by ID) or via board access
-      if (item.assigned_lo_id === currentUserId) {
+      if (hasRole(req, 'manager')) {
+        // Manager: allow if the item's LO is one of their assigned LOs, else board access
+        const loIds = await getManagerLOIds(currentUserId);
+        if (!loIds.includes(item.assigned_lo_id)) {
+          const boardIds = await getAccessibleBoardIds(currentUserId);
+          if (!boardIds.includes(item.source_board_id)) {
+            return res.status(403).json({ error: 'Access denied' });
+          }
+        }
+      } else if (item.assigned_lo_id === currentUserId) {
         // Direct assignment — allow
       } else {
         const boardIds = await getAccessibleBoardIds(currentUserId);

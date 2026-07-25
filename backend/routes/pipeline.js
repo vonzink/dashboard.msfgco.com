@@ -7,7 +7,7 @@ const { getDbUser, getUserId, getUserRole, hasRole, isAdmin, requireDbUser } = r
 const { pipelineUpdate, validate } = require('../validation/schemas');
 const { buildUpdate } = require('../utils/queryBuilder');
 const { deleted } = require('../utils/response');
-const { getAccessibleBoardIds, getProcessorLOIds } = require('../utils/boardAccess');
+const { getAccessibleBoardIds, getAssignedLOIds } = require('../utils/boardAccess');
 const { getMondayToken } = require('../services/monday/sync');
 const { createPipelineItem, updatePipelineItem, archivePipelineItem, createItemUpdate } = require('../services/monday/writer');
 
@@ -24,11 +24,12 @@ router.get('/', async (req, res, next) => {
     let query = 'SELECT p.* FROM pipeline p WHERE 1=1';
     const params = [];
 
-    if (hasRole(req, 'admin', 'manager')) {
-      // Admin/Manager: see all pipeline items
-    } else if (role === 'processor') {
-      // Processor: see loans from assigned LOs + accessible boards
-      const loIds = await getProcessorLOIds(userId);
+    if (hasRole(req, 'admin')) {
+      // Admin: see all pipeline items
+    } else if (role === 'processor' || role === 'manager') {
+      // Processor/Manager: see loans from assigned LOs + accessible boards.
+      // Unassigned (no LOs, no boards) sees nothing.
+      const loIds = await getAssignedLOIds(role, userId);
       const boardIds = await getAccessibleBoardIds(userId);
       const conditions = [];
       if (loIds.length > 0) {
@@ -106,14 +107,14 @@ router.get('/summary', async (req, res, next) => {
     let whereClause = 'WHERE 1=1';
     const params = [];
 
-    if (hasRole(req, 'admin', 'manager')) {
-      // Admin/Manager can filter by specific LO for goals view
+    if (hasRole(req, 'admin')) {
+      // Admin can filter by specific LO for goals view
       if (lo_id) {
         whereClause += ' AND assigned_lo_id = ?';
         params.push(lo_id);
       }
-    } else if (role === 'processor') {
-      const loIds = await getProcessorLOIds(userId);
+    } else if (role === 'processor' || role === 'manager') {
+      const loIds = await getAssignedLOIds(role, userId);
       const boardIds = await getAccessibleBoardIds(userId);
       const conditions = [];
       if (loIds.length > 0) {
@@ -254,10 +255,11 @@ router.get('/:id', async (req, res, next) => {
     }
 
     const currentUserId = getUserId(req);
-    if (!hasRole(req, 'admin', 'manager') && pipeline[0].assigned_lo_id !== currentUserId) {
-      // Processors can also access if the LO is assigned to them
-      if (getUserRole(req) === 'processor') {
-        const loIds = await getProcessorLOIds(currentUserId);
+    if (!hasRole(req, 'admin') && pipeline[0].assigned_lo_id !== currentUserId) {
+      // Processors/Managers can also access if the LO is assigned to them
+      const role = getUserRole(req);
+      if (role === 'processor' || role === 'manager') {
+        const loIds = await getAssignedLOIds(role, currentUserId);
         if (!loIds.includes(pipeline[0].assigned_lo_id)) {
           return res.status(403).json({ error: 'Access denied' });
         }
@@ -384,8 +386,17 @@ router.delete('/:id', async (req, res, next) => {
       return res.status(404).json({ error: 'Pipeline item not found' });
     }
 
-    if (!hasRole(req, 'admin', 'manager') && existing[0].assigned_lo_id !== getUserId(req)) {
-      return res.status(403).json({ error: 'Access denied' });
+    if (!hasRole(req, 'admin') && existing[0].assigned_lo_id !== getUserId(req)) {
+      // Managers may act on items belonging to their assigned LOs; everyone
+      // else (incl. processors) may only act on items assigned to them.
+      if (hasRole(req, 'manager')) {
+        const loIds = await getAssignedLOIds('manager', getUserId(req));
+        if (!loIds.includes(existing[0].assigned_lo_id)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+      } else {
+        return res.status(403).json({ error: 'Access denied' });
+      }
     }
 
     // Archive on Monday.com before deleting from DB (non-blocking)
