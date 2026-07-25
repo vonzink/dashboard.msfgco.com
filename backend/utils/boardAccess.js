@@ -24,16 +24,22 @@ async function getProcessorLOIds(processorUserId) {
 }
 
 /**
- * Get LO IDs that a manager is assigned to.
- * Managers are scoped just like processors: a manager with no assignments
- * sees no loans.
+ * Get LO IDs that a manager can see: everyone assigned to them, plus
+ * themselves.
+ *
+ * Self is always included because managers originate their own loans — Kray
+ * Olson carries a full pipeline of his own. Without this, turning on manager
+ * scoping would hide a manager's own loans from them until an admin
+ * remembered to assign each manager to himself.
  */
 async function getManagerLOIds(managerUserId) {
   const [assignments] = await db.query(
     'SELECT lo_user_id FROM manager_lo_assignments WHERE manager_user_id = ?',
     [managerUserId]
   );
-  return assignments.map(a => a.lo_user_id);
+  const ids = assignments.map(a => a.lo_user_id);
+  if (managerUserId != null && !ids.includes(managerUserId)) ids.push(managerUserId);
+  return ids;
 }
 
 /**
