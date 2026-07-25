@@ -756,6 +756,10 @@
 
       <!-- Ask AI tab pane -->
       <div class="ask-ai-pane" id="askAiPane">
+        <div class="ask-ai-modes" role="tablist" aria-label="Assistant mode">
+          <button type="button" class="ask-ai-mode-btn is-active" data-mode="dashboard" role="tab" aria-selected="true">Dashboard</button>
+          <button type="button" class="ask-ai-mode-btn" data-mode="open" role="tab" aria-selected="false">Assistant</button>
+        </div>
         <div class="ask-ai-messages" id="askAiMessages" aria-live="polite"></div>
         <form class="ask-ai-input-row" id="askAiForm">
           <input type="text" id="askAiInput" class="chat-input" placeholder="Ask about the dashboard..." maxlength="2000" autocomplete="off" />
