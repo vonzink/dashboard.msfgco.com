@@ -37,8 +37,8 @@
     <button class="admin-tab" data-tab="system">
       <i class="fas fa-server"></i> System
     </button>
-    <button class="admin-tab" data-tab="monday">
-      <i class="fas fa-sync-alt"></i> Monday.com
+    <button class="admin-tab" data-tab="integrations">
+      <i class="fas fa-plug"></i> Integrations
     </button>
   </div>
 
@@ -1036,9 +1036,16 @@
   </div>
 
   <!-- ================================================
-       TAB: Monday.com Integration
+       TAB: Integrations
   ================================================ -->
-  <div class="admin-panel" id="panel-monday">
+  <div class="admin-panel" id="panel-integrations">
+
+  <!-- ── Monday.com ────────────────────────────────── -->
+  <section class="integration-group" id="integrationMonday">
+    <div class="integration-group-head">
+      <h3 class="integration-group-title"><i class="fas fa-table"></i> Monday.com</h3>
+      <span class="integration-group-status is-active">Active</span>
+    </div>
 
     <!-- Sticky header: Setup checklist + quick sync access -->
     <div class="monday-header-strip" id="mondayHeaderStrip">
@@ -1226,6 +1233,20 @@
       <h4 style="font-size:14px; margin:16px 0 8px; color:#104547;"><i class="fas fa-history"></i> Sync History</h4>
       <div id="mondaySyncHistory" style="font-size:13px; color:#666;">Loading...</div>
     </div>
+  </section>
+
+  <!-- ── Suite ─────────────────────────────────────── -->
+  <section class="integration-group" id="integrationSuite">
+    <div class="integration-group-head">
+      <h3 class="integration-group-title"><i class="fas fa-landmark"></i> Suite</h3>
+      <span class="integration-group-status" id="suiteGroupStatus">Not configured</span>
+    </div>
+    <p class="integration-group-empty">
+      Suite (<code>los.msfgco.com</code>) will supply Pre-Approvals for enabled loan
+      officers. Connection settings and per-LO toggles arrive with the Suite sync.
+    </p>
+  </section>
+
   </div>
 
   <script src="/js/admin/admin-settings.js?v=20260721bcpos1"></script>
