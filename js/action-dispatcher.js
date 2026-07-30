@@ -104,7 +104,7 @@
     // Monday.com Integration
     // =====================
     'monday-settings': () =>
-      Utils.openPopup('Calculators/Admin Settings/admin-settings.html#monday', 'MSFGAdminSettings'),
+      Utils.openPopup('Calculators/Admin Settings/admin-settings.html#integrations', 'MSFGAdminSettings'),
 
     'monday-sync': (el) => {
       if (typeof MondaySettings !== 'undefined') {
