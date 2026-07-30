@@ -22,6 +22,7 @@ const announcementsRoutes = require('./routes/announcements');
 const notificationsRoutes = require('./routes/notifications');
 const goalsRoutes = require('./routes/goals');
 const filesRoutes = require('./routes/files');
+const userFilesRoutes = require('./routes/userFiles');
 const tasksRoutes = require('./routes/tasks');
 const preApprovalsRoutes = require('./routes/preApprovals');
 const pipelineRoutes = require('./routes/pipeline');
@@ -123,10 +124,27 @@ const writeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many write requests, please slow down' },
-  // Only apply to mutating methods
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+  // Only apply to mutating methods. My Files is excluded and limited
+  // separately — see myFilesWriteLimiter below.
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
+    || req.originalUrl.startsWith('/api/my-files'),
 });
 app.use('/api/', writeLimiter);
+
+// Each uploaded file costs two write requests (presign, then confirm), so
+// dropping a folder of 100 files would exhaust the 200-request budget above.
+// That limiter is keyed by IP, so one person bulk-uploading would lock every
+// colleague behind the same office connection out of every write endpoint on
+// the dashboard. This one is keyed per user and sized for bulk file work.
+const myFilesWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.db?.id || req.ip),
+  message: { error: 'Too many file operations, please slow down' },
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+});
 
 // Request logging
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
@@ -185,6 +203,7 @@ app.use('/api/investors', authenticate, requireNonExternal, investorsRoutes);
 app.use('/api/chat', authenticate, requireNonExternal, chatRoutes);
 app.use('/api/goals', authenticate, requireNonExternal, goalsRoutes);
 app.use('/api/files', authenticate, requireNonExternal, filesRoutes);
+app.use('/api/my-files', authenticate, requireNonExternal, myFilesWriteLimiter, userFilesRoutes);
 app.use('/api/tasks', authenticate, requireNonExternal, tasksRoutes);
 app.use('/api/pre-approvals', authenticate, requireNonExternal, preApprovalsRoutes);
 app.use('/api/pipeline', authenticate, requireNonExternal, pipelineRoutes);
