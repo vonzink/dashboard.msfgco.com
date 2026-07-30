@@ -50,13 +50,14 @@ imported anywhere — Ask AI reaches its model over plain HTTP, not IAM.
 **The role's S3 grants do not cover what the backend actually uses.** This is the gap that
 would have caused an outage had the keys simply been deleted.
 
-| Bucket referenced by `msfg-backend` | Covered by the role today? |
+| Bucket used by `msfg-backend` | Covered by the role today? |
 |---|---|
 | `msfg-dashboard-files` | Yes — `msfg-dashboard-s3-policy` |
 | `msfg-media` | **No** |
 | `msfg-mortgage-documents-prod` | **No** |
-| `msfg-content-engine` | **No** |
-| `msfg-internal` | **No** |
+
+(The initial scan also flagged `msfg-content-engine` and `msfg-internal`. Task 1 established
+that neither is a bucket — see below.)
 
 Note the near-miss: the inline policy `mortgage-app-prod-s3-access` grants access to
 `msfg-mortgage-app-documents-prod`, which is **not** the same bucket as the
@@ -68,66 +69,153 @@ auth, so it is unaffected.
 
 ---
 
-## Task 1: Confirm bucket usage before granting anything
+## Task 1: Confirm bucket usage — **COMPLETE (2026-07-30)**
 
-Do not widen the role based on a `grep` alone. Two of the four uncovered buckets
-(`msfg-content-engine`, `msfg-internal`) may be dead references in unused code, and granting
-access to buckets nothing reads is exactly the sprawl this plan exists to reverse.
+Two of the four "uncovered buckets" from the initial scan turned out not to be buckets at all.
 
-- [ ] **Step 1: Trace each uncovered bucket to a live code path**
+| Candidate | Verdict |
+|---|---|
+| `msfg-media` | **Real bucket**, heavily used — avatars, business cards, QR codes, chat attachments, investor logos/photos/documents, employee documents |
+| `msfg-mortgage-documents-prod` | **Real bucket** — Forms Library browse/upload, lending guideline PDFs |
+| `msfg-content-engine` | **Not a bucket.** A string literal used as a `source:` field value in `routes/contentPublish.js` |
+| `msfg-internal` | **Not a bucket.** A RAG brain slug in `backend/.env` as `RAG_BRAIN_OPEN_SLUG`, consumed over HTTP by `services/askAi/askAi.service.js`, which contains no S3 code at all |
 
-For `msfg-media`, `msfg-mortgage-documents-prod`, `msfg-content-engine`, and `msfg-internal`,
-find the referencing file and determine whether a reachable route uses it, and which
-operations (`GetObject`, `PutObject`, `DeleteObject`, `ListBucket`, tagging).
+`msfg-web` needs **no grant**. `/home/ubuntu/apps/msfg.us` has no `S3Client` construction, no
+bucket env var, and no S3 call sites. The `@aws-sdk/client-s3` string found in the first scan
+was a bundled webpack chunk name (`@aws-sdk/client-s3-ecbef8e33fd0b8f0`), not live usage.
 
-Start from `backend/services/s3.js`, which defines the `BUCKETS` registry, then follow to
-`backend/routes/`. Record findings in a table: bucket, file, route, operations needed.
+### Operations actually used
 
-- [ ] **Step 2: Confirm `msfg-web`'s S3 usage**
+From `backend/services/s3.js`, which is the only place S3 commands are constructed
+(`PutObjectCommand`, `GetObjectCommand`, `DeleteObjectCommand`), plus `ListObjectsV2Command`
+in `backend/routes/files.js`:
 
-`/home/ubuntu/apps/msfg.us` imports `@aws-sdk/client-s3` but no bucket name appeared in the
-scan — only static asset filenames. Determine whether it reads a bucket from an env var, or
-whether the import is vestigial. If vestigial, it needs no grant.
+| Bucket | Region | Object actions | Bucket actions |
+|---|---|---|---|
+| `msfg-dashboard-files` | us-east-1 | PutObject, GetObject, DeleteObject | ListBucket |
+| `msfg-media` | us-west-2 | PutObject, GetObject, DeleteObject | ListBucket |
+| `msfg-mortgage-documents-prod` | us-east-1 | PutObject, GetObject, DeleteObject | ListBucket |
 
-- [ ] **Step 3: Report before proceeding**
+Two things to remove rather than carry forward:
 
-Produce the operations-per-bucket table and stop. Task 2 is written from that table, not from
-assumptions. Do not begin Task 2 without it.
+- **`s3:PutObjectAcl`** in the current `msfg-dashboard-s3-policy` is unused. No code sets an
+  ACL; uploads go through presigned PUTs with only `ContentType`. Drop it.
+- **The inline `mortgage-app-prod-s3-access` policy** grants
+  `msfg-mortgage-app-documents-prod`, which nothing on this host references. Delete it unless
+  an owner is identified.
+
+**One caveat to check during Task 3 smoke-testing:** `backend/routes/chat.js:237` calls
+`deleteObject(att.s3_bucket, att.s3_key)` using a bucket name read from the
+`chat_attachments` table rather than the `BUCKETS` registry. Confirm that column only ever
+contains `msfg-media`:
+
+```sql
+SELECT DISTINCT s3_bucket FROM chat_attachments;
+```
+
+If it returns anything else, that bucket needs a grant too.
 
 ---
 
 ## Task 2: Extend the instance role
 
-- [ ] **Step 1: Draft the policy**
+- [ ] **Step 1: Apply this policy document**
 
-Write a replacement for `msfg-dashboard-s3-policy` covering every bucket confirmed in Task 1,
-scoped to the operations actually used. One statement pair per bucket — object-level actions
-on `arn:aws:s3:::<bucket>/*`, and `ListBucket`/`GetBucketLocation` on `arn:aws:s3:::<bucket>`.
+Task 1 is complete, so the policy is fully determined. Replace `msfg-dashboard-s3-policy`
+with:
 
-Do not use `"Resource": "*"`. Do not use `s3:*`.
-
-Delete the inline `mortgage-app-prod-s3-access` policy if Task 1 confirms
-`msfg-mortgage-app-documents-prod` is unused by anything on this host. If it is used by
-something, keep it and correct any name mismatch.
-
-- [ ] **Step 2: Apply as a new policy version**
-
-Create a new version of the managed policy rather than editing in place, so rollback is
-`aws iam set-default-policy-version` back to the prior version ID. Record the prior version ID
-in the task notes before applying.
-
-- [ ] **Step 3: Verify the role can do the work, before removing anything**
-
-From the EC2 box, assume the role explicitly and exercise a read against each bucket:
-
-```bash
-aws sts get-caller-identity   # still the IAM user at this point — expected
-# then, per bucket:
-aws s3 ls s3://<bucket>/ --profile <role-profile-or-instance-creds> --max-items 1
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "DashboardBucketObjects",
+      "Effect": "Allow",
+      "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+      "Resource": [
+        "arn:aws:s3:::msfg-dashboard-files/*",
+        "arn:aws:s3:::msfg-media/*",
+        "arn:aws:s3:::msfg-mortgage-documents-prod/*"
+      ]
+    },
+    {
+      "Sid": "DashboardBucketList",
+      "Effect": "Allow",
+      "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+      "Resource": [
+        "arn:aws:s3:::msfg-dashboard-files",
+        "arn:aws:s3:::msfg-media",
+        "arn:aws:s3:::msfg-mortgage-documents-prod"
+      ]
+    }
+  ]
+}
 ```
 
-Every bucket in the table must succeed. Any failure means the policy is wrong; fix it here,
-while the admin keys are still working and there is no outage.
+Note this drops `s3:PutObjectAcl`, which nothing uses. No `"Resource": "*"`, no `s3:*`.
+
+- [ ] **Step 2: Apply it as a new policy version**
+
+Create a new version rather than editing in place, so rollback is a single command. Record the
+current default version ID first:
+
+```bash
+ARN=arn:aws:iam::116981808374:policy/msfg-dashboard-s3-policy
+aws iam get-policy --policy-arn $ARN --query 'Policy.DefaultVersionId' --output text   # note this
+aws iam create-policy-version --policy-arn $ARN --policy-document file://policy.json --set-as-default
+```
+
+Rollback: `aws iam set-default-policy-version --policy-arn $ARN --version-id <recorded-id>`.
+
+A managed policy holds at most five versions. If creation fails on that limit, delete the
+oldest non-default version first.
+
+- [ ] **Step 3: Verify the role works — while the admin keys still do**
+
+This is the whole point of ordering the plan this way. Test the role's permissions *before*
+removing the credentials that are currently masking it, so a mistake costs nothing.
+
+On the EC2 box, pull the instance-role credentials from IMDS explicitly and use them in a
+subshell, leaving the shared credentials file untouched:
+
+```bash
+TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+  -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+CREDS=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+  http://169.254.169.254/latest/meta-data/iam/security-credentials/msfg-dashboard-ec2-role)
+
+(
+  export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["AccessKeyId"])')
+  export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["SecretAccessKey"])')
+  export AWS_SESSION_TOKEN=$(echo "$CREDS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["Token"])')
+
+  aws sts get-caller-identity          # must show assumed-role/msfg-dashboard-ec2-role
+  aws s3 ls s3://msfg-dashboard-files/ --region us-east-1 --max-items 1
+  aws s3 ls s3://msfg-mortgage-documents-prod/ --region us-east-1 --max-items 1
+  aws s3 ls s3://msfg-media/ --region us-west-2 --max-items 1
+)
+```
+
+Environment variables take precedence over the shared credentials file, so the subshell uses
+the role while everything outside it keeps working. All three listings must succeed. Any
+`AccessDenied` means the policy is wrong — fix it here, not during the cutover.
+
+Also confirm the chat-attachment caveat from Task 1:
+
+```sql
+SELECT DISTINCT s3_bucket FROM chat_attachments;
+```
+
+If that returns any bucket other than `msfg-media`, add it to the policy before proceeding.
+
+- [ ] **Step 4: Delete the dead inline policy**
+
+```bash
+aws iam delete-role-policy --role-name msfg-dashboard-ec2-role --policy-name mortgage-app-prod-s3-access
+```
+
+Task 1 confirmed nothing on this host references `msfg-mortgage-app-documents-prod`. This
+grants access nothing uses either way, so deferring it until after Task 3 soaks is also fine.
 
 ---
 
