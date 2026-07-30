@@ -268,6 +268,7 @@ const Announcements = {
         links: saved.links || [],
         icon: saved.icon,
         author: saved.author_name || authorName,
+        authorId: saved.author_id ?? userId,
         createdAt: saved.created_at,
         fileName: saved.file_name,
         attachments: saved.attachments || [],
@@ -296,9 +297,15 @@ const Announcements = {
     return !!CONFIG.currentUser;
   },
 
-  _canDelete() {
-    const role = String(CONFIG.currentUser?.role || '').toLowerCase();
-    return role === 'admin';
+  // Delete is allowed for admins and for the user who authored the announcement.
+  // The backend DELETE route enforces the same rule (403 otherwise); the button
+  // is only shown when it would actually be permitted.
+  _canDelete(announcement) {
+    const user = CONFIG.currentUser;
+    if (!user) return false;
+    if (String(user.role || '').toLowerCase() === 'admin') return true;
+    if (!announcement || announcement.authorId == null) return false;
+    return String(announcement.authorId) === String(user.id);
   },
 
   _sanitizeHtml(html) {
@@ -357,17 +364,15 @@ const Announcements = {
     }
   },
 
-  buildAnnouncementCard(announcement) {
-    const iconClass = announcement.icon || 'fa-bullhorn';
-    const postedAt = new Date(announcement.createdAt).toLocaleString('en-US', {
+  _postedAt(announcement) {
+    return new Date(announcement.createdAt).toLocaleString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric',
       hour: 'numeric', minute: '2-digit',
     });
-    const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
-    const links = this._getLinks(announcement);
-    const attachments = this._getAttachments(announcement);
-    const showDelete = this._canDelete();
-    const linksHtml = links.map((link, index) => {
+  },
+
+  _linksHtml(announcement) {
+    return this._getLinks(announcement).map((link, index) => {
       const safeUrl = this._safeUrl(link.url);
       if (!safeUrl) return '';
       const label = link.label || `Link ${index + 1}`;
@@ -375,7 +380,10 @@ const Announcements = {
         <i class="fas fa-link"></i> ${Utils.escapeHtml(label)}
       </a>`;
     }).join('');
-    const attachmentsHtml = attachments.map((attachment, index) => {
+  },
+
+  _attachmentsHtml(announcement) {
+    return this._getAttachments(announcement).map((attachment, index) => {
       const name = attachment.file_name || attachment.fileName || 'Attachment';
       const type = attachment.file_type || attachment.fileType || '';
       const size = attachment.file_size || attachment.fileSize || 0;
@@ -403,6 +411,15 @@ const Announcements = {
         ? `<a class="news-attachment" href="${safeUrl}" target="_blank" rel="noopener noreferrer">${inner}</a>`
         : `<div class="news-attachment">${inner}</div>`;
     }).join('');
+  },
+
+  buildAnnouncementCard(announcement) {
+    const iconClass = announcement.icon || 'fa-bullhorn';
+    const postedAt = this._postedAt(announcement);
+    const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
+    const showDelete = this._canDelete(announcement);
+    const linksHtml = this._linksHtml(announcement);
+    const attachmentsHtml = this._attachmentsHtml(announcement);
 
     return `
       <div class="news-item" data-id="${announcement.id}">
@@ -430,7 +447,181 @@ const Announcements = {
     `;
   },
 
+  // Full-width detail layout — the title already lives in the modal header,
+  // so we drop the duplicated in-card title + icon rail. The flat (non-flex)
+  // structure also removes the horizontal-overflow trap the card layout had.
+  buildAnnouncementDetail(announcement) {
+    const postedAt = this._postedAt(announcement);
+    const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
+    const linksHtml = this._linksHtml(announcement);
+    const attachmentsHtml = this._attachmentsHtml(announcement);
+
+    return `
+      <div class="announcement-detail-view">
+        ${imageUrl ? `<div class="announcement-detail-hero"><img src="${imageUrl}" alt=""></div>` : ''}
+        <div class="announcement-body">${this._sanitizeHtml(announcement.content)}</div>
+        ${linksHtml ? `<div class="news-links">${linksHtml}</div>` : ''}
+        ${attachmentsHtml ? `<div class="news-attachments">${attachmentsHtml}</div>` : ''}
+        <div class="announcement-detail-meta">
+          <span><i class="fas fa-user"></i> ${Utils.escapeHtml(announcement.author)}</span>
+          <span><i class="fas fa-clock"></i> ${postedAt}</span>
+        </div>
+      </div>
+    `;
+  },
+
+  // ========================================
+  // EXPORT / SAVE AS PDF
+  // Renders a clean, self-contained page into a hidden iframe and opens the
+  // browser print dialog (the user picks "Save as PDF"). No external libs,
+  // CSP-safe, and images print reliably (no canvas cross-origin tainting).
+  // ========================================
+  exportAnnouncement(id) {
+    const targetId = Number.isFinite(id) ? id : this._activeDetailId;
+    const announcement = this._carouselAnnouncements.find(a => a.id === targetId);
+    if (!announcement) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('aria-hidden', 'true');
+    iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;';
+    document.body.appendChild(iframe);
+
+    const cleanup = () => { try { iframe.remove(); } catch (e) {} };
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(this._buildPrintDoc(announcement));
+    doc.close();
+
+    let printed = false;
+    const triggerPrint = () => {
+      if (printed) return;
+      printed = true;
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (e) {
+        console.error('Print failed:', e);
+        cleanup();
+        return;
+      }
+      // Remove after the dialog closes (onafterprint) or as a fallback.
+      iframe.contentWindow.onafterprint = () => setTimeout(cleanup, 200);
+      setTimeout(cleanup, 60000);
+    };
+
+    // Wait for images so they aren't blank in the PDF; cap the wait.
+    const images = Array.from(doc.images || []);
+    const pending = images.filter(img => !img.complete);
+    if (pending.length === 0) {
+      setTimeout(triggerPrint, 60);
+    } else {
+      let remaining = pending.length;
+      const tick = () => { remaining -= 1; if (remaining <= 0) triggerPrint(); };
+      pending.forEach(img => {
+        img.addEventListener('load', tick);
+        img.addEventListener('error', tick);
+      });
+      setTimeout(triggerPrint, 3000); // safety: never hang on a stuck image
+    }
+  },
+
+  _buildPrintDoc(announcement) {
+    const esc = Utils.escapeHtml;
+    const title = esc(announcement.title || 'Announcement');
+    const author = esc(announcement.author || '');
+    const postedAt = esc(this._postedAt(announcement));
+    const imageUrl = this._safeUrl(announcement.imageUrl || announcement.image_url);
+    const body = this._sanitizeHtml(announcement.content || '');
+
+    const linkItems = this._getLinks(announcement).map((link, index) => {
+      const url = this._safeUrl(link.url);
+      if (!url) return '';
+      const label = esc(link.label || `Link ${index + 1}`);
+      return `<li><span class="lbl">${label}</span><span class="url">${url}</span></li>`;
+    }).join('');
+
+    const attachItems = this._getAttachments(announcement).map(att => {
+      const name = esc(att.file_name || att.fileName || 'Attachment');
+      const size = att.file_size || att.fileSize || 0;
+      const sizeStr = size ? ` <span class="muted">(${esc(Utils.formatFileSize(size))})</span>` : '';
+      return `<li>${name}${sizeStr}</li>`;
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MSFG Announcement - ${title}</title>
+<style>
+  @page { margin: 0.7in; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #1c2530; line-height: 1.6; font-size: 12pt; background: #fff;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .sheet { max-width: 720px; margin: 0 auto; }
+  .brandbar {
+    background: linear-gradient(135deg, #8cc63e 0%, #2f7d4f 50%, #104547 100%);
+    color: #fff; padding: 20px 24px; border-radius: 10px; margin-bottom: 22px;
+  }
+  .brandbar .eyebrow {
+    font-size: 9pt; letter-spacing: .14em; text-transform: uppercase;
+    opacity: .85; margin: 0 0 6px;
+  }
+  .brandbar h1 { font-size: 20pt; line-height: 1.2; margin: 0; word-wrap: break-word; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 18px; color: #5a6675;
+    font-size: 10pt; margin: 0 0 20px; padding-bottom: 14px;
+    border-bottom: 1px solid #e2e7ee;
+  }
+  .hero { width: 100%; max-height: 340px; object-fit: cover; border-radius: 10px; margin: 0 0 20px; }
+  .content { font-size: 12pt; overflow-wrap: anywhere; word-break: break-word; }
+  .content img { max-width: 100%; height: auto; border-radius: 6px; }
+  .content h1, .content h2, .content h3 { line-height: 1.25; }
+  .content a { color: #104547; word-break: break-word; }
+  .content ul, .content ol { padding-left: 1.4em; }
+  .section { margin-top: 22px; }
+  .section h2 {
+    font-size: 10pt; letter-spacing: .1em; text-transform: uppercase;
+    color: #104547; margin: 0 0 10px; padding-bottom: 6px;
+    border-bottom: 1px solid #e2e7ee;
+  }
+  .section ul { list-style: none; margin: 0; padding: 0; }
+  .section li { padding: 5px 0; font-size: 10.5pt; word-break: break-word; }
+  .section .lbl { font-weight: 700; margin-right: 8px; }
+  .section .url { color: #2f7d4f; }
+  .muted { color: #8a95a4; }
+  footer {
+    margin-top: 30px; padding-top: 12px; border-top: 1px solid #e2e7ee;
+    color: #8a95a4; font-size: 9pt; text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="sheet">
+    <div class="brandbar">
+      <p class="eyebrow">MSFG &middot; News &amp; Announcements</p>
+      <h1>${title}</h1>
+    </div>
+    <div class="meta">
+      ${author ? `<span>Posted by <strong>${author}</strong></span>` : ''}
+      <span>${postedAt}</span>
+    </div>
+    ${imageUrl ? `<img class="hero" src="${imageUrl}" alt="">` : ''}
+    <div class="content">${body}</div>
+    ${linkItems ? `<div class="section"><h2>Links</h2><ul>${linkItems}</ul></div>` : ''}
+    ${attachItems ? `<div class="section"><h2>Attachments</h2><ul>${attachItems}</ul></div>` : ''}
+    <footer>Generated from the MSFG Dashboard</footer>
+  </div>
+</body>
+</html>`;
+  },
+
   _activeCategory: 'all',
+  _activeDetailId: null,
 
   // Detect category from icon or title keywords
   _detectCategory(announcement) {
@@ -531,26 +722,59 @@ const Announcements = {
     const body = document.getElementById('announcementDetailBody');
     if (!overlay || !title || !body) return;
 
+    this._activeDetailId = id;
     title.textContent = announcement.title;
-    body.innerHTML = this.buildAnnouncementCard(announcement);
+    body.innerHTML = this.buildAnnouncementDetail(announcement);
+    this._renderDetailActions(announcement);
     overlay.classList.add('active');
+
+    const modal = document.getElementById('announcementDetailModal');
+    if (modal) modal.scrollTop = 0;
+  },
+
+  // Show a Delete button (next to Save/Close) only when the current user is
+  // permitted to delete this announcement — its author, or an admin.
+  _renderDetailActions(announcement) {
+    const actions = document.querySelector('#announcementDetailModal .announcement-detail-actions');
+    if (!actions) return;
+    const prior = actions.querySelector('.announcement-detail-delete');
+    if (prior) prior.remove();
+    if (this._canDelete(announcement)) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'announcement-detail-action is-danger announcement-detail-delete';
+      btn.dataset.id = String(announcement.id);
+      btn.title = 'Delete announcement';
+      btn.innerHTML = '<i class="fas fa-trash"></i> Delete';
+      actions.insertBefore(btn, actions.firstChild);
+    }
   },
 
   hideAnnouncementDetail() {
     const overlay = document.getElementById('announcementDetailOverlay');
     if (overlay) overlay.classList.remove('active');
+    this._activeDetailId = null;
   },
 
   bindAnnouncementDetail() {
-    const overlay = document.getElementById('announcementDetailOverlay');
     const close = document.getElementById('announcementDetailClose');
+    const save = document.getElementById('announcementDetailSave');
+    const actions = document.querySelector('#announcementDetailModal .announcement-detail-actions');
 
+    // The window closes ONLY via the × button (or Esc) — no click-away /
+    // backdrop dismiss — so it stays open while the reader interacts with it.
     if (close) {
       close.addEventListener('click', () => this.hideAnnouncementDetail());
     }
-    if (overlay) {
-      overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) this.hideAnnouncementDetail();
+    if (save) {
+      save.addEventListener('click', () => this.exportAnnouncement(this._activeDetailId));
+    }
+    if (actions) {
+      actions.addEventListener('click', (e) => {
+        const del = e.target.closest('.announcement-detail-delete');
+        if (!del) return;
+        const delId = Number(del.dataset.id);
+        if (Number.isFinite(delId)) this.deleteAnnouncement(delId);
       });
     }
   },
@@ -568,6 +792,7 @@ const Announcements = {
 
       this._carouselAnnouncements = this._carouselAnnouncements.filter(a => a.id !== announcementId);
       this.renderCardGrid();
+      this.hideAnnouncementDetail();
     } catch (error) {
       console.error('Failed to delete announcement:', error);
       alert('Failed to delete announcement. Please try again.');
@@ -601,6 +826,7 @@ const Announcements = {
         links: a.links || [],
         icon: a.icon,
         author: a.author_name || 'Unknown',
+        authorId: a.author_id,
         createdAt: a.created_at,
         fileName: a.file_name,
         fileType: a.file_type,
