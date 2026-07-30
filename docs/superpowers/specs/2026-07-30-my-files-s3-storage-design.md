@@ -67,13 +67,54 @@ The Suite button is a few lines. The rest of this spec is about My Files.
   `BUCKETS` registry (`forms`, `media`, `dashboard`), and helpers `getUploadUrl`,
   `getDownloadUrl`, `getObject`, `deleteObject`, `resolveUrl`, `resolveUrls`,
   `buildMediaKey`, `buildFormsKey`, `sanitizeFileName`.
-- Credentials come from the default AWS credential chain — EC2 instance role or env vars.
-  **Which one is live in production must be confirmed before writing the IAM policy.**
+- Credentials come from the default AWS credential chain. **Verified on the production box
+  2026-07-30 — see §4.1 below. The result is a blocker for Phase 2.**
 - Existing buckets: `msfg-dashboard-files` (us-east-1), `msfg-media` (us-west-2),
   `msfg-mortgage-documents-prod` (us-east-1).
 - Established upload flow everywhere in the codebase: `POST …/upload-url` →
   browser `PUT`s directly to S3 → metadata saved. `multer` is used only in
   `backend/routes/checklists.js` for server-side PDF parsing, never for S3.
+
+### 4.1 Production AWS credentials — the instance role is being shadowed
+
+Verified by SSH to `ubuntu@52.203.186.217` on 2026-07-30:
+
+| Finding | Value |
+|---|---|
+| Instance role attached | `msfg-dashboard-ec2-role` — `AmazonCognitoPowerUser`, `AmazonSSMManagedInstanceCore`, `msfg-dashboard-s3-policy`, inline `mortgage-app-prod-s3-access` |
+| `~/.aws/credentials` present for user `ubuntu` | **Yes** (created 2025-12-29) |
+| `AWS_ACCESS_KEY_ID` in `backend/.env` | Absent |
+| `aws sts get-caller-identity` on the box | `arn:aws:iam::116981808374:user/vonzink@gmail.com` |
+| That user's policies | **`AdministratorAccess`**, plus membership in a `FullAccess` group |
+| Active access keys on that user | 2, created 2025-08-11 and 2025-09-23 — never rotated |
+| PM2 processes running as `ubuntu` with `HOME=/home/ubuntu` | 8, including `msfg-backend` |
+
+The AWS SDK credential chain resolves the **shared credentials file before instance
+metadata**. Because `~/.aws/credentials` exists, the properly-scoped instance role is never
+consulted. Every one of the eight PM2 apps on that host — not just the dashboard backend —
+is executing with full AWS account administrator privileges via long-lived keys on disk.
+
+This matters directly to this feature rather than being a general hygiene note. My Files is
+being designed to hold NPI, and its controls assume a bounded backend identity: a KMS key
+policy limiting who can decrypt, CloudTrail data events that cannot be tampered with, and a
+least-privilege S3 policy. None of those constrain a principal holding `AdministratorAccess`,
+which can rewrite the key policy, disable the trail, or empty the bucket. Writing a
+least-privilege policy for this feature while the process runs as account admin produces
+documentation, not a control.
+
+**Phase 2 therefore begins by fixing this,** sequenced to avoid breaking the other seven
+apps that currently rely on admin-level access:
+
+1. Inventory the AWS API calls made by all eight PM2 apps on the host.
+2. Extend `msfg-dashboard-ec2-role` to cover exactly those calls.
+3. Verify with the role assumed explicitly, before changing anything.
+4. Move `~/.aws/credentials` aside and restart PM2 so the SDK falls through to the role.
+5. Deactivate (do not delete) both access keys; soak.
+6. Delete the keys, and detach `AdministratorAccess` from the day-to-day user.
+
+Steps 1 and 2 are the real work. Note that the instance role already carries
+`AmazonSSMManagedInstanceCore`, so Session Manager is available and the `.pem` workflow is
+not the only way onto the box.
 
 ### The existing File Browser (the thing we are extending)
 
@@ -374,9 +415,11 @@ Each phase is independently shippable.
 
 1. **Suite button + header restructure.** Replace Alerts with Suite and a placeholder
    My Files button; relocate the notifications entry point into the user dropdown.
-2. **AWS groundwork.** Create the bucket, KMS key, bucket policy, CORS, lifecycle rules,
-   logging, and GuardDuty. Update the backend IAM policy. Confirm whether EC2 uses an
-   instance role or access keys first.
+2. **AWS groundwork.** First, the credential remediation in §4.1 — inventory the eight PM2
+   apps' AWS calls, extend `msfg-dashboard-ec2-role`, remove the shadowing
+   `~/.aws/credentials`, and retire the admin access keys. Only then create the bucket, KMS
+   key, bucket policy, CORS, lifecycle rules, logging, and GuardDuty, and attach the
+   least-privilege S3 and KMS permissions to the role.
 3. **Backend read path.** Migration 090, `resolveUserKey`, `/list`, `/download-url`,
    `/preview-url`, `/usage`, audit logging.
 4. **Backend write path.** Folder create, single-PUT upload, soft delete, restore, purge,
@@ -394,12 +437,15 @@ Each phase is independently shippable.
 These are external dependencies, not undecided design. Each has a defined default so no
 phase is blocked on discussion alone.
 
-- **Blocking Phase 2:** confirm whether the production EC2 backend authenticates to AWS via
-  an instance role or access keys in `.env`. The code uses the default credential chain, so
-  both are possible, and this determines where the new S3 and KMS permissions attach.
-- **Blocking Phase 1:** confirm the user-facing Suite host is `https://suite.msfgco.com`
-  and that it opens in a new tab with no token hand-off. `js/config.js` references
-  `los.msfgco.com` as the Suite *API* host, so the two should not be conflated.
+- ~~Confirm how the EC2 backend authenticates to AWS.~~ **Resolved, and it surfaced a
+  problem.** A `~/.aws/credentials` file for an `AdministratorAccess` IAM user shadows the
+  correctly-scoped instance role, so all eight PM2 apps run as account admin. See §4.1.
+  Remediating this is now the first work item in Phase 2 and gates the NPI controls.
+- ~~Confirm the user-facing Suite host.~~ **Resolved.** The
+  `2026-07-25-suite-integrations-preapprovals-design.md` spec states the split directly —
+  `suite.msfgco.com` is the user-facing app, `los.msfgco.com` is the partner API — and
+  `2026-07-25-dashboard-suite-preapprovals-sync.md:793` already builds deep links as
+  `https://suite.msfgco.com/loans/<suite_loan_id>`. Phase 1 is unblocked.
 - **Non-blocking:** compliance sign-off on the 365-day archive window for offboarded users.
   The default is set; changing it is a lifecycle-rule edit.
 - **Non-blocking:** icon choice for the Suite button (`fa-layer-group` is the default).
