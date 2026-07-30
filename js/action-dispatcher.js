@@ -90,6 +90,9 @@
     'open-logos-browser': () =>
       Utils.openPopup('Calculators/File Browser/file-browser.html?library=logos', 'MSFGLogosBrowser', 1100, 800),
 
+    'open-my-files': () =>
+      Utils.openPopup('Calculators/My Files/my-files.html', 'MSFGMyFiles', 1200, 820),
+
     'open-content-studio': () => {
       if (typeof ContentStudio !== 'undefined') ContentStudio.open();
     },
@@ -97,11 +100,14 @@
     'open-time-calculator': () =>
       Utils.openPopup('Calculators/Time Calculator/time-calculator.html', 'MSFGTimeCalc', 1000, 800),
 
+    'open-basis-point-calculator': () =>
+      Utils.openPopup('Calculators/Basis Point Calculator/basis-point-calculator.html', 'MSFGBasisPointCalc', 1000, 850),
+
     // =====================
     // Monday.com Integration
     // =====================
     'monday-settings': () =>
-      Utils.openPopup('Calculators/Admin Settings/admin-settings.html#monday', 'MSFGAdminSettings'),
+      Utils.openPopup('Calculators/Admin Settings/admin-settings.html#integrations', 'MSFGAdminSettings'),
 
     'monday-sync': (el) => {
       if (typeof MondaySettings !== 'undefined') {

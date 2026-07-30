@@ -377,6 +377,71 @@ body {
   padding-bottom: 0;
 }
 
+/* ── Integrations Tab: per-service groups ── */
+/* NOTE: never add `overflow`, `transform`, `filter`, or `contain` to
+   .integration-group — .monday-header-strip inside it is `position: sticky`,
+   and any of those properties would create a new containing block and break it. */
+.integration-group {
+  display: block;
+  margin-bottom: 32px;
+}
+
+.integration-group:last-child {
+  margin-bottom: 0;
+}
+
+.integration-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--border-color, #e5e5e5);
+}
+
+.integration-group-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: #104547;
+}
+
+.integration-group-title i {
+  margin-right: 6px;
+}
+
+.integration-group-status {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #f1f1f1;
+  color: #666;
+  white-space: nowrap;
+}
+
+.integration-group-status.is-active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.integration-group-empty {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+  padding: 16px;
+  border: 1px dashed var(--border-color, #ddd);
+  border-radius: 8px;
+}
+
+.integration-group-empty code {
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
 /* ── Monday Tab: Sticky Header Strip (setup flow + quick sync) ── */
 .monday-header-strip {
   position: sticky;

@@ -46,6 +46,7 @@
 .news-content {
     flex: 1;
     position: relative;
+    min-width: 0; /* allow flex child to shrink so long content wraps instead of overflowing */
 }
 
 .news-header {
@@ -101,6 +102,32 @@
     font-size: 0.85rem;
     color: var(--text-secondary);
     line-height: 1.6;
+    /* Long URLs / unbroken strings wrap instead of forcing a horizontal scrollbar */
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+/* No embedded element (pasted image, table, code block, iframe) may exceed the column width */
+.announcement-body img,
+.announcement-body video,
+.announcement-body iframe,
+.announcement-body table {
+    max-width: 100%;
+}
+.announcement-body img,
+.announcement-body video {
+    height: auto;
+}
+.announcement-body pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+}
+.announcement-body table {
+    display: block;
+    overflow-x: auto;
+}
+.announcement-body a {
+    overflow-wrap: anywhere;
 }
 .announcement-body ul, .announcement-body ol {
     margin: 0.3rem 0;
@@ -239,14 +266,22 @@
     background: var(--bg-secondary);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-xl);
-    max-width: 640px;
-    width: 100%;
-    max-height: 90vh;
+    width: min(640px, 100%);
+    max-width: 95vw;
+    min-width: 300px;
+    max-height: 92vh;
+    min-height: 240px;
+    /* overflow (not visible) is required for the drag-to-resize grip below */
     overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
+    resize: both;               /* drag the bottom-right corner to resize */
     transform: scale(0.95) translateY(20px);
     opacity: 0;
-    transition: all var(--transition-normal);
+    /* animate only entrance props so manual resizing stays instant */
+    transition: transform var(--transition-normal), opacity var(--transition-normal);
+    display: flex;
+    flex-direction: column;
 }
 
 #announcementDetailOverlay.active .announcement-detail-modal {
@@ -254,19 +289,132 @@
     opacity: 1;
 }
 
+/* Custom resize affordance so the drag corner is discoverable (native
+   resize handle sits underneath — decorative layer must not eat the drag) */
+.announcement-detail-modal::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    background:
+        linear-gradient(135deg, transparent 0 45%, var(--text-muted) 45% 55%, transparent 55% 100%),
+        linear-gradient(135deg, transparent 0 70%, var(--text-muted) 70% 80%, transparent 80% 100%);
+    opacity: 0.5;
+    border-bottom-right-radius: var(--radius-xl);
+}
+
 .announcement-detail-modal .modal-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: var(--spacing-md);
     padding: var(--spacing-lg);
     border-bottom: 1px solid var(--border-color);
+    position: sticky;
+    top: 0;
+    background: var(--bg-secondary);
+    z-index: 1;
+    flex-shrink: 0;
 }
 
 .announcement-detail-modal .modal-header h3 {
     margin: 0;
     font-size: 1.1rem;
+    line-height: 1.35;
     color: var(--text-primary);
-    padding-right: var(--spacing-md);
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+/* Header action cluster (Save / Delete / Close) */
+.announcement-detail-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+}
+
+.announcement-detail-action {
+    height: 36px;
+    padding: 0 0.85rem;
+    border-radius: 999px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    white-space: nowrap;
+}
+
+.announcement-detail-action:hover {
+    background: var(--green-teal);
+    border-color: var(--green-teal);
+    color: #fff;
+}
+
+.announcement-detail-action.is-danger:hover {
+    background: var(--status-danger);
+    border-color: var(--status-danger);
+}
+
+.announcement-detail-action.is-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Clean full-width detail body (no duplicated title / icon rail) */
+.announcement-detail-view {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.announcement-detail-hero {
+    width: 100%;
+    max-height: 340px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: 0.9rem;
+    background: var(--bg-tertiary);
+}
+
+.announcement-detail-hero img {
+    width: 100%;
+    height: 100%;
+    max-height: 340px;
+    object-fit: cover;
+    display: block;
+}
+
+.announcement-detail-view .announcement-body {
+    font-size: 0.92rem;
+}
+
+.announcement-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-md);
+    padding-top: var(--spacing-md);
+    border-top: 1px solid var(--border-color);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.announcement-detail-meta span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
 }
 
 .announcement-detail-modal .modal-close {
@@ -891,14 +1039,36 @@
 .news-link-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.38rem 0.55rem;
-    border: 1px solid var(--border-color);
+    gap: 0.4rem;
+    padding: 0.45rem 0.85rem;
+    border: 1px solid rgba(16, 69, 71, 0.35);
     border-radius: 999px;
-    background: var(--bg-secondary);
-    font-size: 0.78rem;
+    background: rgba(16, 69, 71, 0.06);
+    font-size: 0.82rem;
+    font-weight: 600;
     color: var(--green-teal);
     text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.news-link-pill:hover {
+    background: var(--green-teal);
+    border-color: var(--green-teal);
+    color: #fff;
+}
+
+/* Dark theme: dark-teal text is unreadable on the dark card, so switch to the
+   bright brand green for contrast (and invert on hover). */
+[data-theme="dark"] .news-link-pill {
+    color: var(--green-bright);
+    background: rgba(140, 198, 62, 0.12);
+    border-color: rgba(140, 198, 62, 0.45);
+}
+
+[data-theme="dark"] .news-link-pill:hover {
+    background: var(--green-bright);
+    border-color: var(--green-bright);
+    color: var(--green-teal);
 }
 
 .news-attachments {
@@ -949,6 +1119,61 @@
 .news-attachment-meta {
     font-size: 0.72rem;
     color: var(--text-muted);
+}
+
+/* ── Add-Announcement modal: focus states, preview & polish ── */
+.announcement-field input:focus,
+.announcement-field select:focus,
+.announcement-icon-field select:focus,
+.announcement-link-row input:focus {
+    outline: none;
+    border-color: var(--green-bright);
+    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.18);
+}
+
+.announcement-editor-wrap {
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.announcement-editor-wrap:focus-within {
+    border-color: var(--green-bright);
+    box-shadow: 0 0 0 3px rgba(140, 198, 62, 0.15);
+}
+
+.announcement-content-editor:focus {
+    outline: none;
+}
+
+/* Graphic preview: FIX broken-image flash — the base `img { display:block }`
+   rule was overriding the [hidden] attribute, so the empty <img> rendered its
+   alt text + a broken-image glyph. Restore the intended hide behaviour. */
+.announcement-preview-window img[hidden] {
+    display: none;
+}
+
+.announcement-preview-window {
+    border-style: dashed;
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.announcement-preview-window:hover,
+.announcement-preview-panel.drag-over .announcement-preview-window {
+    border-color: var(--green-bright);
+    background: rgba(140, 198, 62, 0.05);
+}
+
+.announcement-preview-empty i {
+    transition: transform var(--transition-fast);
+}
+
+.announcement-preview-window:hover .announcement-preview-empty i {
+    transform: translateY(-2px);
+}
+
+.announcement-graphic-actions .btn:focus-visible {
+    outline: 2px solid var(--green-bright);
+    outline-offset: 2px;
 }
 
 /* ── Responsive ── */

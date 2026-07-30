@@ -418,6 +418,27 @@
       setGraphicFile(null);
     });
     $('annGenerateImageBtn')?.addEventListener('click', generateGraphic);
+
+    // Click the preview window to pick a graphic; drag an image onto the panel to set it.
+    const previewWindow = document.querySelector('.announcement-preview-window');
+    previewWindow?.addEventListener('click', function(){ input?.click(); });
+
+    const panel = document.querySelector('.announcement-preview-panel');
+    if(panel){
+      panel.addEventListener('dragover', function(e){
+        e.preventDefault();
+        panel.classList.add('drag-over');
+      });
+      panel.addEventListener('dragleave', function(){
+        panel.classList.remove('drag-over');
+      });
+      panel.addEventListener('drop', function(e){
+        e.preventDefault();
+        panel.classList.remove('drag-over');
+        const file = Array.from(e.dataTransfer?.files || []).find(isImageFile);
+        if(file) setGraphicFile(file, 'upload');
+      });
+    }
   }
 
   function init(){

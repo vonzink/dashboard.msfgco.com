@@ -59,6 +59,7 @@ Source: https://dashboard.msfgco.com/
 - [Skip to content](https://dashboard.msfgco.com/#mainContent)
 - [Rates](https://email.msfginfo.com/) (key=ratesheet; target=_blank)
 - [Applications](https://app.msfgco.com/) (target=_blank)
+- [Suite](https://suite.msfgco.com/) (target=_blank)
 - [View Paycheck](https://identity.myisolved.com/Account/Login?ReturnUrl=%2Fconnect%2Fauthorize%2Fcallback%3Fclient_id%3Daee%26redirect_uri%3Dhttps%253A%252F%252Faee.myisolved.com%26response_type%3Dcode%26scope%3Dopenid%2520core-api%2520multi-tenant%2520workspaces-api%2520notifications-api%2520adaptive-perform-api%2520entitlements-api.read%26nonce%3D22120140bfda48094c9c275b5c1bb8eb59ewpdNMH%26state%3De31acde63632bf3dc13601467c8350c5e1CDIgmLi%26code_challenge%3D2uMpUx7PO0lW6U8jcjjdbh82NRFaXbQACrzvJ1xSz2E%26code_challenge_method%3DS256) (key=payroll_new; target=_blank)
 - [401K](https://www.my401kdata.com/) (target=_blank)
 - [Employee Posters](https://mandatoryview.com/productview) (target=_blank)
@@ -225,7 +226,7 @@ Source: https://dashboard.msfgco.com/Calculators/File%20Browser/file-browser.htm
 
 ## Dashboard Button And Action Inventory
 
-- Alerts: action=open-notifications
+- My Files: action=open-my-files (opens Calculators/My Files/my-files.html in a popup)
 - Settings: action=open-settings
 - Admin: action=open-admin-settings
 - Switch Role: id=roleSwitcherBtn
@@ -304,7 +305,9 @@ Source: https://dashboard.msfgco.com/Calculators/File%20Browser/file-browser.htm
 - Manage Investors: action=manage-investors
 - MSFG Docs: action=open-forms-library
 - Processing: action=open-processing; data-type=title
+- Notifications: action=open-notifications
 - Mil Levy Calculator: action=open-mil-levy
+- Basis Point Calculator: action=open-basis-point-calculator
 - Time Calculator: action=open-time-calculator
 - Add: action=open-add-announcement; id=addAnnouncementBtn
 - Scroll left: id=newsCarouselPrev

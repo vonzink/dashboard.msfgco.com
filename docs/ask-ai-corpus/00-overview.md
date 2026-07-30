@@ -7,7 +7,7 @@ visibility: PUBLIC
 The MSFG Dashboard (dashboard.msfgco.com) is Mountain State Financial Group's internal staff portal: a single long-scroll home page plus a top navigation bar of menus that link out to other internal tools. There's no separate "page" for each feature — most of the dashboard's own data (Goals, News, Pre-Approvals, Applications, Pipeline, Loans Funded) lives as sections you scroll through on the home page, while HR, Systems, Marketing, Programs, Investors, and Tools are dropdown menus in the top nav that open modals or link to outside systems.
 
 ## How to find it
-Sign in at dashboard.msfgco.com — you're redirected automatically to sign-in if you don't have a session (see Login below). Once in, the header has a logo, a utility toolbar (Rates, Applications, Alerts, Settings, Admin), your user info, and a dark/light theme toggle. Below that is the main navigation bar with dropdown menus. The rest of the page is the scrolling section stack.
+Sign in at dashboard.msfgco.com — you're redirected automatically to sign-in if you don't have a session (see Login below). Once in, the header has a logo, a utility toolbar (Rates, Applications, Suite, My Files, Settings, Admin), your user info, and a dark/light theme toggle. Below that is the main navigation bar with dropdown menus. The rest of the page is the scrolling section stack.
 
 ## The 6 scroll sections (home page, top to bottom)
 - **Goals** — units/volume performance tiles for the loan officer, with a period selector. See the Goals guide.
@@ -24,12 +24,13 @@ Sign in at dashboard.msfgco.com — you're redirected automatically to sign-in i
 - **Marketing** — Logos browser (brand assets), Keyword Explorer, Content Studio (AI social content generation), and links to the company's social accounts.
 - **Programs** — quick-reference program sheets by loan type: Conventional, FHA, VA, USDA, Non-QM, Other.
 - **Investors** — "Show All" opens the full investor directory modal; the menu also lists individual wholesale partners, and admins get a "Manage Investors" option.
-- **Tools** — Loan Calculator Hub, Document Creator, MSFG Docs (forms library), Processing, and a "More…" submenu with the Mil Levy Calculator, Time Calculator, and Document Scanner.
+- **Tools** — Loan Calculator Hub, Document Creator, MSFG Docs (forms library), Processing, Notifications, and a "More…" submenu with the Mil Levy Calculator, Basis Point Calculator, Time Calculator, and Document Scanner.
 
 ## Header utility buttons
 - **Rates** — today's rate sheet.
 - **Applications** — opens app.msfgco.com in a new tab.
-- **Alerts** (bell icon) — notifications panel.
+- **Suite** (layers icon) — opens suite.msfgco.com in a new tab.
+- **My Files** (folder icon) — your personal file storage. Opens a popup where you can upload files by dragging them in or with the Upload button, create folders, download, and delete. Deleted items go to Trash and can be restored for 30 days before they are removed automatically. A meter in the top right shows how much of your storage allowance you have used. Only you can see your own files.
 - **Settings** (gear icon) — user settings, including the Goals target-setting tab.
 - **Admin** (shield icon, admins only) — admin settings panel.
 
