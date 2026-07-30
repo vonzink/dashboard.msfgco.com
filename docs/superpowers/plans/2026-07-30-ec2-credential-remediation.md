@@ -117,9 +117,14 @@ If it returns anything else, that bucket needs a grant too.
 
 ---
 
-## Task 2: Extend the instance role
+## Task 2: Extend the instance role — **COMPLETE (2026-07-30), except Step 4**
 
-- [ ] **Step 1: Apply this policy document**
+Applied as version `v2`, now default. **Rollback: `aws iam set-default-policy-version --policy-arn
+$ARN --version-id v1`.** Before the change the policy had only `v1` and was attached to nothing
+but `msfg-dashboard-ec2-role`, so the blast radius was limited to that role — which at the time
+was fully shadowed by the admin credentials, meaning the change had no runtime effect at all.
+
+- [x] **Step 1: Apply this policy document**
 
 Task 1 is complete, so the policy is fully determined. Replace `msfg-dashboard-s3-policy`
 with:
@@ -154,7 +159,7 @@ with:
 
 Note this drops `s3:PutObjectAcl`, which nothing uses. No `"Resource": "*"`, no `s3:*`.
 
-- [ ] **Step 2: Apply it as a new policy version**
+- [x] **Step 2: Apply it as a new policy version**
 
 Create a new version rather than editing in place, so rollback is a single command. Record the
 current default version ID first:
@@ -170,7 +175,7 @@ Rollback: `aws iam set-default-policy-version --policy-arn $ARN --version-id <re
 A managed policy holds at most five versions. If creation fails on that limit, delete the
 oldest non-default version first.
 
-- [ ] **Step 3: Verify the role works — while the admin keys still do**
+- [x] **Step 3: Verify the role works — while the admin keys still do**
 
 This is the whole point of ordering the plan this way. Test the role's permissions *before*
 removing the credentials that are currently masking it, so a mistake costs nothing.
@@ -190,15 +195,36 @@ CREDS=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
   export AWS_SESSION_TOKEN=$(echo "$CREDS" | python3 -c 'import sys,json;print(json.load(sys.stdin)["Token"])')
 
   aws sts get-caller-identity          # must show assumed-role/msfg-dashboard-ec2-role
-  aws s3 ls s3://msfg-dashboard-files/ --region us-east-1 --max-items 1
-  aws s3 ls s3://msfg-mortgage-documents-prod/ --region us-east-1 --max-items 1
-  aws s3 ls s3://msfg-media/ --region us-west-2 --max-items 1
+
+  # Use s3api, not `aws s3 ls`. The high-level `aws s3 ls` does NOT accept --max-items and
+  # exits non-zero with "Unknown options", which looks exactly like a permissions failure.
+  aws s3api list-objects-v2 --bucket msfg-dashboard-files --max-keys 1 --region us-east-1
+  aws s3api list-objects-v2 --bucket msfg-mortgage-documents-prod --max-keys 1 --region us-east-1
+  aws s3api list-objects-v2 --bucket msfg-media --max-keys 1 --region us-west-2
+
+  # Negative control: an ungranted bucket must fail, and must fail with AccessDenied
+  # specifically. A NoSuchBucket or region-redirect error would prove nothing.
+  aws s3api list-objects-v2 --bucket msfg.us --max-keys 1 --region us-west-1
 )
 ```
 
 Environment variables take precedence over the shared credentials file, so the subshell uses
-the role while everything outside it keeps working. All three listings must succeed. Any
-`AccessDenied` means the policy is wrong — fix it here, not during the cutover.
+the role while everything outside it keeps working. Any `AccessDenied` on a granted bucket means
+the policy is wrong — fix it here, not during the cutover.
+
+**Results (2026-07-30).** Identity inside the subshell resolved to
+`assumed-role/msfg-dashboard-ec2-role/i-009758ffb4622ba02`, and outside it remained
+`user/vonzink@gmail.com`, confirming the subshell isolation held. Per bucket:
+
+| Bucket | ListBucket | GetObject | PutObject | DeleteObject |
+|---|---|---|---|---|
+| `msfg-dashboard-files` | OK | OK | OK | OK |
+| `msfg-mortgage-documents-prod` | OK | OK | OK | OK |
+| `msfg-media` | OK | OK | OK | OK |
+
+The negative control on `msfg.us` returned `AccessDenied ... because no identity-based policy
+allows the s3:ListBucket action` — denied for the correct reason. Write testing used a scratch
+key under `_roleverify/` in each bucket, deleted immediately after.
 
 Also confirm the chat-attachment caveat from Task 1:
 
@@ -207,6 +233,9 @@ SELECT DISTINCT s3_bucket FROM chat_attachments;
 ```
 
 If that returns any bucket other than `msfg-media`, add it to the policy before proceeding.
+
+**Result:** `chat_attachments` holds zero rows, so no historical bucket values exist outside the
+three already granted. Caveat closed.
 
 - [ ] **Step 4: Delete the dead inline policy**
 
