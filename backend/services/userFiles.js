@@ -269,6 +269,17 @@ async function listAllUnderPrefix(prefix) {
   return objects;
 }
 
+/** Whether a single object exists at an exact key. */
+async function objectExists(key) {
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+    return true;
+  } catch (err) {
+    if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) return false;
+    throw err;
+  }
+}
+
 /** Delete keys in S3's maximum batch size. */
 async function deleteKeys(keys) {
   for (let i = 0; i < keys.length; i += DELETE_BATCH_SIZE) {
@@ -432,6 +443,83 @@ async function softDelete(userId, clientPath) {
   };
 }
 
+/**
+ * Move or rename a file or folder.
+ *
+ * S3 has no move, so this is copy-then-delete over every object beneath the
+ * source. Byte count is unchanged, so quota is untouched.
+ */
+async function move(userId, fromPath, toPath) {
+  const fromKey = resolveUserKey(userId, fromPath);
+  const fromPrefix = resolveUserKey(userId, fromPath, { trailingSlash: true });
+  const toKey = resolveUserKey(userId, toPath);
+  const toPrefix = resolveUserKey(userId, toPath, { trailingSlash: true });
+  const rootPrefix = userRootPrefix(userId);
+
+  if (fromPrefix === rootPrefix) {
+    throw new UserFilePathError('Cannot move the root folder');
+  }
+  if (fromKey === toKey) {
+    return { moved: 0, unchanged: true };
+  }
+
+  const objects = await listAllUnderPrefix(fromPrefix);
+  const isFolder = objects.length > 0;
+
+  if (isFolder) {
+    // Copying a folder into its own subtree would keep generating new source
+    // objects as it walked, so the listing is taken once above and this guard
+    // rejects the case outright rather than relying on that ordering.
+    if (toPrefix.startsWith(fromPrefix)) {
+      const error = new Error('Cannot move a folder into itself');
+      error.statusCode = 409;
+      throw error;
+    }
+  } else {
+    if (!(await objectExists(fromKey))) {
+      const error = new Error('That file no longer exists');
+      error.statusCode = 404;
+      throw error;
+    }
+    objects.push({ Key: fromKey });
+  }
+
+  // S3 overwrites silently, so an unchecked move would destroy whatever sat at
+  // the destination with no way back. Both shapes have to be checked: a file
+  // occupies the bare key, a folder occupies the prefix.
+  const destinationOccupied = (await listAllUnderPrefix(toPrefix)).length > 0
+    || await objectExists(toKey);
+
+  if (destinationOccupied) {
+    const error = new Error('Something with that name already exists here');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (objects.length > SYNC_OBJECT_LIMIT) {
+    const error = new Error('Folder is too large to move in one request');
+    error.statusCode = 409;
+    error.details = { objectCount: objects.length, limit: SYNC_OBJECT_LIMIT };
+    throw error;
+  }
+
+  await mapWithConcurrency(objects, COPY_CONCURRENCY, async (object) => {
+    const destination = isFolder
+      ? toPrefix + object.Key.slice(fromPrefix.length)
+      : toKey;
+
+    await s3.send(new CopyObjectCommand({
+      Bucket: BUCKET,
+      Key: destination,
+      CopySource: `${BUCKET}/${encodeURIComponent(object.Key).replace(/%2F/g, '/')}`,
+    }));
+  });
+
+  await deleteKeys(objects.map((object) => object.Key));
+
+  return { moved: objects.length, from: fromPath, to: toPath };
+}
+
 /** List trash, grouped by the deletion batch that produced it. */
 async function listTrash(userId) {
   const objects = await listAllUnderPrefix(userTrashPrefix(userId));
@@ -534,11 +622,14 @@ async function purgeFromTrash(userId, trashPath) {
 function audit({ userId, actorUserId, action, s3Key = null, bytes = null, req = null }) {
   const ip = req ? (req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim() : null;
   const userAgent = req ? String(req.headers['user-agent'] || '').slice(0, 512) : null;
+  // The insert is fire-and-forget, so an over-long key would drop the row
+  // silently rather than surface as an error. Truncate to the column width.
+  const key = s3Key === null ? null : String(s3Key).slice(0, 1024);
 
   return db.query(
     `INSERT INTO user_file_audit (user_id, actor_user_id, action, s3_key, bytes, ip, user_agent)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [userId, actorUserId, action, s3Key, bytes, ip || null, userAgent]
+    [userId, actorUserId, action, key, bytes, ip || null, userAgent]
   ).catch((err) => logger.warn({ err, action, userId }, 'user file audit insert failed'));
 }
 
@@ -557,6 +648,7 @@ module.exports = {
   prepareUpload,
   confirmUpload,
   softDelete,
+  move,
   listTrash,
   restoreFromTrash,
   purgeFromTrash,

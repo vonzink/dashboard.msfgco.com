@@ -262,12 +262,13 @@
 
       folders.forEach((folder) => {
         rows.push(
-          '<div class="file-row folder" data-type="folder" data-path="' + escapeHtml(folder.path) + '">' +
+          '<div class="file-row folder" draggable="true" data-type="folder" data-path="' + escapeHtml(folder.path) + '" data-name="' + escapeHtml(folder.name) + '">' +
             '<div class="col-icon"><i class="fas fa-folder"></i></div>' +
             '<div class="col-name">' + escapeHtml(folder.name) + '</div>' +
             '<div class="col-size">--</div>' +
             '<div class="col-date">--</div>' +
             '<div class="col-action">' +
+              '<button type="button" class="row-btn" data-act="rename" title="Rename"><i class="fas fa-pen"></i></button>' +
               '<button type="button" class="row-btn danger" data-act="delete" title="Delete"><i class="fas fa-trash"></i></button>' +
             '</div>' +
           '</div>'
@@ -277,13 +278,14 @@
       files.forEach((file) => {
         const look = iconFor(file.name);
         rows.push(
-          '<div class="file-row file ' + look.cls + '" data-type="file" data-path="' + escapeHtml(file.path) + '">' +
+          '<div class="file-row file ' + look.cls + '" draggable="true" data-type="file" data-path="' + escapeHtml(file.path) + '" data-name="' + escapeHtml(file.name) + '">' +
             '<div class="col-icon"><i class="fas ' + look.icon + '"></i></div>' +
             '<div class="col-name">' + escapeHtml(file.name) + '</div>' +
             '<div class="col-size">' + formatSize(file.size) + '</div>' +
             '<div class="col-date">' + formatDate(file.lastModified) + '</div>' +
             '<div class="col-action">' +
               '<button type="button" class="row-btn" data-act="download" title="Download"><i class="fas fa-download"></i></button>' +
+              '<button type="button" class="row-btn" data-act="rename" title="Rename"><i class="fas fa-pen"></i></button>' +
               '<button type="button" class="row-btn danger" data-act="delete" title="Delete"><i class="fas fa-trash"></i></button>' +
             '</div>' +
           '</div>'
@@ -350,6 +352,15 @@
       }
 
       if (action === 'download') return download(path);
+
+      if (action === 'rename') {
+        const current = row.dataset.name;
+        const name = prompt('Rename to', current);
+        if (!name || name === current) return;
+        if (name.includes('/')) return toast('Names cannot contain "/"', true);
+        await moveItem(path, currentPath ? currentPath + '/' + name : name);
+        return;
+      }
 
       if (action === 'delete') {
         const label = row.querySelector('.col-name').textContent;
@@ -520,19 +531,31 @@
       });
     }
 
-    /* ── Drag and drop ── */
+    /* ── Dragging in from the desktop (upload) ── */
+
+    // Dragging a row inside the page fires the same window events as dragging a
+    // file in from the desktop. Only the latter carries a "Files" type, so this
+    // is what keeps an internal move from raising the upload overlay.
+    function isExternalFileDrag(event) {
+      const types = event.dataTransfer && event.dataTransfer.types;
+      return types ? Array.prototype.indexOf.call(types, 'Files') !== -1 : false;
+    }
+
     window.addEventListener('dragenter', (event) => {
-      if (inTrash) return;
+      if (inTrash || !isExternalFileDrag(event)) return;
       event.preventDefault();
       dragDepth += 1;
       document.body.classList.add('dragging');
     });
-    window.addEventListener('dragover', (event) => event.preventDefault());
+    window.addEventListener('dragover', (event) => {
+      if (isExternalFileDrag(event)) event.preventDefault();
+    });
     window.addEventListener('dragleave', () => {
       dragDepth = Math.max(0, dragDepth - 1);
       if (dragDepth === 0) document.body.classList.remove('dragging');
     });
     window.addEventListener('drop', (event) => {
+      if (!isExternalFileDrag(event)) return;
       event.preventDefault();
       dragDepth = 0;
       document.body.classList.remove('dragging');
@@ -540,6 +563,108 @@
 
       const files = Array.from(event.dataTransfer.files || []);
       if (files.length) queueUploads(files);
+    });
+
+    /* ── Dragging a row onto a folder (move) ── */
+
+    // dataTransfer payloads are unreadable during dragover, so the source is
+    // held here to decide whether a hovered target is a legal drop.
+    let dragSource = null;
+
+    async function moveItem(from, to) {
+      if (from === to) return;
+      try {
+        await api('/move', { method: 'POST', body: JSON.stringify({ from, to }) });
+        toast('Moved');
+        load(currentPath);
+      } catch (err) {
+        toast(err.message || 'Move failed', true);
+      }
+    }
+
+    function clearDropTargets() {
+      document.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
+    }
+
+    $list.addEventListener('dragstart', (event) => {
+      const row = event.target.closest('.file-row');
+      if (!row || inTrash || !row.dataset.path) return event.preventDefault();
+
+      dragSource = { path: row.dataset.path, name: row.dataset.name };
+      row.classList.add('dragging-row');
+      event.dataTransfer.effectAllowed = 'move';
+      // A custom type marks this as an internal drag; the plain text copy is
+      // what stops the browser treating an unrecognised payload as a no-op.
+      event.dataTransfer.setData('application/x-msfg-move', row.dataset.path);
+      event.dataTransfer.setData('text/plain', row.dataset.name);
+    });
+
+    $list.addEventListener('dragend', () => {
+      dragSource = null;
+      clearDropTargets();
+      document.querySelectorAll('.dragging-row').forEach((el) => el.classList.remove('dragging-row'));
+    });
+
+    function folderDropTarget(event) {
+      if (!dragSource) return null;
+      const row = event.target.closest('.file-row.folder');
+      if (!row || row.dataset.path === dragSource.path) return null;
+      return row;
+    }
+
+    $list.addEventListener('dragover', (event) => {
+      if (!dragSource) return;
+      const row = folderDropTarget(event);
+      if (!row) return clearDropTargets();
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      if (!row.classList.contains('drop-target')) {
+        clearDropTargets();
+        row.classList.add('drop-target');
+      }
+    });
+
+    $list.addEventListener('drop', (event) => {
+      const row = folderDropTarget(event);
+      if (!row) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const destination = row.dataset.path + '/' + dragSource.name;
+      const from = dragSource.path;
+      dragSource = null;
+      clearDropTargets();
+      moveItem(from, destination);
+    });
+
+    // Breadcrumbs double as drop targets so an item can be moved back up.
+    $crumbs.addEventListener('dragover', (event) => {
+      const crumb = event.target.closest('.breadcrumb-item');
+      if (!dragSource || !crumb || crumb.classList.contains('active')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      event.dataTransfer.dropEffect = 'move';
+      if (!crumb.classList.contains('drop-target')) {
+        clearDropTargets();
+        crumb.classList.add('drop-target');
+      }
+    });
+
+    $crumbs.addEventListener('dragleave', clearDropTargets);
+
+    $crumbs.addEventListener('drop', (event) => {
+      const crumb = event.target.closest('.breadcrumb-item');
+      if (!dragSource || !crumb || crumb.classList.contains('active')) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      const parent = crumb.dataset.path || '';
+      const destination = parent ? parent + '/' + dragSource.name : dragSource.name;
+      const from = dragSource.path;
+      dragSource = null;
+      clearDropTargets();
+      moveItem(from, destination);
     });
 
     /* ── Init ── */

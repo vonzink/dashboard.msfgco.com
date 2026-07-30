@@ -175,7 +175,21 @@ body {
 .col-name   { flex: 1; font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .col-size   { width: 90px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; }
 .col-date   { width: 130px; font-size: 12px; color: #888; text-align: right; flex-shrink: 0; }
-.col-action { width: 92px; text-align: right; flex-shrink: 0; }
+.col-action { width: 120px; text-align: right; flex-shrink: 0; }
+
+/* ── Moving rows by dragging ── */
+.file-row[draggable="true"] { cursor: grab; }
+.file-row.dragging-row { opacity: .4; }
+.file-row.drop-target {
+  background: var(--msfg-light-green);
+  box-shadow: inset 0 0 0 2px var(--msfg-teal);
+}
+.breadcrumb-item.drop-target {
+  background: var(--msfg-light-green);
+  box-shadow: inset 0 0 0 2px var(--msfg-teal);
+}
+/* The row is the drop target, so children must not swallow the drag events. */
+.file-row.drop-target * { pointer-events: none; }
 
 .file-row.folder .col-icon { color: var(--msfg-teal); }
 .file-row.file .col-icon   { color: #c0392b; }
