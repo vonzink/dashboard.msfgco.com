@@ -90,7 +90,8 @@
     'open-logos-browser': () =>
       Utils.openPopup('Calculators/File Browser/file-browser.html?library=logos', 'MSFGLogosBrowser', 1100, 800),
 
-    'open-my-files': () => comingSoon('My Files'),
+    'open-my-files': () =>
+      Utils.openPopup('Calculators/My Files/my-files.html', 'MSFGMyFiles', 1200, 820),
 
     'open-content-studio': () => {
       if (typeof ContentStudio !== 'undefined') ContentStudio.open();

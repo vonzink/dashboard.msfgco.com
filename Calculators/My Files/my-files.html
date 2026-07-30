@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MSFG My Files</title>
+
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/vendor/fontawesome/css/all.min.css" />
+</head>
+
+<body>
+  <div class="pageHeader">
+    <h2><i class="fas fa-folder"></i> My Files</h2>
+    <div class="usage">
+      <span id="usageText">--</span>
+      <div class="usage-bar"><div class="usage-fill" id="usageFill"></div></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button type="button" class="btn primary" id="btnUpload"><i class="fas fa-arrow-up-from-bracket"></i> Upload</button>
+    <button type="button" class="btn" id="btnNewFolder"><i class="fas fa-folder-plus"></i> New Folder</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn ghost" id="btnRefresh" title="Refresh"><i class="fas fa-rotate"></i></button>
+    <button type="button" class="btn ghost" id="btnTrash"><i class="fas fa-trash"></i> Trash</button>
+  </div>
+
+  <div class="trash-banner" id="trashBanner" style="display:none;">
+    <i class="fas fa-circle-info"></i>
+    <span>Deleted items are kept for 30 days, then removed automatically. They still count toward your storage until purged.</span>
+  </div>
+
+  <div class="breadcrumb-bar" id="breadcrumbs"></div>
+
+  <div class="file-browser">
+    <div class="file-header">
+      <div class="col-icon"></div>
+      <div class="col-name">Name</div>
+      <div class="col-size">Size</div>
+      <div class="col-date">Modified</div>
+      <div class="col-action"></div>
+    </div>
+
+    <div id="fileList"></div>
+
+    <div class="state-msg" id="loadingState">
+      <i class="fas fa-spinner fa-spin"></i>
+      <p>Loading...</p>
+    </div>
+
+    <div class="state-msg" id="emptyState" style="display:none;">
+      <i class="fas fa-folder-open"></i>
+      <p>This folder is empty.</p>
+      <p class="hint">Drag files here to upload.</p>
+    </div>
+
+    <div class="state-msg" id="errorState" style="display:none;">
+      <i class="fas fa-exclamation-triangle"></i>
+      <p id="errorMsg">Something went wrong.</p>
+    </div>
+  </div>
+
+  <input type="file" id="filePicker" multiple hidden />
+
+  <div class="drop-overlay">
+    <i class="fas fa-cloud-arrow-up"></i>
+    <div>Drop files to upload</div>
+  </div>
+
+  <div class="uploads" id="uploads">
+    <div class="uploads-head">
+      <span id="uploadsTitle">Uploads</span>
+      <button type="button" id="uploadsClose" title="Hide"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="uploads-body" id="uploadsBody"></div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    /* ── API config ── */
+    const API_BASE = window.location.protocol === 'https:'
+      ? 'https://api.msfgco.com/api'
+      : 'http://52.203.186.217:8080/api';
+
+    function getAuthToken() {
+      const cookieMatch = document.cookie.match(/(?:^|;\s*)auth_token=([^;]*)/);
+      return (
+        localStorage.getItem('auth_token') ||
+        (cookieMatch ? decodeURIComponent(cookieMatch[1]) : null) ||
+        sessionStorage.getItem('auth_token')
+      );
+    }
+
+    async function api(path, options = {}) {
+      const token = getAuthToken();
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = 'Bearer ' + token;
+
+      const res = await fetch(API_BASE + '/my-files' + path, { ...options, headers });
+
+      if (res.status === 401) {
+        showError('Your session expired. Close this window and sign in again.');
+        throw new Error('unauthorized');
+      }
+
+      let payload = null;
+      try { payload = await res.json(); } catch { /* empty body is fine */ }
+
+      if (!res.ok) {
+        const err = new Error((payload && payload.error) || res.statusText);
+        err.status = res.status;
+        err.payload = payload;
+        throw err;
+      }
+      return payload;
+    }
+
+    /* ── State ── */
+    let currentPath = '';
+    let inTrash = false;
+    let quota = { bytesUsed: 0, quotaBytes: 0, bytesRemaining: 0 };
+    let dragDepth = 0;   // dragenter/dragleave fire per element, so count them
+
+    /* ── DOM ── */
+    const $list      = document.getElementById('fileList');
+    const $crumbs    = document.getElementById('breadcrumbs');
+    const $loading   = document.getElementById('loadingState');
+    const $empty     = document.getElementById('emptyState');
+    const $error     = document.getElementById('errorState');
+    const $errorMsg  = document.getElementById('errorMsg');
+    const $usageText = document.getElementById('usageText');
+    const $usageFill = document.getElementById('usageFill');
+    const $picker    = document.getElementById('filePicker');
+    const $uploads   = document.getElementById('uploads');
+    const $uploadsBody = document.getElementById('uploadsBody');
+    const $uploadsTitle = document.getElementById('uploadsTitle');
+    const $trashBanner = document.getElementById('trashBanner');
+    const $btnUpload = document.getElementById('btnUpload');
+    const $btnNewFolder = document.getElementById('btnNewFolder');
+    const $toast     = document.getElementById('toast');
+
+    /* ── Helpers ── */
+    function formatSize(bytes) {
+      if (bytes === 0) return '0 B';
+      if (!bytes) return '--';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+      if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+      return (bytes / 1073741824).toFixed(2) + ' GB';
+    }
+
+    function formatDate(value) {
+      if (!value) return '--';
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return '--';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function iconFor(name) {
+      const ext = (name.split('.').pop() || '').toLowerCase();
+      if (['png','jpg','jpeg','gif','webp','svg','bmp'].includes(ext)) return { cls: 'img', icon: 'fa-file-image' };
+      if (['doc','docx','rtf'].includes(ext)) return { cls: 'doc', icon: 'fa-file-word' };
+      if (['xls','xlsx','csv'].includes(ext)) return { cls: 'xls', icon: 'fa-file-excel' };
+      if (['zip','rar','7z','gz','tar'].includes(ext)) return { cls: 'zip', icon: 'fa-file-zipper' };
+      if (['txt','md','log'].includes(ext)) return { cls: 'txt', icon: 'fa-file-lines' };
+      if (ext === 'pdf') return { cls: '', icon: 'fa-file-pdf' };
+      return { cls: '', icon: 'fa-file' };
+    }
+
+    // Everything user-supplied goes through this before reaching innerHTML.
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
+    let toastTimer;
+    function toast(message, isError) {
+      $toast.textContent = message;
+      $toast.classList.toggle('error', !!isError);
+      $toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => $toast.classList.remove('show'), 3200);
+    }
+
+    function setState(which) {
+      $loading.style.display = which === 'loading' ? 'block' : 'none';
+      $empty.style.display   = which === 'empty'   ? 'block' : 'none';
+      $error.style.display   = which === 'error'   ? 'block' : 'none';
+    }
+
+    function showError(message) {
+      $errorMsg.textContent = message;
+      setState('error');
+    }
+
+    /* ── Usage ── */
+    async function refreshUsage() {
+      try {
+        quota = await api('/usage');
+        const pct = quota.quotaBytes ? Math.min(100, (quota.bytesUsed / quota.quotaBytes) * 100) : 0;
+        $usageText.textContent = formatSize(quota.bytesUsed) + ' of ' + formatSize(quota.quotaBytes) + ' used';
+        $usageFill.style.width = pct + '%';
+        $usageFill.className = 'usage-fill' + (pct >= 95 ? ' full' : pct >= 80 ? ' warn' : '');
+      } catch {
+        $usageText.textContent = '';
+      }
+    }
+
+    /* ── Breadcrumbs ── */
+    function renderCrumbs() {
+      if (inTrash) {
+        $crumbs.innerHTML = '<span class="breadcrumb-item active"><i class="fas fa-trash"></i> Trash</span>';
+        return;
+      }
+
+      const parts = currentPath ? currentPath.split('/').filter(Boolean) : [];
+      let html = '<span class="breadcrumb-item" data-path=""><i class="fas fa-house"></i> My Files</span>';
+      let accumulated = '';
+
+      parts.forEach((part, index) => {
+        accumulated += (accumulated ? '/' : '') + part;
+        const isLast = index === parts.length - 1;
+        html += '<span class="breadcrumb-sep"><i class="fas fa-chevron-right"></i></span>';
+        html += isLast
+          ? '<span class="breadcrumb-item active">' + escapeHtml(part) + '</span>'
+          : '<span class="breadcrumb-item" data-path="' + escapeHtml(accumulated) + '">' + escapeHtml(part) + '</span>';
+      });
+
+      $crumbs.innerHTML = html;
+    }
+
+    /* ── Listing ── */
+    async function load(path) {
+      currentPath = path || '';
+      inTrash = false;
+      $trashBanner.style.display = 'none';
+      $btnUpload.disabled = false;
+      $btnNewFolder.disabled = false;
+      renderCrumbs();
+      setState('loading');
+      $list.innerHTML = '';
+
+      try {
+        const data = await api('/list?path=' + encodeURIComponent(currentPath));
+        renderRows(data.folders, data.files);
+      } catch (err) {
+        if (err.message !== 'unauthorized') showError(err.message || 'Could not load your files.');
+      }
+    }
+
+    function renderRows(folders, files) {
+      const rows = [];
+
+      folders.forEach((folder) => {
+        rows.push(
+          '<div class="file-row folder" data-type="folder" data-path="' + escapeHtml(folder.path) + '">' +
+            '<div class="col-icon"><i class="fas fa-folder"></i></div>' +
+            '<div class="col-name">' + escapeHtml(folder.name) + '</div>' +
+            '<div class="col-size">--</div>' +
+            '<div class="col-date">--</div>' +
+            '<div class="col-action">' +
+              '<button type="button" class="row-btn danger" data-act="delete" title="Delete"><i class="fas fa-trash"></i></button>' +
+            '</div>' +
+          '</div>'
+        );
+      });
+
+      files.forEach((file) => {
+        const look = iconFor(file.name);
+        rows.push(
+          '<div class="file-row file ' + look.cls + '" data-type="file" data-path="' + escapeHtml(file.path) + '">' +
+            '<div class="col-icon"><i class="fas ' + look.icon + '"></i></div>' +
+            '<div class="col-name">' + escapeHtml(file.name) + '</div>' +
+            '<div class="col-size">' + formatSize(file.size) + '</div>' +
+            '<div class="col-date">' + formatDate(file.lastModified) + '</div>' +
+            '<div class="col-action">' +
+              '<button type="button" class="row-btn" data-act="download" title="Download"><i class="fas fa-download"></i></button>' +
+              '<button type="button" class="row-btn danger" data-act="delete" title="Delete"><i class="fas fa-trash"></i></button>' +
+            '</div>' +
+          '</div>'
+        );
+      });
+
+      $list.innerHTML = rows.join('');
+      setState(rows.length ? null : 'empty');
+    }
+
+    /* ── Trash ── */
+    async function loadTrash() {
+      inTrash = true;
+      $trashBanner.style.display = 'flex';
+      $btnUpload.disabled = true;
+      $btnNewFolder.disabled = true;
+      renderCrumbs();
+      setState('loading');
+      $list.innerHTML = '';
+
+      try {
+        const data = await api('/trash');
+        const rows = [];
+
+        data.groups.forEach((group) => {
+          group.items.forEach((item) => {
+            const look = iconFor(item.name);
+            rows.push(
+              '<div class="file-row file ' + look.cls + '" data-type="trash" data-trash="' + escapeHtml(item.trashPath) + '">' +
+                '<div class="col-icon"><i class="fas ' + look.icon + '"></i></div>' +
+                '<div class="col-name">' + escapeHtml(item.originalPath) + '</div>' +
+                '<div class="col-size">' + formatSize(item.size) + '</div>' +
+                '<div class="col-date">' + formatDate(group.deletedAtDate) + '</div>' +
+                '<div class="col-action">' +
+                  '<button type="button" class="row-btn" data-act="restore" title="Restore"><i class="fas fa-rotate-left"></i></button>' +
+                  '<button type="button" class="row-btn danger" data-act="purge" title="Delete forever"><i class="fas fa-xmark"></i></button>' +
+                '</div>' +
+              '</div>'
+            );
+          });
+        });
+
+        $list.innerHTML = rows.join('');
+        setState(rows.length ? null : 'empty');
+      } catch (err) {
+        if (err.message !== 'unauthorized') showError(err.message || 'Could not load trash.');
+      }
+    }
+
+    /* ── Row actions ── */
+    $list.addEventListener('click', async (event) => {
+      const row = event.target.closest('.file-row');
+      if (!row) return;
+
+      const button = event.target.closest('.row-btn');
+      const action = button && button.dataset.act;
+      const path = row.dataset.path;
+      const trashPath = row.dataset.trash;
+
+      if (!action) {
+        if (row.dataset.type === 'folder') load(path);
+        else if (row.dataset.type === 'file') download(path);
+        return;
+      }
+
+      if (action === 'download') return download(path);
+
+      if (action === 'delete') {
+        const label = row.querySelector('.col-name').textContent;
+        if (!confirm('Move "' + label + '" to trash?')) return;
+        try {
+          await api('?path=' + encodeURIComponent(path), { method: 'DELETE' });
+          toast('Moved to trash');
+          load(currentPath);
+        } catch (err) {
+          toast(err.message || 'Delete failed', true);
+        }
+        return;
+      }
+
+      if (action === 'restore') {
+        try {
+          await api('/restore', { method: 'POST', body: JSON.stringify({ trashPath }) });
+          toast('Restored');
+          loadTrash();
+          refreshUsage();
+        } catch (err) {
+          toast(err.message || 'Restore failed', true);
+        }
+        return;
+      }
+
+      if (action === 'purge') {
+        if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+        try {
+          await api('/trash?trashPath=' + encodeURIComponent(trashPath), { method: 'DELETE' });
+          toast('Deleted permanently');
+          loadTrash();
+          refreshUsage();
+        } catch (err) {
+          toast(err.message || 'Delete failed', true);
+        }
+      }
+    });
+
+    async function download(path) {
+      try {
+        const { url } = await api('/download-url?path=' + encodeURIComponent(path));
+        window.location.href = url;
+      } catch (err) {
+        toast(err.message || 'Could not download', true);
+      }
+    }
+
+    /* ── Breadcrumb navigation ── */
+    $crumbs.addEventListener('click', (event) => {
+      const crumb = event.target.closest('.breadcrumb-item');
+      if (!crumb || crumb.classList.contains('active')) return;
+      load(crumb.dataset.path || '');
+    });
+
+    /* ── New folder ── */
+    $btnNewFolder.addEventListener('click', async () => {
+      const name = prompt('Folder name');
+      if (!name) return;
+      if (name.includes('/')) return toast('Folder names cannot contain "/"', true);
+
+      const path = currentPath ? currentPath + '/' + name : name;
+      try {
+        await api('/folder', { method: 'POST', body: JSON.stringify({ path }) });
+        load(currentPath);
+      } catch (err) {
+        toast(err.message || 'Could not create folder', true);
+      }
+    });
+
+    /* ── Uploads ── */
+    $btnUpload.addEventListener('click', () => $picker.click());
+    $picker.addEventListener('change', () => {
+      queueUploads(Array.from($picker.files));
+      $picker.value = '';
+    });
+    document.getElementById('uploadsClose').addEventListener('click', () => $uploads.classList.remove('open'));
+    document.getElementById('btnRefresh').addEventListener('click', () => (inTrash ? loadTrash() : load(currentPath)));
+    document.getElementById('btnTrash').addEventListener('click', () => (inTrash ? load('') : loadTrash()));
+
+    let uploadSeq = 0;
+    let activeUploads = 0;
+
+    function queueUploads(files) {
+      if (!files.length) return;
+      // Capture the folder at queue time so navigating away mid-upload still
+      // puts the file where the user dropped it.
+      const targetPath = currentPath;
+      $uploads.classList.add('open');
+      files.forEach((file) => uploadOne(file, targetPath));
+    }
+
+    function uploadRow(id, name) {
+      const el = document.createElement('div');
+      el.className = 'upload-item';
+      el.id = 'up-' + id;
+      el.innerHTML =
+        '<div class="upload-name"><span>' + escapeHtml(name) + '</span>' +
+        '<span class="upload-status">Waiting</span></div>' +
+        '<div class="upload-bar"><div class="upload-fill"></div></div>';
+      $uploadsBody.prepend(el);
+      return el;
+    }
+
+    function setUploadState(el, status, percent, cls) {
+      el.querySelector('.upload-status').textContent = status;
+      if (percent !== null) el.querySelector('.upload-fill').style.width = percent + '%';
+      if (cls) el.classList.add(cls);
+    }
+
+    async function uploadOne(file, targetPath) {
+      const id = ++uploadSeq;
+      const el = uploadRow(id, file.name);
+      const path = targetPath ? targetPath + '/' + file.name : file.name;
+
+      activeUploads += 1;
+      $uploadsTitle.textContent = 'Uploads (' + activeUploads + ' active)';
+
+      try {
+        const contentType = file.type || 'application/octet-stream';
+        const { uploadUrl } = await api('/upload-url', {
+          method: 'POST',
+          body: JSON.stringify({ path, size: file.size, contentType }),
+        });
+
+        setUploadState(el, 'Uploading', 0, null);
+        // XHR rather than fetch, because fetch still cannot report upload
+        // progress and a large file with no feedback looks frozen.
+        await putWithProgress(uploadUrl, file, contentType, (percent) => {
+          setUploadState(el, percent + '%', percent, null);
+        });
+
+        await api('/upload-complete', { method: 'POST', body: JSON.stringify({ path }) });
+
+        setUploadState(el, 'Done', 100, 'done');
+        if (targetPath === currentPath && !inTrash) load(currentPath);
+        refreshUsage();
+      } catch (err) {
+        const message = err.status === 409
+          ? 'Not enough space'
+          : (err.message || 'Failed');
+        setUploadState(el, message, 100, 'failed');
+        toast(file.name + ': ' + message, true);
+      } finally {
+        activeUploads -= 1;
+        $uploadsTitle.textContent = activeUploads > 0
+          ? 'Uploads (' + activeUploads + ' active)'
+          : 'Uploads';
+      }
+    }
+
+    function putWithProgress(url, file, contentType, onProgress) {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('PUT', url);
+        // Must match the Content-Type the backend signed, or S3 rejects the
+        // signature.
+        xhr.setRequestHeader('Content-Type', contentType);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
+        };
+        xhr.onload = () => (xhr.status >= 200 && xhr.status < 300
+          ? resolve()
+          : reject(new Error('Upload failed (' + xhr.status + ')')));
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(file);
+      });
+    }
+
+    /* ── Drag and drop ── */
+    window.addEventListener('dragenter', (event) => {
+      if (inTrash) return;
+      event.preventDefault();
+      dragDepth += 1;
+      document.body.classList.add('dragging');
+    });
+    window.addEventListener('dragover', (event) => event.preventDefault());
+    window.addEventListener('dragleave', () => {
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) document.body.classList.remove('dragging');
+    });
+    window.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dragDepth = 0;
+      document.body.classList.remove('dragging');
+      if (inTrash) return toast('Switch out of Trash to upload', true);
+
+      const files = Array.from(event.dataTransfer.files || []);
+      if (files.length) queueUploads(files);
+    });
+
+    /* ── Init ── */
+    if (!getAuthToken()) {
+      showError('You are not signed in. Close this window and sign in to the dashboard.');
+    } else {
+      load('');
+      refreshUsage();
+    }
+  })();
+  </script>
+</body>
+</html>
