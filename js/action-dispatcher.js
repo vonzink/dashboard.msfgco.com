@@ -97,6 +97,9 @@
     'open-time-calculator': () =>
       Utils.openPopup('Calculators/Time Calculator/time-calculator.html', 'MSFGTimeCalc', 1000, 800),
 
+    'open-basis-point-calculator': () =>
+      Utils.openPopup('Calculators/Basis Point Calculator/basis-point-calculator.html', 'MSFGBasisPointCalc', 1000, 850),
+
     // =====================
     // Monday.com Integration
     // =====================

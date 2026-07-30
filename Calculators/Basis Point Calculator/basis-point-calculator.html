@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Basis Point Calculator - MSFG</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <h1><i class="fas fa-percentage"></i> Basis Point Calculator</h1>
+      <p>Convert between basis points, percentage, and dollar cost &mdash; or compare scenarios side by side.</p>
+    </header>
+
+    <main class="app-main">
+      <!-- Mode Tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="single">
+          <i class="fas fa-calculator"></i> Converter
+        </button>
+        <button class="mode-tab" data-mode="compare">
+          <i class="fas fa-balance-scale"></i> Compare Scenarios
+        </button>
+      </div>
+
+      <!-- ══ Single Converter ══ -->
+      <section id="singleSection">
+        <div class="card">
+          <h2 class="card-title"><i class="fas fa-exchange-alt"></i> Rate &amp; Cost Converter</h2>
+          <p class="card-subtitle">Type into <strong>any</strong> field &mdash; everything else updates automatically. Fields the calculator fills in are tinted green.</p>
+
+          <!-- Rate -->
+          <div class="field-group">
+            <div class="field-group-label">The Rate</div>
+            <div class="field-row">
+              <div class="field">
+                <label for="s_bps">Basis Points</label>
+                <div class="input-wrap has-suffix">
+                  <input type="text" id="s_bps" inputmode="decimal" placeholder="2" />
+                  <span class="input-affix suffix">bps</span>
+                </div>
+              </div>
+              <div class="field">
+                <label for="s_pct">Percentage</label>
+                <div class="input-wrap has-suffix">
+                  <input type="text" id="s_pct" inputmode="decimal" placeholder="0.02" />
+                  <span class="input-affix suffix">%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Loan -->
+          <div class="field-group">
+            <div class="field-group-label">The Loan</div>
+            <div class="field-row">
+              <div class="field">
+                <label for="s_amount">Loan Amount</label>
+                <div class="input-wrap has-prefix">
+                  <span class="input-affix prefix">$</span>
+                  <input type="text" id="s_amount" inputmode="decimal" placeholder="103,200" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="s_days">Number of Days</label>
+                <div class="input-wrap">
+                  <input type="text" id="s_days" inputmode="numeric" value="1" />
+                </div>
+                <div class="field-hint">Use 1 for a one-time cost.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Cost -->
+          <div class="field-group">
+            <div class="field-group-label">The Cost</div>
+            <div class="field-row">
+              <div class="field">
+                <label for="s_costDay">Cost Per Day</label>
+                <div class="input-wrap has-prefix">
+                  <span class="input-affix prefix">$</span>
+                  <input type="text" id="s_costDay" inputmode="decimal" placeholder="20.64" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="s_costTotal">Total Cost</label>
+                <div class="input-wrap has-prefix">
+                  <span class="input-affix prefix">$</span>
+                  <input type="text" id="s_costTotal" inputmode="decimal" placeholder="61.92" />
+                </div>
+                <div class="field-hint">Cost per day &times; number of days.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="result-hero">
+            <div class="hero-label">Total Cost</div>
+            <span class="hero-number" id="s_hero">&mdash;</span>
+            <div class="hero-sub" id="s_heroSub"></div>
+          </div>
+
+          <div class="toolbar">
+            <button class="btn btn-ghost btn-sm" id="s_reset"><i class="fas fa-rotate-left"></i> Reset</button>
+          </div>
+        </div>
+
+        <!-- Reference -->
+        <section class="card card-muted">
+          <h2 class="card-title"><i class="fas fa-book"></i> Quick Reference</h2>
+          <div class="ref-grid">
+            <div class="ref-chip"><div class="ref-top">1 bp</div><div class="ref-bottom">= 0.01%</div></div>
+            <div class="ref-chip"><div class="ref-top">25 bps</div><div class="ref-bottom">= 0.25%</div></div>
+            <div class="ref-chip"><div class="ref-top">50 bps</div><div class="ref-bottom">= 0.50%</div></div>
+            <div class="ref-chip"><div class="ref-top">100 bps</div><div class="ref-bottom">= 1.00%</div></div>
+          </div>
+          <div class="formula-line">
+            <i class="fas fa-lightbulb"></i>
+            <code>Cost = Loan Amount &times; (Basis Points &divide; 10,000) &times; Days</code>
+          </div>
+        </section>
+      </section>
+
+      <!-- ══ Compare Scenarios ══ -->
+      <section id="compareSection" style="display:none;">
+        <div class="card">
+          <div class="compare-head">
+            <div>
+              <h2 class="card-title" style="margin:0;"><i class="fas fa-balance-scale"></i> Compare Scenarios</h2>
+              <p class="card-subtitle" style="margin:0.25rem 0 0;">Enter up to three options &mdash; the cheapest total cost is highlighted.</p>
+            </div>
+            <button class="btn btn-ghost btn-sm" id="c_reset"><i class="fas fa-rotate-left"></i> Reset</button>
+          </div>
+
+          <div class="compare-grid" id="compareGrid" style="--cols:2;"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>MSFG Basis Point Calculator &mdash; 1 basis point = 0.01% = $1 per $10,000.</small>
+    </footer>
+  </div>
+
+  <!-- Template for a compare column -->
+  <template id="compareColTpl">
+    <div class="compare-col">
+      <div class="compare-col-head">
+        <input type="text" class="compare-name" value="Option" />
+        <button type="button" class="compare-remove" title="Remove"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="field-group">
+        <div class="field-row">
+          <div class="field">
+            <label>Basis Points</label>
+            <div class="input-wrap has-suffix">
+              <input type="text" data-f="bps" inputmode="decimal" placeholder="2" />
+              <span class="input-affix suffix">bps</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-row">
+          <div class="field">
+            <label>Percentage</label>
+            <div class="input-wrap has-suffix">
+              <input type="text" data-f="pct" inputmode="decimal" placeholder="0.02" />
+              <span class="input-affix suffix">%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-row">
+          <div class="field">
+            <label>Loan Amount</label>
+            <div class="input-wrap has-prefix">
+              <span class="input-affix prefix">$</span>
+              <input type="text" data-f="amount" inputmode="decimal" placeholder="103,200" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="field-group">
+        <div class="field-row">
+          <div class="field">
+            <label>Number of Days</label>
+            <div class="input-wrap">
+              <input type="text" data-f="days" inputmode="numeric" value="1" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="compare-out">
+        <div class="co-label">Total Cost</div>
+        <div class="co-total" data-f="total">&mdash;</div>
+        <div class="co-perday" data-f="perday"></div>
+        <div class="compare-badge" data-f="badge" style="display:none;"></div>
+      </div>
+    </div>
+  </template>
+
+  <script>
+  (() => {
+    'use strict';
+
+    // ── Number helpers ──────────────────────────
+    // Parse a user string into a number, tolerating $, commas, % and spaces.
+    function parseNum(str) {
+      if (str == null) return NaN;
+      const cleaned = String(str).replace(/[^0-9.\-]/g, '');
+      if (cleaned === '' || cleaned === '-' || cleaned === '.') return NaN;
+      return parseFloat(cleaned);
+    }
+    const isNum = n => typeof n === 'number' && isFinite(n);
+
+    // Trim trailing zeros to at most `dp` decimals.
+    function trim(n, dp) {
+      if (!isNum(n)) return '';
+      return parseFloat(n.toFixed(dp)).toString();
+    }
+    // Money with thousands separators, 2 decimals.
+    function money(n) {
+      if (!isNum(n)) return '';
+      return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function moneyHero(n) {
+      return isNum(n) ? '$' + money(n) : '&mdash;';
+    }
+
+    /* ============================================================
+       Linked calculator engine.
+       Given the four related quantities — basis points, percent,
+       loan amount, days, cost/day, total cost — recompute the rest
+       from whichever field the user just touched.
+
+       Canonical rate is always basis points:
+         percent    = bps / 100
+         costPerDay = amount * bps / 10000
+         totalCost  = costPerDay * days
+       ============================================================ */
+    function makeCalc(fields, onCompute) {
+      // fields: { bps, pct, amount, days, costDay, costTotal } → input elements (some optional)
+      function wrapOf(el) { return el ? el.closest('.input-wrap') : null; }
+
+      function markDerived(el, derived) {
+        const w = wrapOf(el);
+        if (w) w.classList.toggle('is-derived', !!derived);
+      }
+
+      function recompute(source) {
+        const v = {
+          bps: fields.bps ? parseNum(fields.bps.value) : NaN,
+          pct: fields.pct ? parseNum(fields.pct.value) : NaN,
+          amount: fields.amount ? parseNum(fields.amount.value) : NaN,
+          days: fields.days ? parseNum(fields.days.value) : NaN,
+          costDay: fields.costDay ? parseNum(fields.costDay.value) : NaN,
+          costTotal: fields.costTotal ? parseNum(fields.costTotal.value) : NaN,
+        };
+        const amount = v.amount;
+        const days = isNum(v.days) && v.days > 0 ? v.days : 1;
+
+        // ── Resolve canonical basis points ──
+        let bps = NaN;
+        if (source === 'bps') {
+          bps = v.bps;
+        } else if (source === 'pct') {
+          bps = isNum(v.pct) ? v.pct * 100 : NaN;
+        } else if (source === 'costDay') {
+          bps = (isNum(v.costDay) && isNum(amount) && amount !== 0) ? (v.costDay / amount) * 10000 : NaN;
+        } else if (source === 'costTotal') {
+          const cd = isNum(v.costTotal) ? v.costTotal / days : NaN;
+          bps = (isNum(cd) && isNum(amount) && amount !== 0) ? (cd / amount) * 10000 : NaN;
+        } else {
+          // amount or days changed → keep the rate sticky, falling back to
+          // any cost the user already typed so "cost + amount → bps" works.
+          if (isNum(v.bps)) bps = v.bps;
+          else if (isNum(v.pct)) bps = v.pct * 100;
+          else if (isNum(v.costDay) && isNum(amount) && amount !== 0) bps = (v.costDay / amount) * 10000;
+          else if (isNum(v.costTotal) && isNum(amount) && amount !== 0) bps = ((v.costTotal / days) / amount) * 10000;
+        }
+
+        // ── Derive everything from bps ──
+        const pct = isNum(bps) ? bps / 100 : NaN;
+        const costDay = (isNum(bps) && isNum(amount)) ? amount * bps / 10000 : NaN;
+        const costTotal = isNum(costDay) ? costDay * days : NaN;
+
+        // ── Write back (never overwrite the field being typed) ──
+        const out = {
+          bps: trim(bps, 4),
+          pct: trim(pct, 6),
+          costDay: money(costDay),
+          costTotal: money(costTotal),
+        };
+        for (const key of ['bps', 'pct', 'costDay', 'costTotal']) {
+          const el = fields[key];
+          if (!el) continue;
+          if (key !== source) {
+            el.value = out[key];
+            markDerived(el, out[key] !== '' && key !== source);
+          } else {
+            markDerived(el, false);
+          }
+        }
+        // amount & days are always user-owned inputs, never derived
+        markDerived(fields.amount, false);
+        markDerived(fields.days, false);
+
+        if (onCompute) onCompute({ bps, pct, amount, days, costDay, costTotal });
+      }
+
+      // Wire live recompute to every editable field.
+      Object.keys(fields).forEach(key => {
+        const el = fields[key];
+        if (!el) return;
+        el.addEventListener('input', () => recompute(key));
+      });
+
+      function reset() {
+        Object.keys(fields).forEach(key => {
+          const el = fields[key];
+          if (!el) return;
+          el.value = (key === 'days') ? '1' : '';
+          markDerived(el, false);
+        });
+        recompute('bps');
+      }
+
+      return { recompute, reset };
+    }
+
+    // ── Mode switching ──────────────────────────
+    const tabs = document.querySelectorAll('.mode-tab');
+    const singleSection = document.getElementById('singleSection');
+    const compareSection = document.getElementById('compareSection');
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const mode = tab.dataset.mode;
+        singleSection.style.display = mode === 'single' ? '' : 'none';
+        compareSection.style.display = mode === 'compare' ? '' : 'none';
+      });
+    });
+
+    // ── Single converter ────────────────────────
+    const $ = id => document.getElementById(id);
+    const singleFields = {
+      bps: $('s_bps'), pct: $('s_pct'), amount: $('s_amount'),
+      days: $('s_days'), costDay: $('s_costDay'), costTotal: $('s_costTotal'),
+    };
+    const heroEl = $('s_hero');
+    const heroSubEl = $('s_heroSub');
+    const single = makeCalc(singleFields, (r) => {
+      heroEl.innerHTML = moneyHero(r.costTotal);
+      if (isNum(r.costTotal) && isNum(r.days) && r.days > 1) {
+        heroSubEl.textContent = '$' + money(r.costDay) + '/day × ' + r.days + ' days';
+      } else {
+        heroSubEl.textContent = '';
+      }
+    });
+    $('s_reset').addEventListener('click', () => single.reset());
+
+    // ── Compare scenarios ───────────────────────
+    const grid = $('compareGrid');
+    const tpl = $('compareColTpl');
+    const MAX_COLS = 3;
+    const columns = []; // { root, fields, outTotal, outPerday, badge, state }
+
+    function refreshCompareSummary() {
+      const totals = columns.map(c => c.state && isNum(c.state.costTotal) ? c.state.costTotal : null);
+      const valid = totals.filter(t => t != null);
+      const min = valid.length ? Math.min(...valid) : null;
+
+      columns.forEach((c, i) => {
+        c.root.classList.remove('is-winner');
+        c.badge.style.display = 'none';
+        c.badge.className = 'compare-badge';
+        const t = totals[i];
+        if (t == null || min == null || valid.length < 2) return;
+
+        if (t === min) {
+          c.root.classList.add('is-winner');
+          c.badge.style.display = '';
+          c.badge.classList.add('badge-win');
+          c.badge.innerHTML = '<i class="fas fa-trophy"></i> Cheapest';
+        } else {
+          c.badge.style.display = '';
+          c.badge.classList.add('badge-delta');
+          c.badge.textContent = '+$' + money(t - min) + ' more';
+        }
+      });
+    }
+
+    function renderAddButton() {
+      const existing = grid.querySelector('.compare-add');
+      if (existing) existing.remove();
+      if (columns.length >= MAX_COLS) { grid.style.setProperty('--cols', columns.length); return; }
+      const btn = document.createElement('button');
+      btn.className = 'compare-add';
+      btn.innerHTML = '<i class="fas fa-plus"></i><br>Add Scenario';
+      btn.addEventListener('click', () => addColumn());
+      grid.appendChild(btn);
+      grid.style.setProperty('--cols', columns.length + 1);
+    }
+
+    function addColumn(name) {
+      if (columns.length >= MAX_COLS) return;
+      const node = tpl.content.firstElementChild.cloneNode(true);
+      const q = sel => node.querySelector(sel);
+      const fields = {
+        bps: q('[data-f="bps"]'), pct: q('[data-f="pct"]'),
+        amount: q('[data-f="amount"]'), days: q('[data-f="days"]'),
+      };
+      const outTotal = q('[data-f="total"]');
+      const outPerday = q('[data-f="perday"]');
+      const badge = q('[data-f="badge"]');
+      const nameInput = q('.compare-name');
+      nameInput.value = name || ('Option ' + String.fromCharCode(65 + columns.length));
+
+      const col = { root: node, fields, outTotal, outPerday, badge, state: null };
+      const calc = makeCalc(fields, (r) => {
+        col.state = r;
+        outTotal.innerHTML = moneyHero(r.costTotal);
+        outPerday.textContent = (isNum(r.costDay) && isNum(r.days) && r.days > 1)
+          ? '$' + money(r.costDay) + '/day × ' + r.days + ' days'
+          : '';
+        refreshCompareSummary();
+      });
+
+      q('.compare-remove').addEventListener('click', () => {
+        const idx = columns.indexOf(col);
+        if (idx > -1) columns.splice(idx, 1);
+        node.remove();
+        renderAddButton();
+        refreshCompareSummary();
+      });
+
+      columns.push(col);
+      const addBtn = grid.querySelector('.compare-add');
+      if (addBtn) grid.insertBefore(node, addBtn);
+      else grid.appendChild(node);
+      renderAddButton();
+      return calc;
+    }
+
+    function resetCompare() {
+      columns.slice().forEach(c => c.root.remove());
+      columns.length = 0;
+      addColumn('Option A');
+      addColumn('Option B');
+    }
+    $('c_reset').addEventListener('click', resetCompare);
+
+    // Seed initial state
+    resetCompare();
+  })();
+  </script>
+</body>
+</html>
