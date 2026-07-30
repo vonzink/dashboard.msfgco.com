@@ -226,7 +226,7 @@ Source: https://dashboard.msfgco.com/Calculators/File%20Browser/file-browser.htm
 
 ## Dashboard Button And Action Inventory
 
-- My Files: action=open-my-files
+- My Files: action=open-my-files (opens Calculators/My Files/my-files.html in a popup)
 - Settings: action=open-settings
 - Admin: action=open-admin-settings
 - Switch Role: id=roleSwitcherBtn

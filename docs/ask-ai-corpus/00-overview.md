@@ -30,7 +30,7 @@ Sign in at dashboard.msfgco.com — you're redirected automatically to sign-in i
 - **Rates** — today's rate sheet.
 - **Applications** — opens app.msfgco.com in a new tab.
 - **Suite** (layers icon) — opens suite.msfgco.com in a new tab.
-- **My Files** (folder icon) — your personal file storage. Not built yet; clicking it shows a "Coming Soon" message.
+- **My Files** (folder icon) — your personal file storage. Opens a popup where you can upload files by dragging them in or with the Upload button, create folders, download, and delete. Deleted items go to Trash and can be restored for 30 days before they are removed automatically. A meter in the top right shows how much of your storage allowance you have used. Only you can see your own files.
 - **Settings** (gear icon) — user settings, including the Goals target-setting tab.
 - **Admin** (shield icon, admins only) — admin settings panel.
 

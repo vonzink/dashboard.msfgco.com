@@ -161,6 +161,14 @@ not the only way onto the box.
 
 ### 5.1 Storage layout
 
+> **Provisioned 2026-07-30.** Bucket `msfg-user-folders` (us-east-1) and CMK
+> `arn:aws:kms:us-east-1:116981808374:key/d62cf069-44ac-46b6-88f6-dc800446a8ce`
+> (`alias/msfg-user-folders`, annual rotation on) exist and are verified. Instance-role grants
+> are policy version **v3**; rollback to `v2` drops user-folders access without touching the
+> other three buckets. Two deliberate deviations from the text below are recorded inline.
+> Still outstanding before launch: server access logging, CloudTrail data events, and
+> GuardDuty Malware Protection.
+
 A **new dedicated bucket**, `msfg-user-folders`, in `us-east-1` (matching the existing
 default S3 client and the RDS region). Not a prefix inside `msfg-dashboard-files`, because
 NPI requires its own KMS key, lifecycle rules, and CloudTrail data-event logging, none of
@@ -184,6 +192,17 @@ Bucket configuration:
 - Default encryption: SSE-KMS with a dedicated CMK, `alias/msfg-user-folders`.
 - Bucket policy: deny requests where `aws:SecureTransport` is false; deny `PutObject`
   where `s3:x-amz-server-side-encryption` is not `aws:kms`.
+
+  **Deviation as built.** The encryption deny also carries
+  `"Null": {"s3:x-amz-server-side-encryption": "false"}`, so it fires only when the header is
+  *present and wrong* — not when it is absent. The strict form would break every browser
+  presigned `PUT`, because the browser must then send `x-amz-server-side-encryption` byte-for-byte
+  or S3 rejects the signature. Default bucket encryption applies the CMK when the header is
+  absent, so objects are KMS-encrypted either way; verified by uploading with no header and
+  confirming the CMK on the stored object. Forcing `AES256` is still denied.
+
+  **Addition as built.** S3 Bucket Keys are enabled, cutting KMS request charges by up to 99%,
+  and object ownership is `BucketOwnerEnforced` so ACLs are disabled outright.
 - Server access logging enabled; CloudTrail S3 data events enabled for this bucket.
 - CORS: origin `https://dashboard.msfgco.com`, methods GET/PUT/POST/HEAD,
   and **`ExposeHeaders: ["ETag"]`** — multipart upload cannot complete without reading
