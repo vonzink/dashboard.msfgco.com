@@ -17,9 +17,11 @@ function toHttpError(err) {
   if (err instanceof UserFilePathError) {
     return { status: 400, body: { error: err.message } };
   }
-  // Quota and over-size-folder rejections carry their own status and context.
-  if (err.statusCode === 409) {
-    return { status: 409, body: { error: err.message, ...(err.details || {}) } };
+  // Quota, over-size-folder and name-collision rejections carry their own
+  // status and context. Restricted to 4xx so an S3 5xx still reaches the
+  // error logger rather than being reported to the client as their mistake.
+  if (err.statusCode >= 400 && err.statusCode < 500) {
+    return { status: err.statusCode, body: { error: err.message, ...(err.details || {}) } };
   }
   if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
     return { status: 404, body: { error: 'File not found' } };
@@ -161,6 +163,25 @@ router.post('/upload-complete', handle(async (req, res) => {
   userFiles.audit({
     userId, actorUserId: userId, action: 'upload', s3Key: path, bytes: result.size, req,
   });
+
+  res.json(result);
+}));
+
+// ========================================
+// POST /api/my-files/move        (drag to another folder, or rename)
+// ========================================
+router.post('/move', handle(async (req, res) => {
+  const userId = req.user.db.id;
+  const { from, to } = req.body || {};
+
+  if (!from) return res.status(400).json({ error: 'from is required' });
+  if (!to) return res.status(400).json({ error: 'to is required' });
+
+  const result = await userFiles.move(userId, from, to);
+
+  if (!result.unchanged) {
+    userFiles.audit({ userId, actorUserId: userId, action: 'move', s3Key: `${from} -> ${to}`, req });
+  }
 
   res.json(result);
 }));

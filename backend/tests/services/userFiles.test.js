@@ -220,6 +220,130 @@ describe('softDelete — oversize folder', () => {
   });
 });
 
+describe('move', () => {
+  const notFound = () => Object.assign(new Error('NotFound'), { name: 'NotFound' });
+  const empty = { Contents: [], IsTruncated: false };
+
+  /** Source is a single file, destination is free. */
+  function stubFileMove() {
+    sendMock
+      .mockResolvedValueOnce(empty)      // list source prefix - not a folder
+      .mockResolvedValueOnce({})         // head source - exists
+      .mockResolvedValueOnce(empty)      // list destination prefix - free
+      .mockRejectedValueOnce(notFound()) // head destination - free
+      .mockResolvedValue({});
+  }
+
+  it('copies to the new key and removes the original', async () => {
+    stubFileMove();
+
+    const result = await userFiles.move(42, 'a.txt', 'Loan Docs/a.txt');
+
+    const [copy] = commandsOfType('CopyObject');
+    expect(copy.input.Key).toBe('users/42/Loan Docs/a.txt');
+    expect(copy.input.CopySource).toBe('msfg-user-folders/users/42/a.txt');
+
+    const [del] = commandsOfType('DeleteObjects');
+    expect(del.input.Delete.Objects).toEqual([{ Key: 'users/42/a.txt' }]);
+    expect(result.moved).toBe(1);
+  });
+
+  it('leaves the quota alone, because a move changes no bytes', async () => {
+    stubFileMove();
+    await userFiles.move(42, 'a.txt', 'b.txt');
+
+    const quotaCall = queryMock.mock.calls.find(([sql]) => sql.includes('user_file_quota'));
+    expect(quotaCall).toBeUndefined();
+  });
+
+  it('rewrites every key under a folder, preserving the subtree', async () => {
+    sendMock
+      .mockResolvedValueOnce({
+        Contents: [
+          { Key: 'users/42/Docs/', Size: 0 },
+          { Key: 'users/42/Docs/2026/app.pdf', Size: 10 },
+        ],
+        IsTruncated: false,
+      })
+      .mockResolvedValueOnce(empty)      // destination prefix free
+      .mockRejectedValueOnce(notFound()) // destination key free
+      .mockResolvedValue({});
+
+    await userFiles.move(42, 'Docs', 'Archive/Docs');
+
+    expect(commandsOfType('CopyObject').map((c) => c.input.Key)).toEqual([
+      'users/42/Archive/Docs/',
+      'users/42/Archive/Docs/2026/app.pdf',
+    ]);
+  });
+
+  it('refuses to move a folder inside itself, which would never terminate', async () => {
+    sendMock.mockResolvedValueOnce({
+      Contents: [{ Key: 'users/42/Docs/app.pdf', Size: 10 }],
+      IsTruncated: false,
+    });
+
+    await expect(userFiles.move(42, 'Docs', 'Docs/Nested')).rejects.toMatchObject({ statusCode: 409 });
+    expect(commandsOfType('CopyObject')).toHaveLength(0);
+  });
+
+  it('refuses to overwrite an existing file at the destination', async () => {
+    sendMock
+      .mockResolvedValueOnce(empty)
+      .mockResolvedValueOnce({})   // source exists
+      .mockResolvedValueOnce(empty)
+      .mockResolvedValueOnce({});  // destination is taken
+
+    await expect(userFiles.move(42, 'a.txt', 'b.txt')).rejects.toMatchObject({ statusCode: 409 });
+    expect(commandsOfType('CopyObject')).toHaveLength(0);
+  });
+
+  it('refuses to move onto an existing folder name', async () => {
+    sendMock
+      .mockResolvedValueOnce(empty)
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ Contents: [{ Key: 'users/42/Docs/x.pdf' }], IsTruncated: false });
+
+    await expect(userFiles.move(42, 'a.txt', 'Docs')).rejects.toMatchObject({ statusCode: 409 });
+    expect(commandsOfType('CopyObject')).toHaveLength(0);
+  });
+
+  it('rejects a missing source instead of silently succeeding', async () => {
+    sendMock
+      .mockResolvedValueOnce(empty)
+      .mockRejectedValueOnce(notFound());
+
+    await expect(userFiles.move(42, 'gone.txt', 'b.txt')).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('refuses to move the root', async () => {
+    await expect(userFiles.move(42, '', 'somewhere')).rejects.toThrow();
+  });
+
+  it('treats a move onto itself as a no-op', async () => {
+    const result = await userFiles.move(42, 'a.txt', 'a.txt');
+    expect(result.unchanged).toBe(true);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it('refuses a folder beyond the synchronous limit', async () => {
+    const many = Array.from({ length: userFiles.SYNC_OBJECT_LIMIT + 1 }, (_, i) => ({
+      Key: `users/42/Big/${i}.txt`, Size: 1,
+    }));
+    sendMock
+      .mockResolvedValueOnce({ Contents: many, IsTruncated: false })
+      .mockResolvedValueOnce(empty)
+      .mockRejectedValueOnce(notFound());
+
+    await expect(userFiles.move(42, 'Big', 'Archive/Big')).rejects.toMatchObject({ statusCode: 409 });
+    expect(commandsOfType('CopyObject')).toHaveLength(0);
+  });
+
+  it('rejects a path that escapes the user prefix', async () => {
+    await expect(userFiles.move(42, 'a.txt', '../43/steal.txt')).rejects.toThrow();
+  });
+});
+
 describe('purgeFromTrash', () => {
   it('gives the space back to the quota', async () => {
     sendMock
