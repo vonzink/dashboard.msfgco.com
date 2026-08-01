@@ -18,6 +18,16 @@ const USER_POOL_ID =
   process.env.COGNITO_USER_POOL_ID || process.env.USER_POOL_ID;
 const CLIENT_ID =
   process.env.COGNITO_CLIENT_ID || process.env.APP_CLIENT_ID;
+// Additional accepted app clients from the SAME user pool (comma-separated) — e.g. the
+// mortgage suite's client, so suite.msfgco.com can call the partner-directory endpoints
+// with its own Cognito token.
+const CLIENT_IDS = [
+  CLIENT_ID,
+  ...(process.env.COGNITO_EXTRA_CLIENT_IDS || "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean),
+].filter(Boolean);
 
 // Cognito issuer + JWKS
 const ISSUER =
@@ -53,6 +63,25 @@ function extractToken(req) {
   return null;
 }
 
+/**
+ * True when a verified token's claims name one of the accepted app clients.
+ * ID tokens carry `aud`; access tokens carry `client_id` and no `aud`, so BOTH are
+ * checked positively — an earlier version only rejected when `aud` was present, which
+ * let an access token from any client in the pool through.
+ * With no client id configured at all the check is skipped (issuer/signature still apply).
+ *
+ * @param {{aud?: string, client_id?: string}} payload verified JWT claims
+ * @param {string[]} [acceptedClientIds] defaults to the env-derived allowlist
+ */
+function isAcceptedClient(payload, acceptedClientIds = CLIENT_IDS) {
+  if (!acceptedClientIds.length) return true;
+  const { aud, client_id: clientId } = payload || {};
+  return Boolean(
+    (aud && acceptedClientIds.includes(aud)) ||
+      (clientId && acceptedClientIds.includes(clientId)),
+  );
+}
+
 async function verifyCognitoJwt(token) {
   if (!USER_POOL_ID) {
     throw new Error("Missing COGNITO_USER_POOL_ID (or USER_POOL_ID) env var");
@@ -66,13 +95,8 @@ async function verifyCognitoJwt(token) {
     // so we skip the audience check here and verify manually.
   });
 
-  // Verify client_id for access tokens OR aud for ID tokens
-  if (CLIENT_ID) {
-    const aud = payload.aud;
-    const clientId = payload.client_id;
-    if (aud && aud !== CLIENT_ID && clientId !== CLIENT_ID) {
-      throw new Error("Token client mismatch");
-    }
+  if (!isAcceptedClient(payload)) {
+    throw new Error("Token client mismatch");
   }
 
   return payload;
@@ -191,6 +215,7 @@ module.exports = {
   optionalAuth,
   extractToken,
   verifyCognitoJwt,
+  isAcceptedClient,
   requireGroup,
   requireAnyGroup,
   requireAllGroups,
