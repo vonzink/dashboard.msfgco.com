@@ -108,9 +108,13 @@ DB_NAME=msfg_mortgage_db
 PORT=8080
 NODE_ENV=production
 
-# CORS — include the mortgage suite so its Contacts page can use the partner
-# directory (realtors/title/insurance); see the suite repo's docs/PARTNER-DIRECTORY.md
-ALLOWED_ORIGINS=https://dashboard.msfgco.com,https://suite.msfgco.com
+# CORS — comma-separated allowlist. This var REPLACES the code default entirely, so it
+# must list EVERY origin that needs access. APPEND to the existing value; never retype it
+# from a doc — prod also serves keywords.msfgco.com and local dev. Check first with:
+#   grep ^ALLOWED_ORIGINS= .env
+# suite.msfgco.com is required for the Contacts partner directory (realtors/title/
+# insurance); see the suite repo's docs/PARTNER-DIRECTORY.md
+ALLOWED_ORIGINS=https://dashboard.msfgco.com,https://keywords.msfgco.com,https://suite.msfgco.com,http://localhost:3000,http://localhost:3001
 
 # Cognito — accept the mortgage suite's app client (same user pool) in addition
 # to the dashboard's own COGNITO_CLIENT_ID
