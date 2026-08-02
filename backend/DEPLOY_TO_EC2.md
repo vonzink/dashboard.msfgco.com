@@ -108,6 +108,14 @@ DB_NAME=msfg_mortgage_db
 PORT=8080
 NODE_ENV=production
 
+# CORS — include the mortgage suite so its Contacts page can use the partner
+# directory (realtors/title/insurance); see the suite repo's docs/PARTNER-DIRECTORY.md
+ALLOWED_ORIGINS=https://dashboard.msfgco.com,https://suite.msfgco.com
+
+# Cognito — accept the mortgage suite's app client (same user pool) in addition
+# to the dashboard's own COGNITO_CLIENT_ID
+COGNITO_EXTRA_CLIENT_IDS=34rg0vqoobfv8hhvg8kunkd738
+
 # AWS S3 Configuration
 AWS_REGION=us-east-1
 S3_BUCKET_NAME=msfg-dashboard-files
