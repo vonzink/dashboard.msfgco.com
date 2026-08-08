@@ -115,6 +115,36 @@ function joinClientPath(clientPath, name) {
 }
 
 /**
+ * Every file under the user's root, flattened, for the local-sync client.
+ *
+ * One request replaces a folder-by-folder crawl: the client diffs this against
+ * its own last-sync snapshot to decide what to upload, download, or delete.
+ *
+ * Folder markers (zero-byte keys ending in '/') and the trash are omitted —
+ * sync rebuilds folders from file paths, and the trash is not a synced tree.
+ *
+ * @param {number} userId
+ * @returns {Promise<{files: Array<{path: string, size: number, etag: string|null, lastModified: Date}>}>}
+ */
+async function snapshot(userId) {
+  const prefix = userRootPrefix(userId);
+  const trashPrefix = userTrashPrefix(userId);
+  const objects = await listAllUnderPrefix(prefix);
+
+  const files = objects
+    .filter((object) => !object.Key.startsWith(trashPrefix))
+    .filter((object) => !object.Key.endsWith('/'))
+    .map((object) => ({
+      path: object.Key.slice(prefix.length),
+      size: object.Size,
+      etag: object.ETag ? object.ETag.replace(/"/g, '') : null,
+      lastModified: object.LastModified,
+    }));
+
+  return { files };
+}
+
+/**
  * Presign a GET for one of the user's files.
  *
  * @param {number} userId
@@ -641,6 +671,7 @@ module.exports = {
   SYNC_OBJECT_LIMIT,
   TRASH_SEGMENT,
   listPath,
+  snapshot,
   getFileUrl,
   getUsage,
   reconcileUsage,
