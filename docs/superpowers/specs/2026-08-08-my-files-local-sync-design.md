@@ -15,11 +15,13 @@ folder; edits sync back.
 
 ## Architecture
 
-- **Engine:** `js/file-sync.js` + `js/file-sync-differ.js`, classic scripts (no ES
-  modules — avoids the build.js unbundled-module carve-out problem). Both files are
-  excluded from content-hashing (same carve-out mechanism as the scanner) because
-  `Calculators/My Files/my-files.html` is a build passthrough whose HTML is never
-  rewritten against the manifest. Cache-busted with `?v=` query params.
+- **Engine:** classic scripts under `js/` (no ES modules — avoids the build.js
+  unbundled-module carve-out that the scanner island needs). They are hashed
+  normally by `build.js`: its HTML rewriter runs over `Calculators/**/*.html` too,
+  and its regex matches `src="/js/…"`, rewriting to `/js/<base>.<hash>.js`. So
+  `Calculators/My Files/my-files.html` must reference them **root-absolute**
+  (`/js/file-sync.js`), not relative (`../../js/…`, which the regex ignores).
+  No `?v=` needed — hashing handles cache-busting.
 - **Loaded by both** the main SPA (`index.html`) and the My Files popup. Leader
   election via the Web Locks API (lock name `msfg-file-sync-leader`): whichever tab
   holds the lock runs sync; other tabs display status. Status fan-out via
@@ -55,7 +57,8 @@ Each cycle:
 5. On success, snapshot rows are updated per-file (not wholesale) so a partial
    failure resumes cleanly.
 
-**MD5** (vendored SparkMD5 in `vendor/`, passthrough) is computed only for initial
+**MD5** (vendored SparkMD5 3.0.2 at `vendor/spark-md5/spark-md5.min.js`, a build
+passthrough; Web Crypto has no MD5) is computed only for initial
 merge and conflict adjudication, compared to the S3 ETag (valid: all uploads are
 single-PUT, so ETag == MD5). Routine change detection never hashes.
 
