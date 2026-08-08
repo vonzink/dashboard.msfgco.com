@@ -1558,5 +1558,20 @@
   <script src="js/announcement-editor.js?v=20260723"></script>
 
   <script src="js/app.js?v=20260410"></script>
+
+  <!--
+    My Files local folder sync. Headless here: the My Files popup owns the UI,
+    this just keeps a linked folder syncing while the dashboard is open.
+  -->
+  <script src="/vendor/spark-md5/spark-md5.min.js"></script>
+  <script src="/js/file-sync-differ.js"></script>
+  <script src="/js/file-sync-store.js"></script>
+  <script src="/js/file-sync-hash.js"></script>
+  <script src="/js/file-sync-local.js"></script>
+  <script src="/js/file-sync-remote.js"></script>
+  <script src="/js/file-sync.js"></script>
+  <script>
+    if (window.FileSync && window.FileSyncLocal && FileSyncLocal.isSupported()) FileSync.start();
+  </script>
 </body>
 </html>

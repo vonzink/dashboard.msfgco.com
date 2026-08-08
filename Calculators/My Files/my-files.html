@@ -27,6 +27,7 @@
     <span class="spacer"></span>
     <button type="button" class="btn ghost" id="btnRefresh" title="Refresh"><i class="fas fa-rotate"></i></button>
     <button type="button" class="btn ghost" id="btnTrash"><i class="fas fa-trash"></i> Trash</button>
+    <div id="syncMount" class="sync-mount"></div>
   </div>
 
   <div class="trash-banner" id="trashBanner" style="display:none;">
@@ -80,6 +81,19 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!--
+    Local folder sync. Paths must be root-absolute: build.js rewrites
+    src="/js/..." to the content-hashed filename but ignores relative paths.
+  -->
+  <script src="/vendor/spark-md5/spark-md5.min.js"></script>
+  <script src="/js/file-sync-differ.js"></script>
+  <script src="/js/file-sync-store.js"></script>
+  <script src="/js/file-sync-hash.js"></script>
+  <script src="/js/file-sync-local.js"></script>
+  <script src="/js/file-sync-remote.js"></script>
+  <script src="/js/file-sync.js"></script>
+  <script src="/js/file-sync-ui.js"></script>
 
   <script>
   (() => {
@@ -667,12 +681,32 @@
       moveItem(from, destination);
     });
 
+    /* ── Local folder sync ── */
+    function initSync() {
+      if (!window.FileSync || !window.FileSyncUI) return;
+      FileSyncUI.mount(document.getElementById('syncMount'));
+      FileSync.start();
+
+      // Re-list when a cycle finishes so files that arrived from disk show up
+      // without the user having to hit Refresh.
+      let lastSeen = null;
+      FileSync.subscribe((state) => {
+        if (state.status !== 'synced' || state.lastSyncAt === lastSeen) return;
+        const first = lastSeen === null;
+        lastSeen = state.lastSyncAt;
+        if (first) return; // the initial subscribe callback is just current state
+        if (!inTrash) load(currentPath);
+        refreshUsage();
+      });
+    }
+
     /* ── Init ── */
     if (!getAuthToken()) {
       showError('You are not signed in. Close this window and sign in to the dashboard.');
     } else {
       load('');
       refreshUsage();
+      initSync();
     }
   })();
   </script>

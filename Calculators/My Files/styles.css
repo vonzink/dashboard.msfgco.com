@@ -371,3 +371,96 @@ body.dragging .drop-overlay { display: flex; }
   .file-header { padding: 8px 12px; }
   .uploads { right: 10px; left: 10px; width: auto; }
 }
+
+/* ── Local Folder Sync ── */
+.sync-mount { position: relative; display: inline-flex; }
+
+.sync-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid rgba(64, 64, 65, .2);
+  background: #fff;
+  color: var(--msfg-gray);
+}
+
+.sync-pill::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: .75;
+}
+
+.sync-pill[data-status="synced"]    { color: #2f7d0f; border-color: var(--msfg-green-border); }
+.sync-pill[data-status="syncing"]   { color: var(--msfg-teal); }
+.sync-pill[data-status="paused"]    { color: #a16207; }
+.sync-pill[data-status="attention"] { color: var(--danger); border-color: rgba(192, 57, 43, .5); }
+
+.sync-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  width: 340px;
+  max-width: calc(100vw - 48px);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(64, 64, 65, .15);
+  background: #fff;
+  color: var(--msfg-gray);
+  box-shadow: 0 10px 30px rgba(16, 69, 71, .18);
+}
+
+.sync-heading {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--msfg-teal);
+  opacity: .8;
+}
+
+.sync-note,
+.sync-meta { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+.sync-meta { opacity: .65; }
+.sync-error { margin: 0 0 8px; font-size: 13px; line-height: 1.45; color: var(--danger); }
+
+.sync-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.sync-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+.sync-action {
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid rgba(64, 64, 65, .2);
+  background: #fff;
+  color: var(--msfg-gray);
+}
+
+.sync-action.primary {
+  background: var(--msfg-green);
+  border-color: var(--msfg-green-border);
+  color: var(--msfg-teal);
+  font-weight: 600;
+}
+
+.sync-action.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+.sync-action:disabled { opacity: .6; cursor: default; }
