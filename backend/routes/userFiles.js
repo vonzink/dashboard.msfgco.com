@@ -63,6 +63,22 @@ router.get('/list', handle(async (req, res) => {
 }));
 
 // ========================================
+// GET /api/my-files/snapshot
+// ========================================
+router.get('/snapshot', handle(async (req, res) => {
+  const userId = req.user.db.id;
+
+  const result = await userFiles.snapshot(userId);
+
+  // Deliberately not audited. A linked sync client polls this every 30s, so a
+  // row per call would add thousands of entries per user per day and bury the
+  // mutations the audit log exists to record. The uploads, deletes and moves
+  // that sync performs are each audited by their own endpoint.
+
+  res.json(result);
+}));
+
+// ========================================
 // GET /api/my-files/download-url?path=
 // ========================================
 router.get('/download-url', handle(async (req, res) => {
