@@ -161,6 +161,7 @@ const Announcements = {
 
     const title = titleEl ? titleEl.value : '';
     const icon = iconEl ? iconEl.value : '';
+    const notifyEmail = !!document.getElementById('announcementNotifyEmail')?.checked;
     const links = window.AnnouncementEditor?.getLinks ? window.AnnouncementEditor.getLinks() : [];
     const attachmentFiles = window.AnnouncementEditor?.getAttachmentFiles ? window.AnnouncementEditor.getAttachmentFiles() : [];
     const graphicFile = window.AnnouncementEditor?.getGraphicFile ? window.AnnouncementEditor.getGraphicFile() : null;
@@ -204,7 +205,8 @@ const Announcements = {
         author: authorName,
         createdAt: new Date().toISOString(),
         attachments,
-        image
+        image,
+        notify_email: notifyEmail
       };
 
       await this.saveAnnouncement(announcement);
@@ -248,7 +250,8 @@ const Announcements = {
         image_s3_key: announcement.image?.file_s3_key || null,
         image_name: announcement.image?.file_name || null,
         image_size: announcement.image?.file_size || null,
-        image_type: announcement.image?.file_type || null
+        image_type: announcement.image?.file_type || null,
+        notify_email: announcement.notify_email || false
       };
 
       const saved = await ServerAPI.createAnnouncement(announcementData);
@@ -279,12 +282,25 @@ const Announcements = {
 
       this.addAnnouncementToUI(uiAnnouncement);
 
-      alert('Announcement added successfully!');
+      alert(this._publishMessage(saved.emailNotification));
       this.hideAnnouncementModal();
     } catch (error) {
       console.error('Failed to save announcement:', error);
       alert(error.message || 'Failed to save announcement. Please try again.');
     }
+  },
+
+  // Success message shown after publishing, reflecting the optional email blast.
+  _publishMessage(emailNotification) {
+    if (!emailNotification) return 'Announcement added successfully!';
+    if (emailNotification.error) {
+      return `Announcement added successfully!\n\n${emailNotification.error}`;
+    }
+    const sent = emailNotification.sent || 0;
+    const failed = emailNotification.failed || 0;
+    let msg = `Announcement added successfully!\n\nEmailed ${sent} team member${sent === 1 ? '' : 's'}.`;
+    if (failed > 0) msg += `\n${failed} message${failed === 1 ? '' : 's'} could not be sent — check the mail logs.`;
+    return msg;
   },
 
   // ========================================

@@ -9,6 +9,8 @@ const { deleted } = require('../utils/response');
 const { sanitizeHtml } = require('../utils/sanitizeHtml');
 const { parseId } = require('../middleware/parseId');
 const { BUCKETS, getDownloadUrl } = require('../services/s3');
+const { sendAnnouncementNotification } = require('../services/email');
+const logger = require('../lib/logger');
 const {
   buildAnnouncementImagePrompt,
   extractGeneratedImageBase64,
@@ -242,6 +244,7 @@ router.post('/', validate(announcement), async (req, res, next) => {
       title, content, link, links, icon,
       file_s3_key, file_name, file_size, file_type, attachments,
       image_s3_key, image_name, image_size, image_type,
+      notify_email,
     } = req.body;
     const sanitizedContent = sanitizeHtml(content);
     const authorId = getUserId(req);
@@ -299,7 +302,30 @@ router.post('/', validate(announcement), async (req, res, next) => {
     );
 
     const hydrated = await hydrateAnnouncement(announcements[0]);
-    res.status(201).json({ ...hydrated, archivedIds });
+
+    // Optional: email the whole team that a new item was posted. This runs
+    // after the announcement is safely saved, and any failure here is reported
+    // back but never fails the request — the announcement still exists.
+    let emailNotification = null;
+    if (notify_email) {
+      try {
+        const [recipients] = await db.query(
+          `SELECT email FROM users WHERE email IS NOT NULL AND email <> ''`
+        );
+        const result = await sendAnnouncementNotification({
+          recipients,
+          title: hydrated.title,
+          authorName: hydrated.author_name,
+          content: hydrated.content,
+        });
+        emailNotification = { requested: result.requested, sent: result.sent, failed: result.failed };
+      } catch (err) {
+        logger.error({ err, announcementId: result.insertId }, 'announcement email notification failed');
+        emailNotification = { error: 'Announcement saved, but the email notification could not be sent.' };
+      }
+    }
+
+    res.status(201).json({ ...hydrated, archivedIds, emailNotification });
   } catch (error) {
     next(error);
   }
