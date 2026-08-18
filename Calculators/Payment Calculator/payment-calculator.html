@@ -1,0 +1,861 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MSFG Payment Calculator</title>
+
+<!--
+  MSFG Mortgage Payment Calculator — dashboard popup version
+  Mountain State Financial Group, LLC · NMLS# 1314257
+
+  This is the MSFG payment calculator adapted for the internal dashboard.
+  It is opened in its own popup window from Tools ▸ Calculators (see
+  js/action-dispatcher.js → 'open-payment-calculator'). Because the calculator
+  is the entire page here, it auto-opens on load and dismissing it (the X or
+  Esc) closes the popup window. The draggable overlay design is kept intact so
+  the card floats on the brand backdrop.
+-->
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet" />
+</head>
+
+<body>
+
+<div id="msfg-payment-calc">
+
+<style>
+/* Brand tokens are declared on BOTH roots because the overlay gets relocated
+   out of the wrapper and can no longer inherit from it. */
+#msfg-payment-calc,
+#msfg-calc-overlay {
+  --msfg-green: #8cc63E;
+  --msfg-green-hover: #7ab434;
+  --msfg-forest: #104547;
+  --msfg-support: #4b7b4d;
+  --msfg-charcoal: #404041;
+  --msfg-border: #dfe5e1;
+  --msfg-muted: #6b7a72;
+  --msfg-affix: #9aa8a0;
+  --msfg-dark-muted: #9dc0ae;
+  --msfg-dark-body: #e4ece7;
+  --msfg-hairline: #edf1ee;
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+#msfg-payment-calc *,
+#msfg-payment-calc *::before,
+#msfg-payment-calc *::after,
+#msfg-calc-overlay *,
+#msfg-calc-overlay *::before,
+#msfg-calc-overlay *::after { box-sizing: border-box; }
+
+#msfg-calc-overlay p,
+#msfg-calc-overlay h1,
+#msfg-calc-overlay label,
+#msfg-calc-overlay div,
+#msfg-calc-overlay span { margin: 0; }
+
+/* ---------- Launcher ---------- */
+#msfg-payment-calc { display: flex; justify-content: center; }
+
+#msfg-payment-calc .msfg-launcher {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: #FFFFFF;
+  background: var(--msfg-green);
+  border: 0;
+  border-radius: 999px;
+  padding: 15px 28px;
+  min-height: 48px;
+  cursor: pointer;
+  transition: background .15s;
+}
+
+#msfg-payment-calc .msfg-launcher:hover { background: var(--msfg-green-hover); }
+
+#msfg-payment-calc .msfg-launcher:focus-visible {
+  outline: 2px solid var(--msfg-green);
+  outline-offset: 3px;
+}
+
+/* Standalone preview only (opening this file directly). Deliberately plain —
+   the popup is meant to overlay a normal page, not sit on a styled backdrop.
+   GHL nests embeds in its own divs, so this never fires there. */
+body > #msfg-payment-calc { padding: 40px 0; }
+
+/* ---------- Overlay + panel ---------- */
+#msfg-calc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: rgba(9, 40, 41, .55);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+#msfg-calc-overlay[hidden] { display: none; }
+
+#msfg-calc-overlay .msfg-panel {
+  position: fixed;
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--msfg-forest);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.42);
+  animation: msfg-pop .13s ease-out;
+}
+
+@keyframes msfg-pop {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Drag bar ---------- */
+#msfg-calc-overlay .msfg-dragbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px 0 18px;
+  min-height: 46px;
+  border-radius: 16px 16px 0 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#msfg-calc-overlay .msfg-dragbar.msfg-grabbing { cursor: grabbing; }
+
+#msfg-calc-overlay .msfg-grip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 0;
+}
+
+#msfg-calc-overlay .msfg-grip i {
+  display: block;
+  width: 22px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--msfg-dark-muted);
+  opacity: .55;
+}
+
+#msfg-calc-overlay .msfg-close {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 19px;
+  line-height: 1;
+  color: var(--msfg-dark-body);
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+
+#msfg-calc-overlay .msfg-close:hover {
+  background: rgba(255,255,255,.12);
+  border-color: rgba(255,255,255,.4);
+}
+
+#msfg-calc-overlay .msfg-panel-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------- Card ---------- */
+#msfg-calc-overlay .msfg-card {
+  width: 100%;
+  background: #FFFFFF;
+  border-radius: 14px;
+  padding: 32px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.22);
+  color: var(--msfg-charcoal);
+}
+
+#msfg-calc-overlay .msfg-title {
+  font-family: 'Montserrat', 'Open Sans', sans-serif;
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -.01em;
+  color: var(--msfg-forest);
+  line-height: 1.2;
+}
+
+#msfg-calc-overlay .msfg-sub {
+  font-size: 13px;
+  color: var(--msfg-muted);
+  margin: 8px 0 26px;
+}
+
+/* ---------- Input grid ---------- */
+#msfg-calc-overlay .msfg-grid {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+  gap: 18px;
+}
+
+#msfg-calc-overlay .msfg-span2 { grid-column: span 2; }
+
+#msfg-calc-overlay .msfg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+#msfg-calc-overlay .msfg-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--msfg-charcoal);
+}
+
+#msfg-calc-overlay .msfg-label .msfg-qual {
+  color: var(--msfg-affix);
+  font-weight: 600;
+}
+
+#msfg-calc-overlay .msfg-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1.5px solid var(--msfg-border);
+  border-radius: 9px;
+  padding: 0 14px;
+  background: #FFFFFF;
+  transition: border-color .15s;
+}
+
+#msfg-calc-overlay .msfg-field:focus-within { border-color: var(--msfg-green); }
+
+#msfg-calc-overlay .msfg-field input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding: 13px 0;
+  font-family: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--msfg-forest);
+  background: transparent;
+  -moz-appearance: textfield;
+}
+
+#msfg-calc-overlay .msfg-field input::-webkit-outer-spin-button,
+#msfg-calc-overlay .msfg-field input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+#msfg-calc-overlay .msfg-field input::placeholder { color: var(--msfg-affix); }
+
+#msfg-calc-overlay .msfg-affix {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--msfg-affix);
+  flex: none;
+}
+
+#msfg-calc-overlay .msfg-help {
+  font-size: 12px;
+  color: var(--msfg-muted);
+}
+
+/* ---------- Term pills ---------- */
+#msfg-calc-overlay .msfg-terms { display: flex; gap: 8px; }
+
+#msfg-calc-overlay .msfg-pill {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 0;
+  border-radius: 9px;
+  border: 1.5px solid var(--msfg-border);
+  background: #FFFFFF;
+  color: var(--msfg-charcoal);
+  cursor: pointer;
+  transition: all .15s;
+}
+
+#msfg-calc-overlay .msfg-pill:hover { border-color: var(--msfg-green); }
+
+#msfg-calc-overlay .msfg-pill.msfg-active {
+  background: var(--msfg-forest);
+  color: #FFFFFF;
+  border-color: var(--msfg-forest);
+}
+
+/* ---------- Expander ---------- */
+#msfg-calc-overlay .msfg-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-top: 1px solid var(--msfg-hairline);
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 0 0;
+  margin-top: 22px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--msfg-support);
+  text-align: left;
+}
+
+#msfg-calc-overlay .msfg-plus {
+  font-size: 18px;
+  line-height: 1;
+  color: var(--msfg-support);
+  transition: transform .2s;
+  display: inline-block;
+}
+
+#msfg-calc-overlay .msfg-toggle[aria-expanded="true"] .msfg-plus { transform: rotate(45deg); }
+
+#msfg-calc-overlay .msfg-more { padding-top: 18px; gap: 16px; }
+#msfg-calc-overlay .msfg-more[hidden] { display: none; }
+
+#msfg-calc-overlay .msfg-more .msfg-field { padding: 0 11px; }
+#msfg-calc-overlay .msfg-more .msfg-field input { font-size: 16px; padding: 11px 0; }
+#msfg-calc-overlay .msfg-more .msfg-affix { font-size: 16px; }
+
+/* ---------- Result panel ---------- */
+#msfg-calc-overlay .msfg-result {
+  background: var(--msfg-forest);
+  border-radius: 11px;
+  padding: 22px;
+  margin-top: 24px;
+}
+
+#msfg-calc-overlay .msfg-result-top {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+#msfg-calc-overlay .msfg-eyebrow {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--msfg-dark-muted);
+}
+
+#msfg-calc-overlay .msfg-total {
+  font-family: 'Montserrat', 'Open Sans', sans-serif;
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: -.02em;
+  color: var(--msfg-green);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+#msfg-calc-overlay .msfg-cta {
+  display: inline-block;
+  background: var(--msfg-green);
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px 18px;
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background .15s;
+}
+
+#msfg-calc-overlay .msfg-cta:hover,
+#msfg-calc-overlay .msfg-cta:focus { background: var(--msfg-green-hover); color: #FFFFFF; }
+
+#msfg-calc-overlay .msfg-breakdown {
+  border-top: 1px solid rgba(255,255,255,.14);
+  margin-top: 18px;
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+#msfg-calc-overlay .msfg-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--msfg-dark-body);
+}
+
+#msfg-calc-overlay .msfg-row b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Footer ---------- */
+#msfg-calc-overlay .msfg-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#msfg-calc-overlay .msfg-ehl {
+  flex: none;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 4px;
+  padding: 5px 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #FFFFFF;
+}
+
+#msfg-calc-overlay .msfg-ehl-glyph { font-size: 13px; line-height: 1; }
+
+#msfg-calc-overlay .msfg-ehl-text {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1.15;
+  letter-spacing: .02em;
+}
+
+#msfg-calc-overlay .msfg-ehl-img {
+  height: 30px;
+  width: auto;
+  filter: brightness(0) invert(1);
+}
+
+#msfg-calc-overlay .msfg-fine {
+  font-size: 11px;
+  color: var(--msfg-dark-muted);
+  text-align: left;
+  line-height: 1.45;
+}
+
+/* ---------- Focus visibility ---------- */
+#msfg-calc-overlay a:focus-visible,
+#msfg-calc-overlay button:focus-visible {
+  outline: 2px solid var(--msfg-green);
+  outline-offset: 2px;
+}
+
+/* ---------- Responsive: sheet mode, no dragging ---------- */
+@media (max-width: 560px) {
+  #msfg-calc-overlay .msfg-panel {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+  #msfg-calc-overlay .msfg-dragbar { cursor: default; }
+  #msfg-calc-overlay .msfg-grip { display: none; }
+  #msfg-calc-overlay .msfg-dragbar { justify-content: flex-end; }
+  #msfg-calc-overlay .msfg-panel-body { padding: 0 12px 14px; }
+  #msfg-calc-overlay .msfg-card { padding: 24px; }
+  #msfg-calc-overlay .msfg-grid { grid-template-columns: minmax(0,1fr); }
+  #msfg-calc-overlay .msfg-span2 { grid-column: span 1; }
+  #msfg-calc-overlay .msfg-total { font-size: 34px; }
+  #msfg-calc-overlay .msfg-cta { padding: 13px 18px; }
+  #msfg-calc-overlay .msfg-pill { padding: 13px 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #msfg-calc-overlay .msfg-panel { animation: none; }
+  #msfg-calc-overlay .msfg-plus { transition: none; }
+}
+</style>
+
+<div id="msfg-calc-overlay" hidden>
+  <div class="msfg-panel" role="dialog" aria-modal="true" aria-labelledby="msfg-dialog-title">
+
+    <div class="msfg-dragbar" id="msfg-dragbar">
+      <span class="msfg-grip" aria-hidden="true"><i></i><i></i><i></i></span>
+      <button type="button" class="msfg-close" id="msfg-close" aria-label="Close calculator">&times;</button>
+    </div>
+
+    <div class="msfg-panel-body">
+      <div class="msfg-card">
+        <h1 class="msfg-title" id="msfg-dialog-title">Estimate your payment</h1>
+        <p class="msfg-sub">Indicative only. Not a commitment to lend.</p>
+
+        <div class="msfg-grid">
+          <div class="msfg-group msfg-span2">
+            <label class="msfg-label" for="msfg-price">Home price</label>
+            <div class="msfg-field">
+              <span class="msfg-affix" aria-hidden="true">$</span>
+              <input id="msfg-price" type="text" inputmode="decimal" autocomplete="off" data-field="price">
+            </div>
+          </div>
+
+          <div class="msfg-group">
+            <label class="msfg-label" for="msfg-down">Down payment</label>
+            <div class="msfg-field">
+              <input id="msfg-down" type="text" inputmode="decimal" autocomplete="off" data-field="down">
+              <span class="msfg-affix" aria-hidden="true">%</span>
+            </div>
+            <p class="msfg-help" id="msfg-down-help"></p>
+          </div>
+
+          <div class="msfg-group">
+            <label class="msfg-label" for="msfg-rate">Interest rate</label>
+            <div class="msfg-field">
+              <input id="msfg-rate" type="text" inputmode="decimal" autocomplete="off" data-field="rate">
+              <span class="msfg-affix" aria-hidden="true">%</span>
+            </div>
+          </div>
+
+          <div class="msfg-group msfg-span2">
+            <span class="msfg-label" id="msfg-term-label">Term</span>
+            <div class="msfg-terms" role="group" aria-labelledby="msfg-term-label">
+              <button type="button" class="msfg-pill" data-term="30" aria-pressed="false">30 yr</button>
+              <button type="button" class="msfg-pill" data-term="25" aria-pressed="false">25 yr</button>
+              <button type="button" class="msfg-pill" data-term="20" aria-pressed="false">20 yr</button>
+              <button type="button" class="msfg-pill" data-term="15" aria-pressed="false">15 yr</button>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="msfg-toggle" id="msfg-toggle" aria-expanded="false" aria-controls="msfg-more">
+          <span>Taxes, insurance, HOA &amp; MI</span>
+          <span class="msfg-plus" aria-hidden="true">&#65291;</span>
+        </button>
+
+        <div class="msfg-grid msfg-more" id="msfg-more" hidden>
+          <div class="msfg-group">
+            <label class="msfg-label" for="msfg-tax">Property tax <span class="msfg-qual">/ yr</span></label>
+            <div class="msfg-field">
+              <span class="msfg-affix" aria-hidden="true">$</span>
+              <input id="msfg-tax" type="text" inputmode="decimal" autocomplete="off" data-field="tax">
+            </div>
+          </div>
+
+          <div class="msfg-group">
+            <label class="msfg-label" for="msfg-ins">Homeowners ins. <span class="msfg-qual">/ yr</span></label>
+            <div class="msfg-field">
+              <span class="msfg-affix" aria-hidden="true">$</span>
+              <input id="msfg-ins" type="text" inputmode="decimal" autocomplete="off" data-field="ins">
+            </div>
+          </div>
+
+          <div class="msfg-group">
+            <label class="msfg-label" for="msfg-hoa">HOA <span class="msfg-qual">/ mo</span></label>
+            <div class="msfg-field">
+              <span class="msfg-affix" aria-hidden="true">$</span>
+              <input id="msfg-hoa" type="text" inputmode="decimal" autocomplete="off" data-field="hoa">
+            </div>
+          </div>
+
+          <div class="msfg-group">
+            <label class="msfg-label" for="msfg-mi">Mortgage ins. <span class="msfg-qual">/ yr of loan</span></label>
+            <div class="msfg-field">
+              <input id="msfg-mi" type="text" inputmode="decimal" autocomplete="off" data-field="mi">
+              <span class="msfg-affix" aria-hidden="true">%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="msfg-result">
+          <div class="msfg-result-top">
+            <div>
+              <div class="msfg-eyebrow">Est. monthly</div>
+              <div class="msfg-total" id="msfg-total" aria-live="polite">$0</div>
+            </div>
+            <a class="msfg-cta" href="https://msfg.us" target="_blank" rel="noopener">Get my real rate</a>
+          </div>
+          <div class="msfg-breakdown" id="msfg-breakdown"></div>
+        </div>
+      </div>
+
+      <div class="msfg-footer">
+        <div class="msfg-ehl" role="img" aria-label="Equal Housing Lender">
+          <span class="msfg-ehl-glyph" aria-hidden="true">&#8962;</span>
+          <span class="msfg-ehl-text" aria-hidden="true">Equal Housing<br>Lender</span>
+        </div>
+        <div class="msfg-fine">
+          Mountain State Financial Group, LLC &middot; NMLS# 1314257<br>
+          Estimates are for illustration only and not a commitment to lend.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var root = document.getElementById('msfg-payment-calc');
+  if (!root || root.dataset.msfgInit === '1') { return; }
+  root.dataset.msfgInit = '1';
+
+  var overlay = document.getElementById('msfg-calc-overlay');
+  var panel = overlay.querySelector('.msfg-panel');
+  var dragbar = document.getElementById('msfg-dragbar');
+  var closeBtn = document.getElementById('msfg-close');
+  var inputs = overlay.querySelectorAll('input[data-field]');
+  var pills = overlay.querySelectorAll('.msfg-pill');
+  var toggle = document.getElementById('msfg-toggle');
+  var morePanel = document.getElementById('msfg-more');
+  var downHelp = document.getElementById('msfg-down-help');
+  var totalEl = document.getElementById('msfg-total');
+  var breakdownEl = document.getElementById('msfg-breakdown');
+
+  /* A `transform` on any ancestor breaks position:fixed for its descendants.
+     Reparenting to <body> makes the panel immune to any wrapper styling. */
+  if (overlay.parentNode !== document.body) { document.body.appendChild(overlay); }
+
+  var state = {
+    price: '485000',
+    down: '10',
+    rate: '6.375',
+    term: 30,
+    tax: '4200',
+    ins: '1400',
+    hoa: '0',
+    mi: '0.5',
+    showMore: false
+  };
+
+  /* ---------- Math ---------- */
+
+  function num(v) {
+    var n = parseFloat(String(v).replace(/[^0-9.]/g, ''));
+    return isFinite(n) ? n : 0;
+  }
+
+  function money(n) {
+    return '$' + Math.round(isFinite(n) ? n : 0).toLocaleString('en-US');
+  }
+
+  function compute() {
+    var price = num(state.price);
+    var downPct = num(state.down);
+    var rate = num(state.rate);
+    var term = num(state.term);
+
+    var loan = Math.max(0, price * (1 - downPct / 100));
+    var downAmt = Math.max(0, price - loan);
+    var n = term * 12;
+    var r = rate / 100 / 12;
+
+    var pi = 0;
+    if (loan > 0 && n > 0) {
+      pi = r > 0 ? (loan * r) / (1 - Math.pow(1 + r, -n)) : loan / n;
+    }
+
+    var mTax = num(state.tax) / 12;
+    var mIns = num(state.ins) / 12;
+    var mHoa = num(state.hoa);
+    var mMi = downPct < 20 ? (loan * num(state.mi) / 100) / 12 : 0;
+
+    return {
+      loan: loan, downAmt: downAmt, pi: pi,
+      tax: mTax, ins: mIns, hoa: mHoa, mi: mMi,
+      total: pi + mTax + mIns + mHoa + mMi
+    };
+  }
+
+  function addRow(label, value) {
+    var row = document.createElement('div');
+    row.className = 'msfg-row';
+    var l = document.createElement('span');
+    l.textContent = label;
+    var v = document.createElement('b');
+    v.textContent = money(value);
+    row.appendChild(l);
+    row.appendChild(v);
+    breakdownEl.appendChild(row);
+  }
+
+  function render() {
+    var c = compute();
+
+    totalEl.textContent = money(c.total);
+    downHelp.textContent = money(c.downAmt) + ' down · ' + money(c.loan) + ' loan';
+
+    breakdownEl.textContent = '';
+    addRow('Principal & interest', c.pi);
+    if (Math.round(c.tax) > 0) { addRow('Property taxes', c.tax); }
+    if (Math.round(c.ins) > 0) { addRow('Homeowners insurance', c.ins); }
+    if (Math.round(c.hoa) > 0) { addRow('HOA dues', c.hoa); }
+    if (Math.round(c.mi) > 0) { addRow('Mortgage insurance', c.mi); }
+  }
+
+  /* ---------- Calculator wiring ---------- */
+
+  for (var i = 0; i < inputs.length; i++) {
+    inputs[i].value = state[inputs[i].dataset.field];
+    inputs[i].addEventListener('input', function (e) {
+      state[e.target.dataset.field] = e.target.value;
+      render();
+    });
+  }
+
+  function syncPills() {
+    for (var k = 0; k < pills.length; k++) {
+      var on = parseInt(pills[k].dataset.term, 10) === state.term;
+      pills[k].classList.toggle('msfg-active', on);
+      pills[k].setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+
+  for (var j = 0; j < pills.length; j++) {
+    pills[j].addEventListener('click', function (e) {
+      state.term = parseInt(e.currentTarget.dataset.term, 10);
+      syncPills();
+      render();
+    });
+  }
+
+  toggle.addEventListener('click', function () {
+    state.showMore = !state.showMore;
+    toggle.setAttribute('aria-expanded', state.showMore ? 'true' : 'false');
+    morePanel.hidden = !state.showMore;
+    clampIntoView();
+  });
+
+  /* ---------- Open / close ---------- */
+
+  function isMobile() {
+    return window.matchMedia('(max-width: 560px)').matches;
+  }
+
+  function centerPanel() {
+    panel.style.left = '';
+    panel.style.top = '';
+    var r = panel.getBoundingClientRect();
+    var left = Math.max(8, (window.innerWidth - r.width) / 2);
+    var top = Math.max(8, (window.innerHeight - r.height) / 2);
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  }
+
+  function clampIntoView() {
+    if (overlay.hidden) { return; }
+    var r = panel.getBoundingClientRect();
+    var maxLeft = Math.max(8, window.innerWidth - r.width - 8);
+    var maxTop = Math.max(8, window.innerHeight - r.height - 8);
+    panel.style.left = Math.min(Math.max(8, r.left), maxLeft) + 'px';
+    panel.style.top = Math.min(Math.max(8, r.top), maxTop) + 'px';
+  }
+
+  function openCalc() {
+    if (!overlay.hidden) { return; }
+    overlay.hidden = false;
+    centerPanel();
+    closeBtn.focus();
+  }
+
+  /* This build is a dedicated popup window: the calculator is the whole page,
+     so dismissing it closes the window. window.close() only works for windows
+     opened by script (which is how the dashboard launches this via
+     window.open); if a browser refuses, the calculator stays open and usable. */
+  function closeCalc() {
+    window.close();
+  }
+
+  closeBtn.addEventListener('click', closeCalc);
+
+  window.MSFGCalc = {
+    open: openCalc,
+    close: closeCalc
+  };
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlay.hidden) { closeCalc(); }
+  });
+
+  window.addEventListener('resize', function () {
+    if (overlay.hidden) { return; }
+    if (isMobile()) {
+      panel.style.left = '';
+      panel.style.top = '';
+    } else {
+      clampIntoView();
+    }
+  });
+
+  /* ---------- Drag ---------- */
+
+  var drag = { active: false, dx: 0, dy: 0, id: null };
+
+  dragbar.addEventListener('pointerdown', function (e) {
+    /* Never start a drag from the close button, and never on mobile where
+       the panel is a fixed sheet. */
+    if (isMobile() || e.target.closest('.msfg-close')) { return; }
+    if (e.button !== 0 && e.pointerType === 'mouse') { return; }
+
+    var r = panel.getBoundingClientRect();
+    drag.active = true;
+    drag.id = e.pointerId;
+    drag.dx = e.clientX - r.left;
+    drag.dy = e.clientY - r.top;
+    dragbar.classList.add('msfg-grabbing');
+    dragbar.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+
+  dragbar.addEventListener('pointermove', function (e) {
+    if (!drag.active || e.pointerId !== drag.id) { return; }
+
+    var r = panel.getBoundingClientRect();
+    var maxLeft = Math.max(8, window.innerWidth - r.width - 8);
+    var maxTop = Math.max(8, window.innerHeight - r.height - 8);
+
+    panel.style.left = Math.min(Math.max(8, e.clientX - drag.dx), maxLeft) + 'px';
+    panel.style.top = Math.min(Math.max(8, e.clientY - drag.dy), maxTop) + 'px';
+  });
+
+  function endDrag(e) {
+    if (!drag.active || (e && e.pointerId !== drag.id)) { return; }
+    drag.active = false;
+    drag.id = null;
+    dragbar.classList.remove('msfg-grabbing');
+  }
+
+  dragbar.addEventListener('pointerup', endDrag);
+  dragbar.addEventListener('pointercancel', endDrag);
+
+  syncPills();
+  render();
+
+  /* No launcher/menu in this standalone popup — open immediately on load. */
+  openCalc();
+})();
+</script>
+
+</div>
+
+</body>
+</html>

@@ -103,6 +103,9 @@
     'open-basis-point-calculator': () =>
       Utils.openPopup('Calculators/Basis Point Calculator/basis-point-calculator.html', 'MSFGBasisPointCalc', 1000, 850),
 
+    'open-payment-calculator': () =>
+      Utils.openPopup('Calculators/Payment Calculator/payment-calculator.html', 'MSFGPaymentCalc', 640, 900),
+
     // =====================
     // Monday.com Integration
     // =====================
