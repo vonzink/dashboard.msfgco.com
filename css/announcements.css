@@ -921,10 +921,50 @@
 
 .announcement-actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: 0.75rem;
     padding-top: 0.5rem;
     border-top: 1px solid var(--border-color);
+}
+
+/* Opt-in email toggle sits on the left; Cancel/Publish stay right-aligned. */
+.ann-notify-toggle {
+    margin-right: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary, #6b7a72);
+    user-select: none;
+}
+
+.ann-notify-toggle input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--green-teal, #8cc63e);
+    cursor: pointer;
+    margin: 0;
+    flex: none;
+}
+
+.ann-notify-toggle i {
+    color: var(--green-teal, #8cc63e);
+}
+
+.ann-notify-toggle:hover {
+    color: var(--text-primary, #104547);
+}
+
+@media (max-width: 560px) {
+    .ann-notify-toggle {
+        margin-right: 0;
+        flex-basis: 100%;
+        order: -1;
+        margin-bottom: 0.5rem;
+    }
 }
 
 .announcement-actions .btn {

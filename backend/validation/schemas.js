@@ -57,6 +57,9 @@ const announcement = z.object({
   image_name: optionalString(255),
   image_size: z.number().int().positive().optional().nullable(),
   image_type: optionalString(100),
+  // When true, creating the announcement also emails all dashboard users.
+  // Ignored on update (PUT). Defaults off — email is strictly opt-in.
+  notify_email: z.boolean().optional().default(false),
 }).refine(
   data => !data.image_s3_key || (data.image_type && data.image_type.startsWith('image/')),
   { message: 'Primary graphic must be an image', path: ['image_type'] }
