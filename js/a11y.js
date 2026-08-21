@@ -25,6 +25,7 @@
   const initNavDropdowns = () => {
     const nav = document.querySelector('.nav-container');
     if (!nav) return;
+    const isMobile = () => window.matchMedia('(max-width: 1300px)').matches;
 
     nav.setAttribute('aria-label', 'Primary');
 
@@ -105,7 +106,11 @@
     // Click handler (open/close)
     nav.addEventListener('click', (e) => {
       const btn = e.target.closest('.nav-button');
-      if (!btn) return;
+      if (!btn) {
+        if (!isMobile() && e.target.closest('.dropdown-item')) closeAll();
+        return;
+      }
+      if (isMobile()) return;
 
       const item = btn.closest('.nav-item');
       if (!item) return;
@@ -122,6 +127,7 @@
 
     // Keyboard support
     nav.addEventListener('keydown', (e) => {
+      if (isMobile()) return;
       const btn = e.target.closest('.nav-button');
       const menuItem = e.target.closest('.dropdown-item');
       const item = e.target.closest('.nav-item');

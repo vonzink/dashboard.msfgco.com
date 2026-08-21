@@ -47,6 +47,7 @@ const App = {
         if (!hamburger || !nav) return;
 
         const isMobile = () => window.matchMedia('(max-width: 1300px)').matches;
+        let wasMobile = isMobile();
 
         hamburger.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -107,13 +108,22 @@ const App = {
             hamburger.setAttribute('aria-expanded', 'false');
         });
 
-        // Reset state when resizing back to desktop
+        // Reset menu state when crossing the desktop/mobile breakpoint so the
+        // two navigation presentations never inherit incompatible open state.
         window.addEventListener('resize', () => {
-            if (!isMobile()) {
-                nav.classList.remove('open');
-                hamburger.setAttribute('aria-expanded', 'false');
-                nav.querySelectorAll('.nav-item.expanded').forEach(n => n.classList.remove('expanded'));
-            }
+            const mobile = isMobile();
+            if (mobile === wasMobile) return;
+            wasMobile = mobile;
+
+            nav.classList.remove('open');
+            hamburger.setAttribute('aria-expanded', 'false');
+            nav.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('expanded', 'is-open');
+                const menu = item.querySelector('.dropdown-menu');
+                if (menu) menu.setAttribute('hidden', '');
+                const button = item.querySelector('.nav-button');
+                if (button) button.setAttribute('aria-expanded', 'false');
+            });
         });
     },
 

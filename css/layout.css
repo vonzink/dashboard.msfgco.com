@@ -395,10 +395,6 @@
         overflow-y: auto;
         padding: 0.25rem 0 0.5rem 1.25rem;
     }
-    .main-nav .nav-item:hover .dropdown-menu {
-        /* disable hover behavior on mobile — require click */
-        opacity: 1;
-    }
     .main-nav .nav-item.expanded .nav-button .fa-chevron-down { transform: rotate(180deg); }
 }
 
@@ -433,7 +429,8 @@
     transition: transform var(--transition-fast);
 }
 
-.nav-item:hover .fa-chevron-down {
+.nav-item.is-open .fa-chevron-down,
+.nav-item.expanded .fa-chevron-down {
     transform: rotate(180deg);
 }
 
@@ -455,6 +452,10 @@
     border: 1px solid var(--border-color);
     overflow: hidden;
     z-index: 100;
+}
+
+.dropdown-menu[hidden] {
+    display: none;
 }
 
 /* Desktop mega menus: related links sit in horizontal groups so the user can
@@ -509,7 +510,7 @@
     border-radius: var(--radius-lg) 0 var(--radius-lg) var(--radius-lg);
 }
 
-.nav-item:hover .dropdown-menu {
+.nav-item.is-open .dropdown-menu {
     opacity: 1;
     visibility: visible;
     transform: translateY(0);
