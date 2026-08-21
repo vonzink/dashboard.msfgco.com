@@ -89,7 +89,10 @@
     transition: max-height 0.35s ease-in-out, padding-top 0.3s ease, padding-bottom 0.3s ease, opacity 0.25s ease;
 }
 
-.section-card.collapsed .section-body {
+.collapsed .section-body {
+    /* Safety net: a collapsed body stays closed even if the inline
+       max-height gets cleared by a late transitionend */
+    max-height: 0 !important;
     padding-top: 0;
     padding-bottom: 0;
     opacity: 0;
@@ -194,7 +197,7 @@
     transition: transform var(--transition-normal);
 }
 
-.section-card.collapsed .section-collapse-btn i {
+.collapsed .section-collapse-btn i {
     transform: rotate(180deg);
 }
 

@@ -572,7 +572,7 @@ const Utils = {
      * Show a brief toast notification
      */
     showToast(message, type = 'info') {
-        const colors = { info: '#104547', error: '#c0392b', success: '#27ae60' };
+        const colors = { info: '#104547', warning: '#b36b00', error: '#c0392b', success: '#27ae60' };
         const bg = colors[type] || colors.info;
         const toast = document.createElement('div');
         toast.style.cssText = 'position:fixed;bottom:24px;right:24px;background:' + bg + ';color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-family:Inter,sans-serif;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .3s;max-width:400px;';

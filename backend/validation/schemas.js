@@ -57,6 +57,7 @@ const announcement = z.object({
   image_name: optionalString(255),
   image_size: z.number().int().positive().optional().nullable(),
   image_type: optionalString(100),
+  announce_to_team: z.boolean().optional().default(false),
 }).refine(
   data => !data.image_s3_key || (data.image_type && data.image_type.startsWith('image/')),
   { message: 'Primary graphic must be an image', path: ['image_type'] }

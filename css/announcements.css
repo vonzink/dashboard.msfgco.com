@@ -921,10 +921,43 @@
 
 .announcement-actions {
     display: flex;
+    align-items: center;
     justify-content: flex-end;
     gap: 0.75rem;
     padding-top: 0.5rem;
     border-top: 1px solid var(--border-color);
+}
+
+.announcement-team-email-option {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-right: auto;
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.announcement-team-email-option input {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--green-bright);
+    flex: 0 0 auto;
+}
+
+.announcement-team-email-option span {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.announcement-team-email-option strong {
+    font-size: 0.86rem;
+}
+
+.announcement-team-email-option small {
+    color: var(--text-muted);
+    font-size: 0.74rem;
 }
 
 .announcement-actions .btn {
@@ -1178,6 +1211,16 @@
 
 /* ── Responsive ── */
 @media (max-width: 768px) {
+    .announcement-actions {
+        align-items: stretch;
+        flex-wrap: wrap;
+    }
+
+    .announcement-team-email-option {
+        flex-basis: 100%;
+        margin: 0 0 0.4rem;
+    }
+
     .news-card-grid {
         grid-template-columns: 1fr;
     }

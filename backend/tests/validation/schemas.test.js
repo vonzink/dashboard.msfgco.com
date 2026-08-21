@@ -34,6 +34,17 @@ describe('announcement schema', () => {
   it('accepts valid announcement', () => {
     const result = announcement.safeParse({ title: 'Test', content: 'Content here' });
     expect(result.success).toBe(true);
+    expect(result.data.announce_to_team).toBe(false);
+  });
+
+  it('accepts an explicit team email request', () => {
+    const result = announcement.safeParse({
+      title: 'Team update',
+      content: 'Content here',
+      announce_to_team: true,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data.announce_to_team).toBe(true);
   });
 
   it('rejects missing title', () => {

@@ -457,6 +457,58 @@
     z-index: 100;
 }
 
+/* Desktop mega menus: related links sit in horizontal groups so the user can
+   scan the full menu without an inner scrollbar or a second flyout. */
+.dropdown-menu-wide {
+    display: grid;
+    width: max-content;
+    max-width: calc(100vw - 2rem);
+    padding: 0.5rem;
+    overflow: visible;
+}
+
+.dropdown-menu-hr {
+    grid-template-columns: 220px minmax(360px, 1fr);
+    min-width: 650px;
+}
+
+.dropdown-menu-systems {
+    grid-template-columns: repeat(4, minmax(190px, 1fr));
+    min-width: 820px;
+}
+
+.dropdown-menu-marketing,
+.dropdown-menu-tools {
+    grid-template-columns: repeat(3, minmax(205px, 1fr));
+    min-width: 650px;
+}
+
+.dropdown-group {
+    min-width: 0;
+    border-right: 1px solid var(--border-color);
+}
+
+.dropdown-group:last-child {
+    border-right: 0;
+}
+
+.dropdown-group .dropdown-header {
+    background: transparent;
+    border-bottom: 0;
+}
+
+.dropdown-menu-wide .dropdown-item {
+    border-radius: var(--radius-sm);
+    white-space: nowrap;
+}
+
+/* The menus at the right edge open inward instead of leaving the viewport. */
+.main-nav > .nav-item:nth-last-child(-n + 2) > .dropdown-menu {
+    left: auto;
+    right: 0;
+    border-radius: var(--radius-lg) 0 var(--radius-lg) var(--radius-lg);
+}
+
 .nav-item:hover .dropdown-menu {
     opacity: 1;
     visibility: visible;
@@ -544,6 +596,26 @@
 }
 
 @media (max-width: 1300px) {
+    .main-nav .dropdown-menu-wide {
+        display: block;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .main-nav .dropdown-group {
+        border-right: 0;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .main-nav .dropdown-group:last-child {
+        border-bottom: 0;
+    }
+
+    .main-nav .dropdown-menu-wide .dropdown-item {
+        white-space: normal;
+    }
+
     /* Inline (always-visible) nesting inside the mobile accordion */
     .main-nav .dropdown-submenu-menu {
         max-height: none;

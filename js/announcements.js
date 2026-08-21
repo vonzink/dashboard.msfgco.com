@@ -157,6 +157,7 @@ const Announcements = {
     const titleEl = document.getElementById('announcementTitle');
     const contentEl = document.getElementById('announcementContent');
     const iconEl = document.getElementById('announcementIcon');
+    const emailTeamEl = document.getElementById('announcementEmailTeam');
     const publishBtn = document.getElementById('announcementPublishBtn');
 
     const title = titleEl ? titleEl.value : '';
@@ -204,7 +205,8 @@ const Announcements = {
         author: authorName,
         createdAt: new Date().toISOString(),
         attachments,
-        image
+        image,
+        announceToTeam: emailTeamEl?.checked === true
       };
 
       await this.saveAnnouncement(announcement);
@@ -248,7 +250,8 @@ const Announcements = {
         image_s3_key: announcement.image?.file_s3_key || null,
         image_name: announcement.image?.file_name || null,
         image_size: announcement.image?.file_size || null,
-        image_type: announcement.image?.file_type || null
+        image_type: announcement.image?.file_type || null,
+        announce_to_team: announcement.announceToTeam === true
       };
 
       const saved = await ServerAPI.createAnnouncement(announcementData);
@@ -279,7 +282,19 @@ const Announcements = {
 
       this.addAnnouncementToUI(uiAnnouncement);
 
-      alert('Announcement added successfully!');
+      if (saved.teamEmail?.requested && !saved.teamEmail.sent) {
+        Utils.showToast(
+          saved.teamEmail.message || 'Announcement published, but the team email could not be sent.',
+          'warning'
+        );
+      } else if (saved.teamEmail?.sent) {
+        Utils.showToast(
+          `Announcement published and emailed to ${saved.teamEmail.recipientCount} team member${saved.teamEmail.recipientCount === 1 ? '' : 's'}.`,
+          'success'
+        );
+      } else {
+        Utils.showToast('Announcement published.', 'success');
+      }
       this.hideAnnouncementModal();
     } catch (error) {
       console.error('Failed to save announcement:', error);

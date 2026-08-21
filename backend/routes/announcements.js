@@ -9,6 +9,8 @@ const { deleted } = require('../utils/response');
 const { sanitizeHtml } = require('../utils/sanitizeHtml');
 const { parseId } = require('../middleware/parseId');
 const { BUCKETS, getDownloadUrl } = require('../services/s3');
+const { sendAnnouncementEmail } = require('../services/teamAnnouncementEmail');
+const logger = require('../lib/logger');
 const {
   buildAnnouncementImagePrompt,
   extractGeneratedImageBase64,
@@ -242,7 +244,11 @@ router.post('/', validate(announcement), async (req, res, next) => {
       title, content, link, links, icon,
       file_s3_key, file_name, file_size, file_type, attachments,
       image_s3_key, image_name, image_size, image_type,
+      announce_to_team,
     } = req.body;
+    if (announce_to_team && hasRole(req, 'external')) {
+      return res.status(403).json({ error: 'External users cannot send team announcements' });
+    }
     const sanitizedContent = sanitizeHtml(content);
     const authorId = getUserId(req);
     const normalizedLinks = normalizeAnnouncementLinks(links);
@@ -299,7 +305,41 @@ router.post('/', validate(announcement), async (req, res, next) => {
     );
 
     const hydrated = await hydrateAnnouncement(announcements[0]);
-    res.status(201).json({ ...hydrated, archivedIds });
+    let teamEmail = { requested: announce_to_team === true, sent: false, recipientCount: 0 };
+
+    if (announce_to_team) {
+      try {
+        const [recipientRows] = await db.query(
+          `SELECT DISTINCT LOWER(TRIM(email)) AS email
+           FROM users
+           WHERE is_active = 1
+             AND email IS NOT NULL
+             AND TRIM(email) != ''
+             AND LOWER(COALESCE(role, '')) != 'external'`
+        );
+        const delivery = await sendAnnouncementEmail({
+          title,
+          content: sanitizedContent,
+          links: normalizedLinks,
+          authorName: announcements[0].author_name,
+          recipients: recipientRows.map(row => row.email),
+        });
+        teamEmail = { requested: true, ...delivery };
+      } catch (error) {
+        logger.error(
+          { err: error, announcementId: result.insertId, recipientType: 'active_non_external_users' },
+          'Announcement published but team email delivery failed'
+        );
+        teamEmail = {
+          requested: true,
+          sent: false,
+          recipientCount: 0,
+          message: 'Announcement published, but AWS SES could not send the team email. Contact an administrator.',
+        };
+      }
+    }
+
+    res.status(201).json({ ...hydrated, archivedIds, teamEmail });
   } catch (error) {
     next(error);
   }
