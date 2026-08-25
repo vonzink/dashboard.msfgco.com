@@ -437,6 +437,9 @@
 
       // Email signature
       document.getElementById('profileSignatureInput').value = data.email_signature || '';
+      document.getElementById('signatureSourceSelect').value =
+        data.email_signature_source === 'custom' ? 'custom' : 'template';
+      applySignatureSource();
       document.getElementById('signaturePreview').style.display = 'none';
 
       // Avatar
@@ -896,7 +899,27 @@
     return 'https://msfg-media.s3.us-west-2.amazonaws.com/' + path;
   }
 
+  // Signature type: 'template' (generated from the profile) or 'custom' (the
+  // person's own HTML). Both modes edit the same body — the selector decides
+  // whether the MSFG generator is offered, so a custom signature can't be
+  // clobbered by an accidental Generate.
+  function applySignatureSource() {
+    const isCustom = document.getElementById('signatureSourceSelect').value === 'custom';
+    const ta = document.getElementById('profileSignatureInput');
+    document.getElementById('signatureGenerateBtn').style.display = isCustom ? 'none' : '';
+    document.getElementById('signatureTemplateHelp').style.display = isCustom ? 'none' : '';
+    document.getElementById('signatureCustomHelp').style.display = isCustom ? '' : 'none';
+    document.getElementById('signatureInputLabel').textContent =
+      isCustom ? 'Custom Signature (HTML)' : 'Email Signature (HTML)';
+    ta.placeholder = isCustom
+      ? "Paste this person's own HTML email signature here..."
+      : 'Paste your HTML email signature here...';
+  }
+
+  document.getElementById('signatureSourceSelect').addEventListener('change', applySignatureSource);
+
   document.getElementById('signatureGenerateBtn').addEventListener('click', () => {
+    if (document.getElementById('signatureSourceSelect').value === 'custom') return;
     const ta = document.getElementById('profileSignatureInput');
     if (ta.value.trim() && !confirm('Replace the current signature with the MSFG template (filled from this profile)? Title and the secure-upload link still need to be filled in.')) return;
 
@@ -949,6 +972,7 @@
         method: 'PUT',
         body: JSON.stringify({
           email_signature: document.getElementById('profileSignatureInput').value,
+          email_signature_source: document.getElementById('signatureSourceSelect').value,
         }),
       });
       alert('Signature saved!');

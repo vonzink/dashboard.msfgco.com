@@ -25,7 +25,7 @@ router.get('/:id/profile', async (req, res, next) => {
       insurance_provider: null, insurance_policy_number: null, insurance_expiration: null,
       bond_company: null, bond_number: null, bond_expiration: null, computer_id: null,
       client_dropbox_location: null,
-      email_signature: null,
+      email_signature: null, email_signature_source: null,
     };
 
     // Generate presigned URLs for images (parallel)
@@ -85,7 +85,7 @@ router.put('/:id/profile', async (req, res, next) => {
       'insurance_provider', 'insurance_policy_number', 'insurance_expiration',
       'bond_company', 'bond_number', 'bond_expiration', 'computer_id',
       'client_dropbox_location',
-      'email_signature',
+      'email_signature', 'email_signature_source',
       'business_card_html', 'business_card_back_html', 'business_card_brand',
       'avatar_position',
     ];

@@ -16,7 +16,7 @@ const EDITABLE_FIELDS = [
   'facebook_business_url', 'facebook_url_2', 'linkedin_url_2', 'nextdoor_url', 'google_my_business_url',
   'qr_code_1_label', 'qr_code_2_label',
   'nmls_number',
-  'email_signature',
+  'email_signature', 'email_signature_source',
 ];
 
 // ── GET /api/me/profile — read own profile ──────
