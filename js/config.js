@@ -161,6 +161,7 @@
       linkedin: "https://www.linkedin.com/company/msfg-home-loans",
 
       keyword_explorer: "https://keywords.msfgco.com",
+      msfg_website: "https://msfgmortgage.com/",
 
       loan_calc_hub: "/calc/",
       docs_hub: "/docs/",
