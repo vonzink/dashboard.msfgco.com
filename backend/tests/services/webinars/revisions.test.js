@@ -21,10 +21,23 @@ function load() {
 
 beforeEach(() => db.query.mockReset());
 afterEach(() => {
+  vi.unstubAllEnvs();
   delete require.cache[servicePath];
   if (originalDb) require.cache[dbPath] = originalDb;
   else delete require.cache[dbPath];
 });
+
+function versionedSnapshot({ admissionVersion = 1, stylesheetOrigins = [] } = {}) {
+  return {
+    schemaVersion: 2,
+    admissionPolicy: {
+      version: admissionVersion,
+      resourcePolicy: { assetOrigin: null, stylesheetOrigins, fontOrigins: [] },
+    },
+    webinar: { ...validSnapshot.webinar },
+    slides: validSnapshot.slides.map(slide => ({ ...slide })),
+  };
+}
 
 describe('Webinar Studio revisions', () => {
   it('lists only safe revision summaries, never snapshots or source', async () => {
@@ -84,9 +97,48 @@ describe('Webinar Studio revisions', () => {
       .mockResolvedValueOnce([[{ slug: 'intro', title: 'Intro', master_html: '<main>{{SLIDE_CONTENT}}</main>', master_css: '' }]])
       .mockResolvedValueOnce([[{ id: '11111111-1111-4111-8111-111111111111', position: 0, anchor: 'opening', title: 'Opening', target_seconds: 0, speaker_notes: '', html: '', css: '', javascript: '' }]]) };
     await expect(buildCompleteSnapshot(connection, 2)).resolves.toEqual({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      admissionPolicy: {
+        version: 1,
+        resourcePolicy: { assetOrigin: null, stylesheetOrigins: [], fontOrigins: [] },
+      },
       webinar: { slug: 'intro', title: 'Intro', masterHtml: '<main>{{SLIDE_CONTENT}}</main>', masterCss: '' },
       slides: [{ id: '11111111-1111-4111-8111-111111111111', position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }],
+    });
+  });
+
+  it('restores a versioned snapshot under its captured resource policy after routine configuration evolution', async () => {
+    const snapshot = versionedSnapshot({ stylesheetOrigins: ['https://styles.old.example'] });
+    snapshot.webinar.masterHtml = '<link rel="stylesheet" href="https://styles.old.example/theme.css"><main>{{SLIDE_CONTENT}}</main>';
+    vi.stubEnv('WEBINAR_EXTERNAL_STYLE_ORIGINS', 'https://styles.new.example');
+    db.query.mockResolvedValueOnce([[
+      { id: 9, webinar_id: 2, version: 4, snapshot: JSON.stringify(snapshot) },
+    ]]);
+
+    const { getRevisionForRestore } = load();
+    await expect(getRevisionForRestore(2, 9)).resolves.toMatchObject({
+      snapshot: { schemaVersion: 2, admissionPolicy: { version: 1 } },
+    });
+  });
+
+  it.each([
+    ['unsupported admission version', versionedSnapshot({ admissionVersion: 999 }), {}],
+    ['explicitly revoked resource origin', versionedSnapshot({
+      stylesheetOrigins: ['https://styles.old.example'],
+    }), { WEBINAR_REVISION_REVOKED_ORIGINS: 'https://styles.old.example' }],
+  ])('returns a stable incompatibility for %s', async (_label, snapshot, env) => {
+    for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+    if (env.WEBINAR_REVISION_REVOKED_ORIGINS) {
+      snapshot.webinar.masterHtml = '<link rel="stylesheet" href="https://styles.old.example/theme.css"><main>{{SLIDE_CONTENT}}</main>';
+    }
+    db.query.mockResolvedValueOnce([[
+      { id: 9, webinar_id: 2, version: 4, snapshot: JSON.stringify(snapshot) },
+    ]]);
+
+    const { getRevisionForRestore } = load();
+    await expect(getRevisionForRestore(2, 9)).rejects.toMatchObject({
+      code: 'REVISION_POLICY_INCOMPATIBLE',
+      message: 'Revision cannot be restored under the current security policy',
     });
   });
 });

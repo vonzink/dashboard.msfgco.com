@@ -50,8 +50,10 @@ const EXPECTED_CONTROLLED_REASON_CODES = [
   'PUBLIC_RUNTIME_ERROR',
   'RESOURCE_NOT_HTTPS',
   'RESOURCE_ORIGIN_FORBIDDEN',
+  'SETTINGS_DATA_CORRUPT',
   'RESTORE_SLIDE_OWNERSHIP_CONFLICT',
   'REVISION_NOT_FOUND',
+  'REVISION_POLICY_INCOMPATIBLE',
   'REVISION_SNAPSHOT_INVALID',
   'SHORTCUTS_INVALID',
   'SHORTCUT_ACTION_UNKNOWN',
@@ -112,6 +114,10 @@ describe('Webinar Studio operational events', () => {
     expect(getControlledReasonCodeDefinition('REVISION_SNAPSHOT_INVALID')).toEqual({
       httpStatus: null,
       eventName: null,
+    });
+    expect(getControlledReasonCodeDefinition('REVISION_POLICY_INCOMPATIBLE')).toEqual({
+      httpStatus: 409,
+      eventName: 'webinar.validation_rejected',
     });
   });
 

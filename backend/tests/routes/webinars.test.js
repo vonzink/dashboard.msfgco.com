@@ -571,6 +571,14 @@ describe('exact post-filter operational reason codes', () => {
       ));
       return request('POST', '/api/webinars/2/history/11/restore', { expectedVersion: 3 });
     }],
+    ['restore policy incompatibility', 'REVISION_POLICY_INCOMPATIBLE', () => {
+      services.mutations.restoreRevision.mockRejectedValueOnce(new WebinarMutationError(
+        'REVISION_POLICY_INCOMPATIBLE',
+        'Revision cannot be restored under the current security policy',
+        { status: 409 },
+      ));
+      return request('POST', '/api/webinars/2/history/11/restore', { expectedVersion: 3 });
+    }],
     ['controlled content validation', 'CONTENT_VALIDATION_FAILED', () => {
       services.mutations.saveMaster.mockRejectedValueOnce(new WebinarMutationError(
         'CONTENT_VALIDATION_FAILED',

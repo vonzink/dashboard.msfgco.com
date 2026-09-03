@@ -60,6 +60,7 @@ const CONTROLLED_REASON_CODE_DEFINITIONS = Object.freeze({
   SETTINGS_DATA_CORRUPT: reasonCodeDefinition(),
   RESTORE_SLIDE_OWNERSHIP_CONFLICT: reasonCodeDefinition(409, 'webinar.version_conflict'),
   REVISION_NOT_FOUND: reasonCodeDefinition(404, 'webinar.validation_rejected'),
+  REVISION_POLICY_INCOMPATIBLE: reasonCodeDefinition(409, 'webinar.validation_rejected'),
   REVISION_SNAPSHOT_INVALID: reasonCodeDefinition(),
   SHORTCUTS_INVALID: reasonCodeDefinition(400, 'webinar.validation_rejected'),
   SHORTCUT_ACTION_UNKNOWN: reasonCodeDefinition(400, 'webinar.validation_rejected'),

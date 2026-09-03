@@ -4,7 +4,13 @@ const {
   assertCandidateWithinLimits, loadResourcePolicy, validateAnchor, validateCss,
   validateJavascript, validateMasterHtml, validateSlideHtml,
 } = require('./contentPolicy');
-const { buildCompleteSnapshot, getRevisionForRestore, insertRevision, assertCompleteSnapshot } = require('./revisions');
+const {
+  RevisionError,
+  buildCompleteSnapshot,
+  captureAdmissionPolicy,
+  getRevisionForRestore,
+  insertRevision,
+} = require('./revisions');
 const { recordAuditEvent: defaultRecordAuditEvent } = require('./audit');
 const { aggregateRollbackFailure, runTransaction } = require('./transaction');
 
@@ -102,8 +108,7 @@ function validationPolicy() {
   return loadResourcePolicy();
 }
 
-function validateCandidate(candidate) {
-  const policy = validationPolicy();
+function validateCandidate(candidate, policy = validationPolicy()) {
   if (hasAssetTokens(candidate) && !policy.assetOrigin) {
     throw new WebinarMutationError('ASSET_ORIGIN_NOT_CONFIGURED', 'Asset origin is not configured', { status: 503 });
   }
@@ -128,6 +133,7 @@ function validateCandidate(candidate) {
   } catch (error) {
     throw validationError(error.issues || [{ code: error.code || 'CONTENT_LIMIT_EXCEEDED' }]);
   }
+  return policy;
 }
 
 function hasAssetTokens(value) {
@@ -201,11 +207,16 @@ function createMutationService({
       assertLockedWebinarEdit(webinar, { actorUserId, actorIsAdmin });
       assertExpectedVersion(webinar, expectedVersion);
       const candidate = candidateFrom(webinar, await activeSlides(connection, webinarId));
-      await transform(candidate, connection, webinar);
-      await candidateValidator(candidate);
+      const transformed = await transform(candidate, connection, webinar);
+      let admissionPolicy = transformed?.admissionPolicy;
+      if (!admissionPolicy) {
+        const resourcePolicy = validationPolicy();
+        await candidateValidator(candidate, resourcePolicy);
+        admissionPolicy = captureAdmissionPolicy(resourcePolicy);
+      }
       const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       await apply(connection, candidate, webinar);
-      const snapshot = await buildCompleteSnapshot(connection, webinarId);
+      const snapshot = await buildCompleteSnapshot(connection, webinarId, { admissionPolicy });
       const liveVersion = Number(webinar.live_version) + 1;
       const revisionId = await insertRevision(connection, { webinarId, liveVersion, snapshot, changeType, changeSummary, actorUserId });
       await recordRevisionAssetReferences(connection, revisionId, assetVersionIds);
@@ -332,15 +343,27 @@ function createMutationService({
     return contentMutation({
       ...input, changeType: 'revision_restored', changeSummary: 'Restored revision',
       transform: async (candidate, connection) => {
-        const revision = await getRevisionForRestore(input.webinarId, input.revisionId, connection);
+        let revision;
+        try {
+          revision = await getRevisionForRestore(input.webinarId, input.revisionId, connection);
+        } catch (error) {
+          if (error instanceof RevisionError && error.code === 'REVISION_POLICY_INCOMPATIBLE') {
+            throw new WebinarMutationError(
+              error.code,
+              'Revision cannot be restored under the current security policy',
+              { status: 409 },
+            );
+          }
+          throw error;
+        }
         if (!revision) throw new WebinarMutationError('REVISION_NOT_FOUND', 'Revision not found', { status: 404 });
-        assertCompleteSnapshot(revision.snapshot);
         await assertRestoreSlideOwnership(connection, input.webinarId, revision.snapshot.slides.map(slide => slide.id));
         candidate.slug = revision.snapshot.webinar.slug;
         candidate.title = revision.snapshot.webinar.title;
         candidate.masterHtml = revision.snapshot.webinar.masterHtml;
         candidate.masterCss = revision.snapshot.webinar.masterCss;
         candidate.slides = revision.snapshot.slides.map(slide => ({ ...slide }));
+        return { admissionPolicy: revision.admissionPolicy };
       },
       apply: async (connection, candidate) => {
         await connection.query('UPDATE webinar_presentations SET slug = ?, title = ?, master_html = ?, master_css = ?, updated_by_user_id = ? WHERE id = ?', [candidate.slug, candidate.title, candidate.masterHtml, candidate.masterCss, input.actorUserId, input.webinarId]);
@@ -367,7 +390,9 @@ function createMutationService({
     return runTransaction(connectionPool, async connection => {
       await findActiveOwner(connection, input.primaryOwnerUserId);
       const candidate = { masterHtml: SAFE_MASTER, masterCss: '', slides: [{ id: randomUUID(), position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }] };
-      await candidateValidator(candidate);
+      const resourcePolicy = validationPolicy();
+      await candidateValidator(candidate, resourcePolicy);
+      const admissionPolicy = captureAdmissionPolicy(resourcePolicy);
       const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       const [created] = await connection.query(
         `INSERT INTO webinar_presentations
@@ -382,7 +407,7 @@ function createMutationService({
          VALUES (?, ?, 0, 'opening', 'Opening', 0, '', '', '', '', ?, ?)`,
         [slide.id, webinarId, input.actorUserId, input.actorUserId],
       );
-      const snapshot = await buildCompleteSnapshot(connection, webinarId);
+      const snapshot = await buildCompleteSnapshot(connection, webinarId, { admissionPolicy });
       const revisionId = await insertRevision(connection, { webinarId, liveVersion: 1, snapshot, changeType: 'webinar_created', changeSummary: 'Created webinar', actorUserId: input.actorUserId });
       await recordRevisionAssetReferences(connection, revisionId, assetVersionIds);
       await connection.query('UPDATE webinar_presentations SET live_version = 1, updated_by_user_id = ? WHERE id = ?', [input.actorUserId, webinarId]);

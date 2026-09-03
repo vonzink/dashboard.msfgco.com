@@ -277,6 +277,7 @@ function assertCandidateWithinLimits(candidate, resourcePolicy = loadResourcePol
 
 module.exports = {
   LIMITS,
+  exactHttpsOrigin,
   loadResourcePolicy,
   validateMasterHtml,
   validateSlideHtml,

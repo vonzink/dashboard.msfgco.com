@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -7,6 +7,20 @@ const { createMutationService } = require('../../../services/webinars/mutations'
 const stableId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
 const masterHtml = '<main>{{SLIDE_CONTENT}}</main>';
+
+afterEach(() => vi.unstubAllEnvs());
+
+function versionedSnapshot({ admissionVersion = 1, stylesheetOrigins = [] } = {}) {
+  return {
+    schemaVersion: 2,
+    admissionPolicy: {
+      version: admissionVersion,
+      resourcePolicy: { assetOrigin: null, stylesheetOrigins, fontOrigins: [] },
+    },
+    webinar: { slug: 'restored-intro', title: 'Restored intro', masterHtml, masterCss: '' },
+    slides: [{ id: stableId, position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }],
+  };
+}
 
 function currentWebinar(overrides = {}) {
   return { id: 2, slug: 'intro', title: 'Intro', master_html: masterHtml, master_css: '', live_version: 4, audience_enabled: 0, primary_owner_user_id: 7, updated_at: '2026-09-03T10:00:00.000Z', updated_by_user_id: 8, updater_name: 'Another Editor', ...overrides };
@@ -346,8 +360,11 @@ describe('Webinar Studio live mutations', () => {
   });
 
   it('restores archived stable IDs into current plus one and archives a presentation non-destructively', async () => {
-    const restored = { schemaVersion: 1, webinar: { slug: 'restored-intro', title: 'Restored intro', masterHtml, masterCss: '' }, slides: [{ id: stableId, position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }] };
-    const { api, connection } = service();
+    const restored = versionedSnapshot({ stylesheetOrigins: ['https://styles.old.example'] });
+    restored.webinar.masterHtml = '<link rel="stylesheet" href="https://styles.old.example/theme.css"><main>{{SLIDE_CONTENT}}</main>';
+    vi.stubEnv('WEBINAR_EXTERNAL_STYLE_ORIGINS', 'https://styles.new.example');
+    const laterCandidateValidator = vi.fn().mockRejectedValue(new Error('later routine validator rejected old policy'));
+    const { api, connection } = service({ validateCandidate: laterCandidateValidator });
     connection.query.mockImplementation(async (sql, params = []) => {
       if (sql.includes('FOR UPDATE') && sql.includes('webinar_presentations')) return [[currentWebinar()]];
       if (sql.includes('FROM webinar_revisions')) return [[{ id: 18, webinar_id: 2, version: 2, snapshot: JSON.stringify(restored) }]];
@@ -359,10 +376,36 @@ describe('Webinar Studio live mutations', () => {
       return [{ affectedRows: 1, insertId: 2 }];
     });
     await expect(api.restoreRevision({ webinarId: 2, revisionId: 18, actorUserId: 7, expectedVersion: 4 })).resolves.toMatchObject({ liveVersion: 5 });
+    expect(laterCandidateValidator).not.toHaveBeenCalled();
+    const insertedRevision = connection.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO webinar_revisions'));
+    expect(JSON.parse(insertedRevision[1][2]).admissionPolicy).toEqual(restored.admissionPolicy);
     expect(connection.query.mock.calls.some(([sql, params]) => sql.includes('SET slug = ?, title = ?') && params[0] === 'restored-intro' && params[1] === 'Restored intro')).toBe(true);
     expect(connection.query.mock.calls.some(([sql, params]) => sql.includes('archived_at = NULL') && params.includes(stableId))).toBe(true);
     await api.archiveWebinar({ webinarId: 2, actorUserId: 7 });
     expect(connection.query.mock.calls.some(([sql]) => sql.includes('archived_at = CURRENT_TIMESTAMP(3), audience_enabled = 0'))).toBe(true);
+  });
+
+  it('maps an explicitly unsupported restore policy to a stable controlled conflict before writes', async () => {
+    const restored = versionedSnapshot({ admissionVersion: 999 });
+    const { api, connection, calls } = service();
+    connection.query.mockImplementation(async (sql) => {
+      if (sql.includes('FOR UPDATE') && sql.includes('webinar_presentations')) return [[currentWebinar()]];
+      if (sql.includes('FROM webinar_revisions')) return [[{
+        id: 18, webinar_id: 2, version: 2, snapshot: JSON.stringify(restored),
+      }]];
+      if (sql.includes('FROM webinar_slides') && sql.includes('ORDER BY position')) return [[...activeSlides()]];
+      return [{ affectedRows: 1 }];
+    });
+
+    await expect(api.restoreRevision({
+      webinarId: 2, revisionId: 18, actorUserId: 7, expectedVersion: 4,
+    })).rejects.toMatchObject({
+      code: 'REVISION_POLICY_INCOMPATIBLE',
+      status: 409,
+      message: 'Revision cannot be restored under the current security policy',
+    });
+    expect(calls).toContain('rollback');
+    expect(connection.query.mock.calls.some(([sql]) => /^(UPDATE|INSERT)/.test(sql.trim()))).toBe(false);
   });
 
   it('rejects a cross-webinar restore ID before any normalized write', async () => {
@@ -407,7 +450,15 @@ describe('Webinar Studio live mutations', () => {
     const state = model.committed();
     expect(state.presentations).toEqual([expect.objectContaining({ id: 20, primary_owner_user_id: 7, audience_enabled: 0, live_version: 1, master_html: '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>', master_css: '' })]);
     expect(state.slides).toEqual([expect.objectContaining({ webinar_id: 20, position: 0, anchor: 'opening', title: 'Opening', html: '', css: '', javascript: '', archived_at: null })]);
-    expect(JSON.parse(state.revisions[0].snapshot)).toEqual({ schemaVersion: 1, webinar: { slug: 'first-time-homebuyer', title: 'First Time Homebuyer', masterHtml: '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>', masterCss: '' }, slides: [expect.objectContaining({ position: 0, anchor: 'opening' })] });
+    expect(JSON.parse(state.revisions[0].snapshot)).toEqual({
+      schemaVersion: 2,
+      admissionPolicy: {
+        version: 1,
+        resourcePolicy: { assetOrigin: null, stylesheetOrigins: [], fontOrigins: [] },
+      },
+      webinar: { slug: 'first-time-homebuyer', title: 'First Time Homebuyer', masterHtml: '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>', masterCss: '' },
+      slides: [expect.objectContaining({ position: 0, anchor: 'opening' })],
+    });
     expect(state.audit).toEqual([expect.objectContaining({ eventType: 'webinar_created', webinarId: 20, metadata: { liveVersion: 1 } })]);
     expect(model.calls).toEqual(['begin', 'commit']);
   });
