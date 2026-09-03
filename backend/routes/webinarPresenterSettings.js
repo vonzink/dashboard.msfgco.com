@@ -13,7 +13,6 @@ function createWebinarPresenterSettingsRouter({
 } = {}) {
   const router = express.Router();
   const trustedSettingsErrorConstructors = [
-    defaultSettings.WebinarSettingsError,
     settings.WebinarSettingsError,
   ].filter((value, index, values) => typeof value === 'function' && values.indexOf(value) === index);
 

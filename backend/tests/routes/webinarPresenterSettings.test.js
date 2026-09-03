@@ -145,16 +145,68 @@ describe('presenter settings API through the production application factory', ()
   });
 
   it('classifies errors safely when an injected settings double omits its error constructor', async () => {
-    delete settings.WebinarSettingsError;
-    settings.getSettings.mockRejectedValueOnce(new Error('password=secret source=<script>'));
+    await new Promise(resolve => server.close(resolve));
+    const constructorlessSettings = {
+      getSettings: vi.fn().mockRejectedValueOnce(new WebinarSettingsError(
+        'SHORTCUT_ACTION_UNKNOWN',
+        'password=secret source=<script>',
+        { status: 400 },
+      )),
+      upsertSettings: vi.fn(),
+    };
+    const app = createApp({
+      webinarAuthenticate: authenticateFromHeader,
+      webinarServices: { settings: constructorlessSettings },
+      webinarOperationalLogger: operationalLogger,
+      webinarWriteLimit: 100,
+    });
+    server = await new Promise(resolve => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
 
     const response = await request('GET', '/api/webinar-presenter-settings/me');
 
     expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+    expect(constructorlessSettings.getSettings).toHaveBeenCalledTimes(1);
     expectOneOperationalRecord({
       event: 'webinar.database_failure', actorUserId: 7,
       statusCode: 500, reasonCode: 'DATABASE_FAILURE',
     });
-    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/password|script/);
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/SHORTCUT_ACTION_UNKNOWN|password|script/);
+  });
+
+  it.each([
+    ['controlled-looking error', () => Object.assign(
+      new Error('password=secret source=<script>'),
+      { code: 'SHORTCUT_ACTION_UNKNOWN', status: 400 },
+    )],
+    ['unexpected thrown primitive', () => 'password=secret source=<script>'],
+  ])('safely masks a constructor-less dependency %s without an instanceof crash', async (_label, thrown) => {
+    await new Promise(resolve => server.close(resolve));
+    const constructorlessSettings = {
+      getSettings: vi.fn().mockRejectedValueOnce(thrown()),
+      upsertSettings: vi.fn(),
+    };
+    const app = createApp({
+      webinarAuthenticate: authenticateFromHeader,
+      webinarServices: { settings: constructorlessSettings },
+      webinarOperationalLogger: operationalLogger,
+      webinarWriteLimit: 100,
+    });
+    server = await new Promise(resolve => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+
+    const response = await request('GET', '/api/webinar-presenter-settings/me');
+
+    expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+    expect(constructorlessSettings.getSettings).toHaveBeenCalledTimes(1);
+    expectOneOperationalRecord({
+      event: 'webinar.database_failure', actorUserId: 7,
+      statusCode: 500, reasonCode: 'DATABASE_FAILURE',
+    });
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/SHORTCUT_ACTION_UNKNOWN|password|script/);
   });
 });

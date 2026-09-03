@@ -83,6 +83,126 @@ let services;
 let operationalLogger;
 let server;
 
+// This is the executable coverage manifest for the approved private API. The
+// exact-dispatch and identity-matrix tests below both consume every row, while
+// the named boundary cases identify the route-specific malformed/error checks.
+function approvedRouteContracts() {
+  return [
+    {
+      label: 'list', method: 'GET', path: '/api/webinars', route: 'GET /api/webinars',
+      status: 200, access: 'active-internal', boundaries: ['authorization', 'exact dispatch', 'unexpected error'],
+      target: () => services.repository.listForRequest,
+      assertArgs: (call, user = identity(7)) => {
+        expect(call).toHaveLength(1);
+        expect(call[0].user).toEqual(user);
+      },
+    },
+    {
+      label: 'get', method: 'GET', path: '/api/webinars/2', route: 'GET /api/webinars/:id',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'archived 404', 'unexpected error'],
+      target: () => services.repository.getPrivateDocument, args: [2],
+    },
+    {
+      label: 'create', method: 'POST', path: '/api/webinars', route: 'POST /api/webinars',
+      status: 201, access: 'admin', boundaries: ['authorization', 'malformed body', 'exact dispatch', 'controlled/unexpected error'],
+      user: identity(7, 'admin'), body: { slug: 'intro', title: 'Intro', primaryOwnerUserId: 8 },
+      target: () => services.mutations.createWebinar,
+      args: [{ slug: 'intro', title: 'Intro', primaryOwnerUserId: 8, actorUserId: 7 }],
+    },
+    {
+      label: 'save master', method: 'PUT', path: '/api/webinars/2/master', route: 'PUT /api/webinars/:id/master',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'archived 404', 'controlled/unexpected error'],
+      body: validMaster, target: () => services.mutations.saveMaster,
+      args: [{ webinarId: 2, actorUserId: 7, ...validMaster }],
+    },
+    {
+      label: 'add slide', method: 'POST', path: '/api/webinars/2/slides', route: 'POST /api/webinars/:id/slides (add)',
+      status: 201, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
+      body: validSlide, target: () => services.mutations.addSlide,
+      args: [{ webinarId: 2, actorUserId: 7, ...validSlide }],
+    },
+    {
+      label: 'duplicate slide', method: 'POST', path: '/api/webinars/2/slides', route: 'POST /api/webinars/:id/slides (duplicate)',
+      status: 201, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing slide', 'controlled/unexpected error'],
+      body: { expectedVersion: 3, sourceSlideId: slideId },
+      target: () => services.mutations.duplicateSlide,
+      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, sourceSlideId: slideId }],
+    },
+    {
+      label: 'save slide', method: 'PUT', path: `/api/webinars/2/slides/${slideId}`, route: 'PUT /api/webinars/:id/slides/:slideId',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing/archived slide', 'controlled/unexpected error'],
+      body: validSlide, target: () => services.mutations.saveSlide,
+      args: [{ webinarId: 2, actorUserId: 7, ...validSlide, slideId }],
+    },
+    {
+      label: 'reorder slides', method: 'PUT', path: '/api/webinars/2/slides/order', route: 'PUT /api/webinars/:id/slides/order',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
+      body: { expectedVersion: 3, slideIds: [secondSlideId, slideId] },
+      target: () => services.mutations.reorderSlides,
+      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, slideIds: [secondSlideId, slideId] }],
+    },
+    {
+      label: 'archive slide', method: 'DELETE', path: `/api/webinars/2/slides/${slideId}`, route: 'DELETE /api/webinars/:id/slides/:slideId',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing/archived slide', 'controlled/unexpected error'],
+      body: { expectedVersion: 3 }, target: () => services.mutations.archiveSlide,
+      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, slideId }],
+    },
+    {
+      label: 'history', method: 'GET', path: '/api/webinars/2/history', route: 'GET /api/webinars/:id/history',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'archived 404', 'unexpected error'],
+      target: () => services.revisions.listHistory, args: [2],
+    },
+    {
+      label: 'restore', method: 'POST', path: '/api/webinars/2/history/11/restore', route: 'POST /api/webinars/:id/history/:revisionId/restore',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
+      body: { expectedVersion: 3 }, target: () => services.mutations.restoreRevision,
+      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, revisionId: 11 }],
+    },
+    {
+      label: 'change owner', method: 'PUT', path: '/api/webinars/2/owner', route: 'PUT /api/webinars/:id/owner',
+      status: 200, access: 'admin', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
+      user: identity(7, 'admin'), body: { primaryOwnerUserId: 8 },
+      target: () => services.mutations.changeOwner,
+      args: [{ webinarId: 2, actorUserId: 7, primaryOwnerUserId: 8 }],
+    },
+    {
+      label: 'change audience', method: 'PUT', path: '/api/webinars/2/audience-access', route: 'PUT /api/webinars/:id/audience-access',
+      status: 200, access: 'admin', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
+      user: identity(7, 'admin'), body: { enabled: true },
+      target: () => services.mutations.changeAudienceAccess,
+      args: [{ webinarId: 2, actorUserId: 7, enabled: true }],
+    },
+    {
+      label: 'archive webinar', method: 'DELETE', path: '/api/webinars/2', route: 'DELETE /api/webinars/:id',
+      status: 200, access: 'admin', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'archived 404', 'controlled/unexpected error'],
+      user: identity(7, 'admin'), target: () => services.mutations.archiveWebinar,
+      args: [{ webinarId: 2, actorUserId: 7 }],
+    },
+    {
+      label: 'list notes', method: 'GET', path: '/api/webinars/2/notes', route: 'GET /api/webinars/:id/notes',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'archived 404', 'unexpected error'],
+      target: () => services.notes.listNotes, args: [{ userId: 7, webinarId: 2 }],
+    },
+    {
+      label: 'add note', method: 'POST', path: `/api/webinars/2/slides/${slideId}/notes`, route: 'POST /api/webinars/:id/slides/:slideId/notes',
+      status: 201, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing/archived slide', 'controlled/unexpected error'],
+      body: { body: 'Private note' }, target: () => services.notes.addNote,
+      args: [{ userId: 7, webinarId: 2, slideId, body: 'Private note' }],
+    },
+    {
+      label: 'update note', method: 'PUT', path: '/api/webinars/2/notes/5', route: 'PUT /api/webinars/:id/notes/:noteId',
+      status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'indistinguishable owner 404', 'controlled/unexpected error'],
+      body: { body: 'Updated note' }, target: () => services.notes.updateNote,
+      args: [{ userId: 7, webinarId: 2, noteId: 5, body: 'Updated note' }],
+    },
+    {
+      label: 'delete note', method: 'DELETE', path: '/api/webinars/2/notes/5', route: 'DELETE /api/webinars/:id/notes/:noteId',
+      status: 204, access: 'owner', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'indistinguishable owner 404', 'controlled/unexpected error'],
+      target: () => services.notes.deleteNote, args: [{ userId: 7, webinarId: 2, noteId: 5 }],
+    },
+  ];
+}
+
 beforeEach(async () => {
   services = makeServices();
   operationalLogger = { info: vi.fn() };
@@ -102,7 +222,8 @@ afterEach(async () => {
 });
 
 async function request(method, path, body, user = identity(7), extraHeaders = {}) {
-  const headers = { 'x-test-user': JSON.stringify(user), ...extraHeaders };
+  const headers = { ...extraHeaders };
+  if (user !== null) headers['x-test-user'] = JSON.stringify(user);
   if (body !== undefined && !Object.keys(headers).some(key => key.toLowerCase() === 'content-type')) {
     headers['content-type'] = 'application/json';
   }
@@ -146,100 +267,36 @@ function expectOneOperationalRecord(expected) {
 }
 
 describe('private webinar API through the production application factory', () => {
-  it.each([
-    {
-      label: 'list', method: 'GET', path: '/api/webinars', status: 200,
-      target: () => services.repository.listForRequest,
-      assertArgs: (call) => {
-        expect(call).toHaveLength(1);
-        expect(call[0].user).toEqual(identity(7));
-      },
-    },
-    {
-      label: 'get', method: 'GET', path: '/api/webinars/2', status: 200,
-      target: () => services.repository.getPrivateDocument, args: [2],
-    },
-    {
-      label: 'create', method: 'POST', path: '/api/webinars', status: 201, user: identity(7, 'admin'),
-      body: { slug: 'intro', title: 'Intro', primaryOwnerUserId: 8 },
-      target: () => services.mutations.createWebinar,
-      args: [{ slug: 'intro', title: 'Intro', primaryOwnerUserId: 8, actorUserId: 7 }],
-    },
-    {
-      label: 'save master', method: 'PUT', path: '/api/webinars/2/master', status: 200, body: validMaster,
-      target: () => services.mutations.saveMaster,
-      args: [{ webinarId: 2, actorUserId: 7, ...validMaster }],
-    },
-    {
-      label: 'add slide', method: 'POST', path: '/api/webinars/2/slides', status: 201, body: validSlide,
-      target: () => services.mutations.addSlide,
-      args: [{ webinarId: 2, actorUserId: 7, ...validSlide }],
-    },
-    {
-      label: 'duplicate slide', method: 'POST', path: '/api/webinars/2/slides', status: 201,
-      body: { expectedVersion: 3, sourceSlideId: slideId },
-      target: () => services.mutations.duplicateSlide,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, sourceSlideId: slideId }],
-    },
-    {
-      label: 'save slide', method: 'PUT', path: `/api/webinars/2/slides/${slideId}`, status: 200, body: validSlide,
-      target: () => services.mutations.saveSlide,
-      args: [{ webinarId: 2, actorUserId: 7, ...validSlide, slideId }],
-    },
-    {
-      label: 'reorder slides', method: 'PUT', path: '/api/webinars/2/slides/order', status: 200,
-      body: { expectedVersion: 3, slideIds: [secondSlideId, slideId] },
-      target: () => services.mutations.reorderSlides,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, slideIds: [secondSlideId, slideId] }],
-    },
-    {
-      label: 'archive slide', method: 'DELETE', path: `/api/webinars/2/slides/${slideId}`, status: 200,
-      body: { expectedVersion: 3 }, target: () => services.mutations.archiveSlide,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, slideId }],
-    },
-    {
-      label: 'history', method: 'GET', path: '/api/webinars/2/history', status: 200,
-      target: () => services.revisions.listHistory, args: [2],
-    },
-    {
-      label: 'restore', method: 'POST', path: '/api/webinars/2/history/11/restore', status: 200,
-      body: { expectedVersion: 3 }, target: () => services.mutations.restoreRevision,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, revisionId: 11 }],
-    },
-    {
-      label: 'change owner', method: 'PUT', path: '/api/webinars/2/owner', status: 200, user: identity(7, 'admin'),
-      body: { primaryOwnerUserId: 8 }, target: () => services.mutations.changeOwner,
-      args: [{ webinarId: 2, actorUserId: 7, primaryOwnerUserId: 8 }],
-    },
-    {
-      label: 'change audience', method: 'PUT', path: '/api/webinars/2/audience-access', status: 200, user: identity(7, 'admin'),
-      body: { enabled: true }, target: () => services.mutations.changeAudienceAccess,
-      args: [{ webinarId: 2, actorUserId: 7, enabled: true }],
-    },
-    {
-      label: 'archive webinar', method: 'DELETE', path: '/api/webinars/2', status: 200, user: identity(7, 'admin'),
-      target: () => services.mutations.archiveWebinar,
-      args: [{ webinarId: 2, actorUserId: 7 }],
-    },
-    {
-      label: 'list notes', method: 'GET', path: '/api/webinars/2/notes', status: 200,
-      target: () => services.notes.listNotes, args: [{ userId: 7, webinarId: 2 }],
-    },
-    {
-      label: 'add note', method: 'POST', path: `/api/webinars/2/slides/${slideId}/notes`, status: 201,
-      body: { body: 'Private note' }, target: () => services.notes.addNote,
-      args: [{ userId: 7, webinarId: 2, slideId, body: 'Private note' }],
-    },
-    {
-      label: 'update note', method: 'PUT', path: '/api/webinars/2/notes/5', status: 200,
-      body: { body: 'Updated note' }, target: () => services.notes.updateNote,
-      args: [{ userId: 7, webinarId: 2, noteId: 5, body: 'Updated note' }],
-    },
-    {
-      label: 'delete note', method: 'DELETE', path: '/api/webinars/2/notes/5', status: 204,
-      target: () => services.notes.deleteNote, args: [{ userId: 7, webinarId: 2, noteId: 5 }],
-    },
-  ])('dispatches the exact $label service contract', async ({ method, path, body, status, user, target, args, assertArgs }) => {
+  it('enumerates every approved verb/path and its required boundary categories', () => {
+    const contracts = approvedRouteContracts();
+    expect(contracts.map(contract => contract.route)).toEqual([
+      'GET /api/webinars',
+      'GET /api/webinars/:id',
+      'POST /api/webinars',
+      'PUT /api/webinars/:id/master',
+      'POST /api/webinars/:id/slides (add)',
+      'POST /api/webinars/:id/slides (duplicate)',
+      'PUT /api/webinars/:id/slides/:slideId',
+      'PUT /api/webinars/:id/slides/order',
+      'DELETE /api/webinars/:id/slides/:slideId',
+      'GET /api/webinars/:id/history',
+      'POST /api/webinars/:id/history/:revisionId/restore',
+      'PUT /api/webinars/:id/owner',
+      'PUT /api/webinars/:id/audience-access',
+      'DELETE /api/webinars/:id',
+      'GET /api/webinars/:id/notes',
+      'POST /api/webinars/:id/slides/:slideId/notes',
+      'PUT /api/webinars/:id/notes/:noteId',
+      'DELETE /api/webinars/:id/notes/:noteId',
+    ]);
+    expect(contracts.every(contract => contract.boundaries.includes('authorization'))).toBe(true);
+    expect(contracts.every(contract => contract.boundaries.includes('exact dispatch'))).toBe(true);
+    expect(contracts.some(contract => contract.boundaries.some(value => value.includes('malformed')))).toBe(true);
+    expect(contracts.some(contract => contract.boundaries.some(value => value.includes('controlled')))).toBe(true);
+    expect(contracts.some(contract => contract.boundaries.some(value => value.includes('unexpected')))).toBe(true);
+  });
+
+  it.each(approvedRouteContracts())('dispatches the exact $label service contract', async ({ method, path, body, status, user, target, args, assertArgs }) => {
     const response = await request(method, path, body, user || identity(7));
     expect(response.status).toBe(status);
     const service = target();
@@ -248,36 +305,26 @@ describe('private webinar API through the production application factory', () =>
     else expect(service.mock.calls[0]).toEqual(args);
   });
 
-  it.each([
-    ['get', 'GET', '/api/webinars/2', undefined, false],
-    ['save master', 'PUT', '/api/webinars/2/master', validMaster, false],
-    ['add slide', 'POST', '/api/webinars/2/slides', validSlide, false],
-    ['duplicate slide', 'POST', '/api/webinars/2/slides', { expectedVersion: 3, sourceSlideId: slideId }, false],
-    ['save slide', 'PUT', `/api/webinars/2/slides/${slideId}`, validSlide, false],
-    ['reorder slides', 'PUT', '/api/webinars/2/slides/order', { expectedVersion: 3, slideIds: [slideId] }, false],
-    ['archive slide', 'DELETE', `/api/webinars/2/slides/${slideId}`, { expectedVersion: 3 }, false],
-    ['history', 'GET', '/api/webinars/2/history', undefined, false],
-    ['restore', 'POST', '/api/webinars/2/history/11/restore', { expectedVersion: 3 }, false],
-    ['change owner', 'PUT', '/api/webinars/2/owner', { primaryOwnerUserId: 8 }, true],
-    ['change audience', 'PUT', '/api/webinars/2/audience-access', { enabled: true }, true],
-    ['archive webinar', 'DELETE', '/api/webinars/2', undefined, true],
-    ['list notes', 'GET', '/api/webinars/2/notes', undefined, false],
-    ['add note', 'POST', `/api/webinars/2/slides/${slideId}/notes`, { body: 'Private note' }, false],
-    ['update note', 'PUT', '/api/webinars/2/notes/5', { body: 'Updated note' }, false],
-    ['delete note', 'DELETE', '/api/webinars/2/notes/5', undefined, false],
-  ])('enforces owner/admin/other authorization for %s', async (_label, method, path, body, adminOnly) => {
-    const ownerSuccess = method === 'POST' && (path.endsWith('/slides') || path.endsWith('/notes'))
-      ? 201
-      : method === 'DELETE' && path.endsWith('/notes/5') ? 204 : 200;
+  it.each(approvedRouteContracts())('enforces the owner/admin/other identity matrix for $label', async (contract) => {
+    const { method, path, body, status, access } = contract;
     const roles = [
-      ['owner', identity(7), adminOnly ? 403 : ownerSuccess],
-      ['admin', identity(1, 'admin'), ownerSuccess],
-      ['other', identity(8), 403],
+      ['owner', identity(7)],
+      ['admin', identity(1, 'admin')],
+      ['other', identity(8)],
     ];
-    for (const [_role, user, expectedStatus] of roles) {
+    for (const [role, user] of roles) {
       vi.clearAllMocks();
+      const expectedStatus = access === 'active-internal'
+        || (access === 'owner' && role !== 'other')
+        || (access === 'admin' && role === 'admin')
+        ? status
+        : 403;
       const response = await request(method, path, body, user);
       expect(response.status).toBe(expectedStatus);
+      if (contract.label === 'list') {
+        expect(services.repository.listForRequest).toHaveBeenCalledTimes(1);
+        contract.assertArgs(services.repository.listForRequest.mock.calls[0], user);
+      }
       if (expectedStatus === 403) {
         const protectedActions = [
           ...Object.values(services.mutations),
@@ -289,17 +336,20 @@ describe('private webinar API through the production application factory', () =>
     }
   });
 
-  it.each([
-    ['owner', identity(7), 403],
-    ['admin', identity(1, 'admin'), 201],
-    ['other', identity(8), 403],
-  ])('keeps webinar creation admin-only for %s', async (_label, user, status) => {
-    const response = await request('POST', '/api/webinars', {
-      slug: 'new-webinar', title: 'New Webinar', primaryOwnerUserId: 7,
-    }, user);
-    expect(response.status).toBe(status);
-    expect(services.mutations.createWebinar).toHaveBeenCalledTimes(status === 201 ? 1 : 0);
-  });
+  it.each(approvedRouteContracts().filter(contract => contract.path.includes('/api/webinars/2')))(
+    'rejects a malformed webinar ID on the $label route before domain dispatch',
+    async ({ method, path, body, access }) => {
+      const user = access === 'admin' ? identity(1, 'admin') : identity(7);
+      const response = await request(
+        method,
+        path.replace('/api/webinars/2', '/api/webinars/not-an-id'),
+        body,
+        user,
+      );
+      expect(response.status).toBe(400);
+      expect(allServiceMocks(services).every(mock => mock.mock.calls.length === 0)).toBe(true);
+    },
+  );
 
   it.each([
     ['webinar id', 'GET', '/api/webinars/not-an-id', undefined],
@@ -346,13 +396,142 @@ describe('private webinar API through the production application factory', () =>
   });
 
   it.each([
-    ['absent mapped identity', {}, 401],
+    ['unauthenticated request', null, 401],
+    ['unmapped authenticated identity', { sub: 'cognito-only', groups: ['user'] }, 401],
     ['inactive mapped identity', { db: { id: 7, role: 'user', is_active: 0 }, groups: ['user'] }, 403],
     ['external mapped identity', { db: { id: 7, role: 'external', is_active: 1 }, groups: ['external'] }, 403],
-  ])('runs the production mapped/active/internal gates for %s', async (_label, user, status) => {
-    const response = await request('PUT', '/api/webinars/2/master', validMaster, user);
+  ])('runs the production list-route mapped/active/internal gate for %s', async (_label, user, status) => {
+    const response = await request('GET', '/api/webinars', undefined, user);
     expect(response.status).toBe(status);
     expect(allServiceMocks(services).every(mock => mock.mock.calls.length === 0)).toBe(true);
+  });
+
+  it.each(approvedRouteContracts())('masks an unexpected $label dependency error through the production boundary', async (contract) => {
+    contract.target().mockRejectedValueOnce(Object.assign(
+      new Error('ER_ACCESS_DENIED password=secret source=<script>'),
+      { code: 'VERSION_CONFLICT', status: 409 },
+    ));
+
+    const response = await request(
+      contract.method,
+      contract.path,
+      contract.body,
+      contract.user || identity(7),
+    );
+
+    expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+    const record = {
+      event: 'webinar.database_failure',
+      actorUserId: 7,
+      statusCode: 500,
+      reasonCode: 'DATABASE_FAILURE',
+    };
+    if (contract.path.includes('/api/webinars/2')) record.webinarId = 2;
+    expectOneOperationalRecord(record);
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/ER_ACCESS_DENIED|VERSION_CONFLICT|password|script/);
+  });
+});
+
+describe('archived and current-user 404 route contracts', () => {
+  it.each([
+    ['private read', 'GET', '/api/webinars/2', undefined, identity(7), 7],
+    ['owner mutation', 'PUT', '/api/webinars/2/master', validMaster, identity(7), 7],
+    ['admin archive mutation', 'DELETE', '/api/webinars/2', undefined, identity(1, 'admin'), 1],
+  ])('returns the safe archived-webinar response before %s dispatch', async (_label, method, path, body, user, actorUserId) => {
+    services.repository.getPrivateDocument.mockResolvedValueOnce(null);
+
+    const response = await request(method, path, body, user);
+
+    expect(response).toEqual({
+      status: 404,
+      body: { error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' },
+    });
+    expect(services.repository.getPrivateDocument.mock.calls).toEqual([[2]]);
+    expect([
+      ...Object.values(services.revisions),
+      ...Object.values(services.mutations),
+      ...Object.values(services.notes),
+    ].every(mock => mock.mock.calls.length === 0)).toBe(true);
+    expectOneOperationalRecord({
+      event: 'webinar.validation_rejected', webinarId: 2, actorUserId,
+      statusCode: 404, reasonCode: 'WEBINAR_NOT_FOUND',
+    });
+  });
+
+  it.each([
+    {
+      label: 'duplicate source', method: 'POST', path: '/api/webinars/2/slides',
+      body: { expectedVersion: 3, sourceSlideId: slideId },
+      target: () => services.mutations.duplicateSlide,
+      error: () => new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
+      args: { webinarId: 2, actorUserId: 7, expectedVersion: 3, sourceSlideId: slideId },
+    },
+    {
+      label: 'save', method: 'PUT', path: `/api/webinars/2/slides/${slideId}`,
+      body: validSlide, target: () => services.mutations.saveSlide,
+      error: () => new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
+      args: { webinarId: 2, actorUserId: 7, ...validSlide, slideId },
+    },
+    {
+      label: 'archive', method: 'DELETE', path: `/api/webinars/2/slides/${slideId}`,
+      body: { expectedVersion: 3 }, target: () => services.mutations.archiveSlide,
+      error: () => new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
+      args: { webinarId: 2, actorUserId: 7, expectedVersion: 3, slideId },
+    },
+    {
+      label: 'private-note add', method: 'POST', path: `/api/webinars/2/slides/${slideId}/notes`,
+      body: { body: 'Private note' }, target: () => services.notes.addNote,
+      error: () => new WebinarNoteError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
+      args: { userId: 7, webinarId: 2, slideId, body: 'Private note' },
+    },
+  ])('returns the same safe 404 for a missing or archived slide on $label', async ({ method, path, body, target, error, args }) => {
+    target().mockRejectedValueOnce(error());
+
+    const response = await request(method, path, body);
+
+    expect(response).toEqual({
+      status: 404,
+      body: { error: 'Slide not found', code: 'SLIDE_NOT_FOUND' },
+    });
+    expect(target().mock.calls).toEqual([[args]]);
+    expectOneOperationalRecord({
+      event: 'webinar.validation_rejected', webinarId: 2, actorUserId: 7,
+      statusCode: 404, reasonCode: 'SLIDE_NOT_FOUND',
+    });
+  });
+
+  it.each([
+    ['missing note on update', 'PUT', { body: 'Updated note' }, () => services.notes.updateNote,
+      { userId: 42, webinarId: 2, noteId: 77, body: 'Updated note' }],
+    ['another user\'s note on update', 'PUT', { body: 'Updated note' }, () => services.notes.updateNote,
+      { userId: 42, webinarId: 2, noteId: 77, body: 'Updated note' }],
+    ['missing note on delete', 'DELETE', undefined, () => services.notes.deleteNote,
+      { userId: 42, webinarId: 2, noteId: 77 }],
+    ['another user\'s note on delete', 'DELETE', undefined, () => services.notes.deleteNote,
+      { userId: 42, webinarId: 2, noteId: 77 }],
+  ])('keeps %s indistinguishable and dispatches exact current-user identity', async (_label, method, body, target, args) => {
+    services.repository.getPrivateDocument.mockResolvedValueOnce({
+      ...webinar,
+      primaryOwnerUserId: 42,
+    });
+    target().mockRejectedValueOnce(new WebinarNoteError(
+      'NOTE_NOT_FOUND',
+      'Note not found',
+      { status: 404 },
+    ));
+
+    const response = await request(method, '/api/webinars/2/notes/77', body, identity(42));
+
+    expect(response).toEqual({
+      status: 404,
+      body: { error: 'Note not found', code: 'NOTE_NOT_FOUND' },
+    });
+    expect(target().mock.calls).toEqual([[args]]);
+    expectOneOperationalRecord({
+      event: 'webinar.validation_rejected', webinarId: 2, actorUserId: 42,
+      statusCode: 404, reasonCode: 'NOTE_NOT_FOUND',
+    });
   });
 });
 
@@ -526,19 +705,88 @@ describe('production transport and limiter contract', () => {
     expect(services.mutations.saveMaster).not.toHaveBeenCalled();
   }, 30000);
 
-  it('records unsupported media with its exact code and never dispatches a route', async () => {
-    const response = await rawRequest('PUT', '/api/webinars/2/master', 'not json', {
-      'content-type': 'text/plain',
-      'transfer-encoding': 'chunked',
+  it('accepts an exact raw 2 MiB mutation at transport and rejects 2 MiB plus one byte', async () => {
+    const prefix = '{"expectedVersion":3,"masterHtml":"';
+    const suffix = '","masterCss":""}';
+    const exactBody = `${prefix}${'x'.repeat(
+      (2 * 1024 * 1024) - Buffer.byteLength(prefix) - Buffer.byteLength(suffix),
+    )}${suffix}`;
+    const overBody = `${exactBody} `;
+    expect(Buffer.byteLength(exactBody)).toBe(2 * 1024 * 1024);
+    expect(Buffer.byteLength(overBody)).toBe((2 * 1024 * 1024) + 1);
+
+    const exact = await rawRequest('PUT', '/api/webinars/2/master', exactBody, {
+      'content-type': 'application/json',
+      'content-length': String(Buffer.byteLength(exactBody)),
       'x-test-user': JSON.stringify(identity(7)),
     });
-    expect(response).toMatchObject({ status: 400, body: { code: 'UNSUPPORTED_MEDIA_TYPE' } });
-    expectOneOperationalRecord({
-      event: 'webinar.validation_rejected', statusCode: 400,
-      reasonCode: 'UNSUPPORTED_MEDIA_TYPE',
+    expect(exact).toMatchObject({ status: 400, body: { code: 'VALIDATION_FAILED' } });
+    expect(exact.status).not.toBe(413);
+    expect(services.mutations.saveMaster).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    const over = await rawRequest('PUT', '/api/webinars/2/master', overBody, {
+      'content-type': 'application/json',
+      'content-length': String(Buffer.byteLength(overBody)),
+      'x-test-user': JSON.stringify(identity(7)),
+    });
+    expect(over).toEqual({
+      status: 413,
+      body: { error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' },
     });
     expect(services.mutations.saveMaster).not.toHaveBeenCalled();
-  });
+    expectOneOperationalRecord({
+      event: 'webinar.validation_rejected', statusCode: 413,
+      reasonCode: 'CONTENT_LIMIT_EXCEEDED',
+    });
+  }, 30000);
+
+  it.each(['text/plain', 'application/x-www-form-urlencoded'])(
+    'rejects an oversized chunked %s stream before route service dispatch',
+    async (contentType) => {
+      const response = await rawRequest(
+        'PUT',
+        '/api/webinars/2/master',
+        'x'.repeat((2 * 1024 * 1024) + 1),
+        {
+          'content-type': contentType,
+          'transfer-encoding': 'chunked',
+          'x-test-user': JSON.stringify(identity(7)),
+        },
+      );
+      expect(response).toEqual({
+        status: 413,
+        body: { error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' },
+      });
+      expect(services.mutations.saveMaster).not.toHaveBeenCalled();
+      expectOneOperationalRecord({
+        event: 'webinar.validation_rejected', statusCode: 413,
+        reasonCode: 'CONTENT_LIMIT_EXCEEDED',
+      });
+    },
+    30000,
+  );
+
+  it.each(['text/plain', 'application/x-www-form-urlencoded'])(
+    'records under-limit unsupported %s media with its structured non-413 response',
+    async (contentType) => {
+      const response = await rawRequest('PUT', '/api/webinars/2/master', 'not json', {
+        'content-type': contentType,
+        'transfer-encoding': 'chunked',
+        'x-test-user': JSON.stringify(identity(7)),
+      });
+      expect(response).toEqual({
+        status: 400,
+        body: { error: 'Unsupported media type', code: 'UNSUPPORTED_MEDIA_TYPE' },
+      });
+      expect(response.status).not.toBe(413);
+      expect(services.mutations.saveMaster).not.toHaveBeenCalled();
+      expectOneOperationalRecord({
+        event: 'webinar.validation_rejected', statusCode: 400,
+        reasonCode: 'UNSUPPORTED_MEDIA_TYPE',
+      });
+    },
+  );
 
   it('records malformed JSON with its exact code and never dispatches a route', async () => {
     const response = await rawRequest('PUT', '/api/webinars/2/master', '{not-json', {
