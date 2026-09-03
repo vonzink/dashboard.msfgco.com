@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { getDbUser, getUserId, isAdmin, requireAdmin, requireDbUser } from '../../middleware/userContext';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { getDbUser, getUserId, isAdmin, requireActiveDbUser, requireAdmin, requireDbUser } from '../../middleware/userContext';
 
 // Helper to build a mock req
 function mockReq(dbUser = null) {
@@ -81,5 +83,32 @@ describe('requireDbUser middleware', () => {
     requireDbUser(mockReq(), res, next);
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
+  });
+});
+
+describe('requireActiveDbUser middleware', () => {
+  it.each([
+    [{ id: 7, is_active: 1 }, true],
+    [{ id: 7, is_active: '1' }, true],
+    [{ id: 7, is_active: 0 }, false],
+    [{ id: 7 }, false],
+    [null, false],
+  ])('requires an explicitly active mapped employee', (dbUser, allowed) => {
+    const res = mockRes();
+    const next = vi.fn();
+    requireActiveDbUser(mockReq(dbUser), res, next);
+    expect(next).toHaveBeenCalledTimes(allowed ? 1 : 0);
+    if (!allowed) {
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({ error: 'Active employee access required' });
+    }
+  });
+});
+
+describe('Cognito DB-user lookup projection', () => {
+  it('selects active state for both email and Cognito-sub identity branches', () => {
+    const authSource = readFileSync(path.resolve(import.meta.dirname, '../../middleware/auth.js'), 'utf8');
+    expect(authSource).toMatch(/SELECT id, email, name, role, is_active FROM users WHERE email = \?/);
+    expect(authSource).toMatch(/SELECT id, email, name, role, is_active FROM users WHERE cognito_sub = \?/);
   });
 });

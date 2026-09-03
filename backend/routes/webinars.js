@@ -1,0 +1,186 @@
+const express = require('express');
+const { z } = require('zod');
+const { getUserId, isAdmin } = require('../middleware/userContext');
+const { assertCanEdit, WebinarAccessError } = require('../services/webinars/authorization');
+const repository = require('../services/webinars/repository');
+const revisions = require('../services/webinars/revisions');
+const mutations = require('../services/webinars/mutations');
+const notes = require('../services/webinars/notes');
+const { assertCandidateWithinLimits } = require('../services/webinars/contentPolicy');
+const { recordOperationalEvent } = require('../services/webinars/observability');
+const schemas = require('../validation/schemas/webinars');
+
+const router = express.Router();
+const webinarIdSchema = z.coerce.number().int().positive();
+const revisionIdSchema = z.coerce.number().int().positive();
+const noteIdSchema = z.coerce.number().int().positive();
+const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+
+function asyncRoute(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+function errorBody(error) {
+  const body = { error: error.message || 'Request failed', code: error.code || 'REQUEST_FAILED' };
+  if (error.issues) body.issues = error.issues;
+  if (error.code === 'VERSION_CONFLICT') {
+    if (error.currentVersion !== undefined) body.currentVersion = error.currentVersion;
+    if (error.updatedAt !== undefined) body.updatedAt = error.updatedAt;
+    if (error.updatedBy !== undefined) body.updatedBy = error.updatedBy;
+  }
+  return body;
+}
+
+function operationFor(req) {
+  return { webinarId: Number(req.params.id), actorUserId: getUserId(req) };
+}
+
+function parseOrRespond(req, res, schema, value) {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  const issues = parsed.error.issues.map(issue => ({ path: issue.path, code: issue.code, message: issue.message }));
+  recordOperationalEvent('webinar.validation_rejected', { actorUserId: getUserId(req), statusCode: 400, reasonCode: 'VALIDATION_FAILED' });
+  res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED', issues });
+  return null;
+}
+
+function assertParsedRequestWithinLimits(req, res) {
+  try {
+    // This covers chunked requests, for which Content-Length is unavailable.
+    assertCandidateWithinLimits(req.body || {});
+    return true;
+  } catch (error) {
+    recordOperationalEvent('webinar.validation_rejected', { actorUserId: getUserId(req), statusCode: 413, reasonCode: 'VALIDATION_FAILED' });
+    res.status(413).json(errorBody(Object.assign(error, { status: 413, code: error.code || 'CONTENT_LIMIT_EXCEEDED' })));
+    return false;
+  }
+}
+
+async function loadAuthorizedWebinar(req, res, { adminOnly = false } = {}) {
+  const id = parseOrRespond(req, res, webinarIdSchema, req.params.id);
+  if (!id) return null;
+  const webinar = await repository.getPrivateDocument(id);
+  if (!webinar) {
+    res.status(404).json({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+    return null;
+  }
+  try {
+    if (adminOnly && !isAdmin(req)) throw new WebinarAccessError(403, 'ADMIN_ACCESS_REQUIRED', 'Admin access required');
+    assertCanEdit(req, { primary_owner_user_id: webinar.primaryOwnerUserId ?? webinar.primary_owner_user_id });
+  } catch (error) {
+    recordOperationalEvent('webinar.authorization_denied', { webinarId: id, actorUserId: getUserId(req), statusCode: 403, reasonCode: 'ACCESS_DENIED' });
+    res.status(error.status || 403).json(errorBody(error));
+    return null;
+  }
+  return { id, webinar };
+}
+
+function respondWithServiceError(req, res, error) {
+  const status = error.status || (error.code === 'VERSION_CONFLICT' ? 409 : 500);
+  const fields = { actorUserId: getUserId(req), statusCode: status, reasonCode: status >= 500 ? 'DATABASE_FAILURE' : error.code === 'VERSION_CONFLICT' ? 'VERSION_CONFLICT' : 'VALIDATION_FAILED' };
+  if (req.params.id && Number.isInteger(Number(req.params.id))) fields.webinarId = Number(req.params.id);
+  if (error.code === 'VERSION_CONFLICT') recordOperationalEvent('webinar.version_conflict', fields);
+  else if (status === 400 || status === 413) recordOperationalEvent('webinar.validation_rejected', fields);
+  else if (status >= 500) recordOperationalEvent('webinar.database_failure', fields);
+  res.status(status).json(errorBody(error));
+}
+
+async function performMutation(req, res, schema, action, status = 200, { adminOnly = false, restored = false } = {}) {
+  const access = await loadAuthorizedWebinar(req, res, { adminOnly });
+  if (!access) return;
+  if (!assertParsedRequestWithinLimits(req, res)) return;
+  const body = parseOrRespond(req, res, schema, req.body);
+  if (!body) return;
+  try {
+    const result = await action({ ...operationFor(req), ...body }, access.webinar);
+    recordOperationalEvent(restored ? 'webinar.restore_succeeded' : 'webinar.save_succeeded', { webinarId: access.id, actorUserId: getUserId(req), liveVersion: result.liveVersion, statusCode: status });
+    res.status(status).json(result);
+  } catch (error) {
+    respondWithServiceError(req, res, error);
+  }
+}
+
+router.get('/', asyncRoute(async (req, res) => {
+  try { res.json(await repository.listForRequest(req)); }
+  catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.post('/', asyncRoute(async (req, res) => {
+  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required', code: 'ADMIN_ACCESS_REQUIRED' });
+  if (!assertParsedRequestWithinLimits(req, res)) return;
+  const body = parseOrRespond(req, res, schemas.createWebinar, req.body);
+  if (!body) return;
+  try {
+    const result = await mutations.createWebinar({ ...body, actorUserId: getUserId(req) });
+    recordOperationalEvent('webinar.save_succeeded', { webinarId: result.webinarId, actorUserId: getUserId(req), liveVersion: result.liveVersion, statusCode: 201 });
+    res.status(201).json(result);
+  } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.get('/:id/history', asyncRoute(async (req, res) => {
+  const access = await loadAuthorizedWebinar(req, res); if (!access) return;
+  try { res.json(await revisions.listHistory(access.id)); } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.post('/:id/history/:revisionId/restore', asyncRoute(async (req, res) => {
+  const revisionId = parseOrRespond(req, res, revisionIdSchema, req.params.revisionId); if (!revisionId) return;
+  await performMutation(req, res, schemas.restoreRevision, body => mutations.restoreRevision({ ...body, revisionId }), 200, { restored: true });
+}));
+
+router.put('/:id/master', asyncRoute(async (req, res) => performMutation(req, res, schemas.saveMaster, body => mutations.saveMaster(body))));
+
+router.post('/:id/slides', asyncRoute(async (req, res) => {
+  const schema = Object.prototype.hasOwnProperty.call(req.body || {}, 'sourceSlideId') ? schemas.duplicateSlide : schemas.addSlide;
+  await performMutation(req, res, schema, body => body.sourceSlideId ? mutations.duplicateSlide(body) : mutations.addSlide(body), 201);
+}));
+
+router.put('/:id/slides/order', asyncRoute(async (req, res) => performMutation(req, res, schemas.reorderSlides, body => mutations.reorderSlides(body))));
+
+router.put('/:id/slides/:slideId', asyncRoute(async (req, res) => {
+  const slideId = parseOrRespond(req, res, uuidSchema, req.params.slideId); if (!slideId) return;
+  await performMutation(req, res, schemas.saveSlide, body => mutations.saveSlide({ ...body, slideId }));
+}));
+
+router.delete('/:id/slides/:slideId', asyncRoute(async (req, res) => {
+  const slideId = parseOrRespond(req, res, uuidSchema, req.params.slideId); if (!slideId) return;
+  await performMutation(req, res, schemas.restoreRevision, body => mutations.archiveSlide({ ...body, slideId }));
+}));
+
+router.put('/:id/owner', asyncRoute(async (req, res) => performMutation(req, res, schemas.changeOwner, body => mutations.changeOwner(body), 200, { adminOnly: true })));
+router.put('/:id/audience-access', asyncRoute(async (req, res) => performMutation(req, res, schemas.changeAudienceAccess, body => mutations.changeAudienceAccess(body), 200, { adminOnly: true })));
+
+router.get('/:id/notes', asyncRoute(async (req, res) => {
+  const access = await loadAuthorizedWebinar(req, res); if (!access) return;
+  try { res.json(await notes.listNotes({ userId: getUserId(req), webinarId: access.id })); } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.post('/:id/slides/:slideId/notes', asyncRoute(async (req, res) => {
+  const slideId = parseOrRespond(req, res, uuidSchema, req.params.slideId); if (!slideId) return;
+  const access = await loadAuthorizedWebinar(req, res); if (!access || !assertParsedRequestWithinLimits(req, res)) return;
+  const body = parseOrRespond(req, res, schemas.writeNote, req.body); if (!body) return;
+  try { res.status(201).json(await notes.addNote({ userId: getUserId(req), webinarId: access.id, slideId, ...body })); } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.put('/:id/notes/:noteId', asyncRoute(async (req, res) => {
+  const noteId = parseOrRespond(req, res, noteIdSchema, req.params.noteId); if (!noteId) return;
+  const access = await loadAuthorizedWebinar(req, res); if (!access || !assertParsedRequestWithinLimits(req, res)) return;
+  const body = parseOrRespond(req, res, schemas.writeNote, req.body); if (!body) return;
+  try { res.json(await notes.updateNote({ userId: getUserId(req), webinarId: access.id, noteId, ...body })); } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.delete('/:id/notes/:noteId', asyncRoute(async (req, res) => {
+  const noteId = parseOrRespond(req, res, noteIdSchema, req.params.noteId); if (!noteId) return;
+  const access = await loadAuthorizedWebinar(req, res); if (!access) return;
+  try { await notes.deleteNote({ userId: getUserId(req), webinarId: access.id, noteId }); res.status(204).end(); } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.delete('/:id', asyncRoute(async (req, res) => {
+  const access = await loadAuthorizedWebinar(req, res, { adminOnly: true }); if (!access) return;
+  try { const result = await mutations.archiveWebinar(operationFor(req)); res.json(result); } catch (error) { respondWithServiceError(req, res, error); }
+}));
+
+router.get('/:id', asyncRoute(async (req, res) => {
+  const access = await loadAuthorizedWebinar(req, res); if (access) res.json(access.webinar);
+}));
+
+module.exports = router;

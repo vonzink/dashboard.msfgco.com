@@ -9,7 +9,7 @@ const rateLimit = require('express-rate-limit');
 
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
-const { requireNonExternal } = require('./middleware/userContext');
+const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
 const pinoHttp = require('pino-http');
@@ -53,6 +53,8 @@ const programsRoutes = require('./routes/programs');
 const hrResourcesRoutes = require('./routes/hrResources');
 const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
+const webinarsRoutes = require('./routes/webinars');
+const webinarPresenterSettingsRoutes = require('./routes/webinarPresenterSettings');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -146,10 +148,36 @@ const myFilesWriteLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
 });
 
+// Private Webinar Studio writes are deliberately keyed to the authenticated
+// employee, rather than the office IP address used by the general limiter.
+const webinarWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.db?.id),
+  message: { error: 'Too many webinar write requests, please slow down' },
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+});
+
+const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings'];
+function rejectOversizedWebinarRequest(req, res, next) {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
+    || !WEBINAR_REQUEST_PREFIXES.some(prefix => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
+    return next();
+  }
+  const contentLength = Number(req.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > 2 * 1024 * 1024) {
+    return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
+  }
+  return next();
+}
+
 // Request logging
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 
 // Body parsing
+app.use(rejectOversizedWebinarRequest);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -187,6 +215,11 @@ app.get('/api/me', authenticate, (req, res) => {
     cognitoGroups: req.user?.groups || []
   });
 });
+
+// Webinar Studio remains private to active internal employees. The active-user
+// check is intentionally scoped here and does not change existing route access.
+app.use('/api/webinars', authenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarsRoutes);
+app.use('/api/webinar-presenter-settings', authenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarPresenterSettingsRoutes);
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);

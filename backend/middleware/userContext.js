@@ -42,6 +42,15 @@ function requireDbUser(req, res, next) {
   return next();
 }
 
+// This deliberately remains opt-in for routes that handle internal Studio data.
+// Existing dashboard routes retain their established mapped-user behavior.
+function requireActiveDbUser(req, res, next) {
+  if (Number(req.user?.db?.is_active) !== 1) {
+    return res.status(403).json({ error: 'Active employee access required' });
+  }
+  return next();
+}
+
 /**
  * Express middleware: reject with 403 if user is not an admin.
  * Use on routes that require admin access.
@@ -118,4 +127,5 @@ module.exports = {
   requireManagerOrAdmin,
   requireNonExternal,
   requireDbUser,
+  requireActiveDbUser,
 };

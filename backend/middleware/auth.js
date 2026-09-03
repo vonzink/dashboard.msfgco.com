@@ -51,7 +51,7 @@ function authenticate(req, res, next) {
       // 1. Try email lookup (works with ID tokens)
       if (email) {
         [users] = await db.query(
-          'SELECT id, email, name, role FROM users WHERE email = ?',
+          'SELECT id, email, name, role, is_active FROM users WHERE email = ?',
           [email]
         );
       }
@@ -59,7 +59,7 @@ function authenticate(req, res, next) {
       // 2. Fallback: try cognito_sub lookup (works with access tokens)
       if (users.length === 0 && sub) {
         [users] = await db.query(
-          'SELECT id, email, name, role FROM users WHERE cognito_sub = ?',
+          'SELECT id, email, name, role, is_active FROM users WHERE cognito_sub = ?',
           [sub]
         );
       }
@@ -119,4 +119,3 @@ module.exports = {
   authenticate,
   getUserFromApiKey,
 };
-
