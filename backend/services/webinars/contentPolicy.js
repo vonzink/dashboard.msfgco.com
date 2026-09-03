@@ -12,6 +12,7 @@ const LIMITS = Object.freeze({
 });
 
 const ASSET_TOKEN = /^\{\{ASSET:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\}\}$/i;
+const ASSET_TOKEN_MARKER = /\{\{ASSET:/ig;
 const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
 const FORBIDDEN_ELEMENTS = new Set(['script', 'iframe', 'object', 'embed', 'form', 'base']);
 const URL_ATTRIBUTE = /(?:^|:)(?:href|src|action|formaction|poster|background|data|cite|longdesc|profile|codebase|manifest|ping)$/;
@@ -156,11 +157,12 @@ function validateCss(source, surface, resourcePolicy = loadResourcePolicy()) {
         const resource = validateCssUrl(match[0], surface, resourcePolicy, allowedOrigins);
         if (resource) issues.push(resource);
       }
-      if (URL_CAPABLE_CSS_FUNCTION.test(value) && !/url\(\s*(?:['"]?https?:\/\/|['"]?\{\{ASSET:)/i.test(value)) {
+      if (URL_CAPABLE_CSS_FUNCTION.test(value) && !/url\(\s*(?:['"]?(?:https?:\/\/|#|\{\{ASSET:))/i.test(value)) {
         issues.push(issue('CSS_VALUE_UNSUPPORTED', surface));
       }
     };
-    root.walkAtRules('import', rule => {
+    root.walkAtRules(rule => {
+      if (String(rule.name).toLowerCase() !== 'import') return;
       const match = rule.params.match(/^(?:url\(\s*)?(?:['"])(.*?)['"]\s*\)?/i)
         || rule.params.match(/^url\(\s*(.*?)\s*\)/i);
       if (!match) {
@@ -233,11 +235,11 @@ function collectStringValues(candidate) {
 function assetTokenIssues(candidate, resourcePolicy) {
   const issues = [];
   for (const value of collectStringValues(candidate)) {
-    let index = 0;
-    while (index < value.length) {
-      const start = value.toUpperCase().indexOf('{{ASSET:', index);
-      if (start < 0) break;
-      const end = value.indexOf('}}', start + 8);
+    ASSET_TOKEN_MARKER.lastIndex = 0;
+    let marker;
+    while ((marker = ASSET_TOKEN_MARKER.exec(value)) !== null) {
+      const start = marker.index;
+      const end = value.indexOf('}}', ASSET_TOKEN_MARKER.lastIndex);
       if (end < 0) {
         issues.push(issue('ASSET_TOKEN_INVALID', 'request'));
         break;
@@ -245,7 +247,7 @@ function assetTokenIssues(candidate, resourcePolicy) {
       const token = value.slice(start, end + 2);
       if (!ASSET_TOKEN.test(token)) issues.push(issue('ASSET_TOKEN_INVALID', 'request'));
       else if (!resourcePolicy.assetOrigin) issues.push(issue('ASSET_ORIGIN_NOT_CONFIGURED', 'request'));
-      index = end + 2;
+      ASSET_TOKEN_MARKER.lastIndex = end + 2;
     }
   }
   return issues;

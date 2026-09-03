@@ -120,4 +120,36 @@ describe('webinar executable-content policy', () => {
     });
     expect(validateCss('@import "https://styles.example/theme.css";', 'master_css', separatedOrigins).issues).toEqual([]);
   });
+
+  it('rejects mixed-case external CSS imports', () => {
+    expect(validateSlideHtml('<style>@IMPORT "https://evil.example/x.css";</style>', policy).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
+  });
+
+  it('uses exact UTF-8 byte limits for every presentation source field', () => {
+    const exactBytes = limit => '€'.repeat(Math.floor(limit / 3)) + 'x'.repeat(limit % 3);
+    const fields = [
+      ['master_html', value => ({ masterHtml: value })],
+      ['master_css', value => ({ masterCss: value })],
+      ['slide_html', value => ({ slides: [{ html: value }] })],
+      ['slide_css', value => ({ slides: [{ css: value }] })],
+      ['slide_javascript', value => ({ slides: [{ javascript: value }] })],
+    ];
+    for (const [surface, candidate] of fields) {
+      const atLimit = exactBytes(LIMITS[surface]);
+      expect(Buffer.byteLength(atLimit, 'utf8')).toBe(LIMITS[surface]);
+      expect(() => assertCandidateWithinLimits(candidate(atLimit), policy)).not.toThrow();
+      expect(() => assertCandidateWithinLimits(candidate(`${atLimit}x`), policy))
+        .toThrow(expect.objectContaining({ code: 'CONTENT_LIMIT_EXCEEDED' }));
+    }
+  });
+
+  it('scans many asset tokens without changing configured candidates', () => {
+    const token = '{{ASSET:11111111-1111-4111-8111-111111111111}}';
+    expect(() => assertCandidateWithinLimits({ masterHtml: token.repeat(4000) }, policy)).not.toThrow();
+  });
+
+  it('allows local CSS fragment URLs', () => {
+    expect(validateCss('.slide { filter: url(#local-filter); }', 'slide_css', policy)).toEqual({ issues: [] });
+  });
 });
