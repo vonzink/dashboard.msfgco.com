@@ -64,6 +64,68 @@ describe('Webinar Studio presenter settings', () => {
       expect(db.query).not.toHaveBeenCalled();
     });
 
+    it('rejects case-only equivalent bindings across shortcut actions', async () => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'ArrowLeft', nextSlide: 'arrowleft' },
+        preferences,
+      })).rejects.toMatchObject({ code: 'SHORTCUT_BINDING_DUPLICATE' });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects bindings that differ only in separator whitespace', async () => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'Ctrl+A', nextSlide: 'ctrl + a' },
+        preferences,
+      })).rejects.toMatchObject({ code: 'SHORTCUT_BINDING_DUPLICATE' });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects bindings that differ only in modifier order', async () => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'Ctrl+Shift+A', nextSlide: 'Shift+Ctrl+A' },
+        preferences,
+      })).rejects.toMatchObject({ code: 'SHORTCUT_BINDING_DUPLICATE' });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects bindings that differ only by a modifier alias', async () => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'Control+A', nextSlide: 'ctrl+a' },
+        preferences,
+      })).rejects.toMatchObject({ code: 'SHORTCUT_BINDING_DUPLICATE' });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('rejects chord bindings containing an empty segment', async () => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'Ctrl+' },
+        preferences,
+      })).rejects.toMatchObject({ code: 'SHORTCUT_BINDING_INVALID' });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('accepts distinct chord bindings and persists the original binding strings', async () => {
+      db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+      const { upsertSettings } = loadSettings();
+      const distinct = { previousSlide: 'Ctrl+A', nextSlide: 'Ctrl+B' };
+      const result = await upsertSettings({ userId: 7, shortcuts: distinct, preferences });
+      expect(result.shortcuts).toEqual(distinct);
+      expect(db.query).toHaveBeenCalledWith(
+        expect.stringContaining('ON DUPLICATE KEY UPDATE'),
+        [7, JSON.stringify(distinct), JSON.stringify(preferences)],
+      );
+    });
+
     it('rejects non-string shortcut key bindings', async () => {
       const { upsertSettings } = loadSettings();
       await expect(upsertSettings({

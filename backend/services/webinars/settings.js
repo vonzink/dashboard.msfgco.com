@@ -7,6 +7,19 @@ const SHORTCUT_ACTIONS = Object.freeze([
 
 const UNSAFE_KEYS = Object.freeze(['__proto__', 'constructor', 'prototype']);
 
+const MODIFIER_ALIASES = Object.freeze({
+  alt: 'alt',
+  option: 'alt',
+  cmd: 'meta',
+  command: 'meta',
+  control: 'ctrl',
+  ctrl: 'ctrl',
+  meta: 'meta',
+  shift: 'shift',
+});
+
+const MODIFIER_ORDER = Object.freeze(['ctrl', 'alt', 'shift', 'meta']);
+
 class WebinarSettingsError extends Error {
   constructor(code, message = 'Webinar settings operation failed', extra = {}) {
     super(message);
@@ -18,6 +31,25 @@ class WebinarSettingsError extends Error {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function canonicalizeBinding(binding) {
+  const tokens = binding.trim().split('+').map((segment) => segment.trim());
+  if (tokens.some((token) => !token)) {
+    throw new WebinarSettingsError('SHORTCUT_BINDING_INVALID', 'Shortcut binding cannot contain an empty chord segment', { status: 400 });
+  }
+
+  const modifiers = [];
+  const keys = [];
+  for (const token of tokens) {
+    const normalizedToken = token.toLowerCase();
+    const modifier = MODIFIER_ALIASES[normalizedToken];
+    if (modifier) modifiers.push(modifier);
+    else keys.push(normalizedToken);
+  }
+
+  modifiers.sort((left, right) => MODIFIER_ORDER.indexOf(left) - MODIFIER_ORDER.indexOf(right));
+  return [...modifiers, ...keys].join('+');
 }
 
 function normalizeShortcuts(shortcuts) {
@@ -33,10 +65,11 @@ function normalizeShortcuts(shortcuts) {
     if (typeof binding !== 'string' || !binding.trim()) {
       throw new WebinarSettingsError('SHORTCUT_BINDING_INVALID', 'Shortcut binding must be a nonempty string', { status: 400 });
     }
-    if (seenBindings.has(binding)) {
+    const canonicalBinding = canonicalizeBinding(binding);
+    if (seenBindings.has(canonicalBinding)) {
       throw new WebinarSettingsError('SHORTCUT_BINDING_DUPLICATE', 'Shortcut bindings must be unique', { status: 400 });
     }
-    seenBindings.add(binding);
+    seenBindings.add(canonicalBinding);
     normalized[action] = binding;
   }
   return normalized;
