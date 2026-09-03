@@ -16,7 +16,7 @@ const ASSET_TOKEN_MARKER = /\{\{ASSET:/ig;
 const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
 const FORBIDDEN_ELEMENTS = new Set(['script', 'iframe', 'object', 'embed', 'form', 'base']);
 const URL_ATTRIBUTE = /(?:^|:)(?:href|src|action|formaction|poster|background|data|cite|longdesc|profile|codebase|manifest|ping)$/;
-const URL_CAPABLE_CSS_FUNCTION = /(?:^|[^\\])(?:url|image-set|-webkit-image-set|cross-fade|image|element)\s*\(/i;
+const URL_CAPABLE_CSS_FUNCTION = /\b(url|image-set|-webkit-image-set|cross-fade|image|element)\s*\(/ig;
 
 function freezeOrigins(value) {
   return Object.freeze(value);
@@ -157,8 +157,13 @@ function validateCss(source, surface, resourcePolicy = loadResourcePolicy()) {
         const resource = validateCssUrl(match[0], surface, resourcePolicy, allowedOrigins);
         if (resource) issues.push(resource);
       }
-      if (URL_CAPABLE_CSS_FUNCTION.test(value) && !/url\(\s*(?:['"]?(?:https?:\/\/|#|\{\{ASSET:))/i.test(value)) {
-        issues.push(issue('CSS_VALUE_UNSUPPORTED', surface));
+      for (const match of value.matchAll(URL_CAPABLE_CSS_FUNCTION)) {
+        const name = match[1].toLowerCase();
+        const argument = value.slice(match.index + match[0].length);
+        const safeUrl = name === 'url' && /^\s*['"]?(?:https?:\/\/|#|\{\{ASSET:)/i.test(argument);
+        if (!safeUrl) {
+          issues.push(issue('CSS_VALUE_UNSUPPORTED', surface));
+        }
       }
     };
     root.walkAtRules(rule => {

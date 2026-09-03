@@ -152,4 +152,22 @@ describe('webinar executable-content policy', () => {
   it('allows local CSS fragment URLs', () => {
     expect(validateCss('.slide { filter: url(#local-filter); }', 'slide_css', policy)).toEqual({ issues: [] });
   });
+
+  it('does not let a local fragment mask sibling URL-capable functions', () => {
+    expect(validateCss(
+      '.slide { background-image: url(#local-filter), image-set("data:image/png;base64,AAAA" 1x); }',
+      'slide_css',
+      policy,
+    ).issues).toContainEqual(expect.objectContaining({ code: 'CSS_VALUE_UNSUPPORTED' }));
+    expect(validateCss(
+      '.slide { background-image: image-set("data:image/png;base64,AAAA" 1x); }',
+      'slide_css',
+      policy,
+    ).issues).toContainEqual(expect.objectContaining({ code: 'CSS_VALUE_UNSUPPORTED' }));
+    expect(validateCss(
+      '.slide { background-image: -webkit-image-set("data:image/png;base64,AAAA" 1x); }',
+      'slide_css',
+      policy,
+    ).issues).toContainEqual(expect.objectContaining({ code: 'CSS_VALUE_UNSUPPORTED' }));
+  });
 });
