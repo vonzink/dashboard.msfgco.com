@@ -14,7 +14,10 @@ const { startCalendarSyncScheduler } = require('./services/calendarSync/schedule
 const logger = require('./lib/logger');
 const pinoHttp = require('pino-http');
 const websocket = require('./lib/websocket');
-const { recordOperationalEvent } = require('./services/webinars/observability');
+const {
+  createOperationalEventRecorder,
+  recordOperationalEvent,
+} = require('./services/webinars/observability');
 
 // Route imports
 const investorsRoutes = require('./routes/investors');
@@ -54,8 +57,8 @@ const programsRoutes = require('./routes/programs');
 const hrResourcesRoutes = require('./routes/hrResources');
 const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
-const webinarsRoutes = require('./routes/webinars');
-const webinarPresenterSettingsRoutes = require('./routes/webinarPresenterSettings');
+const { createWebinarsRouter } = require('./routes/webinars');
+const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
@@ -63,8 +66,24 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
 
-function createApp({ webinarAuthenticate = authenticate } = {}) {
+function createApp({
+  webinarAuthenticate = authenticate,
+  webinarServices = {},
+  webinarOperationalLogger = null,
+  webinarWriteLimit = 300,
+} = {}) {
 const app = express();
+const webinarRecordOperationalEvent = webinarOperationalLogger
+  ? createOperationalEventRecorder(webinarOperationalLogger)
+  : recordOperationalEvent;
+const webinarsRoutes = createWebinarsRouter({
+  ...webinarServices,
+  recordOperationalEvent: webinarRecordOperationalEvent,
+});
+const webinarPresenterSettingsRoutes = createWebinarPresenterSettingsRouter({
+  settings: webinarServices.settings,
+  recordOperationalEvent: webinarRecordOperationalEvent,
+});
 
 // ======================
 // SECURITY MIDDLEWARE
@@ -156,7 +175,7 @@ const myFilesWriteLimiter = rateLimit({
 // employee, rather than the office IP address used by the general limiter.
 const webinarWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 300,
+  max: webinarWriteLimit,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => String(req.user?.db?.id),
@@ -179,7 +198,7 @@ function rejectOversizedWebinarRequest(req, res, next) {
   }
   const contentLength = Number(req.get('content-length'));
   if (Number.isFinite(contentLength) && contentLength > WEBINAR_MAX_REQUEST_BYTES) {
-    recordWebinarTransportRejection(req, 413);
+    recordWebinarTransportRejection(req, 413, 'CONTENT_LIMIT_EXCEEDED');
     return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
   }
   return next();
@@ -188,7 +207,7 @@ function rejectOversizedWebinarRequest(req, res, next) {
 function recordWebinarTransportRejection(req, statusCode, reasonCode = 'VALIDATION_FAILED') {
   if (req.webinarTransportEventRecorded) return;
   req.webinarTransportEventRecorded = true;
-  recordOperationalEvent('webinar.validation_rejected', { statusCode, reasonCode });
+  webinarRecordOperationalEvent('webinar.validation_rejected', { statusCode, reasonCode });
 }
 
 function verifyWebinarRawRequestSize(req, _res, buffer) {
@@ -211,14 +230,14 @@ function parseWebinarRawJson(req, res, next) {
   const contentType = (req.get('content-type') || '').split(';')[0].trim().toLowerCase();
   if (contentType !== 'application/json') {
     recordWebinarTransportRejection(req, 400, 'UNSUPPORTED_MEDIA_TYPE');
-    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED' });
+    return res.status(400).json({ error: 'Unsupported media type', code: 'UNSUPPORTED_MEDIA_TYPE' });
   }
   try {
     req.body = JSON.parse(req.body.toString('utf8'));
     return next();
   } catch {
-    recordWebinarTransportRejection(req, 400);
-    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED' });
+    recordWebinarTransportRejection(req, 400, 'MALFORMED_JSON');
+    return res.status(400).json({ error: 'Invalid JSON', code: 'MALFORMED_JSON' });
   }
 }
 
@@ -328,11 +347,12 @@ app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');
 
   if (isWebinarStudioMutation(req) && (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413)) {
-    recordWebinarTransportRejection(req, 413);
+    recordWebinarTransportRejection(req, 413, 'CONTENT_LIMIT_EXCEEDED');
     return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
   }
   if (err.type === 'entity.parse.failed' && isWebinarStudioMutation(req)) {
-    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED' });
+    recordWebinarTransportRejection(req, 400, 'MALFORMED_JSON');
+    return res.status(400).json({ error: 'Invalid JSON', code: 'MALFORMED_JSON' });
   }
   
   // Don't leak error details in production
