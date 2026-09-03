@@ -26,6 +26,32 @@ describe('Webinar Studio operational events', () => {
     })).toEqual({});
   });
 
+  it.each([
+    'VALIDATION_FAILED', 'VERSION_CONFLICT', 'ACCESS_DENIED', 'DATABASE_FAILURE',
+    'SHORTCUT_ACTION_UNKNOWN', 'SHORTCUT_BINDING_INVALID', 'SHORTCUT_BINDING_RESERVED',
+    'SHORTCUT_BINDING_DUPLICATE', 'SHORTCUTS_INVALID', 'PREFERENCES_INVALID',
+    'PREFERENCE_KEY_UNSAFE', 'PREFERENCE_VALUE_INVALID', 'ANCHOR_CONFLICT',
+    'RESTORE_SLIDE_OWNERSHIP_CONFLICT', 'UNSUPPORTED_MEDIA_TYPE', 'CONTENT_LIMIT_EXCEEDED',
+  ])('emits the approved route reason code %s in the final logger record', (reasonCode) => {
+    const logger = { info: vi.fn() };
+    createOperationalEventRecorder(logger)('webinar.validation_rejected', { reasonCode, statusCode: 400 });
+    expect(logger.info).toHaveBeenCalledWith(
+      { event: 'webinar.validation_rejected', reasonCode, statusCode: 400 },
+      'webinar operational event'
+    );
+  });
+
+  it('never emits unrecognized or source-like reason codes', () => {
+    const logger = { info: vi.fn() };
+    createOperationalEventRecorder(logger)('webinar.validation_rejected', {
+      reasonCode: 'SQLSTATE_42000 password=secret source=<script>', statusCode: 400,
+    });
+    expect(logger.info).toHaveBeenCalledWith(
+      { event: 'webinar.validation_rejected', statusCode: 400 },
+      'webinar operational event'
+    );
+  });
+
   it('does not expose mutable allow-list policy', () => {
     expect(() => EVENT_NAMES.push('webinar.exfiltration')).toThrow();
     expect(() => SAFE_FIELDS.push('token')).toThrow();

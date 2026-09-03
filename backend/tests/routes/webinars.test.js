@@ -156,23 +156,11 @@ describe('mounted Webinar Studio transport and limiter contract', () => {
   }).then(async response => ({ status: response.status, body: await response.json().catch(() => null) }));
 
   beforeAll(async () => {
-    const router = (await import('../../routes/webinars.js')).default;
-    const settingsRouter = (await import('../../routes/webinarPresenterSettings.js')).default;
-    const { requireActiveDbUser, requireDbUser, requireNonExternal } = createRequire(import.meta.url)('../../middleware/userContext');
-    mounted = express();
-    mounted.use(serverApi.rejectOversizedWebinarRequest);
-    mounted.use(serverApi.webinarRawBodyParser);
-    mounted.use(serverApi.parseWebinarRawJson);
-    mounted.use(express.json({ limit: '10mb' }));
-    mounted.use((req, _res, next) => { req.user = JSON.parse(req.get('x-test-user') || '{}'); next(); });
-    mounted.use('/api/', serverApi.writeLimiter);
-    mounted.use('/api/webinars', requireDbUser, requireActiveDbUser, requireNonExternal, serverApi.webinarWriteLimiter, router);
-    mounted.use('/api/webinar-presenter-settings', requireDbUser, requireActiveDbUser, requireNonExternal, serverApi.webinarWriteLimiter, settingsRouter);
-    mounted.post('/api/unrelated', (_req, res) => res.status(201).json({ ok: true }));
-    mounted.use((err, req, res, _next) => {
-      if (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413) return res.status(413).json({ code: 'CONTENT_LIMIT_EXCEEDED' });
-      if (err.type === 'entity.parse.failed') return res.status(400).json({ code: 'VALIDATION_FAILED' });
-      return res.status(500).json({ error: 'Internal server error' });
+    mounted = serverApi.createApp({
+      webinarAuthenticate: (req, _res, next) => {
+        req.user = JSON.parse(req.get('x-test-user') || '{}');
+        next();
+      },
     });
     mountedServer = await new Promise(resolve => { const s = mounted.listen(0, () => resolve(s)); });
   });
@@ -184,6 +172,21 @@ describe('mounted Webinar Studio transport and limiter contract', () => {
     }
     expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster, user(1, 'admin'))).status).toBe(200);
   }, 30000);
+
+  it('exposes the production application factory without opening a listener', () => {
+    expect(serverApi.createApp).toBeTypeOf('function');
+    const productionApp = serverApi.createApp({ webinarAuthenticate: (_req, _res, next) => next() });
+    expect(productionApp.listen).toBeTypeOf('function');
+  });
+
+  it.each([
+    ['absent mapped identity', {}, 401],
+    ['inactive mapped identity', { db: { id: 7, role: 'user', is_active: 0 }, groups: ['user'] }, 403],
+    ['external mapped identity', { db: { id: 7, role: 'external', is_active: 1 }, groups: ['external'] }, 403],
+  ])('short-circuits %s through the real private mount before services', async (_label, identity, status) => {
+    expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster, identity)).status).toBe(status);
+    expect(services.saveMaster).not.toHaveBeenCalled();
+  });
 
   it('enforces 300 writes per identity and skips read methods', async () => {
     for (let count = 0; count < 99; count += 1) expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster)).status).toBe(200);
@@ -201,7 +204,7 @@ describe('mounted Webinar Studio transport and limiter contract', () => {
       req.on('error', reject); req.write(oversized); req.end();
     });
     expect(chunked).toBe(413);
-    expect((await mountedRequest('POST', '/api/unrelated', JSON.parse(oversized))).status).toBe(201);
+    expect((await mountedRequest('POST', '/api/unrelated', JSON.parse(oversized))).status).toBe(404);
   }, 30000);
 
   it('accepts exactly 2 MiB of raw JSON for semantic validation and rejects malformed JSON safely', async () => {

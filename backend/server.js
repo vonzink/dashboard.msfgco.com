@@ -57,9 +57,14 @@ const askAiRoutes = require('./routes/askAi');
 const webinarsRoutes = require('./routes/webinars');
 const webinarPresenterSettingsRoutes = require('./routes/webinarPresenterSettings');
 
-const app = express();
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
+
+function createApp({ webinarAuthenticate = authenticate } = {}) {
+const app = express();
 
 // ======================
 // SECURITY MIDDLEWARE
@@ -88,10 +93,6 @@ app.use(helmet({
 }));
 
 // CORS - restrict to your frontend domain
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',') 
-  : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
-
 app.use(cors({
   origin: function(origin, callback) {
     // Allow requests with no origin only in explicit development mode
@@ -268,8 +269,8 @@ app.get('/api/me', authenticate, (req, res) => {
 
 // Webinar Studio remains private to active internal employees. The active-user
 // check is intentionally scoped here and does not change existing route access.
-app.use('/api/webinars', authenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarsRoutes);
-app.use('/api/webinar-presenter-settings', authenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarPresenterSettingsRoutes);
+app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarsRoutes);
+app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarPresenterSettingsRoutes);
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);
@@ -350,6 +351,20 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
+app.locals.webinarStudio = {
+  isWebinarStudioMutation,
+  rejectOversizedWebinarRequest,
+  verifyWebinarRawRequestSize,
+  webinarRawBodyParser,
+  parseWebinarRawJson,
+  writeLimiter,
+  webinarWriteLimiter,
+};
+return app;
+}
+
+const app = createApp();
+
 // ======================
 // START SERVER
 // ======================
@@ -422,11 +437,6 @@ if (require.main === module) {
 
 module.exports = {
   app,
-  isWebinarStudioMutation,
-  rejectOversizedWebinarRequest,
-  verifyWebinarRawRequestSize,
-  webinarRawBodyParser,
-  parseWebinarRawJson,
-  writeLimiter,
-  webinarWriteLimiter,
+  createApp,
+  ...app.locals.webinarStudio,
 };
