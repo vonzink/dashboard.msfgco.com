@@ -15,12 +15,43 @@ create succeeds. It never drops the database named in the supplied URL.
 Executed from `backend/`:
 
 ```sh
-npm test
+npx vitest run \
+  tests/lib/httpLogging.test.js \
+  tests/db/migrations.test.js \
+  tests/db/webinarStudioFoundationMigration.test.js \
+  tests/middleware/userContext.test.js \
+  tests/routes/webinarPresenterSettings.test.js \
+  tests/routes/webinars.test.js \
+  tests/services/webinars/audit.test.js \
+  tests/services/webinars/authorization.test.js \
+  tests/services/webinars/contentPolicy.test.js \
+  tests/services/webinars/mutations.test.js \
+  tests/services/webinars/notes.test.js \
+  tests/services/webinars/observability.test.js \
+  tests/services/webinars/repository.test.js \
+  tests/services/webinars/revisions.test.js \
+  tests/services/webinars/settings.test.js \
+  tests/validation/webinars.schema.test.js
 ```
 
-Result: 43 test files, 793 tests: 791 passed and 2 existing Calendar UI tests
-failed. The default Vitest config excludes `tests/integration/**`; no integration
-test ran in this command.
+The consolidated Foundation regression selection passed 16 files and 459 tests.
+It covers logging, migration execution/postflight, identity mapping, private
+routes, transactions, revisions, content policy, settings, notes, repository,
+authorization, observability, and request schemas.
+
+```sh
+TZ=UTC npm test
+```
+
+Result: 47 test files and 882 tests: 880 passed and only the two accepted
+Calendar UI tests failed. The default Vitest config excludes
+`tests/integration/**`; no integration test ran in this command.
+
+A plain `npm test` under this workstation's `America/Denver` timezone also
+reproduces three zone-less timestamp failures in the newly merged Plaud tests.
+The Plaud service and tests are byte-for-byte identical to `origin/main`, and
+the Plaud suite passes 10/10 under `TZ=UTC`. No Plaud behavior was changed by
+this remediation.
 
 ```sh
 npx vitest run --config vitest.webinar-integration.config.js \
@@ -109,14 +140,17 @@ WEBINAR_TEST_DATABASE_URL='[redacted local disposable MySQL URL]' \
   tests/integration/webinarStudioFoundation.integration.test.js
 ```
 
-Result: 1 test file and 5 tests passed. The test applied migrations 091, 092,
+Result: 1 test file and 5 tests passed. Cleanup then confirmed that the exact
+container was absent, port 33079 was free, and the secret directory was gone.
+The test applied migrations 091, 092,
 and 093 verbatim to its own generated database, seeded three active nonexternal
 users, and then exercised the real mutation, revision, repository, notes,
 settings, and private route code.
 
-Focused lint (with ESM parsing explicitly selected because the repository's
-flat ESLint config declares every `.js` file CommonJS) passed for the two
-JavaScript files created here:
+Focused lint of every changed production JavaScript file completed with zero
+errors. It retained one pre-existing `server.js:276` unused-catch-variable
+warning (blamed to `b6f00f80`, outside this work). The integration harness and
+config also passed focused ESM lint:
 
 ```sh
 npx eslint --no-config-lookup --parser-options '{"sourceType":"module","ecmaVersion":"latest"}' \
@@ -125,10 +159,7 @@ npx eslint --no-config-lookup --parser-options '{"sourceType":"module","ecmaVers
   vitest.webinar-integration.config.js
 ```
 
-`npm run lint` remains a repository baseline failure: the observed full run
-reported 56 errors and 52 warnings, including pre-existing CommonJS parsing
-errors for the existing Vitest config and test files, plus unrelated backend
-lint errors. It is not evidence against the focused Task 7 files.
+`git diff --check` passed.
 
 ## Disposable integration coverage
 
@@ -167,10 +198,12 @@ The live integration asserts all of the following in the disposable database:
 
 ## Git and operational hold points
 
-Baseline Dashboard worktree commit: `830eb73158845a194145199a11175a31ce86fa91`.
-Before staging, `git diff --cached --name-only` was empty, proving no unrelated
-Dashboard worktree files were staged. Task 7's commit SHA is recorded in the
-task report after the commit is made.
+The clean starting Dashboard worktree commit was
+`89d2d8c4711aab346be5caa5f414ff8e6a7fe16e`. Fetched `origin/main` was
+`49cb9e4b982215c943d5f28e2c7da68fbe7df5fb` and was merged before remediation
+in `bca5d79c7b8b72cdc74a7fb617b0186874c73170`. The source/test remediation
+commits through this evidence run are `72a8371`, `d849087`, `82ffd18`,
+`3b057b6`, `c7f6c39`, and `dd7bfe5`.
 
 The following gates are deliberately **UNPERFORMED**:
 
