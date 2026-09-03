@@ -32,6 +32,13 @@ let disposableLifecycle;
 let primaryFailure;
 let hasPrimaryFailure = false;
 
+function normalizeUrlHostname(hostname) {
+  const normalized = hostname.toLowerCase();
+  return normalized.startsWith('[') && normalized.endsWith(']')
+    ? normalized.slice(1, -1)
+    : normalized;
+}
+
 function parseDisposableDatabaseUrl(value) {
   let url;
   try {
@@ -42,7 +49,8 @@ function parseDisposableDatabaseUrl(value) {
   if (url.protocol !== 'mysql:' || !url.hostname || !url.pathname || url.pathname === '/') {
     throw new Error('WEBINAR_TEST_DATABASE_URL must identify a local MySQL source database');
   }
-  if (!localMysqlHosts.has(url.hostname.toLowerCase())) {
+  const host = normalizeUrlHostname(url.hostname);
+  if (!localMysqlHosts.has(host)) {
     throw new Error('WEBINAR_TEST_DATABASE_URL must use localhost, 127.0.0.1, or ::1');
   }
   let user;
@@ -54,7 +62,7 @@ function parseDisposableDatabaseUrl(value) {
     throw new Error('WEBINAR_TEST_DATABASE_URL contains invalid encoded credentials');
   }
   return {
-    host: url.hostname,
+    host,
     port: url.port ? Number(url.port) : 3306,
     user,
     password,
@@ -276,6 +284,10 @@ function assertSafeHistoryContract(items, canaries) {
 
 describeWithMysql('webinar studio foundation', () => {
   it('never adopts a source-named or existing database during disposable creation', async () => {
+    expect(parseDisposableDatabaseUrl('mysql://user:password@[::1]:3306/mysql')).toMatchObject({
+      host: '::1',
+      database: 'mysql',
+    });
     const calls = [];
     const candidates = ['mysql', 'webinar_studio_it_existing', 'webinar_studio_it_fresh'];
     const lifecycle = createDisposableLifecycle('mysql');

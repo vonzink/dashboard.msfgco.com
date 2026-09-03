@@ -30,10 +30,78 @@ npx vitest run --config vitest.webinar-integration.config.js \
 Result with no database URL: 1 test file and 5 tests skipped, exit 0. No MySQL
 connection, database creation, or teardown is attempted in that mode.
 
-After preflighting that neither the fixed disposable-container name nor local
-port 33079 was already in use, a MySQL 8 container created by this task was
-started, checked over TCP, and stopped after the run. The credential-bearing
-environment value is intentionally redacted:
+### Credential-safe disposable MySQL lifecycle
+
+The commands below create a private random password in a mode-`0700` temporary
+directory, mount it through MySQL's `_FILE` interface, and never put the
+credential itself in command history, Docker configuration, or test output.
+They also refuse to adopt an existing container or listener. Run them from
+`backend/` in one shell:
+
+```sh
+set -eu
+WEBINAR_IT_CONTAINER='webinar-studio-final-it'
+WEBINAR_IT_PORT='33079'
+WEBINAR_IT_CREATED='0'
+
+if docker container inspect "$WEBINAR_IT_CONTAINER" >/dev/null 2>&1; then
+  echo 'Refusing to reuse an existing integration container' >&2
+  exit 1
+fi
+if lsof -nP -iTCP:"$WEBINAR_IT_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo 'Refusing to reuse an occupied integration port' >&2
+  exit 1
+fi
+
+WEBINAR_IT_SECRET_DIR="$(mktemp -d "${TMPDIR:-/tmp}/webinar-studio-it.XXXXXX")"
+chmod 700 "$WEBINAR_IT_SECRET_DIR"
+WEBINAR_IT_SECRET_FILE="$WEBINAR_IT_SECRET_DIR/mysql-root-password"
+umask 077
+openssl rand -hex 32 > "$WEBINAR_IT_SECRET_FILE"
+
+cleanup_webinar_it() {
+  if [ "$WEBINAR_IT_CREATED" = '1' ]; then
+    docker rm --force "$WEBINAR_IT_CONTAINER" >/dev/null
+    WEBINAR_IT_CREATED='0'
+  fi
+  unset WEBINAR_TEST_DATABASE_URL WEBINAR_IT_PASSWORD
+  rm -f -- "$WEBINAR_IT_SECRET_FILE"
+  rmdir -- "$WEBINAR_IT_SECRET_DIR"
+}
+trap cleanup_webinar_it EXIT INT TERM HUP
+
+docker run --detach --name "$WEBINAR_IT_CONTAINER" \
+  --publish "127.0.0.1:${WEBINAR_IT_PORT}:3306" \
+  --mount "type=bind,source=${WEBINAR_IT_SECRET_FILE},target=/run/secrets/mysql-root-password,readonly" \
+  --env MYSQL_ROOT_PASSWORD_FILE=/run/secrets/mysql-root-password \
+  --health-cmd='MYSQL_PWD="$(cat /run/secrets/mysql-root-password)" mysqladmin ping --host=127.0.0.1 --user=root --silent' \
+  --health-interval=1s --health-timeout=5s --health-retries=90 \
+  mysql:8.0 >/dev/null
+WEBINAR_IT_CREATED='1'
+
+WEBINAR_IT_STATUS='starting'
+for WEBINAR_IT_ATTEMPT in $(seq 1 90); do
+  WEBINAR_IT_STATUS="$(docker inspect --format '{{.State.Health.Status}}' "$WEBINAR_IT_CONTAINER")"
+  [ "$WEBINAR_IT_STATUS" = 'healthy' ] && break
+  [ "$WEBINAR_IT_STATUS" = 'unhealthy' ] && break
+  sleep 1
+done
+test "$WEBINAR_IT_STATUS" = 'healthy'
+
+IFS= read -r WEBINAR_IT_PASSWORD < "$WEBINAR_IT_SECRET_FILE"
+export WEBINAR_TEST_DATABASE_URL="mysql://root:${WEBINAR_IT_PASSWORD}@127.0.0.1:${WEBINAR_IT_PORT}/mysql"
+npx vitest run --config vitest.webinar-integration.config.js \
+  tests/integration/webinarStudioFoundation.integration.test.js
+
+cleanup_webinar_it
+trap - EXIT INT TERM HUP
+! docker container inspect "$WEBINAR_IT_CONTAINER" >/dev/null 2>&1
+! lsof -nP -iTCP:"$WEBINAR_IT_PORT" -sTCP:LISTEN >/dev/null 2>&1
+test ! -e "$WEBINAR_IT_SECRET_DIR"
+```
+
+The recorded run used this lifecycle. The credential-bearing environment value
+is intentionally not printed:
 
 ```sh
 WEBINAR_TEST_DATABASE_URL='[redacted local disposable MySQL URL]' \
@@ -41,10 +109,10 @@ WEBINAR_TEST_DATABASE_URL='[redacted local disposable MySQL URL]' \
   tests/integration/webinarStudioFoundation.integration.test.js
 ```
 
-Result: 1 test file and 5 tests passed. The test applied migration 091 verbatim
-to its own generated database, seeded three active nonexternal users, and then
-exercised the real mutation, revision, repository, notes, settings, and private
-route code.
+Result: 1 test file and 5 tests passed. The test applied migrations 091, 092,
+and 093 verbatim to its own generated database, seeded three active nonexternal
+users, and then exercised the real mutation, revision, repository, notes,
+settings, and private route code.
 
 Focused lint (with ESM parsing explicitly selected because the repository's
 flat ESLint config declares every `.js` file CommonJS) passed for the two
@@ -67,6 +135,8 @@ lint errors. It is not evidence against the focused Task 7 files.
 The live integration asserts all of the following in the disposable database:
 
 - migration foreign keys and unique index names, plus an invalid-owner FK rejection;
+- local URL parsing that normalizes the standard bracketed `[::1]` URL hostname
+  to the unbracketed `::1` value expected by the MySQL driver;
 - adversarial disposable-database lifecycle cases: source-name rejection,
   pre-existing-name collision, create-time race, create failure, exact ordered
   cleanup, drop failure, server/pool/source-close failure, and non-drop guards;
@@ -81,7 +151,7 @@ The live integration asserts all of the following in the disposable database:
   tables before and after rejection;
 - rollback after an injected audit-write failure;
 - archive and revision restore using the same stable slide UUID;
-- append-only five-revision history whose service and route items have only the
+- append-only six-revision history whose service and route items have only the
   explicit allowed key sets, positive IDs and versions, valid timestamps, known
   change types, and the constrained server-generated summaries for this exact
   sequence. Normalized source/code/note/resource-policy semantics are rejected
