@@ -59,7 +59,11 @@ const saveMaster = z.object({
 const addSlide = z.object({
   expectedVersion,
   ...slideFields,
-  sourceSlideId: slideId.optional(),
+}).strict();
+
+const duplicateSlide = z.object({
+  expectedVersion,
+  sourceSlideId: slideId,
 }).strict();
 
 const saveSlide = z.object({
@@ -90,6 +94,7 @@ module.exports = {
   createWebinar,
   saveMaster,
   addSlide,
+  duplicateSlide,
   saveSlide,
   reorderSlides,
   restoreRevision,

@@ -71,22 +71,31 @@ async function activeSlides(connection, webinarId) {
   return rows.map(cloneSlide);
 }
 
+async function assertRestoreSlideOwnership(connection, webinarId, slideIds) {
+  if (!slideIds.length) return;
+  const placeholders = slideIds.map(() => '?').join(', ');
+  const [rows] = await connection.query(
+    `SELECT id, webinar_id FROM webinar_slides WHERE id IN (${placeholders}) FOR UPDATE`,
+    slideIds,
+  );
+  if (rows.some(row => Number(row.webinar_id) !== Number(webinarId))) {
+    throw new WebinarMutationError('RESTORE_SLIDE_OWNERSHIP_CONFLICT', 'Restore slide belongs to a different webinar', { status: 409 });
+  }
+}
+
 function validationError(issues) {
   return new WebinarMutationError('CONTENT_VALIDATION_FAILED', 'Webinar content failed validation', { status: 400, issues });
 }
 
 function validationPolicy() {
-  const current = loadResourcePolicy();
-  return current.assetOrigin ? current : {
-    ...current,
-    // Asset tokens are syntactically valid content. The foundation hook below owns
-    // their availability decision and intentionally fails closed until that package exists.
-    assetOrigin: 'https://assets.invalid',
-  };
+  return loadResourcePolicy();
 }
 
 function validateCandidate(candidate) {
   const policy = validationPolicy();
+  if (hasAssetTokens(candidate) && !policy.assetOrigin) {
+    throw new WebinarMutationError('ASSET_ORIGIN_NOT_CONFIGURED', 'Asset origin is not configured', { status: 503 });
+  }
   const issues = [
     ...validateMasterHtml(candidate.masterHtml, policy).issues,
     ...validateCss(candidate.masterCss, 'master_css', policy).issues,
@@ -127,6 +136,8 @@ async function unavailableReferenceWriter(_connection, _revisionId, assetVersion
 
 function candidateFrom(webinar, slides) {
   return {
+    slug: webinar.slug,
+    title: webinar.title,
     masterHtml: webinar.master_html,
     masterCss: webinar.master_css,
     slides: slides.map(slide => ({ ...slide })),
@@ -140,8 +151,24 @@ function nextAnchor(existing, desired) {
   return `${desired}-${suffix}`;
 }
 
-function resultFor(webinar, liveVersion) {
-  return { webinarId: Number(webinar.id), liveVersion, updatedAt: webinar.updated_at };
+function resultFor(webinar) {
+  return {
+    webinarId: Number(webinar.id),
+    liveVersion: Number(webinar.live_version),
+    updatedAt: webinar.updated_at,
+    primaryOwnerUserId: Number(webinar.primary_owner_user_id),
+    audienceEnabled: Boolean(Number(webinar.audience_enabled)),
+  };
+}
+
+async function readCurrentMetadata(connection, webinarId) {
+  const [rows] = await connection.query(
+    `SELECT id, live_version, updated_at, primary_owner_user_id, audience_enabled
+     FROM webinar_presentations WHERE id = ?`,
+    [webinarId],
+  );
+  if (!rows[0]) throw new WebinarMutationError('WEBINAR_NOT_FOUND', 'Webinar not found', { status: 404 });
+  return rows[0];
 }
 
 async function findActiveOwner(connection, userId) {
@@ -152,6 +179,7 @@ async function findActiveOwner(connection, userId) {
 
 function createMutationService({
   db: connectionPool = db,
+  validateCandidate: candidateValidator = validateCandidate,
   syncAssetReferences = unavailableAssetSync,
   recordRevisionAssetReferences = unavailableReferenceWriter,
   recordAuditEvent = defaultRecordAuditEvent,
@@ -164,7 +192,7 @@ function createMutationService({
       assertExpectedVersion(webinar, expectedVersion);
       const candidate = candidateFrom(webinar, await activeSlides(connection, webinarId));
       await transform(candidate, connection, webinar);
-      validateCandidate(candidate);
+      await candidateValidator(candidate);
       const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       await apply(connection, candidate, webinar);
       const snapshot = await buildCompleteSnapshot(connection, webinarId);
@@ -179,8 +207,9 @@ function createMutationService({
         webinarId, actorUserId, eventType: 'content_saved', targetType: 'webinar', targetId: webinarId,
         metadata: { liveVersion, changeType },
       });
+      const current = await readCurrentMetadata(connection, webinarId);
       await connection.commit();
-      return resultFor(webinar, liveVersion);
+      return resultFor(current);
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -227,13 +256,19 @@ function createMutationService({
       transform: async candidate => {
         const source = input.sourceSlideId ? candidate.slides.find(slide => slide.id === input.sourceSlideId) : null;
         if (input.sourceSlideId && !source) throw new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 });
-        const anchor = nextAnchor(new Set(candidate.slides.map(slide => slide.anchor)), input.anchor || `${source.anchor}-copy`);
-        created = {
-          id: randomUUID(), position: candidate.slides.length, anchor,
-          title: input.title ?? source.title, targetSeconds: input.targetSeconds ?? source.targetSeconds,
-          speakerNotes: input.speakerNotes ?? source.speakerNotes, html: input.html ?? source.html,
-          css: input.css ?? source.css, javascript: input.javascript ?? source.javascript,
-        };
+        const anchors = new Set(candidate.slides.map(slide => slide.anchor));
+        created = source
+          ? {
+            id: randomUUID(), position: candidate.slides.length, anchor: nextAnchor(anchors, `${source.anchor}-copy`),
+            title: source.title, targetSeconds: source.targetSeconds, speakerNotes: source.speakerNotes,
+            html: source.html, css: source.css, javascript: source.javascript,
+          }
+          : {
+            id: randomUUID(), position: candidate.slides.length, anchor: input.anchor,
+            title: input.title, targetSeconds: input.targetSeconds, speakerNotes: input.speakerNotes,
+            html: input.html, css: input.css, javascript: input.javascript,
+          };
+        if (!source && anchors.has(created.anchor)) throw new WebinarMutationError('ANCHOR_CONFLICT', 'Slide anchor already exists', { status: 409 });
         candidate.slides.push(created);
       },
       apply: connection => connection.query(
@@ -243,6 +278,10 @@ function createMutationService({
         [created.id, input.webinarId, created.position, created.anchor, created.title, created.targetSeconds, created.speakerNotes, created.html, created.css, created.javascript, input.actorUserId, input.actorUserId],
       ),
     });
+  }
+
+  function duplicateSlide(input) {
+    return addSlide(input);
   }
 
   function reorderSlides(input) {
@@ -292,20 +331,29 @@ function createMutationService({
         const revision = await getRevisionForRestore(input.webinarId, input.revisionId, connection);
         if (!revision) throw new WebinarMutationError('REVISION_NOT_FOUND', 'Revision not found', { status: 404 });
         assertCompleteSnapshot(revision.snapshot);
+        await assertRestoreSlideOwnership(connection, input.webinarId, revision.snapshot.slides.map(slide => slide.id));
+        candidate.slug = revision.snapshot.webinar.slug;
+        candidate.title = revision.snapshot.webinar.title;
         candidate.masterHtml = revision.snapshot.webinar.masterHtml;
         candidate.masterCss = revision.snapshot.webinar.masterCss;
         candidate.slides = revision.snapshot.slides.map(slide => ({ ...slide }));
       },
       apply: async (connection, candidate) => {
-        await connection.query('UPDATE webinar_presentations SET master_html = ?, master_css = ?, updated_by_user_id = ? WHERE id = ?', [candidate.masterHtml, candidate.masterCss, input.actorUserId, input.webinarId]);
+        await connection.query('UPDATE webinar_presentations SET slug = ?, title = ?, master_html = ?, master_css = ?, updated_by_user_id = ? WHERE id = ?', [candidate.slug, candidate.title, candidate.masterHtml, candidate.masterCss, input.actorUserId, input.webinarId]);
         await connection.query('UPDATE webinar_slides SET position = NULL, archived_at = CURRENT_TIMESTAMP(3), updated_by_user_id = ? WHERE webinar_id = ? AND archived_at IS NULL', [input.actorUserId, input.webinarId]);
         for (const slide of candidate.slides) {
-          await connection.query(
-            `INSERT INTO webinar_slides (id, webinar_id, position, anchor, title, target_seconds, speaker_notes, html, css, javascript, created_by_user_id, updated_by_user_id, archived_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-             ON DUPLICATE KEY UPDATE position = VALUES(position), anchor = VALUES(anchor), title = VALUES(title), target_seconds = VALUES(target_seconds), speaker_notes = VALUES(speaker_notes), html = VALUES(html), css = VALUES(css), javascript = VALUES(javascript), archived_at = NULL, updated_by_user_id = VALUES(updated_by_user_id)`,
-            [slide.id, input.webinarId, slide.position, slide.anchor, slide.title, slide.targetSeconds, slide.speakerNotes, slide.html, slide.css, slide.javascript, input.actorUserId, input.actorUserId],
+          const [updated] = await connection.query(
+            `UPDATE webinar_slides SET position = ?, anchor = ?, title = ?, target_seconds = ?, speaker_notes = ?, html = ?, css = ?, javascript = ?, archived_at = NULL, updated_by_user_id = ?
+             WHERE id = ? AND webinar_id = ?`,
+            [slide.position, slide.anchor, slide.title, slide.targetSeconds, slide.speakerNotes, slide.html, slide.css, slide.javascript, input.actorUserId, slide.id, input.webinarId],
           );
+          if (!updated.affectedRows) {
+            await connection.query(
+              `INSERT INTO webinar_slides (id, webinar_id, position, anchor, title, target_seconds, speaker_notes, html, css, javascript, created_by_user_id, updated_by_user_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [slide.id, input.webinarId, slide.position, slide.anchor, slide.title, slide.targetSeconds, slide.speakerNotes, slide.html, slide.css, slide.javascript, input.actorUserId, input.actorUserId],
+            );
+          }
         }
       },
     });
@@ -317,7 +365,7 @@ function createMutationService({
       await connection.beginTransaction();
       await findActiveOwner(connection, input.primaryOwnerUserId);
       const candidate = { masterHtml: SAFE_MASTER, masterCss: '', slides: [{ id: randomUUID(), position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }] };
-      validateCandidate(candidate);
+      await candidateValidator(candidate);
       const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       const [created] = await connection.query(
         `INSERT INTO webinar_presentations
@@ -337,8 +385,9 @@ function createMutationService({
       await recordRevisionAssetReferences(connection, revisionId, assetVersionIds);
       await connection.query('UPDATE webinar_presentations SET live_version = 1, updated_by_user_id = ? WHERE id = ?', [input.actorUserId, webinarId]);
       await recordAuditEvent(connection, { webinarId, actorUserId: input.actorUserId, eventType: 'webinar_created', targetType: 'webinar', targetId: webinarId, metadata: { liveVersion: 1 } });
+      const current = await readCurrentMetadata(connection, webinarId);
       await connection.commit();
-      return { webinarId, liveVersion: 1, updatedAt: null };
+      return resultFor(current);
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -353,8 +402,9 @@ function createMutationService({
       await connection.beginTransaction();
       const webinar = await lockWebinar(connection, input.webinarId);
       await action(connection, webinar);
+      const current = await readCurrentMetadata(connection, input.webinarId);
       await connection.commit();
-      return resultFor(webinar, Number(webinar.live_version));
+      return resultFor(current);
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -385,7 +435,7 @@ function createMutationService({
     });
   }
 
-  return { createWebinar, archiveWebinar, saveMaster, addSlide, saveSlide, reorderSlides, archiveSlide, restoreRevision, changeOwner, changeAudienceAccess };
+  return { createWebinar, archiveWebinar, saveMaster, addSlide, duplicateSlide, saveSlide, reorderSlides, archiveSlide, restoreRevision, changeOwner, changeAudienceAccess };
 }
 
 module.exports = { WebinarMutationError, lockWebinar, assertExpectedVersion, validateCandidate, createMutationService, ...createMutationService() };

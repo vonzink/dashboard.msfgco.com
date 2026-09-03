@@ -21,4 +21,15 @@ describe('Webinar Studio audit records', () => {
     expect(() => assertSafeAuditMetadata({ reasonCode: { nested: true } })).toThrow(expect.objectContaining({ code: 'AUDIT_METADATA_INVALID' }));
     expect(() => assertSafeAuditMetadata({ arbitrary: 'no' })).toThrow(expect.objectContaining({ code: 'AUDIT_METADATA_INVALID' }));
   });
+
+  it.each([
+    [{ reasonCode: 'api_key=super-secret' }],
+    [{ liveVersion: '5' }],
+    [{ liveVersion: Number.MAX_SAFE_INTEGER + 1 }],
+    [{ durationMs: 10 ** 12 }],
+    [{ statusCode: 999 }],
+    [{ slideId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' }],
+  ])('rejects leaky or unbounded values in otherwise allowed metadata', metadata => {
+    expect(() => assertSafeAuditMetadata(metadata)).toThrow(expect.objectContaining({ code: 'AUDIT_METADATA_INVALID' }));
+  });
 });

@@ -7,6 +7,11 @@ const dbPath = require.resolve('../../../db/connection');
 const servicePath = path.resolve(import.meta.dirname, '../../../services/webinars/revisions.js');
 const originalDb = require.cache[dbPath];
 const db = { query: vi.fn() };
+const validSnapshot = {
+  schemaVersion: 1,
+  webinar: { slug: 'intro', title: 'Intro', masterHtml: '<main>{{SLIDE_CONTENT}}</main>', masterCss: '' },
+  slides: [{ id: '11111111-1111-4111-8111-111111111111', position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }],
+};
 
 function load() {
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: db };
@@ -36,11 +41,23 @@ describe('Webinar Studio revisions', () => {
 
   it('loads a restore snapshot only when both webinar and revision match', async () => {
     db.query.mockResolvedValueOnce([[
-      { id: 9, webinar_id: 2, version: 4, snapshot: JSON.stringify({ schemaVersion: 1, webinar: { slug: 'intro', title: 'Intro', masterHtml: '<main>{{SLIDE_CONTENT}}</main>', masterCss: '' }, slides: [] }) },
+      { id: 9, webinar_id: 2, version: 4, snapshot: JSON.stringify(validSnapshot) },
     ]]);
     const { getRevisionForRestore } = load();
     await expect(getRevisionForRestore(2, 9)).resolves.toMatchObject({ id: 9, webinarId: 2, version: 4, snapshot: { schemaVersion: 1 } });
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('webinar_id = ?'), [2, 9]);
+  });
+
+  it.each([
+    ['unexpected schema version', { ...validSnapshot, schemaVersion: 2 }],
+    ['non-UUID stable ID', { ...validSnapshot, slides: [{ ...validSnapshot.slides[0], id: 'not-a-uuid' }] }],
+    ['duplicate anchor', { ...validSnapshot, slides: [...validSnapshot.slides, { ...validSnapshot.slides[0], id: '22222222-2222-4222-8222-222222222222', position: 1 }] }],
+    ['non-sequential position', { ...validSnapshot, slides: [{ ...validSnapshot.slides[0], position: 2 }] }],
+    ['source in a snapshot field', { ...validSnapshot, webinar: { ...validSnapshot.webinar, masterHtml: 7 } }],
+  ])('rejects %s restore snapshots', async (_name, snapshot) => {
+    db.query.mockResolvedValueOnce([[{ id: 9, webinar_id: 2, version: 4, snapshot: JSON.stringify(snapshot) }]]);
+    const { getRevisionForRestore } = load();
+    await expect(getRevisionForRestore(2, 9)).rejects.toMatchObject({ code: 'REVISION_SNAPSHOT_INVALID' });
   });
 
   it('builds exactly the complete normalized revision snapshot', async () => {

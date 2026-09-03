@@ -25,7 +25,17 @@ describe('webinar request schemas', () => {
       masterCss: '',
     }).success).toBe(true);
     expect(schemas.addSlide.safeParse(validSlide).success).toBe(true);
+    expect(schemas.duplicateSlide.safeParse({
+      expectedVersion: 1,
+      sourceSlideId: '11111111-1111-4111-8111-111111111111',
+    }).success).toBe(true);
     expect(schemas.saveSlide.safeParse(validSlide).success).toBe(true);
+  });
+
+  it('keeps duplicate requests source-only and add requests self-contained', () => {
+    expect(schemas.addSlide.safeParse({ ...validSlide, sourceSlideId: '11111111-1111-4111-8111-111111111111' }).success).toBe(false);
+    expect(schemas.duplicateSlide.safeParse({ expectedVersion: 1, sourceSlideId: '11111111-1111-4111-8111-111111111111', html: '<section>override</section>' }).success).toBe(false);
+    expect(schemas.duplicateSlide.safeParse({ expectedVersion: 1 }).success).toBe(false);
   });
 
   it('rejects invalid webinar and slide scalar boundaries', () => {

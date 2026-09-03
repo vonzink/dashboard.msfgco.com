@@ -1,5 +1,10 @@
 const db = require('../../db/connection');
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
+const WEBINAR_FIELDS = ['slug', 'title', 'masterHtml', 'masterCss'];
+const SLIDE_FIELDS = ['id', 'position', 'anchor', 'title', 'targetSeconds', 'speakerNotes', 'html', 'css', 'javascript'];
+
 class RevisionError extends Error {
   constructor(code, message = 'Invalid webinar revision') {
     super(message);
@@ -54,16 +59,35 @@ async function buildCompleteSnapshot(connection, webinarId) {
 }
 
 function assertCompleteSnapshot(snapshot) {
-  if (!snapshot || snapshot.schemaVersion !== 1 || !snapshot.webinar || !Array.isArray(snapshot.slides)) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)
+    || snapshot.schemaVersion !== 1 || !snapshot.webinar || Array.isArray(snapshot.webinar)
+    || !Array.isArray(snapshot.slides)
+    || Object.keys(snapshot).length !== 3
+    || !Object.prototype.hasOwnProperty.call(snapshot, 'schemaVersion')
+    || !Object.prototype.hasOwnProperty.call(snapshot, 'webinar')
+    || !Object.prototype.hasOwnProperty.call(snapshot, 'slides')) {
     throw new RevisionError('REVISION_SNAPSHOT_INVALID');
   }
-  const webinarFields = ['slug', 'title', 'masterHtml', 'masterCss'];
-  const slideFields = ['id', 'position', 'anchor', 'title', 'targetSeconds', 'speakerNotes', 'html', 'css', 'javascript'];
-  if (webinarFields.some(field => typeof snapshot.webinar[field] !== 'string')) throw new RevisionError('REVISION_SNAPSHOT_INVALID');
-  for (const slide of snapshot.slides) {
-    if (!slide || slideFields.some(field => !(field in slide)) || typeof slide.id !== 'string' || !Number.isInteger(slide.position)) {
+  if (Object.keys(snapshot.webinar).length !== WEBINAR_FIELDS.length
+    || WEBINAR_FIELDS.some(field => typeof snapshot.webinar[field] !== 'string')) {
+    throw new RevisionError('REVISION_SNAPSHOT_INVALID');
+  }
+  const ids = new Set();
+  const anchors = new Set();
+  for (const [position, slide] of snapshot.slides.entries()) {
+    if (!slide || typeof slide !== 'object' || Array.isArray(slide)
+      || Object.keys(slide).length !== SLIDE_FIELDS.length
+      || SLIDE_FIELDS.some(field => !Object.prototype.hasOwnProperty.call(slide, field))
+      || !UUID.test(slide.id) || !ANCHOR.test(slide.anchor)
+      || !Number.isInteger(slide.position) || slide.position !== position
+      || !Number.isInteger(slide.targetSeconds) || slide.targetSeconds < 0 || slide.targetSeconds > 7200
+      || ['title', 'speakerNotes', 'html', 'css', 'javascript'].some(field => typeof slide[field] !== 'string')
+      || !slide.title.trim()) {
       throw new RevisionError('REVISION_SNAPSHOT_INVALID');
     }
+    if (ids.has(slide.id) || anchors.has(slide.anchor)) throw new RevisionError('REVISION_SNAPSHOT_INVALID');
+    ids.add(slide.id);
+    anchors.add(slide.anchor);
   }
   return snapshot;
 }
