@@ -6,7 +6,7 @@ truth for the audio. What happens after that (transcription, etc.) is a
 separate step that reads from the bucket.
 
 ```
-Plaud recorder ──sync──▶ Plaud cloud ──(cron every 15 min)──▶ s3://msfg-plaud-recordings/recordings/YYYY/MM/*.mp3
+Plaud recorder ──sync──▶ Plaud cloud ──(cron every 30 min)──▶ s3://msfg-plaud-recordings/recordings/YYYY/MM/*.mp3
                                                 │
                                                 └──▶ plaud_recordings table (what was copied, when, how big)
 ```
@@ -108,31 +108,47 @@ table.
 
 The server has no browser, so the login bounces through an SSH tunnel: the
 Plaud login page on your Mac redirects to `localhost:8199`, and the tunnel
-carries that to the box.
+carries that to the box. Two wrinkles we hit doing this for real: `plaud
+login` on a headless box thinks it opened a browser and never prints the
+link, and putting it in the background with `&` gets it paused by the shell.
+The steps below work around both.
 
-**Local**, from anywhere. Nothing to replace:
+**Local, in its own Terminal window.** Start the tunnel and leave the window
+open. It shows no prompt; that's it working. Nothing to replace:
 
 ```bash
-ssh -i /Users/zacharyzink/MSFG/Security/msfg-mortgage-key.pem -L 8199:localhost:8199 ubuntu@52.203.186.217
+ssh -i /Users/zacharyzink/MSFG/Security/msfg-mortgage-key.pem -N -L 8199:localhost:8199 ubuntu@52.203.186.217
 ```
 
-You're now **on the box**. Install the Plaud command-line tool and log in:
+**On the box**, in a normal SSH session. Install the Plaud command-line tool
+(`sudo` because Node is installed system-wide on this box):
 
 ```bash
-npm install -g @plaud-ai/cli
-plaud login
+sudo npm install -g @plaud-ai/cli
 ```
 
-It will say it can't open a browser and print a URL. Copy that URL into a
-browser on your Mac, sign in with the **same Apple login** you used for the
-MCP (that's the account with your recordings), click Authorize. The terminal
-on the box should say `Logged in successfully!`. Confirm:
+Make a tiny "browser" that writes the login link to a file instead of opening
+it, then start the login detached and print the link:
 
 ```bash
+mkdir -p ~/bin && printf '#!/bin/sh\necho "$1" > "$HOME/plaud-login-url.txt"\n' > ~/bin/plaud-show-url && chmod +x ~/bin/plaud-show-url
+BROWSER=$HOME/bin/plaud-show-url nohup plaud login </dev/null >~/plaud-login.log 2>&1 &
+sleep 3 && cat ~/plaud-login-url.txt
+```
+
+Copy the `https://web.plaud.ai/...` link into a browser on your Mac, sign in
+with the **same Apple login** you used for the MCP (that's the account with
+your recordings), click Allow. You have two minutes from when the link
+appears; if it times out, rerun the three lines above for a fresh link. The
+browser should show "Authorization successful". Confirm on the box:
+
+```bash
+cat ~/plaud-login.log
 plaud files
 ```
 
-You should see your recent recordings. The token now lives at
+You should see `Logged in successfully!` and your recent recordings. Close the
+tunnel window with `Ctrl+C`. The token now lives at
 `/home/ubuntu/.plaud/tokens.json` and the sync job keeps it refreshed. You can
 close the tunnel; a normal SSH session is fine from here.
 
@@ -179,18 +195,15 @@ Then run it with no flags to catch up on the rest of the recent page.
 
 ### Step 7 — Schedule it (the box)
 
-Cron doesn't know about nvm, so it needs the full path to `node`. Get it:
+Cron needs the full path to `node`. On this box it is `/usr/bin/node`
+(confirm with `which node`). This installs the schedule, every 30 minutes,
+replacing any earlier plaud-sync line so it's safe to rerun. Nothing to
+replace:
 
 ```bash
-which node
 mkdir -p /home/ubuntu/logs
-crontab -e
-```
-
-Add this line, **replacing `NODE_PATH` with what `which node` printed** (something like `/home/ubuntu/.nvm/versions/node/v20.19.0/bin/node`):
-
-```
-*/15 * * * * cd /home/ubuntu/msfg-backend/backend && flock -n /tmp/plaud-sync.lock NODE_PATH scripts/plaud-sync.js >> /home/ubuntu/logs/plaud-sync.log 2>&1
+( crontab -l 2>/dev/null | grep -v plaud-sync; echo "*/30 * * * * cd /home/ubuntu/msfg-backend/backend && flock -n /tmp/plaud-sync.lock /usr/bin/node scripts/plaud-sync.js >> /home/ubuntu/logs/plaud-sync.log 2>&1" ) | crontab -
+crontab -l
 ```
 
 `flock -n` means a slow run can never overlap the next one. Watch it work:
@@ -212,4 +225,5 @@ tail -f /home/ubuntu/logs/plaud-sync.log
 - **This rides on Plaud's MCP/CLI login, not a public API.** Plaud doesn't hand out API apps to the public, so the official CLI's token is our way in. If Plaud changes that, this breaks. It's the only link, so it's worth knowing.
 - **Recordings appear only after the recorder syncs to the phone app.** The job can't see audio that's still on the device.
 - **No transcription is used or paid for.** Only the audio file is fetched.
-- **Storage cost is small.** Plaud MP3s run roughly 1 MB per minute. Consider an S3 lifecycle rule to move objects to Glacier after 90 days once the downstream step has what it needs.
+- **Storage cost is small.** Plaud MP3s run about 14 MB per hour of audio (measured on the first ten recordings). A year of daily hour-long calls is roughly 5 GB. Consider an S3 lifecycle rule to move objects to Glacier after 90 days once the downstream step has what it needs.
+- **Plain-English recap** of how this was set up, including the login workaround: `docs/PLAUD_SETUP_RECAP.md`.
