@@ -16,7 +16,7 @@
  * attempt, so a recorder left in a drawer for a week still gets picked up.
  *
  * Runs sequentially on purpose: one download at a time is plenty for a
- * fifteen-minute cron and keeps the job easy to reason about.
+ * half-hourly cron and keeps the job easy to reason about.
  */
 
 const { Transform } = require('stream');
