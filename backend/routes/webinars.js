@@ -6,7 +6,6 @@ const repository = require('../services/webinars/repository');
 const revisions = require('../services/webinars/revisions');
 const mutations = require('../services/webinars/mutations');
 const notes = require('../services/webinars/notes');
-const { assertCandidateWithinLimits } = require('../services/webinars/contentPolicy');
 const { recordOperationalEvent } = require('../services/webinars/observability');
 const schemas = require('../validation/schemas/webinars');
 
@@ -17,8 +16,18 @@ const noteIdSchema = z.coerce.number().int().positive();
 const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
 
 function asyncRoute(handler) {
-  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch((_error) => {
+    recordOperationalEvent('webinar.database_failure', { actorUserId: getUserId(req), statusCode: 500, reasonCode: 'DATABASE_FAILURE' });
+    res.status(500).json({ error: 'Internal server error' });
+  });
 }
+
+const KNOWN_ERROR_CODES = new Set([
+  'VERSION_CONFLICT', 'WEBINAR_NOT_FOUND', 'SLIDE_NOT_FOUND', 'NOTE_NOT_FOUND', 'REVISION_NOT_FOUND',
+  'CONTENT_VALIDATION_FAILED', 'ANCHOR_CONFLICT', 'SLIDE_SET_MISMATCH', 'OWNER_NOT_ACTIVE',
+  'ASSET_ORIGIN_NOT_CONFIGURED', 'ASSET_LIBRARY_NOT_READY', 'NOTE_BODY_EMPTY', 'NOTE_BODY_TOO_LONG',
+  'RESTORE_SLIDE_OWNERSHIP_CONFLICT', 'ADMIN_ACCESS_REQUIRED', 'WEBINAR_ACCESS_DENIED',
+]);
 
 function errorBody(error) {
   const body = { error: error.message || 'Request failed', code: error.code || 'REQUEST_FAILED' };
@@ -44,18 +53,6 @@ function parseOrRespond(req, res, schema, value) {
   return null;
 }
 
-function assertParsedRequestWithinLimits(req, res) {
-  try {
-    // This covers chunked requests, for which Content-Length is unavailable.
-    assertCandidateWithinLimits(req.body || {});
-    return true;
-  } catch (error) {
-    recordOperationalEvent('webinar.validation_rejected', { actorUserId: getUserId(req), statusCode: 413, reasonCode: 'VALIDATION_FAILED' });
-    res.status(413).json(errorBody(Object.assign(error, { status: 413, code: error.code || 'CONTENT_LIMIT_EXCEEDED' })));
-    return false;
-  }
-}
-
 async function loadAuthorizedWebinar(req, res, { adminOnly = false } = {}) {
   const id = parseOrRespond(req, res, webinarIdSchema, req.params.id);
   if (!id) return null;
@@ -76,19 +73,20 @@ async function loadAuthorizedWebinar(req, res, { adminOnly = false } = {}) {
 }
 
 function respondWithServiceError(req, res, error) {
-  const status = error.status || (error.code === 'VERSION_CONFLICT' ? 409 : 500);
+  const known = KNOWN_ERROR_CODES.has(error.code);
+  const status = known ? (error.status || (error.code === 'VERSION_CONFLICT' ? 409 : 400)) : 500;
   const fields = { actorUserId: getUserId(req), statusCode: status, reasonCode: status >= 500 ? 'DATABASE_FAILURE' : error.code === 'VERSION_CONFLICT' ? 'VERSION_CONFLICT' : 'VALIDATION_FAILED' };
   if (req.params.id && Number.isInteger(Number(req.params.id))) fields.webinarId = Number(req.params.id);
   if (error.code === 'VERSION_CONFLICT') recordOperationalEvent('webinar.version_conflict', fields);
   else if (status === 400 || status === 413) recordOperationalEvent('webinar.validation_rejected', fields);
   else if (status >= 500) recordOperationalEvent('webinar.database_failure', fields);
-  res.status(status).json(errorBody(error));
+  if (!known) return res.status(500).json({ error: 'Internal server error' });
+  return res.status(status).json(errorBody(error));
 }
 
 async function performMutation(req, res, schema, action, status = 200, { adminOnly = false, restored = false } = {}) {
   const access = await loadAuthorizedWebinar(req, res, { adminOnly });
   if (!access) return;
-  if (!assertParsedRequestWithinLimits(req, res)) return;
   const body = parseOrRespond(req, res, schema, req.body);
   if (!body) return;
   try {
@@ -106,8 +104,10 @@ router.get('/', asyncRoute(async (req, res) => {
 }));
 
 router.post('/', asyncRoute(async (req, res) => {
-  if (!isAdmin(req)) return res.status(403).json({ error: 'Admin access required', code: 'ADMIN_ACCESS_REQUIRED' });
-  if (!assertParsedRequestWithinLimits(req, res)) return;
+  if (!isAdmin(req)) {
+    recordOperationalEvent('webinar.authorization_denied', { actorUserId: getUserId(req), statusCode: 403, reasonCode: 'ACCESS_DENIED' });
+    return res.status(403).json({ error: 'Admin access required', code: 'ADMIN_ACCESS_REQUIRED' });
+  }
   const body = parseOrRespond(req, res, schemas.createWebinar, req.body);
   if (!body) return;
   try {
@@ -156,14 +156,14 @@ router.get('/:id/notes', asyncRoute(async (req, res) => {
 
 router.post('/:id/slides/:slideId/notes', asyncRoute(async (req, res) => {
   const slideId = parseOrRespond(req, res, uuidSchema, req.params.slideId); if (!slideId) return;
-  const access = await loadAuthorizedWebinar(req, res); if (!access || !assertParsedRequestWithinLimits(req, res)) return;
+  const access = await loadAuthorizedWebinar(req, res); if (!access) return;
   const body = parseOrRespond(req, res, schemas.writeNote, req.body); if (!body) return;
   try { res.status(201).json(await notes.addNote({ userId: getUserId(req), webinarId: access.id, slideId, ...body })); } catch (error) { respondWithServiceError(req, res, error); }
 }));
 
 router.put('/:id/notes/:noteId', asyncRoute(async (req, res) => {
   const noteId = parseOrRespond(req, res, noteIdSchema, req.params.noteId); if (!noteId) return;
-  const access = await loadAuthorizedWebinar(req, res); if (!access || !assertParsedRequestWithinLimits(req, res)) return;
+  const access = await loadAuthorizedWebinar(req, res); if (!access) return;
   const body = parseOrRespond(req, res, schemas.writeNote, req.body); if (!body) return;
   try { res.json(await notes.updateNote({ userId: getUserId(req), webinarId: access.id, noteId, ...body })); } catch (error) { respondWithServiceError(req, res, error); }
 }));

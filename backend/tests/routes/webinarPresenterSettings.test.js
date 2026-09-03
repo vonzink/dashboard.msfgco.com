@@ -30,4 +30,9 @@ describe('presenter settings API', () => {
   it('rejects settings routes other than the literal /me', async () => {
     expect((await request('GET', '/api/webinar-presenter-settings/7')).status).toBe(404);
   });
+  it('never exposes settings persistence errors', async () => {
+    settings.upsertSettings.mockRejectedValueOnce(Object.assign(new Error('ER_BAD_DB_ERROR password=secret'), { code: 'ER_BAD_DB_ERROR' }));
+    expect(await request('PUT', '/api/webinar-presenter-settings/me', { shortcuts: {}, preferences: {} }))
+      .toEqual({ status: 500, body: { error: 'Internal server error' } });
+  });
 });

@@ -115,7 +115,8 @@ const limiter = rateLimit({
   max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later' }
+  message: { error: 'Too many requests, please try again later' },
+  skip: isWebinarStudioMutation,
 });
 app.use('/api/', limiter);
 
@@ -129,7 +130,8 @@ const writeLimiter = rateLimit({
   // Only apply to mutating methods. My Files is excluded and limited
   // separately — see myFilesWriteLimiter below.
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
-    || req.originalUrl.startsWith('/api/my-files'),
+    || req.originalUrl.startsWith('/api/my-files')
+    || isWebinarStudioMutation(req),
 });
 app.use('/api/', writeLimiter);
 
@@ -161,16 +163,32 @@ const webinarWriteLimiter = rateLimit({
 });
 
 const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings'];
+const WEBINAR_MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+function isWebinarStudioMutation(req) {
+  return !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+    && WEBINAR_REQUEST_PREFIXES.some(prefix => {
+      const pathname = (req.originalUrl || req.url || '').split('?')[0];
+      return pathname === prefix || pathname.startsWith(`${prefix}/`);
+    });
+}
 function rejectOversizedWebinarRequest(req, res, next) {
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
-    || !WEBINAR_REQUEST_PREFIXES.some(prefix => req.path === prefix || req.path.startsWith(`${prefix}/`))) {
+  if (!isWebinarStudioMutation(req)) {
     return next();
   }
   const contentLength = Number(req.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > 2 * 1024 * 1024) {
+  if (Number.isFinite(contentLength) && contentLength > WEBINAR_MAX_REQUEST_BYTES) {
     return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
   }
   return next();
+}
+
+function verifyWebinarRawRequestSize(req, _res, buffer) {
+  if (isWebinarStudioMutation(req) && buffer.length > WEBINAR_MAX_REQUEST_BYTES) {
+    const error = new Error('Webinar request exceeds 2 MB limit');
+    error.status = 413;
+    error.code = 'CONTENT_LIMIT_EXCEEDED';
+    throw error;
+  }
 }
 
 // Request logging
@@ -178,7 +196,7 @@ app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health'
 
 // Body parsing
 app.use(rejectOversizedWebinarRequest);
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb', verify: verifyWebinarRawRequestSize }));
 app.use(express.urlencoded({ extended: true }));
 
 // ======================
@@ -275,6 +293,13 @@ app.use('/api/handbook', authenticate, handbookRoutes);
 // ======================
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');
+
+  if (err.code === 'CONTENT_LIMIT_EXCEEDED' && isWebinarStudioMutation(req)) {
+    return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
+  }
+  if (err.type === 'entity.parse.failed' && isWebinarStudioMutation(req)) {
+    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED' });
+  }
   
   // Don't leak error details in production
   const message = process.env.NODE_ENV === 'production' 
@@ -344,20 +369,29 @@ async function startServer() {
   }
 }
 
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully');
-  if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
-  websocket.close();
-  await db.close();
-  process.exit(0);
-});
+if (require.main === module) {
+  process.on('SIGTERM', async () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
+    websocket.close();
+    await db.close();
+    process.exit(0);
+  });
+  process.on('SIGINT', async () => {
+    logger.info('SIGINT received, shutting down gracefully');
+    if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
+    websocket.close();
+    await db.close();
+    process.exit(0);
+  });
+  startServer();
+}
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
-  websocket.close();
-  await db.close();
-  process.exit(0);
-});
-
-startServer();
+module.exports = {
+  app,
+  isWebinarStudioMutation,
+  rejectOversizedWebinarRequest,
+  verifyWebinarRawRequestSize,
+  writeLimiter,
+  webinarWriteLimiter,
+};

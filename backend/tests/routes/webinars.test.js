@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createRequire } from 'node:module';
+import http from 'node:http';
 
 const services = vi.hoisted(() => ({
   listForRequest: vi.fn(), getPrivateDocument: vi.fn(), listHistory: vi.fn(),
@@ -16,6 +17,7 @@ const validSlide = { expectedVersion: 1, anchor: 'opening', title: 'Opening', ta
 const webinar = { id: 2, primaryOwnerUserId: 7, primary_owner_user_id: 7, slides: [{ id: uuid }] };
 let app;
 let server;
+let serverApi;
 
 function user(id, role = 'user') { return { db: { id, role, is_active: 1 }, groups: [role] }; }
 function request(method, path, body, identity = user(7)) {
@@ -27,6 +29,7 @@ function request(method, path, body, identity = user(7)) {
 
 beforeAll(async () => {
   const require = createRequire(import.meta.url);
+  serverApi = require('../../server');
   const observability = require('../../services/webinars/observability');
   services.recordOperationalEvent = vi.spyOn(observability, 'recordOperationalEvent');
   const router = (await import('../../routes/webinars.js')).default;
@@ -114,6 +117,12 @@ describe('private webinar API contracts', () => {
     expect(response).toMatchObject({ status: 409, body: { code: 'VERSION_CONFLICT', currentVersion: 2, updatedBy: { id: 1 } } });
   });
 
+  it('never exposes unexpected database errors', async () => {
+    services.saveMaster.mockRejectedValueOnce(Object.assign(new Error('ER_ACCESS_DENIED: password=secret'), { code: 'ER_ACCESS_DENIED' }));
+    const response = await request('PUT', '/api/webinars/2/master', validMaster);
+    expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+  });
+
   it('uses the authenticated identity for current-user notes', async () => {
     await request('POST', `/api/webinars/2/slides/${uuid}/notes`, { body: 'Private note' });
     expect(services.addNote).toHaveBeenCalledWith(expect.objectContaining({ userId: 7, webinarId: 2, slideId: uuid }));
@@ -123,8 +132,61 @@ describe('private webinar API contracts', () => {
     ['archived webinars', async () => { services.getPrivateDocument.mockResolvedValueOnce(null); return request('GET', '/api/webinars/2'); }, 404],
     ['missing slides', async () => { services.saveSlide.mockRejectedValueOnce(Object.assign(new Error('Slide not found'), { status: 404, code: 'SLIDE_NOT_FOUND' })); return request('PUT', `/api/webinars/2/slides/${uuid}`, validSlide); }, 404],
     ['another user’s note', async () => { services.updateNote.mockRejectedValueOnce(Object.assign(new Error('Note not found'), { status: 404, code: 'NOTE_NOT_FOUND' })); return request('PUT', '/api/webinars/2/notes/1', { body: 'No access' }); }, 404],
-    ['a chunked-size candidate over 2 MB', async () => request('PUT', '/api/webinars/2/master', { ...validMaster, masterHtml: 'x'.repeat(2 * 1024 * 1024 + 1) }), 413],
+    ['a source-content candidate over its Zod limit', async () => request('PUT', '/api/webinars/2/master', { ...validMaster, masterHtml: 'x'.repeat(2 * 1024 * 1024 + 1) }), 400],
   ])('returns the controlled status for %s', async (_boundary, run, status) => {
     expect((await run()).status).toBe(status);
   });
+});
+
+describe('mounted Webinar Studio transport and limiter contract', () => {
+  let mounted;
+  let mountedServer;
+  const mountedRequest = (method, path, body, identity = user(7)) => fetch(`http://127.0.0.1:${mountedServer.address().port}${path}`, {
+    method, headers: { 'content-type': 'application/json', 'x-test-user': JSON.stringify(identity) }, body: body === undefined ? undefined : JSON.stringify(body),
+  }).then(async response => ({ status: response.status, body: await response.json().catch(() => null) }));
+
+  beforeAll(async () => {
+    const router = (await import('../../routes/webinars.js')).default;
+    const { requireActiveDbUser, requireDbUser, requireNonExternal } = createRequire(import.meta.url)('../../middleware/userContext');
+    mounted = express();
+    mounted.use(serverApi.rejectOversizedWebinarRequest);
+    mounted.use(express.json({ limit: '10mb', verify: serverApi.verifyWebinarRawRequestSize }));
+    mounted.use((req, _res, next) => { req.user = JSON.parse(req.get('x-test-user') || '{}'); next(); });
+    mounted.use('/api/', serverApi.writeLimiter);
+    mounted.use('/api/webinars', requireDbUser, requireActiveDbUser, requireNonExternal, serverApi.webinarWriteLimiter, router);
+    mounted.post('/api/unrelated', (_req, res) => res.status(201).json({ ok: true }));
+    mounted.use((err, req, res, _next) => {
+      if (err.code === 'CONTENT_LIMIT_EXCEEDED') return res.status(413).json({ code: err.code });
+      if (err.type === 'entity.parse.failed') return res.status(400).json({ code: 'VALIDATION_FAILED' });
+      return res.status(500).json({ error: 'Internal server error' });
+    });
+    mountedServer = await new Promise(resolve => { const s = mounted.listen(0, () => resolve(s)); });
+  });
+  afterAll(() => new Promise(resolve => mountedServer.close(resolve)));
+
+  it('does not let the 200/IP global write limiter shadow identity-keyed webinar writes', async () => {
+    for (let count = 0; count < 201; count += 1) {
+      expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster)).status).toBe(200);
+    }
+    expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster, user(1, 'admin'))).status).toBe(200);
+  }, 30000);
+
+  it('enforces 300 writes per identity and skips read methods', async () => {
+    for (let count = 0; count < 99; count += 1) expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster)).status).toBe(200);
+    expect((await mountedRequest('PUT', '/api/webinars/2/master', validMaster)).status).toBe(429);
+    expect((await mountedRequest('GET', '/api/webinars/2')).status).toBe(200);
+    expect((await mountedRequest('HEAD', '/api/webinars/2')).status).toBe(200);
+    expect((await mountedRequest('OPTIONS', '/api/webinars/2')).status).not.toBe(429);
+  }, 30000);
+
+  it('enforces raw declared and chunked size without limiting unrelated requests', async () => {
+    const oversized = JSON.stringify({ source: 'a'.repeat(2 * 1024 * 1024) });
+    expect((await mountedRequest('POST', '/api/webinars', JSON.parse(oversized), user(1, 'admin'))).status).toBe(413);
+    const chunked = await new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port: mountedServer.address().port, method: 'POST', path: '/api/webinars', headers: { 'content-type': 'application/json', 'x-test-user': JSON.stringify(user(1, 'admin')), 'transfer-encoding': 'chunked' } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      req.on('error', reject); req.write(oversized); req.end();
+    });
+    expect(chunked).toBe(413);
+    expect((await mountedRequest('POST', '/api/unrelated', JSON.parse(oversized))).status).toBe(201);
+  }, 30000);
 });
