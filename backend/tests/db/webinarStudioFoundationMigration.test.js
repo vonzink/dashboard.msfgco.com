@@ -19,16 +19,56 @@ describe('091 webinar studio foundation migration', () => {
     expect(migration).toMatch(new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   });
 
-  it('keeps slide identity stable and archived positions nullable', () => {
-    expect(migration).toMatch(/id CHAR\(36\) NOT NULL PRIMARY KEY/);
-    expect(migration).toMatch(/position INT UNSIGNED NULL/);
-    expect(migration).toMatch(/UNIQUE KEY uq_webinar_slide_anchor \(webinar_id, anchor\)/);
-    expect(migration).toMatch(/UNIQUE KEY uq_webinar_slide_position \(webinar_id, position\)/);
+  it.each([
+    'UNIQUE KEY uq_webinar_slug (slug)',
+    'UNIQUE KEY uq_webinar_slide_anchor (webinar_id, anchor)',
+    'UNIQUE KEY uq_webinar_slide_position (webinar_id, position)',
+    'UNIQUE KEY uq_webinar_revision_version (webinar_id, version)',
+    'UNIQUE KEY uq_webinar_note_legacy_source (source_system, source_record_id)',
+  ])('declares unique key %s', uniqueKey => {
+    expect(migration).toContain(uniqueKey);
   });
 
-  it('keys settings and notes to canonical users', () => {
-    expect(migration).toMatch(/PRIMARY KEY \(user_id\)/);
-    expect(migration).toMatch(/CONSTRAINT fk_webinar_settings_user FOREIGN KEY \(user_id\) REFERENCES users\(id\)/);
-    expect(migration).toMatch(/CONSTRAINT fk_webinar_note_slide FOREIGN KEY \(slide_id\) REFERENCES webinar_slides\(id\)/);
+  it('keeps UUID identity and archived positions nullable', () => {
+    expect(migration).toContain('id CHAR(36) NOT NULL PRIMARY KEY');
+    expect(migration).toContain('slide_id CHAR(36) NOT NULL');
+    expect(migration).toContain('position INT UNSIGNED NULL');
+  });
+
+  it.each([
+    'snapshot JSON NOT NULL',
+    'shortcuts JSON NOT NULL',
+    'preferences JSON NOT NULL',
+    'metadata JSON NOT NULL',
+  ])('declares JSON column %s', column => {
+    expect(migration).toContain(column);
+  });
+
+  it('keeps presentation and slide archive timestamps nullable', () => {
+    expect(migration).toMatch(/archived_at DATETIME\(3\) NULL/g);
+    expect(migration.match(/archived_at DATETIME\(3\) NULL/g)).toHaveLength(2);
+  });
+
+  it.each([
+    'CONSTRAINT fk_webinar_owner FOREIGN KEY (primary_owner_user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_created_by FOREIGN KEY (created_by_user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_slide_webinar FOREIGN KEY (webinar_id) REFERENCES webinar_presentations(id)',
+    'CONSTRAINT fk_webinar_slide_created_by FOREIGN KEY (created_by_user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_slide_updated_by FOREIGN KEY (updated_by_user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_revision_webinar FOREIGN KEY (webinar_id) REFERENCES webinar_presentations(id)',
+    'CONSTRAINT fk_webinar_revision_user FOREIGN KEY (created_by_user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_settings_user FOREIGN KEY (user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_note_user FOREIGN KEY (user_id) REFERENCES users(id)',
+    'CONSTRAINT fk_webinar_note_webinar FOREIGN KEY (webinar_id) REFERENCES webinar_presentations(id)',
+    'CONSTRAINT fk_webinar_note_slide FOREIGN KEY (slide_id) REFERENCES webinar_slides(id)',
+    'CONSTRAINT fk_webinar_audit_webinar FOREIGN KEY (webinar_id) REFERENCES webinar_presentations(id)',
+    'CONSTRAINT fk_webinar_audit_actor FOREIGN KEY (actor_user_id) REFERENCES users(id)',
+  ])('declares foreign key %s', foreignKey => {
+    expect(migration).toContain(foreignKey);
+  });
+
+  it('keys presenter settings to canonical users', () => {
+    expect(migration).toContain('PRIMARY KEY (user_id)');
   });
 });
