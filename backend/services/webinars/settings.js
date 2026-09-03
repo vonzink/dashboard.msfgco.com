@@ -34,6 +34,10 @@ const BASE_KEY_ALIASES = Object.freeze({
   space: 'Space',
 });
 
+// Mirrors validateDescriptor() in deck/js/presenter-shortcuts.js.
+const PRESENTER_BROWSER_RESERVED = /^(?:Control|Meta)(?:\+(?:Alt|Shift))*\+(?:Key[LRNWPT]|Tab)$/;
+const PRESENTER_HISTORY_ARROW = /^Arrow(?:Left|Right)$/;
+
 class WebinarSettingsError extends Error {
   constructor(code, message = 'Webinar settings operation failed', extra = {}) {
     super(message);
@@ -67,7 +71,11 @@ function canonicalizeBinding(binding) {
     throw new WebinarSettingsError('SHORTCUT_BINDING_INVALID', 'Shortcut binding must map to a valid presenter descriptor', { status: 400 });
   }
   modifiers.sort((left, right) => MODIFIER_ORDER.indexOf(left) - MODIFIER_ORDER.indexOf(right));
-  return [...modifiers, base].join('+');
+  const descriptor = [...modifiers, base].join('+');
+  if (isPresenterBrowserReserved(descriptor, modifiers, base)) {
+    throw new WebinarSettingsError('SHORTCUT_BINDING_RESERVED', 'Shortcut binding is reserved by the browser', { status: 400 });
+  }
+  return descriptor;
 }
 
 function normalizeBaseToken(baseTokens) {
@@ -78,6 +86,11 @@ function normalizeBaseToken(baseTokens) {
   if (/^[0-9]$/.test(base)) return `Digit${base}`;
   if (/^digit[0-9]$/.test(base)) return `Digit${base.slice(-1)}`;
   return BASE_KEY_ALIASES[base] || null;
+}
+
+function isPresenterBrowserReserved(descriptor, modifiers, base) {
+  return PRESENTER_BROWSER_RESERVED.test(descriptor) ||
+    ((modifiers.includes('Alt') || modifiers.includes('Meta')) && PRESENTER_HISTORY_ARROW.test(base));
 }
 
 function normalizeShortcuts(shortcuts) {

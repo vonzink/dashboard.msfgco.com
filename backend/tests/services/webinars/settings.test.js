@@ -156,6 +156,40 @@ describe('Webinar Studio presenter settings', () => {
       expect(db.query).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['Ctrl+R', 'SHORTCUT_BINDING_RESERVED'],
+      ['Meta+KeyL', 'SHORTCUT_BINDING_RESERVED'],
+      ['Ctrl+Alt+Shift+W', 'SHORTCUT_BINDING_RESERVED'],
+      ['Alt+ArrowLeft', 'SHORTCUT_BINDING_RESERVED'],
+      ['Meta+ArrowRight', 'SHORTCUT_BINDING_RESERVED'],
+      ['Escape', 'SHORTCUT_BINDING_INVALID'],
+      ['Tab', 'SHORTCUT_BINDING_INVALID'],
+    ])('rejects the consumer-reserved descriptor %s before querying the database', async (binding, code) => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: binding },
+        preferences,
+      })).rejects.toMatchObject({ code });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['Ctrl+A', 'Control+KeyA'],
+      ['Ctrl+Alt+Shift+A', 'Control+Alt+Shift+KeyA'],
+      ['Alt+ArrowUp', 'Alt+ArrowUp'],
+      ['Meta+ArrowDown', 'Meta+ArrowDown'],
+    ])('accepts the nearby executable descriptor %s', async (binding, descriptor) => {
+      db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+      const { upsertSettings } = loadSettings();
+      const result = await upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: binding },
+        preferences,
+      });
+      expect(result.shortcuts).toEqual({ previousSlide: descriptor });
+    });
+
     it('accepts distinct bindings after canonicalization', async () => {
       db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
       const { upsertSettings } = loadSettings();
