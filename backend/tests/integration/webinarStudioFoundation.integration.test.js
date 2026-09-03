@@ -126,7 +126,22 @@ async function cleanupDisposableResources({ server, pool, lifecycle, sourceConne
 
 function cleanupFailureAggregate(failures) {
   const aggregate = new AggregateError(failures.map(failure => failure.error), 'Disposable resource cleanup failed');
+  aggregate.cleanupFailures = failures;
   aggregate.cleanupSteps = failures.map(failure => failure.step);
+  return aggregate;
+}
+
+function finalizeIntegrationFailure(primary, cleanupFailures) {
+  if (!primary) return cleanupFailures.length ? cleanupFailureAggregate(cleanupFailures) : null;
+  if (!cleanupFailures.length) return primary;
+  const aggregate = new AggregateError(
+    [primary, ...cleanupFailures.map(failure => failure.error)],
+    'Integration execution and cleanup failed',
+  );
+  aggregate.cause = primary;
+  aggregate.primaryFailure = primary;
+  aggregate.cleanupFailures = cleanupFailures;
+  aggregate.cleanupSteps = cleanupFailures.map(failure => failure.step);
   return aggregate;
 }
 
@@ -184,27 +199,67 @@ async function captureWebinarMutationState(webinarId) {
   return state;
 }
 
+const sensitiveCanaries = Object.freeze({
+  masterHtml: 'CANARY_MASTER_HTML_9c84',
+  masterCss: 'CANARY_MASTER_CSS_9c84',
+  slideHtml: 'CANARY_SLIDE_HTML_9c84',
+  slideCss: 'CANARY_SLIDE_CSS_9c84',
+  slideJavascript: 'CANARY_SLIDE_JAVASCRIPT_9c84',
+  speakerNotes: 'CANARY_SPEAKER_NOTES_9c84',
+  title: 'CANARY_PRIVATE_TITLE_9c84',
+  note: 'CANARY_PRIVATE_NOTE_9c84',
+});
 const historyItemKeys = ['changeSummary', 'changeType', 'createdAt', 'createdBy', 'id', 'version'];
 const historyCreatorKeys = ['name'];
-const forbiddenHistoryKeys = new Set([
-  'snapshot', 'source', 'masterHtml', 'masterCss', 'html', 'css', 'javascript',
-  'speakerNotes', 'resourcePolicy', 'slides', 'notes', 'code',
+const historySummaries = new Map([
+  ['webinar_created', 'Created webinar'],
+  ['master_saved', 'Updated master presentation'],
+  ['slide_saved', 'Updated slide'],
+  ['slide_archived', 'Archived slide'],
+  ['revision_restored', 'Restored revision'],
 ]);
+const forbiddenHistorySemantics = new Set([
+  'snapshot', 'source', 'sourcecode', 'sourcehtml', 'sourcecss', 'sourcejavascript',
+  'masterhtml', 'mastercss', 'html', 'css', 'javascript', 'slidehtml', 'slidecss',
+  'slidejavascript', 'speakernotes', 'resourcepolicy', 'resources', 'resource',
+  'slides', 'notes', 'note', 'code', 'content', 'privatecontent', 'assetstoragekey',
+]);
+
+function normalizeHistoryKey(key) {
+  return String(key)
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
 
 function assertNoForbiddenHistoryKeys(value) {
   if (!value || typeof value !== 'object') return;
   for (const [key, nested] of Object.entries(value)) {
-    expect(forbiddenHistoryKeys.has(key)).toBe(false);
+    expect(forbiddenHistorySemantics.has(normalizeHistoryKey(key))).toBe(false);
     assertNoForbiddenHistoryKeys(nested);
   }
 }
 
-function assertSafeHistoryItems(items) {
+function isValidHistoryTimestamp(value) {
+  if (!(value instanceof Date) && typeof value !== 'string') return false;
+  return Number.isFinite(new Date(value).getTime());
+}
+
+function assertSafeHistoryContract(items, canaries) {
   expect(Array.isArray(items)).toBe(true);
   for (const item of items) {
     expect(Object.keys(item).sort()).toEqual(historyItemKeys);
     expect(Object.keys(item.createdBy).sort()).toEqual(historyCreatorKeys);
+    expect(Number.isSafeInteger(item.id) && item.id > 0).toBe(true);
+    expect(Number.isSafeInteger(item.version) && item.version > 0).toBe(true);
+    expect(historySummaries.has(item.changeType)).toBe(true);
+    expect(item.changeSummary).toBe(historySummaries.get(item.changeType));
+    expect(isValidHistoryTimestamp(item.createdAt)).toBe(true);
+    expect(typeof item.createdBy.name).toBe('string');
+    expect(item.createdBy.name).toMatch(/^Webinar (?:Admin|Owner)$/);
     assertNoForbiddenHistoryKeys(item);
+    const serialized = JSON.stringify(item);
+    for (const canary of Object.values(canaries)) expect(serialized).not.toContain(canary);
   }
 }
 
@@ -300,6 +355,45 @@ describeWithMysql('webinar studio foundation', () => {
     expect(nonDroppableCalls).toEqual(['source', 'source']);
   });
 
+  it('preserves primary and actual cleanup failures without suppressing any cleanup call', () => {
+    const primary = new Error('primary integration failure', { cause: new Error('primary cause') });
+    const cleanupOne = new Error('cleanup one failure', { cause: new Error('cleanup one cause') });
+    const cleanupTwo = { marker: 'non-error cleanup value' };
+    const failures = [
+      { step: 'server', error: cleanupOne },
+      { step: 'source', error: cleanupTwo },
+    ];
+
+    expect(finalizeIntegrationFailure(primary, [])).toBe(primary);
+
+    const cleanupOnly = finalizeIntegrationFailure(null, failures);
+    expect(cleanupOnly).toBeInstanceOf(AggregateError);
+    expect(cleanupOnly.errors).toEqual([cleanupOne, cleanupTwo]);
+    expect(cleanupOnly.cleanupFailures).toBe(failures);
+    expect(cleanupOnly.cleanupSteps).toEqual(['server', 'source']);
+    expect(cleanupOnly.errors[0]).toBe(cleanupOne);
+    expect(cleanupOnly.errors[0].cause.message).toBe('cleanup one cause');
+
+    const combinedOne = finalizeIntegrationFailure(primary, [failures[0]]);
+    expect(combinedOne.errors).toEqual([primary, cleanupOne]);
+    expect(combinedOne.primaryFailure).toBe(primary);
+    expect(combinedOne.cleanupFailures).toEqual([failures[0]]);
+
+    const combined = finalizeIntegrationFailure(primary, failures);
+    expect(combined).toBeInstanceOf(AggregateError);
+    expect(combined.errors).toEqual([primary, cleanupOne, cleanupTwo]);
+    expect(combined.errors[0]).toBe(primary);
+    expect(combined.cause).toBe(primary);
+    expect(combined.primaryFailure).toBe(primary);
+    expect(combined.cleanupFailures).toBe(failures);
+    expect(combined.errors[1].cause.message).toBe('cleanup one cause');
+
+    const nonErrorPrimary = { marker: 'non-error primary value' };
+    const combinedNonError = finalizeIntegrationFailure(nonErrorPrimary, failures);
+    expect(combinedNonError.errors).toEqual([nonErrorPrimary, cleanupOne, cleanupTwo]);
+    expect(combinedNonError.cause).toBe(nonErrorPrimary);
+  });
+
   beforeAll(async () => {
     try {
       const source = parseDisposableDatabaseUrl(process.env.WEBINAR_TEST_DATABASE_URL);
@@ -370,12 +464,8 @@ describeWithMysql('webinar studio foundation', () => {
       lifecycle: disposableLifecycle,
       sourceConnection,
     });
-    if (!failures.length) return;
-    if (primaryFailure) {
-      primaryFailure.cleanupSteps = failures.map(failure => failure.step);
-      return;
-    }
-    throw cleanupFailureAggregate(failures);
+    const finalFailure = finalizeIntegrationFailure(primaryFailure, failures);
+    if (finalFailure) throw finalFailure;
   });
 
   it('uses the exact migration constraints and real private services without leaking state', async () => {
@@ -402,7 +492,7 @@ describeWithMysql('webinar studio foundation', () => {
     const mutations = require('../../services/webinars/mutations');
     webinar = await mutations.createWebinar({
       slug: 'integration-foundation',
-      title: 'Integration Foundation',
+      title: `Integration Foundation ${sensitiveCanaries.title}`,
       primaryOwnerUserId: owner.id,
       actorUserId: admin.id,
     });
@@ -426,15 +516,17 @@ describeWithMysql('webinar studio foundation', () => {
       'SELECT id FROM webinar_slides WHERE webinar_id = ? AND archived_at IS NULL', [webinar.webinarId],
     );
     const stableSlideId = slides[0].id;
-    const master = '<main>{{SLIDE_CONTENT}}</main>';
+    const master = `<main data-private-canary="${sensitiveCanaries.masterHtml}">{{SLIDE_CONTENT}}</main>`;
     expect(await mutations.saveMaster({
       webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 1,
-      masterHtml: master, masterCss: '.frame { color: navy; }',
+      masterHtml: master, masterCss: `.${sensitiveCanaries.masterCss} { color: navy; }`,
     })).toMatchObject({ liveVersion: 2 });
     expect(await mutations.saveSlide({
       webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 2, slideId: stableSlideId,
-      anchor: 'opening', title: 'Opening', targetSeconds: 60, speakerNotes: 'Shared presenter note',
-      html: '<section>Welcome</section>', css: '.slide { display: grid; }', javascript: 'const ready = true;',
+      anchor: 'opening', title: 'Opening', targetSeconds: 60, speakerNotes: sensitiveCanaries.speakerNotes,
+      html: `<section data-private-canary="${sensitiveCanaries.slideHtml}">Welcome</section>`,
+      css: `.${sensitiveCanaries.slideCss} { display: grid; }`,
+      javascript: `const ${sensitiveCanaries.slideJavascript} = true;`,
     })).toMatchObject({ liveVersion: 3 });
 
     const beforeConflict = await captureWebinarMutationState(webinar.webinarId);
@@ -478,14 +570,14 @@ describeWithMysql('webinar studio foundation', () => {
     const history = await revisions.listHistory(webinar.webinarId);
     expect(history).toHaveLength(5);
     expect(history.map(item => item.version)).toEqual([5, 4, 3, 2, 1]);
-    assertSafeHistoryItems(history);
+    assertSafeHistoryContract(history, sensitiveCanaries);
     const ownerHistory = await request('GET', `/api/webinars/${webinar.webinarId}/history`, undefined, owner);
     expect(ownerHistory.status).toBe(200);
-    assertSafeHistoryItems(ownerHistory.body);
+    assertSafeHistoryContract(ownerHistory.body, sensitiveCanaries);
     expect((await request('GET', `/api/webinars/${webinar.webinarId}/history`, undefined, other)).status).toBe(403);
 
     const ownerNote = await notes.addNote({
-      userId: owner.id, webinarId: webinar.webinarId, slideId: stableSlideId, body: 'Owner private note',
+      userId: owner.id, webinarId: webinar.webinarId, slideId: stableSlideId, body: sensitiveCanaries.note,
     });
     const [notesBeforeRejectedMutations] = await db.query(
       'SELECT * FROM webinar_presenter_notes WHERE webinar_id = ? ORDER BY id', [webinar.webinarId],

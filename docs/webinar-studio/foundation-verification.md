@@ -27,7 +27,7 @@ npx vitest run --config vitest.webinar-integration.config.js \
   tests/integration/webinarStudioFoundation.integration.test.js
 ```
 
-Result with no database URL: 1 test file and 4 tests skipped, exit 0. No MySQL
+Result with no database URL: 1 test file and 5 tests skipped, exit 0. No MySQL
 connection, database creation, or teardown is attempted in that mode.
 
 After preflighting that neither the fixed disposable-container name nor local
@@ -41,7 +41,7 @@ WEBINAR_TEST_DATABASE_URL='[redacted local disposable MySQL URL]' \
   tests/integration/webinarStudioFoundation.integration.test.js
 ```
 
-Result: 1 test file and 4 tests passed. The test applied migration 091 verbatim
+Result: 1 test file and 5 tests passed. The test applied migration 091 verbatim
 to its own generated database, seeded three active nonexternal users, and then
 exercised the real mutation, revision, repository, notes, settings, and private
 route code.
@@ -70,6 +70,9 @@ The live integration asserts all of the following in the disposable database:
 - adversarial disposable-database lifecycle cases: source-name rejection,
   pre-existing-name collision, create-time race, create failure, exact ordered
   cleanup, drop failure, server/pool/source-close failure, and non-drop guards;
+- primary-failure and cleanup-failure aggregation that retains the original
+  primary value first, preserves every cleanup error object/cause, aggregates
+  cleanup-only failures, and rethrows a primary-only failure unchanged;
 - owner and admin access, and a non-owner `403` through private routes;
 - creation at revision 1 with audience access disabled;
 - two live content saves, then a stale `VERSION_CONFLICT` with byte/deep-equal
@@ -78,8 +81,11 @@ The live integration asserts all of the following in the disposable database:
 - rollback after an injected audit-write failure;
 - archive and revision restore using the same stable slide UUID;
 - append-only five-revision history whose service and route items have only the
-  explicit allowed key sets; snapshots, source/code/note, and resource-policy
-  keys are rejected recursively;
+  explicit allowed key sets, positive IDs and versions, valid timestamps, known
+  change types, and the constrained server-generated summaries for this exact
+  sequence. Normalized source/code/note/resource-policy semantics are rejected
+  recursively, and unique canaries in saved master/slide/source/note surfaces
+  are absent from every returned history value;
 - user-scoped notes that another permitted user cannot list, update, or delete,
   with the complete note rows (including body and timestamps) unchanged after
   rejected mutations;
