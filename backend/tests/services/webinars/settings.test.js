@@ -114,16 +114,57 @@ describe('Webinar Studio presenter settings', () => {
       expect(db.query).not.toHaveBeenCalled();
     });
 
-    it('accepts distinct chord bindings and persists the original binding strings', async () => {
+    it('normalizes aliases, modifier order, and key codes before persisting settings', async () => {
       db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
       const { upsertSettings } = loadSettings();
-      const distinct = { previousSlide: 'Ctrl+A', nextSlide: 'Ctrl+B' };
-      const result = await upsertSettings({ userId: 7, shortcuts: distinct, preferences });
-      expect(result.shortcuts).toEqual(distinct);
+      const raw = {
+        previousSlide: 'ctrl + a',
+        nextSlide: 'arrowleft',
+        toggleDrawing: 'Shift+Ctrl+B',
+      };
+      const normalized = {
+        previousSlide: 'Control+KeyA',
+        nextSlide: 'ArrowLeft',
+        toggleDrawing: 'Control+Shift+KeyB',
+      };
+      const result = await upsertSettings({ userId: 7, shortcuts: raw, preferences });
+      expect(result.shortcuts).toEqual(normalized);
       expect(db.query).toHaveBeenCalledWith(
         expect.stringContaining('ON DUPLICATE KEY UPDATE'),
-        [7, JSON.stringify(distinct), JSON.stringify(preferences)],
+        [7, JSON.stringify(normalized), JSON.stringify(preferences)],
       );
+    });
+
+    it('normalizes common modifier aliases to the consumer descriptor order', async () => {
+      db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+      const { upsertSettings } = loadSettings();
+      const result = await upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'command+option+1' },
+        preferences,
+      });
+      expect(result.shortcuts).toEqual({ previousSlide: 'Alt+Meta+Digit1' });
+    });
+
+    it('rejects bindings that cannot become valid consumer descriptors', async () => {
+      const { upsertSettings } = loadSettings();
+      await expect(upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'Ctrl+F13' },
+        preferences,
+      })).rejects.toMatchObject({ code: 'SHORTCUT_BINDING_INVALID' });
+      expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('accepts distinct bindings after canonicalization', async () => {
+      db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+      const { upsertSettings } = loadSettings();
+      const result = await upsertSettings({
+        userId: 7,
+        shortcuts: { previousSlide: 'Ctrl+A', nextSlide: 'Ctrl+B' },
+        preferences,
+      });
+      expect(result.shortcuts).toEqual({ previousSlide: 'Control+KeyA', nextSlide: 'Control+KeyB' });
     });
 
     it('rejects non-string shortcut key bindings', async () => {

@@ -8,17 +8,31 @@ const SHORTCUT_ACTIONS = Object.freeze([
 const UNSAFE_KEYS = Object.freeze(['__proto__', 'constructor', 'prototype']);
 
 const MODIFIER_ALIASES = Object.freeze({
-  alt: 'alt',
-  option: 'alt',
-  cmd: 'meta',
-  command: 'meta',
-  control: 'ctrl',
-  ctrl: 'ctrl',
-  meta: 'meta',
-  shift: 'shift',
+  alt: 'Alt',
+  option: 'Alt',
+  cmd: 'Meta',
+  command: 'Meta',
+  control: 'Control',
+  ctrl: 'Control',
+  meta: 'Meta',
+  shift: 'Shift',
 });
 
-const MODIFIER_ORDER = Object.freeze(['ctrl', 'alt', 'shift', 'meta']);
+const MODIFIER_ORDER = Object.freeze(['Control', 'Alt', 'Shift', 'Meta']);
+
+const BASE_KEY_ALIASES = Object.freeze({
+  arrowdown: 'ArrowDown',
+  arrowleft: 'ArrowLeft',
+  arrowright: 'ArrowRight',
+  arrowup: 'ArrowUp',
+  backspace: 'Backspace',
+  end: 'End',
+  enter: 'Enter',
+  home: 'Home',
+  pagedown: 'PageDown',
+  pageup: 'PageUp',
+  space: 'Space',
+});
 
 class WebinarSettingsError extends Error {
   constructor(code, message = 'Webinar settings operation failed', extra = {}) {
@@ -40,16 +54,30 @@ function canonicalizeBinding(binding) {
   }
 
   const modifiers = [];
-  const keys = [];
+  const baseTokens = [];
   for (const token of tokens) {
     const normalizedToken = token.toLowerCase();
     const modifier = MODIFIER_ALIASES[normalizedToken];
     if (modifier) modifiers.push(modifier);
-    else keys.push(normalizedToken);
+    else baseTokens.push(normalizedToken);
   }
 
+  const base = normalizeBaseToken(baseTokens);
+  if (!base || new Set(modifiers).size !== modifiers.length) {
+    throw new WebinarSettingsError('SHORTCUT_BINDING_INVALID', 'Shortcut binding must map to a valid presenter descriptor', { status: 400 });
+  }
   modifiers.sort((left, right) => MODIFIER_ORDER.indexOf(left) - MODIFIER_ORDER.indexOf(right));
-  return [...modifiers, ...keys].join('+');
+  return [...modifiers, base].join('+');
+}
+
+function normalizeBaseToken(baseTokens) {
+  if (baseTokens.length !== 1) return null;
+  const [base] = baseTokens;
+  if (/^[a-z]$/.test(base)) return `Key${base.toUpperCase()}`;
+  if (/^key[a-z]$/.test(base)) return `Key${base.slice(-1).toUpperCase()}`;
+  if (/^[0-9]$/.test(base)) return `Digit${base}`;
+  if (/^digit[0-9]$/.test(base)) return `Digit${base.slice(-1)}`;
+  return BASE_KEY_ALIASES[base] || null;
 }
 
 function normalizeShortcuts(shortcuts) {
@@ -65,12 +93,12 @@ function normalizeShortcuts(shortcuts) {
     if (typeof binding !== 'string' || !binding.trim()) {
       throw new WebinarSettingsError('SHORTCUT_BINDING_INVALID', 'Shortcut binding must be a nonempty string', { status: 400 });
     }
-    const canonicalBinding = canonicalizeBinding(binding);
-    if (seenBindings.has(canonicalBinding)) {
+    const normalizedBinding = canonicalizeBinding(binding);
+    if (seenBindings.has(normalizedBinding)) {
       throw new WebinarSettingsError('SHORTCUT_BINDING_DUPLICATE', 'Shortcut bindings must be unique', { status: 400 });
     }
-    seenBindings.add(canonicalBinding);
-    normalized[action] = binding;
+    seenBindings.add(normalizedBinding);
+    normalized[action] = normalizedBinding;
   }
   return normalized;
 }
