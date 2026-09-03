@@ -121,6 +121,11 @@ AWS_REGION=us-east-1
 S3_BUCKET_NAME=msfg-dashboard-files
 AWS_ACCESS_KEY_ID=YOUR_AWS_ACCESS_KEY
 AWS_SECRET_ACCESS_KEY=YOUR_AWS_SECRET_KEY
+
+# Plaud recordings → S3 archive (cron job, see docs/PLAUD_SYNC.md)
+PLAUD_S3_BUCKET=msfg-plaud-recordings
+# PLAUD_S3_PREFIX=recordings            # folder inside the bucket (default: recordings)
+# PLAUD_TOKEN_FILE=/home/ubuntu/.plaud/tokens.json   # written by `plaud login` (default)
 ```
 
 **Important:** 
