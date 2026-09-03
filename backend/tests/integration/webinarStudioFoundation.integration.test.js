@@ -9,6 +9,7 @@ const describeWithMysql = process.env.WEBINAR_TEST_DATABASE_URL ? describe : des
 const migrationPaths = [
   path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql'),
   path.resolve(import.meta.dirname, '../../db/migrations/092_webinar_active_slide_anchors.sql'),
+  path.resolve(import.meta.dirname, '../../db/migrations/093_users_is_active.sql'),
 ];
 const localMysqlHosts = new Set(['127.0.0.1', '::1', 'localhost']);
 const identifier = /^[A-Za-z0-9_]{1,64}$/;
@@ -22,6 +23,7 @@ let server;
 let notes;
 let revisions;
 let createMutationService;
+let verifyWebinarStudioSchema;
 let owner;
 let admin;
 let other;
@@ -433,17 +435,16 @@ describeWithMysql('webinar studio foundation', () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) NOT NULL UNIQUE,
         name VARCHAR(255) NOT NULL,
-        role VARCHAR(100) NOT NULL DEFAULT 'user',
-        is_active TINYINT(1) NOT NULL DEFAULT 1
+        role VARCHAR(100) NOT NULL DEFAULT 'user'
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-        await applyFoundationMigrations(setup);
         await setup.query(
-        `INSERT INTO users (email, name, role, is_active) VALUES
-         ('webinar-owner@example.test', 'Webinar Owner', 'user', 1),
-         ('webinar-admin@example.test', 'Webinar Admin', 'admin', 1),
-         ('webinar-other@example.test', 'Webinar Other', 'user', 1)`,
+        `INSERT INTO users (email, name, role) VALUES
+         ('webinar-owner@example.test', 'Webinar Owner', 'user'),
+         ('webinar-admin@example.test', 'Webinar Admin', 'admin'),
+         ('webinar-other@example.test', 'Webinar Other', 'user')`,
         );
-        const [users] = await setup.query('SELECT id, email, role FROM users ORDER BY id');
+        await applyFoundationMigrations(setup);
+        const [users] = await setup.query('SELECT id, email, role, is_active FROM users ORDER BY id');
         [owner, admin, other] = users;
       } finally {
         await setup.end();
@@ -456,6 +457,7 @@ describeWithMysql('webinar studio foundation', () => {
       process.env.DB_NAME = createdDatabase;
 
       db = require('../../db/connection');
+      ({ verifyWebinarStudioSchema } = require('../../db/migrations'));
       ({ createMutationService } = require('../../services/webinars/mutations'));
       notes = require('../../services/webinars/notes');
       revisions = require('../../services/webinars/revisions');
@@ -491,6 +493,8 @@ describeWithMysql('webinar studio foundation', () => {
 
   it('uses the exact migration constraints and real private services without leaking state', async () => {
     try {
+    expect([owner.is_active, admin.is_active, other.is_active]).toEqual([1, 1, 1]);
+    await expect(verifyWebinarStudioSchema(db, createdDatabase)).resolves.toBeUndefined();
     const [foreignKeys] = await db.query(
       `SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
        WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'FOREIGN KEY'

@@ -10,6 +10,14 @@ const activeAnchorMigration = fs.readFileSync(
   path.resolve(import.meta.dirname, '../../db/migrations/092_webinar_active_slide_anchors.sql'),
   'utf8',
 );
+const usersActiveMigration = fs.readFileSync(
+  path.resolve(import.meta.dirname, '../../db/migrations/093_users_is_active.sql'),
+  'utf8',
+);
+const canonicalSchema = fs.readFileSync(
+  path.resolve(import.meta.dirname, '../../DATABASE_SCHEMA.sql'),
+  'utf8',
+);
 
 describe('091 webinar studio foundation migration', () => {
   it.each([
@@ -86,5 +94,23 @@ describe('092 active slide anchor migration', () => {
     expect(activeAnchorMigration.indexOf('UNIQUE KEY uq_webinar_slide_active_anchor'))
       .toBeLessThan(activeAnchorMigration.indexOf('DROP INDEX uq_webinar_slide_anchor'));
     expect(activeAnchorMigration).not.toMatch(/UPDATE\s+webinar_slides\s+SET\s+anchor/i);
+  });
+});
+
+describe('users.is_active schema compatibility', () => {
+  it('includes an active flag in the canonical fresh-install users table', () => {
+    const usersTable = canonicalSchema.match(/CREATE TABLE IF NOT EXISTS users \([\s\S]*?\n\)/)?.[0];
+
+    expect(usersTable).toContain('is_active TINYINT(1) NOT NULL DEFAULT 1');
+  });
+
+  it('adds the active flag to existing users tables through an idempotent numbered migration', () => {
+    expect(usersActiveMigration).toMatch(/INFORMATION_SCHEMA\.COLUMNS/i);
+    expect(usersActiveMigration).toMatch(/TABLE_NAME\s*=\s*'users'/i);
+    expect(usersActiveMigration).toMatch(/COLUMN_NAME\s*=\s*'is_active'/i);
+    expect(usersActiveMigration).toContain(
+      'ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1',
+    );
+    expect(usersActiveMigration).toMatch(/IF\s*\(\s*@\w+\s*=\s*0/i);
   });
 });
