@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "plaud:sync": "node scripts/plaud-sync.js",
     "migrate": "node -e \"require('./db/migrations').runMigrations().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); })\"",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -20,6 +21,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.490.0",
     "@aws-sdk/client-s3": "^3.490.0",
     "@aws-sdk/client-sesv2": "^3.1115.0",
+    "@aws-sdk/lib-storage": "3.997.0",
     "@aws-sdk/s3-request-presigner": "^3.490.0",
     "acorn": "^8.18.0",
     "cors": "^2.8.5",
