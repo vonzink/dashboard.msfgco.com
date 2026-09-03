@@ -14,6 +14,7 @@ const { startCalendarSyncScheduler } = require('./services/calendarSync/schedule
 const logger = require('./lib/logger');
 const pinoHttp = require('pino-http');
 const websocket = require('./lib/websocket');
+const { recordOperationalEvent } = require('./services/webinars/observability');
 
 // Route imports
 const investorsRoutes = require('./routes/investors');
@@ -177,9 +178,16 @@ function rejectOversizedWebinarRequest(req, res, next) {
   }
   const contentLength = Number(req.get('content-length'));
   if (Number.isFinite(contentLength) && contentLength > WEBINAR_MAX_REQUEST_BYTES) {
+    recordWebinarTransportRejection(req, 413);
     return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
   }
   return next();
+}
+
+function recordWebinarTransportRejection(req, statusCode, reasonCode = 'VALIDATION_FAILED') {
+  if (req.webinarTransportEventRecorded) return;
+  req.webinarTransportEventRecorded = true;
+  recordOperationalEvent('webinar.validation_rejected', { statusCode, reasonCode });
 }
 
 function verifyWebinarRawRequestSize(req, _res, buffer) {
@@ -191,12 +199,36 @@ function verifyWebinarRawRequestSize(req, _res, buffer) {
   }
 }
 
+const webinarRawBodyParser = express.raw({
+  type: isWebinarStudioMutation,
+  limit: WEBINAR_MAX_REQUEST_BYTES,
+  verify: verifyWebinarRawRequestSize,
+});
+
+function parseWebinarRawJson(req, res, next) {
+  if (!isWebinarStudioMutation(req) || !Buffer.isBuffer(req.body)) return next();
+  const contentType = (req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    recordWebinarTransportRejection(req, 400, 'UNSUPPORTED_MEDIA_TYPE');
+    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED' });
+  }
+  try {
+    req.body = JSON.parse(req.body.toString('utf8'));
+    return next();
+  } catch {
+    recordWebinarTransportRejection(req, 400);
+    return res.status(400).json({ error: 'Invalid request', code: 'VALIDATION_FAILED' });
+  }
+}
+
 // Request logging
 app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
 
 // Body parsing
 app.use(rejectOversizedWebinarRequest);
-app.use(express.json({ limit: '10mb', verify: verifyWebinarRawRequestSize }));
+app.use(webinarRawBodyParser);
+app.use(parseWebinarRawJson);
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // ======================
@@ -294,7 +326,8 @@ app.use('/api/handbook', authenticate, handbookRoutes);
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');
 
-  if (err.code === 'CONTENT_LIMIT_EXCEEDED' && isWebinarStudioMutation(req)) {
+  if (isWebinarStudioMutation(req) && (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413)) {
+    recordWebinarTransportRejection(req, 413);
     return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
   }
   if (err.type === 'entity.parse.failed' && isWebinarStudioMutation(req)) {
@@ -392,6 +425,8 @@ module.exports = {
   isWebinarStudioMutation,
   rejectOversizedWebinarRequest,
   verifyWebinarRawRequestSize,
+  webinarRawBodyParser,
+  parseWebinarRawJson,
   writeLimiter,
   webinarWriteLimiter,
 };

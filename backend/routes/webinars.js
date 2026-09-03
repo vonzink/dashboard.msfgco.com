@@ -75,9 +75,9 @@ async function loadAuthorizedWebinar(req, res, { adminOnly = false } = {}) {
 function respondWithServiceError(req, res, error) {
   const known = KNOWN_ERROR_CODES.has(error.code);
   const status = known ? (error.status || (error.code === 'VERSION_CONFLICT' ? 409 : 400)) : 500;
-  const fields = { actorUserId: getUserId(req), statusCode: status, reasonCode: status >= 500 ? 'DATABASE_FAILURE' : error.code === 'VERSION_CONFLICT' ? 'VERSION_CONFLICT' : 'VALIDATION_FAILED' };
+  const fields = { actorUserId: getUserId(req), statusCode: status, reasonCode: status >= 500 ? 'DATABASE_FAILURE' : error.code === 'VERSION_CONFLICT' ? 'VERSION_CONFLICT' : status === 409 ? error.code : 'VALIDATION_FAILED' };
   if (req.params.id && Number.isInteger(Number(req.params.id))) fields.webinarId = Number(req.params.id);
-  if (error.code === 'VERSION_CONFLICT') recordOperationalEvent('webinar.version_conflict', fields);
+  if (status === 409) recordOperationalEvent('webinar.version_conflict', fields);
   else if (status === 400 || status === 413) recordOperationalEvent('webinar.validation_rejected', fields);
   else if (status >= 500) recordOperationalEvent('webinar.database_failure', fields);
   if (!known) return res.status(500).json({ error: 'Internal server error' });

@@ -117,6 +117,16 @@ describe('private webinar API contracts', () => {
     expect(response).toMatchObject({ status: 409, body: { code: 'VERSION_CONFLICT', currentVersion: 2, updatedBy: { id: 1 } } });
   });
 
+  it('records non-version conflicts as conflicts without updater metadata', async () => {
+    services.saveSlide.mockRejectedValueOnce(Object.assign(new Error('Anchor is already in use'), { status: 409, code: 'ANCHOR_CONFLICT', updatedBy: { id: 1 } }));
+    const response = await request('PUT', `/api/webinars/2/slides/${uuid}`, validSlide);
+    expect(response).toEqual({ status: 409, body: { error: 'Anchor is already in use', code: 'ANCHOR_CONFLICT' } });
+    expect(services.recordOperationalEvent).toHaveBeenCalledWith('webinar.version_conflict', expect.objectContaining({
+      actorUserId: 7, webinarId: 2, statusCode: 409, reasonCode: 'ANCHOR_CONFLICT'
+    }));
+    expect(services.recordOperationalEvent.mock.calls.flat().some(value => value?.updatedBy)).toBe(false);
+  });
+
   it('never exposes unexpected database errors', async () => {
     services.saveMaster.mockRejectedValueOnce(Object.assign(new Error('ER_ACCESS_DENIED: password=secret'), { code: 'ER_ACCESS_DENIED' }));
     const response = await request('PUT', '/api/webinars/2/master', validMaster);
@@ -147,16 +157,20 @@ describe('mounted Webinar Studio transport and limiter contract', () => {
 
   beforeAll(async () => {
     const router = (await import('../../routes/webinars.js')).default;
+    const settingsRouter = (await import('../../routes/webinarPresenterSettings.js')).default;
     const { requireActiveDbUser, requireDbUser, requireNonExternal } = createRequire(import.meta.url)('../../middleware/userContext');
     mounted = express();
     mounted.use(serverApi.rejectOversizedWebinarRequest);
-    mounted.use(express.json({ limit: '10mb', verify: serverApi.verifyWebinarRawRequestSize }));
+    mounted.use(serverApi.webinarRawBodyParser);
+    mounted.use(serverApi.parseWebinarRawJson);
+    mounted.use(express.json({ limit: '10mb' }));
     mounted.use((req, _res, next) => { req.user = JSON.parse(req.get('x-test-user') || '{}'); next(); });
     mounted.use('/api/', serverApi.writeLimiter);
     mounted.use('/api/webinars', requireDbUser, requireActiveDbUser, requireNonExternal, serverApi.webinarWriteLimiter, router);
+    mounted.use('/api/webinar-presenter-settings', requireDbUser, requireActiveDbUser, requireNonExternal, serverApi.webinarWriteLimiter, settingsRouter);
     mounted.post('/api/unrelated', (_req, res) => res.status(201).json({ ok: true }));
     mounted.use((err, req, res, _next) => {
-      if (err.code === 'CONTENT_LIMIT_EXCEEDED') return res.status(413).json({ code: err.code });
+      if (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413) return res.status(413).json({ code: 'CONTENT_LIMIT_EXCEEDED' });
       if (err.type === 'entity.parse.failed') return res.status(400).json({ code: 'VALIDATION_FAILED' });
       return res.status(500).json({ error: 'Internal server error' });
     });
@@ -188,5 +202,36 @@ describe('mounted Webinar Studio transport and limiter contract', () => {
     });
     expect(chunked).toBe(413);
     expect((await mountedRequest('POST', '/api/unrelated', JSON.parse(oversized))).status).toBe(201);
+  }, 30000);
+
+  it('accepts exactly 2 MiB of raw JSON for semantic validation and rejects malformed JSON safely', async () => {
+    const prefix = '{"expectedVersion":1,"masterHtml":"';
+    const suffix = '","masterCss":""}';
+    const exactBoundary = `${prefix}${'x'.repeat((2 * 1024 * 1024) - Buffer.byteLength(prefix) - Buffer.byteLength(suffix))}${suffix}`;
+    const exact = await fetch(`http://127.0.0.1:${mountedServer.address().port}/api/webinars/2/master`, {
+      method: 'PUT', headers: { 'content-type': 'application/json', 'x-test-user': JSON.stringify(user(98, 'admin')) }, body: exactBoundary,
+    });
+    expect(exact.status).not.toBe(413);
+    const malformed = await fetch(`http://127.0.0.1:${mountedServer.address().port}/api/webinars/2/master`, {
+      method: 'PUT', headers: { 'content-type': 'application/json', 'x-test-user': JSON.stringify(user(97, 'admin')) }, body: '{not-json',
+    });
+    expect(malformed.status).toBe(400);
+  }, 30000);
+
+  it.each(['text/plain', 'application/x-www-form-urlencoded'])('rejects chunked raw bodies over 2 MiB for %s before a handler can see them', async (contentType) => {
+    const status = await new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port: mountedServer.address().port, method: 'PUT', path: '/api/webinars/2/master', headers: { 'content-type': contentType, 'x-test-user': JSON.stringify(user(99, 'admin')), 'transfer-encoding': 'chunked' } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      req.on('error', reject); req.write('x'.repeat(2 * 1024 * 1024 + 1)); req.end();
+    });
+    expect(status).toBe(413);
+    expect(services.saveMaster).not.toHaveBeenCalled();
+  }, 30000);
+
+  it('applies the same raw limit before the settings identity gates', async () => {
+    const status = await new Promise((resolve, reject) => {
+      const req = http.request({ host: '127.0.0.1', port: mountedServer.address().port, method: 'PUT', path: '/api/webinar-presenter-settings/me', headers: { 'content-type': 'text/plain', 'transfer-encoding': 'chunked' } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode)); });
+      req.on('error', reject); req.write('x'.repeat(2 * 1024 * 1024 + 1)); req.end();
+    });
+    expect(status).toBe(413);
   }, 30000);
 });
