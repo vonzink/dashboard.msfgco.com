@@ -60,6 +60,24 @@ describe('Webinar Studio revisions', () => {
     await expect(getRevisionForRestore(2, 9)).rejects.toMatchObject({ code: 'REVISION_SNAPSHOT_INVALID' });
   });
 
+  it('enforces live slug and title bounds for restore snapshots', async () => {
+    const { assertCompleteSnapshot } = load();
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, webinar: { ...validSnapshot.webinar, slug: 'a'.repeat(190), title: 'T'.repeat(255) } })).not.toThrow();
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, webinar: { ...validSnapshot.webinar, slug: 'Not-valid' } })).toThrow(expect.objectContaining({ code: 'REVISION_SNAPSHOT_INVALID' }));
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, webinar: { ...validSnapshot.webinar, slug: 'a'.repeat(191) } })).toThrow(expect.objectContaining({ code: 'REVISION_SNAPSHOT_INVALID' }));
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, webinar: { ...validSnapshot.webinar, title: 'T'.repeat(256) } })).toThrow(expect.objectContaining({ code: 'REVISION_SNAPSHOT_INVALID' }));
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, slides: [{ ...validSnapshot.slides[0], title: 'T'.repeat(256) }] })).toThrow(expect.objectContaining({ code: 'REVISION_SNAPSHOT_INVALID' }));
+  });
+
+  it('uses UTF-8 byte limits for snapshot speaker notes and content surfaces', async () => {
+    const { assertCompleteSnapshot } = load();
+    const exactNotes = `${'€'.repeat(34133)}a`; // 102400 UTF-8 bytes exactly.
+    expect(Buffer.byteLength(exactNotes, 'utf8')).toBe(100 * 1024);
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, slides: [{ ...validSnapshot.slides[0], speakerNotes: exactNotes }] })).not.toThrow();
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, slides: [{ ...validSnapshot.slides[0], speakerNotes: `${exactNotes}a` }] })).toThrow(expect.objectContaining({ code: 'REVISION_SNAPSHOT_INVALID' }));
+    expect(() => assertCompleteSnapshot({ ...validSnapshot, slides: [{ ...validSnapshot.slides[0], javascript: 'x'.repeat(500 * 1024 + 1) }] })).toThrow(expect.objectContaining({ code: 'REVISION_SNAPSHOT_INVALID' }));
+  });
+
   it('builds exactly the complete normalized revision snapshot', async () => {
     const { buildCompleteSnapshot } = load();
     const connection = { query: vi.fn()

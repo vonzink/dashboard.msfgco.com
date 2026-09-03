@@ -55,6 +55,86 @@ function service(options = {}) {
   return { ...fake, api: createMutationService({ db: fake.db, validateCandidate: options.validateCandidate, syncAssetReferences: options.syncAssetReferences, recordRevisionAssetReferences: options.recordRevisionAssetReferences, recordAuditEvent: options.recordAuditEvent || vi.fn().mockResolvedValue({ id: 1 }) }) };
 }
 
+function copy(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function statefulMutationModel(initial) {
+  let committed = copy(initial);
+  let transaction = null;
+  const calls = [];
+  const state = () => transaction || committed;
+  const presentation = id => state().presentations.find(row => Number(row.id) === Number(id));
+  const connection = {
+    beginTransaction: vi.fn(async () => { transaction = copy(committed); calls.push('begin'); }),
+    commit: vi.fn(async () => { committed = transaction; transaction = null; calls.push('commit'); }),
+    rollback: vi.fn(async () => { transaction = null; calls.push('rollback'); }),
+    release: vi.fn(),
+    query: vi.fn(async (sql, params = []) => {
+      const db = state();
+      if (sql.includes('FROM users')) return [[db.users.find(user => Number(user.id) === Number(params[0]) && Number(user.is_active) === 1)].filter(Boolean)];
+      if (sql.includes('FROM webinar_revisions') && sql.includes('WHERE webinar_id = ? AND id = ?')) return [[db.revisions.find(row => Number(row.webinar_id) === Number(params[0]) && Number(row.id) === Number(params[1]))].filter(Boolean)];
+      if (sql.includes('FOR UPDATE') && sql.includes('webinar_presentations')) {
+        const row = presentation(params[0]);
+        return [[row && { ...row, updater_name: 'Editor' }].filter(Boolean)];
+      }
+      if (sql.includes('SELECT id, webinar_id FROM webinar_slides')) {
+        return [db.slides.filter(slide => params.includes(slide.id)).map(slide => ({ id: slide.id, webinar_id: slide.webinar_id }))];
+      }
+      if (sql.includes('SELECT slug, title, master_html')) return [[presentation(params[0])].filter(Boolean)];
+      if (sql.includes('SELECT id, live_version, updated_at')) return [[presentation(params[0])].filter(Boolean)];
+      if (sql.includes('FROM webinar_presentations') && sql.includes('WHERE id = ?')) return [[presentation(params[0])].filter(Boolean)];
+      if (sql.includes('FROM webinar_slides') && sql.includes('ORDER BY position')) {
+        return [db.slides.filter(slide => Number(slide.webinar_id) === Number(params[0]) && !slide.archived_at).sort((a, b) => a.position - b.position)];
+      }
+      if (sql.includes('INSERT INTO webinar_presentations')) {
+        const id = db.nextPresentationId++;
+        db.presentations.push({ id, slug: params[0], title: params[1], primary_owner_user_id: params[2], master_html: params[3], master_css: params[4], audience_enabled: 0, live_version: 0, created_by_user_id: params[5], updated_by_user_id: params[6], updated_at: '2026-09-03T11:00:00.000Z', archived_at: null });
+        return [{ insertId: id }];
+      }
+      if (sql.includes('INSERT INTO webinar_slides')) {
+        if (sql.includes("VALUES (?, ?, 0, 'opening'")) {
+          db.slides.push({ id: params[0], webinar_id: params[1], position: 0, anchor: 'opening', title: 'Opening', target_seconds: 0, speaker_notes: '', html: '', css: '', javascript: '', archived_at: null });
+        } else {
+          db.slides.push({ id: params[0], webinar_id: params[1], position: params[2], anchor: params[3], title: params[4], target_seconds: params[5], speaker_notes: params[6], html: params[7], css: params[8], javascript: params[9], archived_at: null });
+        }
+        return [{ insertId: 1, affectedRows: 1 }];
+      }
+      if (sql.includes('INSERT INTO webinar_revisions')) {
+        const id = db.nextRevisionId++;
+        db.revisions.push({ id, webinar_id: params[0], version: params[1], snapshot: params[2], change_type: params[3], change_summary: params[4], created_by_user_id: params[5] });
+        return [{ insertId: id }];
+      }
+      if (sql.includes('UPDATE webinar_presentations SET live_version = ?')) {
+        const row = presentation(params[2]); row.live_version = params[0]; row.updated_by_user_id = params[1]; row.updated_at = '2026-09-03T11:00:01.000Z'; return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE webinar_presentations SET live_version = 1')) {
+        const row = presentation(params[1]); row.live_version = 1; row.updated_by_user_id = params[0]; row.updated_at = '2026-09-03T11:00:01.000Z'; return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE webinar_presentations SET slug = ?')) {
+        const row = presentation(params[5]); Object.assign(row, { slug: params[0], title: params[1], master_html: params[2], master_css: params[3], updated_by_user_id: params[4], updated_at: '2026-09-03T11:00:01.000Z' }); return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE webinar_slides SET position = NULL')) {
+        db.slides.filter(slide => Number(slide.webinar_id) === Number(params[1]) && !slide.archived_at).forEach(slide => { slide.position = null; slide.archived_at = '2026-09-03T11:00:01.000Z'; }); return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE webinar_slides SET position = ?, anchor')) {
+        const slide = db.slides.find(row => row.id === params[9] && Number(row.webinar_id) === Number(params[10]));
+        if (!slide) return [{ affectedRows: 0 }];
+        Object.assign(slide, { position: params[0], anchor: params[1], title: params[2], target_seconds: params[3], speaker_notes: params[4], html: params[5], css: params[6], javascript: params[7], archived_at: null });
+        return [{ affectedRows: 1 }];
+      }
+      throw new Error(`Unhandled model query: ${sql}`);
+    }),
+  };
+  return {
+    calls,
+    db: { getConnection: vi.fn().mockResolvedValue(connection) },
+    connection,
+    committed: () => copy(committed),
+    audit: async (_connection, event) => { state().audit.push(copy(event)); return { id: state().audit.length }; },
+  };
+}
+
 describe('Webinar Studio live mutations', () => {
   it('locks, validates, snapshots, versions and commits a Master save atomically', async () => {
     const { api, calls } = service();
@@ -255,6 +335,82 @@ describe('Webinar Studio live mutations', () => {
     expect(presentation[0]).toContain('0');
     expect(presentation[1]).toContain('<main class="webinar-slide">{{SLIDE_CONTENT}}</main>');
     expect(calls).toEqual(expect.arrayContaining(['beginTransaction', 'revision:1', 'commit']));
+  });
+
+  it('commits complete create state atomically in a transaction-local model', async () => {
+    const model = statefulMutationModel({ users: [{ id: 7, name: 'Owner', is_active: 1 }], presentations: [], slides: [], revisions: [], audit: [], nextPresentationId: 20, nextRevisionId: 90 });
+    const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+    await expect(api.createWebinar({ slug: 'first-time-homebuyer', title: 'First Time Homebuyer', primaryOwnerUserId: 7, actorUserId: 1 }))
+      .resolves.toMatchObject({ webinarId: 20, liveVersion: 1, updatedAt: '2026-09-03T11:00:01.000Z' });
+    const state = model.committed();
+    expect(state.presentations).toEqual([expect.objectContaining({ id: 20, primary_owner_user_id: 7, audience_enabled: 0, live_version: 1, master_html: '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>', master_css: '' })]);
+    expect(state.slides).toEqual([expect.objectContaining({ webinar_id: 20, position: 0, anchor: 'opening', title: 'Opening', html: '', css: '', javascript: '', archived_at: null })]);
+    expect(JSON.parse(state.revisions[0].snapshot)).toEqual({ schemaVersion: 1, webinar: { slug: 'first-time-homebuyer', title: 'First Time Homebuyer', masterHtml: '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>', masterCss: '' }, slides: [expect.objectContaining({ position: 0, anchor: 'opening' })] });
+    expect(state.audit).toEqual([expect.objectContaining({ eventType: 'webinar_created', webinarId: 20, metadata: { liveVersion: 1 } })]);
+    expect(model.calls).toEqual(['begin', 'commit']);
+  });
+
+  it('commits restored live/archived slides and a new complete revision in a transaction-local model', async () => {
+    const restored = { schemaVersion: 1, webinar: { slug: 'restored', title: 'Restored', masterHtml, masterCss: '' }, slides: [{ id: stableId, position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 20, speakerNotes: 'restored note', html: '<section>restored</section>', css: '', javascript: '' }] };
+    const initial = {
+      users: [{ id: 7, name: 'Owner', is_active: 1 }],
+      presentations: [{ ...currentWebinar(), archived_at: null }],
+      slides: [
+        { ...activeSlides()[0], webinar_id: 2, archived_at: '2026-09-01T00:00:00.000Z', position: null },
+        { id: secondId, webinar_id: 2, position: 0, anchor: 'old-slide', title: 'Old', target_seconds: 0, speaker_notes: '', html: '<section>old</section>', css: '', javascript: '', archived_at: null },
+      ],
+      revisions: [{ id: 18, webinar_id: 2, version: 2, snapshot: JSON.stringify(restored) }], audit: [], nextPresentationId: 3, nextRevisionId: 19,
+    };
+    const model = statefulMutationModel(initial);
+    const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+    await expect(api.restoreRevision({ webinarId: 2, revisionId: 18, actorUserId: 7, expectedVersion: 4 })).resolves.toMatchObject({ liveVersion: 5 });
+    const state = model.committed();
+    expect(state.slides.find(slide => slide.id === stableId)).toEqual(expect.objectContaining({ archived_at: null, position: 0, html: '<section>restored</section>' }));
+    expect(state.slides.find(slide => slide.id === secondId)).toEqual(expect.objectContaining({ archived_at: '2026-09-03T11:00:01.000Z', position: null }));
+    expect(state.revisions).toHaveLength(2);
+    expect(state.revisions[1]).toEqual(expect.objectContaining({ version: 5, change_type: 'revision_restored' }));
+    expect(JSON.parse(state.revisions[1].snapshot).slides).toEqual([expect.objectContaining({ id: stableId, position: 0 })]);
+    expect(state.audit).toEqual([expect.objectContaining({ eventType: 'content_saved', metadata: { liveVersion: 5, changeType: 'revision_restored' } })]);
+  });
+
+  it.each(['revision', 'audit', 'commit'])('rolls back all material create state when %s fails', async stage => {
+    const initial = { users: [{ id: 7, name: 'Owner', is_active: 1 }], presentations: [], slides: [], revisions: [], audit: [], nextPresentationId: 20, nextRevisionId: 90 };
+    const model = statefulMutationModel(initial);
+    const recordAuditEvent = stage === 'audit' ? vi.fn().mockRejectedValue(new Error('audit failed')) : model.audit;
+    if (stage === 'revision') {
+      const base = model.connection.query.getMockImplementation();
+      model.connection.query.mockImplementation((sql, params) => sql.includes('INSERT INTO webinar_revisions') ? Promise.reject(new Error('revision failed')) : base(sql, params));
+    }
+    if (stage === 'commit') model.connection.commit.mockImplementation(async () => { throw new Error('commit failed'); });
+    const api = createMutationService({ db: model.db, recordAuditEvent });
+    await expect(api.createWebinar({ slug: 'intro', title: 'Intro', primaryOwnerUserId: 7, actorUserId: 1 })).rejects.toThrow();
+    expect(model.committed()).toEqual(initial);
+    expect(model.calls).toContain('rollback');
+    if (stage !== 'commit') expect(model.calls).not.toContain('commit');
+  });
+
+  it.each(['revision', 'audit', 'commit'])('rolls back all material restore state when %s fails', async stage => {
+    const restored = { schemaVersion: 1, webinar: { slug: 'restored', title: 'Restored', masterHtml, masterCss: '' }, slides: [{ id: stableId, position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 20, speakerNotes: 'restored note', html: '<section>restored</section>', css: '', javascript: '' }] };
+    const initial = {
+      users: [{ id: 7, name: 'Owner', is_active: 1 }], presentations: [{ ...currentWebinar(), archived_at: null }],
+      slides: [
+        { ...activeSlides()[0], webinar_id: 2, archived_at: '2026-09-01T00:00:00.000Z', position: null },
+        { id: secondId, webinar_id: 2, position: 0, anchor: 'old-slide', title: 'Old', target_seconds: 0, speaker_notes: '', html: '<section>old</section>', css: '', javascript: '', archived_at: null },
+      ],
+      revisions: [{ id: 18, webinar_id: 2, version: 2, snapshot: JSON.stringify(restored) }], audit: [], nextPresentationId: 3, nextRevisionId: 19,
+    };
+    const model = statefulMutationModel(initial);
+    const recordAuditEvent = stage === 'audit' ? vi.fn().mockRejectedValue(new Error('audit failed')) : model.audit;
+    if (stage === 'revision') {
+      const base = model.connection.query.getMockImplementation();
+      model.connection.query.mockImplementation((sql, params) => sql.includes('INSERT INTO webinar_revisions') ? Promise.reject(new Error('revision failed')) : base(sql, params));
+    }
+    if (stage === 'commit') model.connection.commit.mockImplementation(async () => { throw new Error('commit failed'); });
+    const api = createMutationService({ db: model.db, recordAuditEvent });
+    await expect(api.restoreRevision({ webinarId: 2, revisionId: 18, actorUserId: 7, expectedVersion: 4 })).rejects.toThrow();
+    expect(model.committed()).toEqual(initial);
+    expect(model.calls).toContain('rollback');
+    if (stage !== 'commit') expect(model.calls).not.toContain('commit');
   });
 
   it('rejects a missing or inactive creation owner before inserting webinar rows', async () => {

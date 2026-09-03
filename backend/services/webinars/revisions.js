@@ -1,7 +1,13 @@
 const db = require('../../db/connection');
+const { LIMITS } = require('../../validation/schemas/webinars');
+const {
+  assertCandidateWithinLimits, validateCss, validateJavascript, validateMasterHtml,
+  validateSlideHtml,
+} = require('./contentPolicy');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const WEBINAR_FIELDS = ['slug', 'title', 'masterHtml', 'masterCss'];
 const SLIDE_FIELDS = ['id', 'position', 'anchor', 'title', 'targetSeconds', 'speakerNotes', 'html', 'css', 'javascript'];
 
@@ -69,7 +75,9 @@ function assertCompleteSnapshot(snapshot) {
     throw new RevisionError('REVISION_SNAPSHOT_INVALID');
   }
   if (Object.keys(snapshot.webinar).length !== WEBINAR_FIELDS.length
-    || WEBINAR_FIELDS.some(field => typeof snapshot.webinar[field] !== 'string')) {
+    || WEBINAR_FIELDS.some(field => typeof snapshot.webinar[field] !== 'string')
+    || !SLUG.test(snapshot.webinar.slug) || snapshot.webinar.slug.length > 190
+    || !snapshot.webinar.title.trim() || snapshot.webinar.title.length > 255) {
     throw new RevisionError('REVISION_SNAPSHOT_INVALID');
   }
   const ids = new Set();
@@ -82,14 +90,41 @@ function assertCompleteSnapshot(snapshot) {
       || !Number.isInteger(slide.position) || slide.position !== position
       || !Number.isInteger(slide.targetSeconds) || slide.targetSeconds < 0 || slide.targetSeconds > 7200
       || ['title', 'speakerNotes', 'html', 'css', 'javascript'].some(field => typeof slide[field] !== 'string')
-      || !slide.title.trim()) {
+      || !slide.title.trim() || slide.title.length > 255
+      || Buffer.byteLength(slide.speakerNotes, 'utf8') > LIMITS.speaker_notes) {
       throw new RevisionError('REVISION_SNAPSHOT_INVALID');
     }
     if (ids.has(slide.id) || anchors.has(slide.anchor)) throw new RevisionError('REVISION_SNAPSHOT_INVALID');
     ids.add(slide.id);
     anchors.add(slide.anchor);
   }
+  assertSnapshotContentPolicy(snapshot);
   return snapshot;
+}
+
+function assertSnapshotContentPolicy(snapshot) {
+  const candidate = {
+    masterHtml: snapshot.webinar.masterHtml,
+    masterCss: snapshot.webinar.masterCss,
+    slides: snapshot.slides,
+  };
+  const issues = [
+    ...validateMasterHtml(candidate.masterHtml).issues,
+    ...validateCss(candidate.masterCss, 'master_css').issues,
+  ];
+  for (const slide of candidate.slides) {
+    issues.push(
+      ...validateSlideHtml(slide.html).issues,
+      ...validateCss(slide.css, 'slide_css').issues,
+      ...validateJavascript(slide.javascript).issues,
+    );
+  }
+  try {
+    assertCandidateWithinLimits(candidate);
+  } catch (error) {
+    issues.push(...(error.issues || [{ code: error.code || 'CONTENT_LIMIT_EXCEEDED' }]));
+  }
+  if (issues.length) throw new RevisionError('REVISION_SNAPSHOT_INVALID');
 }
 
 async function insertRevision(connection, { webinarId, liveVersion, snapshot, changeType, changeSummary, actorUserId }) {
