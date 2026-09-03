@@ -2,8 +2,13 @@ function getDbUser(req) {
   return req.user?.db || null;
 }
 
+function isValidDbUserId(value) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
 function getUserId(req) {
-  return req.user?.db?.id || null;
+  const userId = req.user?.db?.id;
+  return isValidDbUserId(userId) ? userId : null;
 }
 
 /**
@@ -36,7 +41,7 @@ function hasRole(req, ...roles) {
 }
 
 function requireDbUser(req, res, next) {
-  if (!req.user?.db) {
+  if (!req.user?.db || !isValidDbUserId(req.user.db.id)) {
     return res.status(401).json({ error: 'User mapping not found' });
   }
   return next();
@@ -45,7 +50,7 @@ function requireDbUser(req, res, next) {
 // This deliberately remains opt-in for routes that handle internal Studio data.
 // Existing dashboard routes retain their established mapped-user behavior.
 function requireActiveDbUser(req, res, next) {
-  if (Number(req.user?.db?.is_active) !== 1) {
+  if (!isValidDbUserId(req.user?.db?.id) || Number(req.user?.db?.is_active) !== 1) {
     return res.status(403).json({ error: 'Active employee access required' });
   }
   return next();
@@ -128,4 +133,5 @@ module.exports = {
   requireNonExternal,
   requireDbUser,
   requireActiveDbUser,
+  isValidDbUserId,
 };

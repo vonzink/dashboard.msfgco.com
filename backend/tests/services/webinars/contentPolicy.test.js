@@ -88,13 +88,6 @@ describe('webinar executable-content policy', () => {
       .toThrow(expect.objectContaining({ code: 'ASSET_TOKEN_INVALID' }));
   });
 
-  it('accepts an exact request-size boundary and rejects one byte over', () => {
-    const prefixBytes = Buffer.byteLength('{"payload":""}', 'utf8');
-    expect(() => assertCandidateWithinLimits({ payload: 'x'.repeat(LIMITS.request - prefixBytes) }, policy)).not.toThrow();
-    expect(() => assertCandidateWithinLimits({ payload: 'x'.repeat(LIMITS.request - prefixBytes + 1) }, policy))
-      .toThrow(expect.objectContaining({ code: 'CONTENT_LIMIT_EXCEEDED' }));
-  });
-
   it('handles deeply nested in-limit HTML without recursive stack overflow', () => {
     const nested = '<i>'.repeat(12000) + '{{SLIDE_CONTENT}}' + '</i>'.repeat(12000);
     expect(Buffer.byteLength(nested, 'utf8')).toBeLessThan(LIMITS.master_html);
@@ -112,6 +105,21 @@ describe('webinar executable-content policy', () => {
     }
   });
 
+  it('rejects noncanonical raw origin spellings that URL parsing would erase', () => {
+    for (const origin of [
+      'https://assets.example?',
+      'https://assets.example#',
+      'https://assets.example/.',
+      'https://assets.example/path/..',
+    ]) {
+      expect(loadResourcePolicy({ WEBINAR_ASSET_CDN_BASE_URL: origin }).assetOrigin).toBeNull();
+    }
+    expect(loadResourcePolicy({ WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example' }).assetOrigin)
+      .toBe('https://assets.example');
+    expect(loadResourcePolicy({ WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example/' }).assetOrigin)
+      .toBe('https://assets.example');
+  });
+
   it('keeps stylesheet and font origins distinct when parsing CSS resources', () => {
     const separatedOrigins = loadResourcePolicy({
       WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example',
@@ -119,6 +127,11 @@ describe('webinar executable-content policy', () => {
       WEBINAR_EXTERNAL_FONT_ORIGINS: 'https://fonts.example',
     });
     expect(validateCss('@import "https://styles.example/theme.css";', 'master_css', separatedOrigins).issues).toEqual([]);
+    expect(validateCss('@font-face { src: url("https://fonts.example/font.woff2"); }', 'master_css', separatedOrigins).issues).toEqual([]);
+    expect(validateCss('.hero { background: url("https://fonts.example/not-a-font.png"); }', 'master_css', separatedOrigins).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
+    expect(validateCss('.hero { cursor: url("https://fonts.example/not-a-cursor.cur"), auto; }', 'master_css', separatedOrigins).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
   });
 
   it('rejects mixed-case external CSS imports', () => {
@@ -147,6 +160,22 @@ describe('webinar executable-content policy', () => {
   it('scans many asset tokens without changing configured candidates', () => {
     const token = '{{ASSET:11111111-1111-4111-8111-111111111111}}';
     expect(() => assertCandidateWithinLimits({ masterHtml: token.repeat(4000) }, policy)).not.toThrow();
+  });
+
+  it('allows a complete multi-slide deck above 2 MiB when every field remains within its limit', () => {
+    const largeSlides = Array.from({ length: 3 }, (_, index) => ({
+      id: `11111111-1111-4111-8111-11111111111${index}`,
+      html: 'h'.repeat(LIMITS.slide_html),
+      css: 'c'.repeat(LIMITS.slide_css),
+      javascript: 'j'.repeat(LIMITS.slide_javascript),
+    }));
+    const candidate = {
+      masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
+      masterCss: '',
+      slides: largeSlides,
+    };
+    expect(Buffer.byteLength(JSON.stringify(candidate), 'utf8')).toBeGreaterThan(LIMITS.request);
+    expect(() => assertCandidateWithinLimits(candidate, policy)).not.toThrow();
   });
 
   it('allows local CSS fragment URLs', () => {

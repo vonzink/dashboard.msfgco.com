@@ -34,6 +34,13 @@ describe('getUserId', () => {
   it('returns null when no db user', () => {
     expect(getUserId(mockReq())).toBeNull();
   });
+
+  it.each([0, -1, 1.5, '7', Number.MAX_SAFE_INTEGER + 1, undefined])(
+    'returns null for invalid DB user ID %j',
+    id => {
+      expect(getUserId(mockReq({ id }))).toBeNull();
+    },
+  );
 });
 
 describe('isAdmin', () => {
@@ -84,6 +91,17 @@ describe('requireDbUser middleware', () => {
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
   });
+
+  it.each([0, -1, 1.5, '7', Number.MAX_SAFE_INTEGER + 1, undefined])(
+    'returns 401 for invalid DB user ID %j',
+    id => {
+      const res = mockRes();
+      const next = vi.fn();
+      requireDbUser(mockReq({ id }), res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(401);
+    },
+  );
 });
 
 describe('requireActiveDbUser middleware', () => {
@@ -91,6 +109,9 @@ describe('requireActiveDbUser middleware', () => {
     [{ id: 7, is_active: 1 }, true],
     [{ id: 7, is_active: '1' }, true],
     [{ id: 7, is_active: 0 }, false],
+    [{ id: 0, is_active: 1 }, false],
+    [{ id: '7', is_active: 1 }, false],
+    [{ id: Number.MAX_SAFE_INTEGER + 1, is_active: 1 }, false],
     [{ id: 7 }, false],
     [null, false],
   ])('requires an explicitly active mapped employee', (dbUser, allowed) => {

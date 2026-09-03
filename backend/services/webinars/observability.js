@@ -57,6 +57,7 @@ const CONTROLLED_REASON_CODE_DEFINITIONS = Object.freeze({
   PUBLIC_RUNTIME_ERROR: reasonCodeDefinition(),
   RESOURCE_NOT_HTTPS: reasonCodeDefinition(),
   RESOURCE_ORIGIN_FORBIDDEN: reasonCodeDefinition(),
+  SETTINGS_DATA_CORRUPT: reasonCodeDefinition(),
   RESTORE_SLIDE_OWNERSHIP_CONFLICT: reasonCodeDefinition(409, 'webinar.version_conflict'),
   REVISION_NOT_FOUND: reasonCodeDefinition(404, 'webinar.validation_rejected'),
   REVISION_SNAPSHOT_INVALID: reasonCodeDefinition(),

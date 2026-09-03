@@ -1,14 +1,5 @@
 const { z } = require('zod');
-
-const LIMITS = Object.freeze({
-  master_html: 250 * 1024,
-  master_css: 500 * 1024,
-  slide_html: 250 * 1024,
-  slide_css: 250 * 1024,
-  slide_javascript: 500 * 1024,
-  request: 2 * 1024 * 1024,
-  speaker_notes: 100 * 1024,
-});
+const { LIMITS } = require('../../services/webinars/limits');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

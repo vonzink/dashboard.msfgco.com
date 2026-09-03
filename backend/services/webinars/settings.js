@@ -135,7 +135,16 @@ function normalizePreferences(preferences) {
 }
 
 function parseJsonColumn(value) {
-  return typeof value === 'string' ? JSON.parse(value) : value;
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch (cause) {
+    throw new WebinarSettingsError(
+      'SETTINGS_DATA_CORRUPT',
+      'Stored webinar presenter settings are corrupt',
+      { status: 500, cause },
+    );
+  }
 }
 
 async function getSettings(userId) {

@@ -54,6 +54,20 @@ describe('Webinar Studio presenter notes', () => {
       expect(db.query).not.toHaveBeenCalled();
     });
 
+    it('accepts exactly 10,000 UTF-8 bytes and rejects one byte over with multibyte text', async () => {
+      const exact = `${'€'.repeat(3333)}x`;
+      expect(Buffer.byteLength(exact, 'utf8')).toBe(10000);
+      db.query
+        .mockResolvedValueOnce([[{ id: slideId }]])
+        .mockResolvedValueOnce([{ insertId: 7 }]);
+      const { addNote } = loadNotes();
+      await expect(addNote({ userId: 7, webinarId: 2, slideId, body: exact }))
+        .resolves.toMatchObject({ id: 7, body: exact });
+      await expect(addNote({ userId: 7, webinarId: 2, slideId, body: `${exact}x` }))
+        .rejects.toMatchObject({ code: 'NOTE_BODY_TOO_LONG' });
+      expect(db.query).toHaveBeenCalledTimes(2);
+    });
+
     it('checks that slide belongs to the target webinar', async () => {
       db.query.mockResolvedValueOnce([[]]); // slide not found
       const { addNote } = loadNotes();
@@ -127,6 +141,17 @@ describe('Webinar Studio presenter notes', () => {
       await expect(updateNote({ userId: 7, webinarId: 2, noteId: 11, body: 'A'.repeat(10001) }))
         .rejects.toMatchObject({ code: 'NOTE_BODY_TOO_LONG' });
       expect(db.query).not.toHaveBeenCalled();
+    });
+
+    it('enforces the multibyte UTF-8 boundary while updating', async () => {
+      const exact = `${'€'.repeat(3333)}x`;
+      db.query.mockResolvedValueOnce([{ affectedRows: 1 }]);
+      const { updateNote } = loadNotes();
+      await expect(updateNote({ userId: 7, webinarId: 2, noteId: 11, body: exact }))
+        .resolves.toMatchObject({ id: 11, body: exact });
+      await expect(updateNote({ userId: 7, webinarId: 2, noteId: 11, body: `${exact}x` }))
+        .rejects.toMatchObject({ code: 'NOTE_BODY_TOO_LONG' });
+      expect(db.query).toHaveBeenCalledTimes(1);
     });
 
     it('trims body before updating', async () => {

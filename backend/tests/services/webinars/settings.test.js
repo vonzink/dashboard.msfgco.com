@@ -312,6 +312,25 @@ describe('Webinar Studio presenter settings', () => {
       expect(result.shortcuts).toEqual({ previousSlide: 'ArrowLeft' });
       expect(result.preferences).toEqual({ showTimer: true });
     });
+
+    it.each([
+      ['shortcuts', '{not-json', JSON.stringify({ showTimer: true })],
+      ['preferences', JSON.stringify({ nextSlide: 'ArrowRight' }), '{not-json'],
+    ])('wraps malformed stored %s JSON in a stable corruption error', async (_column, storedShortcuts, storedPreferences) => {
+      db.query.mockResolvedValueOnce([[
+        {
+          shortcuts: storedShortcuts,
+          preferences: storedPreferences,
+          created_at: '2026-09-03T00:00:00.000Z',
+          updated_at: '2026-09-03T00:00:00.000Z',
+        },
+      ]]);
+      const { getSettings, WebinarSettingsError } = loadSettings();
+      const error = await getSettings(7).catch(value => value);
+      expect(error).toBeInstanceOf(WebinarSettingsError);
+      expect(error).toMatchObject({ code: 'SETTINGS_DATA_CORRUPT', status: 500 });
+      expect(error).not.toBeInstanceOf(SyntaxError);
+    });
   });
 
   describe('SHORTCUT_ACTIONS export', () => {

@@ -672,6 +672,32 @@ describe('exact post-filter operational reason codes', () => {
 });
 
 describe('production transport and limiter contract', () => {
+  it.each([
+    ['anonymous callers', null, 401],
+    ['unmapped callers', { sub: 'cognito-only', groups: ['user'] }, 401],
+    ['inactive callers', { db: { id: 7, role: 'user', is_active: 0 }, groups: ['user'] }, 403],
+    ['external callers', identity(7, 'external'), 403],
+  ])('rate limits repeated %s by IP before authentication and body parsing', async (_label, user, rejectedStatus) => {
+    await new Promise(resolve => server.close(resolve));
+    const app = createApp({
+      webinarAuthenticate: authenticateFromHeader,
+      webinarServices: services,
+      webinarOperationalLogger: operationalLogger,
+      webinarIpWriteLimit: 2,
+      webinarWriteLimit: 100,
+    });
+    server = await new Promise(resolve => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+
+    const statuses = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      statuses.push((await request('PUT', '/api/webinars/2/master', validMaster, user)).status);
+    }
+    expect(statuses).toEqual([rejectedStatus, rejectedStatus, 429]);
+    expect(services.mutations.saveMaster).not.toHaveBeenCalled();
+  });
+
   it('records declared 413 rejections exactly once after filtering', async () => {
     const response = await request(
       'POST',

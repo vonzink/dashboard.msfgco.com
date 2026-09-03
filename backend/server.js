@@ -12,8 +12,9 @@ const { authenticate } = require('./middleware/auth');
 const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
-const pinoHttp = require('pino-http');
+const { createSafeHttpLogger } = require('./lib/httpLogging');
 const websocket = require('./lib/websocket');
+const { LIMITS } = require('./services/webinars/limits');
 const {
   createOperationalEventRecorder,
   recordOperationalEvent,
@@ -70,6 +71,7 @@ function createApp({
   webinarAuthenticate = authenticate,
   webinarServices = {},
   webinarOperationalLogger = null,
+  webinarIpWriteLimit = 300,
   webinarWriteLimit = 300,
 } = {}) {
 const app = express();
@@ -156,6 +158,19 @@ const writeLimiter = rateLimit({
 });
 app.use('/api/', writeLimiter);
 
+// Protect private Studio mutation endpoints before parsing bodies or doing
+// authentication work. A second limiter below isolates accepted employees by
+// the positive database ID derived by the server.
+const webinarIpWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: webinarIpWriteLimit,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many webinar requests, please slow down' },
+  skip: (req) => !isWebinarStudioMutation(req),
+});
+app.use('/api/', webinarIpWriteLimiter);
+
 // Each uploaded file costs two write requests (presign, then confirm), so
 // dropping a folder of 100 files would exhaust the 200-request budget above.
 // That limiter is keyed by IP, so one person bulk-uploading would lock every
@@ -184,7 +199,7 @@ const webinarWriteLimiter = rateLimit({
 });
 
 const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings'];
-const WEBINAR_MAX_REQUEST_BYTES = 2 * 1024 * 1024;
+const WEBINAR_MAX_REQUEST_BYTES = LIMITS.request;
 function isWebinarStudioMutation(req) {
   return !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
     && WEBINAR_REQUEST_PREFIXES.some(prefix => {
@@ -241,8 +256,8 @@ function parseWebinarRawJson(req, res, next) {
   }
 }
 
-// Request logging
-app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === '/health' } }));
+// Closed header allowlists keep credentials and cookies out of request logs.
+app.use(createSafeHttpLogger(logger));
 
 // Body parsing
 app.use(rejectOversizedWebinarRequest);
@@ -378,6 +393,7 @@ app.locals.webinarStudio = {
   webinarRawBodyParser,
   parseWebinarRawJson,
   writeLimiter,
+  webinarIpWriteLimiter,
   webinarWriteLimiter,
 };
 return app;
