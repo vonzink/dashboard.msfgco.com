@@ -72,7 +72,8 @@ The live integration asserts all of the following in the disposable database:
   cleanup, drop failure, server/pool/source-close failure, and non-drop guards;
 - primary-failure and cleanup-failure aggregation that retains the original
   primary value first, preserves every cleanup error object/cause, aggregates
-  cleanup-only failures, and rethrows a primary-only failure unchanged;
+  cleanup-only failures, and rethrows a primary-only failure unchanged,
+  including `false`, `0`, empty-string, `null`, and `undefined` values;
 - owner and admin access, and a non-owner `403` through private routes;
 - creation at revision 1 with audience access disabled;
 - two live content saves, then a stale `VERSION_CONFLICT` with byte/deep-equal
@@ -85,7 +86,9 @@ The live integration asserts all of the following in the disposable database:
   change types, and the constrained server-generated summaries for this exact
   sequence. Normalized source/code/note/resource-policy semantics are rejected
   recursively, and unique canaries in saved master/slide/source/note surfaces
-  are absent from every returned history value;
+  are absent from every returned history value. Before both history reads, the
+  test persists a private-note canary and a disposable resource-policy fixture
+  row; neither appears in the service or authenticated route history response;
 - user-scoped notes that another permitted user cannot list, update, or delete,
   with the complete note rows (including body and timestamps) unchanged after
   rejected mutations;

@@ -9,6 +9,7 @@ const describeWithMysql = process.env.WEBINAR_TEST_DATABASE_URL ? describe : des
 const migrationPath = path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql');
 const localMysqlHosts = new Set(['127.0.0.1', '::1', 'localhost']);
 const identifier = /^[A-Za-z0-9_]{1,64}$/;
+const NO_INTEGRATION_FAILURE = Symbol('no integration failure');
 
 let mysql;
 let sourceConnection;
@@ -24,6 +25,7 @@ let other;
 let webinar;
 let disposableLifecycle;
 let primaryFailure;
+let hasPrimaryFailure = false;
 
 function parseDisposableDatabaseUrl(value) {
   let url;
@@ -131,8 +133,8 @@ function cleanupFailureAggregate(failures) {
   return aggregate;
 }
 
-function finalizeIntegrationFailure(primary, cleanupFailures) {
-  if (!primary) return cleanupFailures.length ? cleanupFailureAggregate(cleanupFailures) : null;
+function finalizeIntegrationFailure({ hasPrimary, primary, cleanupFailures }) {
+  if (!hasPrimary) return cleanupFailures.length ? cleanupFailureAggregate(cleanupFailures) : NO_INTEGRATION_FAILURE;
   if (!cleanupFailures.length) return primary;
   const aggregate = new AggregateError(
     [primary, ...cleanupFailures.map(failure => failure.error)],
@@ -208,6 +210,7 @@ const sensitiveCanaries = Object.freeze({
   speakerNotes: 'CANARY_SPEAKER_NOTES_9c84',
   title: 'CANARY_PRIVATE_TITLE_9c84',
   note: 'CANARY_PRIVATE_NOTE_9c84',
+  resourcePolicy: 'CANARY_RESOURCE_POLICY_9c84',
 });
 const historyItemKeys = ['changeSummary', 'changeType', 'createdAt', 'createdBy', 'id', 'version'];
 const historyCreatorKeys = ['name'];
@@ -364,9 +367,11 @@ describeWithMysql('webinar studio foundation', () => {
       { step: 'source', error: cleanupTwo },
     ];
 
-    expect(finalizeIntegrationFailure(primary, [])).toBe(primary);
+    expect(finalizeIntegrationFailure({ hasPrimary: true, primary, cleanupFailures: [] })).toBe(primary);
 
-    const cleanupOnly = finalizeIntegrationFailure(null, failures);
+    expect(finalizeIntegrationFailure({ hasPrimary: false, primary: undefined, cleanupFailures: [] })).toBe(NO_INTEGRATION_FAILURE);
+
+    const cleanupOnly = finalizeIntegrationFailure({ hasPrimary: false, primary: undefined, cleanupFailures: failures });
     expect(cleanupOnly).toBeInstanceOf(AggregateError);
     expect(cleanupOnly.errors).toEqual([cleanupOne, cleanupTwo]);
     expect(cleanupOnly.cleanupFailures).toBe(failures);
@@ -374,12 +379,12 @@ describeWithMysql('webinar studio foundation', () => {
     expect(cleanupOnly.errors[0]).toBe(cleanupOne);
     expect(cleanupOnly.errors[0].cause.message).toBe('cleanup one cause');
 
-    const combinedOne = finalizeIntegrationFailure(primary, [failures[0]]);
+    const combinedOne = finalizeIntegrationFailure({ hasPrimary: true, primary, cleanupFailures: [failures[0]] });
     expect(combinedOne.errors).toEqual([primary, cleanupOne]);
     expect(combinedOne.primaryFailure).toBe(primary);
     expect(combinedOne.cleanupFailures).toEqual([failures[0]]);
 
-    const combined = finalizeIntegrationFailure(primary, failures);
+    const combined = finalizeIntegrationFailure({ hasPrimary: true, primary, cleanupFailures: failures });
     expect(combined).toBeInstanceOf(AggregateError);
     expect(combined.errors).toEqual([primary, cleanupOne, cleanupTwo]);
     expect(combined.errors[0]).toBe(primary);
@@ -389,9 +394,18 @@ describeWithMysql('webinar studio foundation', () => {
     expect(combined.errors[1].cause.message).toBe('cleanup one cause');
 
     const nonErrorPrimary = { marker: 'non-error primary value' };
-    const combinedNonError = finalizeIntegrationFailure(nonErrorPrimary, failures);
+    const combinedNonError = finalizeIntegrationFailure({ hasPrimary: true, primary: nonErrorPrimary, cleanupFailures: failures });
     expect(combinedNonError.errors).toEqual([nonErrorPrimary, cleanupOne, cleanupTwo]);
     expect(combinedNonError.cause).toBe(nonErrorPrimary);
+
+    for (const falsyPrimary of [false, 0, '', null, undefined]) {
+      expect(finalizeIntegrationFailure({ hasPrimary: true, primary: falsyPrimary, cleanupFailures: [] })).toBe(falsyPrimary);
+      const combinedFalsy = finalizeIntegrationFailure({ hasPrimary: true, primary: falsyPrimary, cleanupFailures: failures });
+      expect(combinedFalsy.errors).toEqual([falsyPrimary, cleanupOne, cleanupTwo]);
+      expect(combinedFalsy.errors[0]).toBe(falsyPrimary);
+      expect(combinedFalsy.cause).toBe(falsyPrimary);
+      expect(combinedFalsy.primaryFailure).toBe(falsyPrimary);
+    }
   });
 
   beforeAll(async () => {
@@ -453,6 +467,7 @@ describeWithMysql('webinar studio foundation', () => {
       });
     } catch (error) {
       primaryFailure = error;
+      hasPrimaryFailure = true;
       throw error;
     }
   });
@@ -464,8 +479,8 @@ describeWithMysql('webinar studio foundation', () => {
       lifecycle: disposableLifecycle,
       sourceConnection,
     });
-    const finalFailure = finalizeIntegrationFailure(primaryFailure, failures);
-    if (finalFailure) throw finalFailure;
+    const finalFailure = finalizeIntegrationFailure({ hasPrimary: hasPrimaryFailure, primary: primaryFailure, cleanupFailures: failures });
+    if (finalFailure !== NO_INTEGRATION_FAILURE) throw finalFailure;
   });
 
   it('uses the exact migration constraints and real private services without leaking state', async () => {
@@ -567,6 +582,23 @@ describeWithMysql('webinar studio foundation', () => {
     );
     expect(restoredSlide[0]).toMatchObject({ id: stableSlideId, archived_at: null });
 
+    const ownerNote = await notes.addNote({
+      userId: owner.id, webinarId: webinar.webinarId, slideId: stableSlideId, body: sensitiveCanaries.note,
+    });
+    await db.query(`CREATE TABLE webinar_test_resource_policies (
+      webinar_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+      resource_policy JSON NOT NULL,
+      CONSTRAINT fk_webinar_test_resource_policy_webinar FOREIGN KEY (webinar_id) REFERENCES webinar_presentations(id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await db.query(
+      'INSERT INTO webinar_test_resource_policies (webinar_id, resource_policy) VALUES (?, ?)',
+      [webinar.webinarId, JSON.stringify({ resourcePolicy: sensitiveCanaries.resourcePolicy })],
+    );
+    const [resourcePolicyRows] = await db.query(
+      'SELECT resource_policy FROM webinar_test_resource_policies WHERE webinar_id = ?', [webinar.webinarId],
+    );
+    expect(JSON.stringify(resourcePolicyRows)).toContain(sensitiveCanaries.resourcePolicy);
+
     const history = await revisions.listHistory(webinar.webinarId);
     expect(history).toHaveLength(5);
     expect(history.map(item => item.version)).toEqual([5, 4, 3, 2, 1]);
@@ -576,9 +608,6 @@ describeWithMysql('webinar studio foundation', () => {
     assertSafeHistoryContract(ownerHistory.body, sensitiveCanaries);
     expect((await request('GET', `/api/webinars/${webinar.webinarId}/history`, undefined, other)).status).toBe(403);
 
-    const ownerNote = await notes.addNote({
-      userId: owner.id, webinarId: webinar.webinarId, slideId: stableSlideId, body: sensitiveCanaries.note,
-    });
     const [notesBeforeRejectedMutations] = await db.query(
       'SELECT * FROM webinar_presenter_notes WHERE webinar_id = ? ORDER BY id', [webinar.webinarId],
     );
@@ -619,6 +648,7 @@ describeWithMysql('webinar studio foundation', () => {
     expect(survivingSlide).toEqual([{ id: stableSlideId }]);
     } catch (error) {
       primaryFailure = error;
+      hasPrimaryFailure = true;
       throw error;
     }
   });
