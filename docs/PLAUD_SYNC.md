@@ -53,11 +53,21 @@ aws s3api put-bucket-encryption --bucket msfg-plaud-recordings --server-side-enc
 
 If you'd rather use the console: S3 → Create bucket → name `msfg-plaud-recordings`, region US West (Oregon), leave "Block all public access" on.
 
-### Step 2 — Let the backend's AWS user write to it (local, AWS console)
+### Step 2 — Let the EC2 role write to it (local)
 
-The backend on EC2 uses the access key in its `.env`. That IAM user needs this
-policy. IAM → Users → the user that owns that key → Add permissions → Create
-inline policy → JSON:
+The backend on EC2 gets its AWS permissions from the instance role
+`msfg-dashboard-ec2-role` (there is no access key in `.env`). The policy is
+checked in at `deploy/iam/plaud-recordings-policy.json`. From the repo root:
+
+```bash
+aws iam put-role-policy --role-name msfg-dashboard-ec2-role --policy-name PlaudRecordingsArchive --policy-document file://deploy/iam/plaud-recordings-policy.json
+```
+
+No restart needed; the role picks it up within a minute. Console alternative:
+IAM → Roles → `msfg-dashboard-ec2-role` → Add permissions → Create inline
+policy → JSON, paste the file's contents, name it `PlaudRecordingsArchive`.
+
+For reference, the policy grants:
 
 ```json
 {
@@ -81,9 +91,6 @@ inline policy → JSON:
   ]
 }
 ```
-
-Name it `PlaudRecordingsArchive`. If EC2 uses an instance role instead of a
-key, attach the same policy to that role.
 
 ### Step 3 — Deploy the code (local)
 
