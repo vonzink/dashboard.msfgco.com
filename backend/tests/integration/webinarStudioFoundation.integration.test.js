@@ -22,6 +22,8 @@ let owner;
 let admin;
 let other;
 let webinar;
+let disposableLifecycle;
+let primaryFailure;
 
 function parseDisposableDatabaseUrl(value) {
   let url;
@@ -59,6 +61,75 @@ function createDatabaseName() {
   return name;
 }
 
+function createDisposableLifecycle(sourceDatabase) {
+  return { sourceDatabase, name: null, createdByThisRun: false };
+}
+
+function isSafeDisposableName(name, sourceDatabase) {
+  return typeof name === 'string' && identifier.test(name) && name !== sourceDatabase;
+}
+
+async function createDisposableDatabase({ lifecycle, generateName, query, maximumAttempts = 8 }) {
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    const name = generateName();
+    if (!identifier.test(name)) throw new Error('Generated disposable database identifier is unsafe');
+    if (name === lifecycle.sourceDatabase) continue;
+
+    const [existing] = await query(
+      'SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?',
+      [name],
+    );
+    if (existing.length) continue;
+
+    try {
+      // No IF NOT EXISTS: a race must fail rather than adopting an existing database.
+      await query(`CREATE DATABASE \`${name}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    } catch (error) {
+      if (error?.code === 'ER_DB_CREATE_EXISTS') continue;
+      throw error;
+    }
+    lifecycle.name = name;
+    lifecycle.createdByThisRun = true;
+    return lifecycle;
+  }
+  throw new Error('Unable to create a unique disposable webinar database');
+}
+
+async function closeServer(server) {
+  if (!server) return;
+  await new Promise((resolve, reject) => {
+    server.close(error => (error ? reject(error) : resolve()));
+  });
+}
+
+async function cleanupDisposableResources({ server, pool, lifecycle, sourceConnection }) {
+  const failures = [];
+  async function attempt(step, operation) {
+    try {
+      await operation();
+    } catch (error) {
+      failures.push({ step, error });
+    }
+  }
+
+  await attempt('server', () => closeServer(server));
+  await attempt('pool', async () => { if (pool) await pool.end(); });
+  if (sourceConnection && lifecycle?.createdByThisRun && isSafeDisposableName(lifecycle.name, lifecycle.sourceDatabase)) {
+    await attempt('database', async () => {
+      await sourceConnection.query(`DROP DATABASE \`${lifecycle.name}\``);
+      lifecycle.createdByThisRun = false;
+    });
+  }
+  await attempt('source', async () => { if (sourceConnection) await sourceConnection.end(); });
+  return failures;
+}
+
+function cleanupFailureAggregate(failures) {
+  const aggregate = new AggregateError(failures.map(failure => failure.error), 'Disposable resource cleanup failed');
+  aggregate.cleanupSteps = failures.map(failure => failure.step);
+  return aggregate;
+}
+
 async function applyMigration091(connection) {
   const migration = readFileSync(migrationPath, 'utf8');
   for (const statement of migration.split(';')) {
@@ -83,71 +154,232 @@ async function request(method, requestPath, body, user) {
   return { status: response.status, body: await response.json().catch(() => null) };
 }
 
-describeWithMysql('webinar studio foundation', () => {
-  beforeAll(async () => {
-    const source = parseDisposableDatabaseUrl(process.env.WEBINAR_TEST_DATABASE_URL);
-    mysql = require('mysql2/promise');
-    sourceConnection = await mysql.createConnection(source);
-    createdDatabase = createDatabaseName();
-    await sourceConnection.query(`CREATE DATABASE \`${createdDatabase}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+function jsonSnapshot(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
-    const target = { ...source, database: createdDatabase };
-    const setup = await mysql.createConnection(target);
+async function captureWebinarMutationState(webinarId) {
+  const state = {};
+  const tables = [
+    ['presentation', 'SELECT * FROM webinar_presentations WHERE id = ? ORDER BY id'],
+    ['slides', 'SELECT * FROM webinar_slides WHERE webinar_id = ? ORDER BY id'],
+    ['revisions', 'SELECT * FROM webinar_revisions WHERE webinar_id = ? ORDER BY id'],
+    ['audit', 'SELECT * FROM webinar_audit_events WHERE webinar_id = ? ORDER BY id'],
+    ['notes', 'SELECT * FROM webinar_presenter_notes WHERE webinar_id = ? ORDER BY id'],
+  ];
+  for (const [name, sql] of tables) {
+    const [rows] = await db.query(sql, [webinarId]);
+    state[name] = jsonSnapshot(rows);
+  }
+  const [referenceTables] = await db.query(
+    `SELECT TABLE_NAME FROM information_schema.TABLES
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE 'webinar%reference%' ORDER BY TABLE_NAME`,
+  );
+  state.references = {};
+  for (const { TABLE_NAME: tableName } of referenceTables) {
+    if (!identifier.test(tableName)) throw new Error('Unexpected webinar reference table identifier');
+    const [rows] = await db.query(`SELECT * FROM \`${tableName}\` ORDER BY 1`);
+    state.references[tableName] = jsonSnapshot(rows);
+  }
+  return state;
+}
+
+const historyItemKeys = ['changeSummary', 'changeType', 'createdAt', 'createdBy', 'id', 'version'];
+const historyCreatorKeys = ['name'];
+const forbiddenHistoryKeys = new Set([
+  'snapshot', 'source', 'masterHtml', 'masterCss', 'html', 'css', 'javascript',
+  'speakerNotes', 'resourcePolicy', 'slides', 'notes', 'code',
+]);
+
+function assertNoForbiddenHistoryKeys(value) {
+  if (!value || typeof value !== 'object') return;
+  for (const [key, nested] of Object.entries(value)) {
+    expect(forbiddenHistoryKeys.has(key)).toBe(false);
+    assertNoForbiddenHistoryKeys(nested);
+  }
+}
+
+function assertSafeHistoryItems(items) {
+  expect(Array.isArray(items)).toBe(true);
+  for (const item of items) {
+    expect(Object.keys(item).sort()).toEqual(historyItemKeys);
+    expect(Object.keys(item.createdBy).sort()).toEqual(historyCreatorKeys);
+    assertNoForbiddenHistoryKeys(item);
+  }
+}
+
+describeWithMysql('webinar studio foundation', () => {
+  it('never adopts a source-named or existing database during disposable creation', async () => {
+    const calls = [];
+    const candidates = ['mysql', 'webinar_studio_it_existing', 'webinar_studio_it_fresh'];
+    const lifecycle = createDisposableLifecycle('mysql');
+    const query = async (sql, params = []) => {
+      calls.push({ sql, params });
+      if (sql.startsWith('SELECT SCHEMA_NAME') && params[0] === 'webinar_studio_it_existing') {
+        return [[{ SCHEMA_NAME: 'webinar_studio_it_existing' }]];
+      }
+      return [[]];
+    };
+
+    await expect(createDisposableDatabase({
+      lifecycle,
+      generateName: () => candidates.shift(),
+      query,
+    })).resolves.toEqual({
+      sourceDatabase: 'mysql', name: 'webinar_studio_it_fresh', createdByThisRun: true,
+    });
+    expect(calls.filter(call => call.sql.startsWith('CREATE DATABASE'))).toHaveLength(1);
+    expect(calls.find(call => call.sql.startsWith('CREATE DATABASE')).sql).toContain('webinar_studio_it_fresh');
+    expect(calls.some(call => call.params[0] === 'mysql')).toBe(false);
+  });
+
+  it('does not mark a database droppable when creation fails or races with a collision', async () => {
+    const lifecycle = createDisposableLifecycle('mysql');
+    const candidates = ['webinar_studio_it_race', 'webinar_studio_it_after_race'];
+    const calls = [];
+    await expect(createDisposableDatabase({
+      lifecycle,
+      generateName: () => candidates.shift(),
+      query: async (sql, params = []) => {
+        calls.push({ sql, params });
+        if (sql.startsWith('CREATE DATABASE') && sql.includes('webinar_studio_it_race')) {
+          const error = new Error('database exists');
+          error.code = 'ER_DB_CREATE_EXISTS';
+          throw error;
+        }
+        return [[]];
+      },
+    })).resolves.toMatchObject({ name: 'webinar_studio_it_after_race', createdByThisRun: true });
+    expect(calls.filter(call => call.sql.startsWith('CREATE DATABASE'))).toHaveLength(2);
+
+    const failedLifecycle = createDisposableLifecycle('mysql');
+    await expect(createDisposableDatabase({
+      lifecycle: failedLifecycle,
+      generateName: () => 'webinar_studio_it_create_failure',
+      query: async sql => {
+        if (sql.startsWith('SELECT SCHEMA_NAME')) return [[]];
+        throw new Error('create failed');
+      },
+    })).rejects.toThrow('create failed');
+    expect(failedLifecycle).toEqual({ sourceDatabase: 'mysql', name: null, createdByThisRun: false });
+  });
+
+  it('continues cleanup in exact order and drops only a database conclusively created by this run', async () => {
+    const calls = [];
+    const lifecycle = {
+      sourceDatabase: 'mysql', name: 'webinar_studio_it_cleanup', createdByThisRun: true,
+    };
+    const failures = await cleanupDisposableResources({
+      server: { close: callback => { calls.push('server'); callback(new Error('server close failed')); } },
+      pool: { end: async () => { calls.push('pool'); throw new Error('pool end failed'); } },
+      lifecycle,
+      sourceConnection: {
+        query: async sql => { calls.push(sql.startsWith('DROP DATABASE') ? 'drop' : 'unexpected-query'); throw new Error('drop failed'); },
+        end: async () => { calls.push('source'); throw new Error('source end failed'); },
+      },
+    });
+    expect(calls).toEqual(['server', 'pool', 'drop', 'source']);
+    expect(failures.map(failure => failure.step)).toEqual(['server', 'pool', 'database', 'source']);
+    expect(lifecycle.createdByThisRun).toBe(true);
+
+    const nonDroppableCalls = [];
+    await cleanupDisposableResources({
+      lifecycle: { sourceDatabase: 'mysql', name: 'mysql', createdByThisRun: true },
+      sourceConnection: {
+        query: async () => { nonDroppableCalls.push('drop'); },
+        end: async () => { nonDroppableCalls.push('source'); },
+      },
+    });
+    await cleanupDisposableResources({
+      lifecycle: { sourceDatabase: 'mysql', name: 'webinar_studio_it_unproven', createdByThisRun: false },
+      sourceConnection: {
+        query: async () => { nonDroppableCalls.push('drop'); },
+        end: async () => { nonDroppableCalls.push('source'); },
+      },
+    });
+    expect(nonDroppableCalls).toEqual(['source', 'source']);
+  });
+
+  beforeAll(async () => {
     try {
-      await setup.query(`CREATE TABLE users (
+      const source = parseDisposableDatabaseUrl(process.env.WEBINAR_TEST_DATABASE_URL);
+      mysql = require('mysql2/promise');
+      sourceConnection = await mysql.createConnection(source);
+      disposableLifecycle = await createDisposableDatabase({
+        lifecycle: createDisposableLifecycle(source.database),
+        generateName: createDatabaseName,
+        query: (...args) => sourceConnection.query(...args),
+      });
+      createdDatabase = disposableLifecycle.name;
+
+      const target = { ...source, database: createdDatabase };
+      const setup = await mysql.createConnection(target);
+      try {
+        await setup.query(`CREATE TABLE users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         email VARCHAR(255) NOT NULL UNIQUE,
         name VARCHAR(255) NOT NULL,
         role VARCHAR(100) NOT NULL DEFAULT 'user',
         is_active TINYINT(1) NOT NULL DEFAULT 1
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-      await applyMigration091(setup);
-      await setup.query(
+        await applyMigration091(setup);
+        await setup.query(
         `INSERT INTO users (email, name, role, is_active) VALUES
          ('webinar-owner@example.test', 'Webinar Owner', 'user', 1),
          ('webinar-admin@example.test', 'Webinar Admin', 'admin', 1),
          ('webinar-other@example.test', 'Webinar Other', 'user', 1)`,
-      );
-      const [users] = await setup.query('SELECT id, email, role FROM users ORDER BY id');
-      [owner, admin, other] = users;
-    } finally {
-      await setup.end();
+        );
+        const [users] = await setup.query('SELECT id, email, role FROM users ORDER BY id');
+        [owner, admin, other] = users;
+      } finally {
+        await setup.end();
+      }
+
+      process.env.DB_HOST = target.host;
+      process.env.DB_PORT = String(target.port);
+      process.env.DB_USER = target.user;
+      process.env.DB_PASSWORD = target.password;
+      process.env.DB_NAME = createdDatabase;
+
+      db = require('../../db/connection');
+      ({ createMutationService } = require('../../services/webinars/mutations'));
+      notes = require('../../services/webinars/notes');
+      revisions = require('../../services/webinars/revisions');
+      const { createApp } = require('../../server');
+      const app = createApp({
+        webinarAuthenticate(req, _res, next) {
+          req.user = JSON.parse(req.get('x-test-user') || '{}');
+          next();
+        },
+        webinarOperationalLogger: { info() {} },
+        webinarWriteLimit: 100,
+      });
+      server = await new Promise(resolve => {
+        const listener = app.listen(0, () => resolve(listener));
+      });
+    } catch (error) {
+      primaryFailure = error;
+      throw error;
     }
-
-    process.env.DB_HOST = target.host;
-    process.env.DB_PORT = String(target.port);
-    process.env.DB_USER = target.user;
-    process.env.DB_PASSWORD = target.password;
-    process.env.DB_NAME = createdDatabase;
-
-    db = require('../../db/connection');
-    ({ createMutationService } = require('../../services/webinars/mutations'));
-    notes = require('../../services/webinars/notes');
-    revisions = require('../../services/webinars/revisions');
-    const { createApp } = require('../../server');
-    const app = createApp({
-      webinarAuthenticate(req, _res, next) {
-        req.user = JSON.parse(req.get('x-test-user') || '{}');
-        next();
-      },
-      webinarOperationalLogger: { info() {} },
-      webinarWriteLimit: 100,
-    });
-    server = await new Promise(resolve => {
-      const listener = app.listen(0, () => resolve(listener));
-    });
   });
 
   afterAll(async () => {
-    if (server) await new Promise(resolve => server.close(resolve));
-    if (db) await db.end();
-    if (sourceConnection && createdDatabase && identifier.test(createdDatabase)) {
-      await sourceConnection.query(`DROP DATABASE IF EXISTS \`${createdDatabase}\``);
+    const failures = await cleanupDisposableResources({
+      server,
+      pool: db,
+      lifecycle: disposableLifecycle,
+      sourceConnection,
+    });
+    if (!failures.length) return;
+    if (primaryFailure) {
+      primaryFailure.cleanupSteps = failures.map(failure => failure.step);
+      return;
     }
-    if (sourceConnection) await sourceConnection.end();
+    throw cleanupFailureAggregate(failures);
   });
 
   it('uses the exact migration constraints and real private services without leaking state', async () => {
+    try {
     const [foreignKeys] = await db.query(
       `SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS
        WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'FOREIGN KEY'
@@ -205,24 +437,13 @@ describeWithMysql('webinar studio foundation', () => {
       html: '<section>Welcome</section>', css: '.slide { display: grid; }', javascript: 'const ready = true;',
     })).toMatchObject({ liveVersion: 3 });
 
-    const [beforeConflict] = await db.query(
-      'SELECT live_version, master_css FROM webinar_presentations WHERE id = ?', [webinar.webinarId],
-    );
-    const [revisionCountBeforeConflict] = await db.query(
-      'SELECT COUNT(*) AS count FROM webinar_revisions WHERE webinar_id = ?', [webinar.webinarId],
-    );
+    const beforeConflict = await captureWebinarMutationState(webinar.webinarId);
     await expect(mutations.saveMaster({
       webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 2,
       masterHtml: master, masterCss: '.stale { color: red; }',
     })).rejects.toMatchObject({ code: 'VERSION_CONFLICT', status: 409 });
-    const [afterConflict] = await db.query(
-      'SELECT live_version, master_css FROM webinar_presentations WHERE id = ?', [webinar.webinarId],
-    );
-    const [revisionCountAfterConflict] = await db.query(
-      'SELECT COUNT(*) AS count FROM webinar_revisions WHERE webinar_id = ?', [webinar.webinarId],
-    );
+    const afterConflict = await captureWebinarMutationState(webinar.webinarId);
     expect(afterConflict).toEqual(beforeConflict);
-    expect(revisionCountAfterConflict).toEqual(revisionCountBeforeConflict);
 
     const rollbackMutations = createMutationService({
       db,
@@ -232,9 +453,7 @@ describeWithMysql('webinar studio foundation', () => {
       webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 3,
       masterHtml: master, masterCss: '.rollback { color: black; }',
     })).rejects.toThrow('injected audit write failure');
-    const [afterRollback] = await db.query(
-      'SELECT live_version, master_css FROM webinar_presentations WHERE id = ?', [webinar.webinarId],
-    );
+    const afterRollback = await captureWebinarMutationState(webinar.webinarId);
     expect(afterRollback).toEqual(beforeConflict);
 
     expect(await mutations.archiveSlide({
@@ -259,22 +478,31 @@ describeWithMysql('webinar studio foundation', () => {
     const history = await revisions.listHistory(webinar.webinarId);
     expect(history).toHaveLength(5);
     expect(history.map(item => item.version)).toEqual([5, 4, 3, 2, 1]);
-    expect(history.every(item => !Object.hasOwn(item, 'snapshot') && !Object.hasOwn(item, 'html'))).toBe(true);
+    assertSafeHistoryItems(history);
     const ownerHistory = await request('GET', `/api/webinars/${webinar.webinarId}/history`, undefined, owner);
     expect(ownerHistory.status).toBe(200);
-    expect(JSON.stringify(ownerHistory.body)).not.toContain('Welcome');
+    assertSafeHistoryItems(ownerHistory.body);
     expect((await request('GET', `/api/webinars/${webinar.webinarId}/history`, undefined, other)).status).toBe(403);
 
     const ownerNote = await notes.addNote({
       userId: owner.id, webinarId: webinar.webinarId, slideId: stableSlideId, body: 'Owner private note',
     });
+    const [notesBeforeRejectedMutations] = await db.query(
+      'SELECT * FROM webinar_presenter_notes WHERE webinar_id = ? ORDER BY id', [webinar.webinarId],
+    );
     expect(await notes.listNotes({ userId: admin.id, webinarId: webinar.webinarId })).toEqual([]);
+    expect((await request('GET', `/api/webinars/${webinar.webinarId}/notes`, undefined, admin)).body).toEqual([]);
     await expect(notes.updateNote({
       userId: admin.id, webinarId: webinar.webinarId, noteId: ownerNote.id, body: 'not allowed',
     })).rejects.toMatchObject({ code: 'NOTE_NOT_FOUND' });
     await expect(notes.deleteNote({
       userId: admin.id, webinarId: webinar.webinarId, noteId: ownerNote.id,
     })).rejects.toMatchObject({ code: 'NOTE_NOT_FOUND' });
+    const [notesAfterRejectedMutations] = await db.query(
+      'SELECT * FROM webinar_presenter_notes WHERE webinar_id = ? ORDER BY id', [webinar.webinarId],
+    );
+    expect(jsonSnapshot(notesAfterRejectedMutations)).toEqual(jsonSnapshot(notesBeforeRejectedMutations));
+    expect((await request('GET', `/api/webinars/${webinar.webinarId}/notes`, undefined, admin)).body).toEqual([]);
     expect(await notes.listNotes({ userId: owner.id, webinarId: webinar.webinarId })).toHaveLength(1);
 
     expect((await request('PUT', '/api/webinar-presenter-settings/me', {
@@ -297,5 +525,9 @@ describeWithMysql('webinar studio foundation', () => {
     );
     expect(archivedWebinar[0].archived_at).not.toBeNull();
     expect(survivingSlide).toEqual([{ id: stableSlideId }]);
+    } catch (error) {
+      primaryFailure = error;
+      throw error;
+    }
   });
 });
