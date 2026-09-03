@@ -54,4 +54,70 @@ describe('webinar executable-content policy', () => {
     expect(validateSlideHtml('<img src="{{ASSET:11111111-1111-4111-8111-111111111111}}">', noAssets).issues[0].code)
       .toBe('ASSET_ORIGIN_NOT_CONFIGURED');
   });
+
+  it('checks every URL-bearing HTML attribute and embedded CSS surface', () => {
+    expect(validateSlideHtml('<svg><use xlink:href="javascript:alert(1)"></use></svg>', policy).issues)
+      .toContainEqual(expect.objectContaining({ code: 'EXECUTABLE_URL' }));
+    expect(validateSlideHtml('<img srcset="https://evil.example/a.png 1x">', policy).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
+    expect(validateSlideHtml('<div style="background:url(https://evil.example/a.png)"></div>', policy).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
+    expect(validateSlideHtml('<style>@import "https://evil.example/a.css";</style>', policy).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
+  });
+
+  it('rejects CSS URL-capable syntax that the simple url regex missed', () => {
+    expect(validateCss('.slide { background: u\\72l(https://evil.example/x.png); }', 'slide_css', policy).issues)
+      .not.toEqual([]);
+    expect(validateCss('.slide { background-image: image-set("https://evil.example/x.png" 1x); }', 'slide_css', policy).issues)
+      .toContainEqual(expect.objectContaining({ code: 'RESOURCE_ORIGIN_FORBIDDEN' }));
+  });
+
+  it('finds valid and malformed asset-token lookalikes across the whole candidate', () => {
+    const noAssets = loadResourcePolicy({});
+    const validToken = '{{ASSET:11111111-1111-4111-8111-111111111111}}';
+    for (const candidate of [
+      { masterHtml: `<p>${validToken}</p>` },
+      { masterCss: `.slide::before { content: '${validToken}'; }` },
+      { slides: [{ javascript: `const asset = '${validToken}';` }] },
+    ]) {
+      expect(() => assertCandidateWithinLimits(candidate, noAssets))
+        .toThrow(expect.objectContaining({ code: 'ASSET_ORIGIN_NOT_CONFIGURED' }));
+    }
+    expect(() => assertCandidateWithinLimits({ masterHtml: '{{ASSET:not-a-uuid}}' }, policy))
+      .toThrow(expect.objectContaining({ code: 'ASSET_TOKEN_INVALID' }));
+  });
+
+  it('accepts an exact request-size boundary and rejects one byte over', () => {
+    const prefixBytes = Buffer.byteLength('{"payload":""}', 'utf8');
+    expect(() => assertCandidateWithinLimits({ payload: 'x'.repeat(LIMITS.request - prefixBytes) }, policy)).not.toThrow();
+    expect(() => assertCandidateWithinLimits({ payload: 'x'.repeat(LIMITS.request - prefixBytes + 1) }, policy))
+      .toThrow(expect.objectContaining({ code: 'CONTENT_LIMIT_EXCEEDED' }));
+  });
+
+  it('handles deeply nested in-limit HTML without recursive stack overflow', () => {
+    const nested = '<i>'.repeat(12000) + '{{SLIDE_CONTENT}}' + '</i>'.repeat(12000);
+    expect(Buffer.byteLength(nested, 'utf8')).toBeLessThan(LIMITS.master_html);
+    expect(validateMasterHtml(nested, policy).issues).toEqual([]);
+  });
+
+  it('drops configured origins containing credentials, paths, queries, or fragments', () => {
+    for (const origin of [
+      'https://user@assets.example',
+      'https://assets.example/path',
+      'https://assets.example?query=1',
+      'https://assets.example#fragment',
+    ]) {
+      expect(loadResourcePolicy({ WEBINAR_ASSET_CDN_BASE_URL: origin }).assetOrigin).toBeNull();
+    }
+  });
+
+  it('keeps stylesheet and font origins distinct when parsing CSS resources', () => {
+    const separatedOrigins = loadResourcePolicy({
+      WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example',
+      WEBINAR_EXTERNAL_STYLE_ORIGINS: 'https://styles.example',
+      WEBINAR_EXTERNAL_FONT_ORIGINS: 'https://fonts.example',
+    });
+    expect(validateCss('@import "https://styles.example/theme.css";', 'master_css', separatedOrigins).issues).toEqual([]);
+  });
 });
