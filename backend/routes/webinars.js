@@ -67,7 +67,11 @@ function createWebinarsRouter({
   }
 
   function operationFor(req) {
-    return { webinarId: Number(req.params.id), actorUserId: getUserId(req) };
+    return {
+      webinarId: Number(req.params.id),
+      actorUserId: getUserId(req),
+      actorIsAdmin: isAdmin(req),
+    };
   }
 
   function parseOrRespond(req, res, schema, value) {
@@ -326,6 +330,7 @@ function createWebinarsRouter({
     try {
       res.status(201).json(await notes.addNote({
         userId: getUserId(req),
+        actorIsAdmin: isAdmin(req),
         webinarId: access.id,
         slideId: parsedSlideId,
         ...body,
@@ -345,6 +350,7 @@ function createWebinarsRouter({
     try {
       res.json(await notes.updateNote({
         userId: getUserId(req),
+        actorIsAdmin: isAdmin(req),
         webinarId: access.id,
         noteId: parsedNoteId,
         ...body,
@@ -362,6 +368,7 @@ function createWebinarsRouter({
     try {
       await notes.deleteNote({
         userId: getUserId(req),
+        actorIsAdmin: isAdmin(req),
         webinarId: access.id,
         noteId: parsedNoteId,
       });

@@ -6,6 +6,7 @@ const {
 } = require('./contentPolicy');
 const { buildCompleteSnapshot, getRevisionForRestore, insertRevision, assertCompleteSnapshot } = require('./revisions');
 const { recordAuditEvent: defaultRecordAuditEvent } = require('./audit');
+const { aggregateRollbackFailure, runTransaction } = require('./transaction');
 
 const SAFE_MASTER = '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>';
 const ASSET_TOKEN = /\{\{ASSET:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\}\}/i;
@@ -58,6 +59,16 @@ function assertExpectedVersion(webinar, expectedVersion) {
       updatedBy: { id: Number(webinar.updated_by_user_id), name: webinar.updater_name || null },
     });
   }
+}
+
+function assertLockedWebinarEdit(webinar, { actorUserId, actorIsAdmin }) {
+  if (Number.isSafeInteger(actorUserId) && actorUserId > 0
+    && (actorIsAdmin === true || Number(webinar.primary_owner_user_id) === actorUserId)) return;
+  throw new WebinarMutationError(
+    'WEBINAR_ACCESS_DENIED',
+    'Webinar owner or administrator access required',
+    { status: 403 },
+  );
 }
 
 async function activeSlides(connection, webinarId) {
@@ -184,11 +195,10 @@ function createMutationService({
   recordRevisionAssetReferences = unavailableReferenceWriter,
   recordAuditEvent = defaultRecordAuditEvent,
 } = {}) {
-  async function contentMutation({ webinarId, actorUserId, expectedVersion, changeType, changeSummary, transform, apply }) {
-    const connection = await connectionPool.getConnection();
-    try {
-      await connection.beginTransaction();
+  async function contentMutation({ webinarId, actorUserId, actorIsAdmin, expectedVersion, changeType, changeSummary, transform, apply }) {
+    return runTransaction(connectionPool, async connection => {
       const webinar = await lockWebinar(connection, webinarId);
+      assertLockedWebinarEdit(webinar, { actorUserId, actorIsAdmin });
       assertExpectedVersion(webinar, expectedVersion);
       const candidate = candidateFrom(webinar, await activeSlides(connection, webinarId));
       await transform(candidate, connection, webinar);
@@ -208,14 +218,8 @@ function createMutationService({
         metadata: { liveVersion, changeType },
       });
       const current = await readCurrentMetadata(connection, webinarId);
-      await connection.commit();
       return resultFor(current);
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
+    });
   }
 
   function saveMaster(input) {
@@ -360,9 +364,7 @@ function createMutationService({
   }
 
   async function createWebinar(input) {
-    const connection = await connectionPool.getConnection();
-    try {
-      await connection.beginTransaction();
+    return runTransaction(connectionPool, async connection => {
       await findActiveOwner(connection, input.primaryOwnerUserId);
       const candidate = { masterHtml: SAFE_MASTER, masterCss: '', slides: [{ id: randomUUID(), position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }] };
       await candidateValidator(candidate);
@@ -386,31 +388,17 @@ function createMutationService({
       await connection.query('UPDATE webinar_presentations SET live_version = 1, updated_by_user_id = ? WHERE id = ?', [input.actorUserId, webinarId]);
       await recordAuditEvent(connection, { webinarId, actorUserId: input.actorUserId, eventType: 'webinar_created', targetType: 'webinar', targetId: webinarId, metadata: { liveVersion: 1 } });
       const current = await readCurrentMetadata(connection, webinarId);
-      await connection.commit();
       return resultFor(current);
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
+    });
   }
 
   async function metadataMutation(input, action) {
-    const connection = await connectionPool.getConnection();
-    try {
-      await connection.beginTransaction();
+    return runTransaction(connectionPool, async connection => {
       const webinar = await lockWebinar(connection, input.webinarId);
       await action(connection, webinar);
       const current = await readCurrentMetadata(connection, input.webinarId);
-      await connection.commit();
       return resultFor(current);
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
+    });
   }
 
   function archiveWebinar(input) {
@@ -438,4 +426,14 @@ function createMutationService({
   return { createWebinar, archiveWebinar, saveMaster, addSlide, duplicateSlide, saveSlide, reorderSlides, archiveSlide, restoreRevision, changeOwner, changeAudienceAccess };
 }
 
-module.exports = { WebinarMutationError, lockWebinar, assertExpectedVersion, validateCandidate, createMutationService, ...createMutationService() };
+module.exports = {
+  WebinarMutationError,
+  aggregateRollbackFailure,
+  assertExpectedVersion,
+  assertLockedWebinarEdit,
+  lockWebinar,
+  runTransaction,
+  validateCandidate,
+  createMutationService,
+  ...createMutationService(),
+};

@@ -113,39 +113,39 @@ function approvedRouteContracts() {
       label: 'save master', method: 'PUT', path: '/api/webinars/2/master', route: 'PUT /api/webinars/:id/master',
       status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'archived 404', 'controlled/unexpected error'],
       body: validMaster, target: () => services.mutations.saveMaster,
-      args: [{ webinarId: 2, actorUserId: 7, ...validMaster }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, ...validMaster }],
     },
     {
       label: 'add slide', method: 'POST', path: '/api/webinars/2/slides', route: 'POST /api/webinars/:id/slides (add)',
       status: 201, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
       body: validSlide, target: () => services.mutations.addSlide,
-      args: [{ webinarId: 2, actorUserId: 7, ...validSlide }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, ...validSlide }],
     },
     {
       label: 'duplicate slide', method: 'POST', path: '/api/webinars/2/slides', route: 'POST /api/webinars/:id/slides (duplicate)',
       status: 201, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing slide', 'controlled/unexpected error'],
       body: { expectedVersion: 3, sourceSlideId: slideId },
       target: () => services.mutations.duplicateSlide,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, sourceSlideId: slideId }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, expectedVersion: 3, sourceSlideId: slideId }],
     },
     {
       label: 'save slide', method: 'PUT', path: `/api/webinars/2/slides/${slideId}`, route: 'PUT /api/webinars/:id/slides/:slideId',
       status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing/archived slide', 'controlled/unexpected error'],
       body: validSlide, target: () => services.mutations.saveSlide,
-      args: [{ webinarId: 2, actorUserId: 7, ...validSlide, slideId }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, ...validSlide, slideId }],
     },
     {
       label: 'reorder slides', method: 'PUT', path: '/api/webinars/2/slides/order', route: 'PUT /api/webinars/:id/slides/order',
       status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
       body: { expectedVersion: 3, slideIds: [secondSlideId, slideId] },
       target: () => services.mutations.reorderSlides,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, slideIds: [secondSlideId, slideId] }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, expectedVersion: 3, slideIds: [secondSlideId, slideId] }],
     },
     {
       label: 'archive slide', method: 'DELETE', path: `/api/webinars/2/slides/${slideId}`, route: 'DELETE /api/webinars/:id/slides/:slideId',
       status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing/archived slide', 'controlled/unexpected error'],
       body: { expectedVersion: 3 }, target: () => services.mutations.archiveSlide,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, slideId }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, expectedVersion: 3, slideId }],
     },
     {
       label: 'history', method: 'GET', path: '/api/webinars/2/history', route: 'GET /api/webinars/:id/history',
@@ -156,27 +156,27 @@ function approvedRouteContracts() {
       label: 'restore', method: 'POST', path: '/api/webinars/2/history/11/restore', route: 'POST /api/webinars/:id/history/:revisionId/restore',
       status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
       body: { expectedVersion: 3 }, target: () => services.mutations.restoreRevision,
-      args: [{ webinarId: 2, actorUserId: 7, expectedVersion: 3, revisionId: 11 }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: false, expectedVersion: 3, revisionId: 11 }],
     },
     {
       label: 'change owner', method: 'PUT', path: '/api/webinars/2/owner', route: 'PUT /api/webinars/:id/owner',
       status: 200, access: 'admin', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
       user: identity(7, 'admin'), body: { primaryOwnerUserId: 8 },
       target: () => services.mutations.changeOwner,
-      args: [{ webinarId: 2, actorUserId: 7, primaryOwnerUserId: 8 }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: true, primaryOwnerUserId: 8 }],
     },
     {
       label: 'change audience', method: 'PUT', path: '/api/webinars/2/audience-access', route: 'PUT /api/webinars/:id/audience-access',
       status: 200, access: 'admin', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'controlled/unexpected error'],
       user: identity(7, 'admin'), body: { enabled: true },
       target: () => services.mutations.changeAudienceAccess,
-      args: [{ webinarId: 2, actorUserId: 7, enabled: true }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: true, enabled: true }],
     },
     {
       label: 'archive webinar', method: 'DELETE', path: '/api/webinars/2', route: 'DELETE /api/webinars/:id',
       status: 200, access: 'admin', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'archived 404', 'controlled/unexpected error'],
       user: identity(7, 'admin'), target: () => services.mutations.archiveWebinar,
-      args: [{ webinarId: 2, actorUserId: 7 }],
+      args: [{ webinarId: 2, actorUserId: 7, actorIsAdmin: true }],
     },
     {
       label: 'list notes', method: 'GET', path: '/api/webinars/2/notes', route: 'GET /api/webinars/:id/notes',
@@ -187,18 +187,18 @@ function approvedRouteContracts() {
       label: 'add note', method: 'POST', path: `/api/webinars/2/slides/${slideId}/notes`, route: 'POST /api/webinars/:id/slides/:slideId/notes',
       status: 201, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'missing/archived slide', 'controlled/unexpected error'],
       body: { body: 'Private note' }, target: () => services.notes.addNote,
-      args: [{ userId: 7, webinarId: 2, slideId, body: 'Private note' }],
+      args: [{ userId: 7, actorIsAdmin: false, webinarId: 2, slideId, body: 'Private note' }],
     },
     {
       label: 'update note', method: 'PUT', path: '/api/webinars/2/notes/5', route: 'PUT /api/webinars/:id/notes/:noteId',
       status: 200, access: 'owner', boundaries: ['authorization', 'malformed ID/body', 'exact dispatch', 'indistinguishable owner 404', 'controlled/unexpected error'],
       body: { body: 'Updated note' }, target: () => services.notes.updateNote,
-      args: [{ userId: 7, webinarId: 2, noteId: 5, body: 'Updated note' }],
+      args: [{ userId: 7, actorIsAdmin: false, webinarId: 2, noteId: 5, body: 'Updated note' }],
     },
     {
       label: 'delete note', method: 'DELETE', path: '/api/webinars/2/notes/5', route: 'DELETE /api/webinars/:id/notes/:noteId',
       status: 204, access: 'owner', boundaries: ['authorization', 'malformed ID', 'exact dispatch', 'indistinguishable owner 404', 'controlled/unexpected error'],
-      target: () => services.notes.deleteNote, args: [{ userId: 7, webinarId: 2, noteId: 5 }],
+      target: () => services.notes.deleteNote, args: [{ userId: 7, actorIsAdmin: false, webinarId: 2, noteId: 5 }],
     },
   ];
 }
@@ -383,6 +383,7 @@ describe('private webinar API through the production application factory', () =>
     const mutation = await request('PUT', '/api/webinars/2/master', {
       ...validMaster,
       actorUserId: 999,
+      actorIsAdmin: true,
     }, identity(42));
     expect(mutation.status).toBe(400);
     expect(services.mutations.saveMaster).not.toHaveBeenCalled();
@@ -391,7 +392,7 @@ describe('private webinar API through the production application factory', () =>
     services.repository.getPrivateDocument.mockResolvedValue({ ...webinar, primaryOwnerUserId: 42 });
     await request('POST', `/api/webinars/2/slides/${slideId}/notes`, { body: 'Mine' }, identity(42));
     expect(services.notes.addNote).toHaveBeenCalledWith({
-      userId: 42, webinarId: 2, slideId, body: 'Mine',
+      userId: 42, actorIsAdmin: false, webinarId: 2, slideId, body: 'Mine',
     });
   });
 
@@ -465,25 +466,25 @@ describe('archived and current-user 404 route contracts', () => {
       body: { expectedVersion: 3, sourceSlideId: slideId },
       target: () => services.mutations.duplicateSlide,
       error: () => new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
-      args: { webinarId: 2, actorUserId: 7, expectedVersion: 3, sourceSlideId: slideId },
+      args: { webinarId: 2, actorUserId: 7, actorIsAdmin: false, expectedVersion: 3, sourceSlideId: slideId },
     },
     {
       label: 'save', method: 'PUT', path: `/api/webinars/2/slides/${slideId}`,
       body: validSlide, target: () => services.mutations.saveSlide,
       error: () => new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
-      args: { webinarId: 2, actorUserId: 7, ...validSlide, slideId },
+      args: { webinarId: 2, actorUserId: 7, actorIsAdmin: false, ...validSlide, slideId },
     },
     {
       label: 'archive', method: 'DELETE', path: `/api/webinars/2/slides/${slideId}`,
       body: { expectedVersion: 3 }, target: () => services.mutations.archiveSlide,
       error: () => new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
-      args: { webinarId: 2, actorUserId: 7, expectedVersion: 3, slideId },
+      args: { webinarId: 2, actorUserId: 7, actorIsAdmin: false, expectedVersion: 3, slideId },
     },
     {
       label: 'private-note add', method: 'POST', path: `/api/webinars/2/slides/${slideId}/notes`,
       body: { body: 'Private note' }, target: () => services.notes.addNote,
       error: () => new WebinarNoteError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 }),
-      args: { userId: 7, webinarId: 2, slideId, body: 'Private note' },
+      args: { userId: 7, actorIsAdmin: false, webinarId: 2, slideId, body: 'Private note' },
     },
   ])('returns the same safe 404 for a missing or archived slide on $label', async ({ method, path, body, target, error, args }) => {
     target().mockRejectedValueOnce(error());
@@ -503,13 +504,13 @@ describe('archived and current-user 404 route contracts', () => {
 
   it.each([
     ['missing note on update', 'PUT', { body: 'Updated note' }, () => services.notes.updateNote,
-      { userId: 42, webinarId: 2, noteId: 77, body: 'Updated note' }],
+      { userId: 42, actorIsAdmin: false, webinarId: 2, noteId: 77, body: 'Updated note' }],
     ['another user\'s note on update', 'PUT', { body: 'Updated note' }, () => services.notes.updateNote,
-      { userId: 42, webinarId: 2, noteId: 77, body: 'Updated note' }],
+      { userId: 42, actorIsAdmin: false, webinarId: 2, noteId: 77, body: 'Updated note' }],
     ['missing note on delete', 'DELETE', undefined, () => services.notes.deleteNote,
-      { userId: 42, webinarId: 2, noteId: 77 }],
+      { userId: 42, actorIsAdmin: false, webinarId: 2, noteId: 77 }],
     ['another user\'s note on delete', 'DELETE', undefined, () => services.notes.deleteNote,
-      { userId: 42, webinarId: 2, noteId: 77 }],
+      { userId: 42, actorIsAdmin: false, webinarId: 2, noteId: 77 }],
   ])('keeps %s indistinguishable and dispatches exact current-user identity', async (_label, method, body, target, args) => {
     services.repository.getPrivateDocument.mockResolvedValueOnce({
       ...webinar,

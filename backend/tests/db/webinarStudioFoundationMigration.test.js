@@ -6,6 +6,10 @@ const migration = fs.readFileSync(
   path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql'),
   'utf8'
 );
+const activeAnchorMigration = fs.readFileSync(
+  path.resolve(import.meta.dirname, '../../db/migrations/092_webinar_active_slide_anchors.sql'),
+  'utf8',
+);
 
 describe('091 webinar studio foundation migration', () => {
   it.each([
@@ -70,5 +74,17 @@ describe('091 webinar studio foundation migration', () => {
 
   it('keys presenter settings to canonical users', () => {
     expect(migration).toContain('PRIMARY KEY (user_id)');
+  });
+});
+
+describe('092 active slide anchor migration', () => {
+  it('preserves historical anchors while enforcing uniqueness only for active slides', () => {
+    expect(activeAnchorMigration).toContain('active_anchor VARCHAR(190)');
+    expect(activeAnchorMigration).toMatch(/CASE WHEN archived_at IS NULL THEN anchor ELSE NULL END/i);
+    expect(activeAnchorMigration).toContain('DROP INDEX uq_webinar_slide_anchor');
+    expect(activeAnchorMigration).toContain('UNIQUE KEY uq_webinar_slide_active_anchor (webinar_id, active_anchor)');
+    expect(activeAnchorMigration.indexOf('UNIQUE KEY uq_webinar_slide_active_anchor'))
+      .toBeLessThan(activeAnchorMigration.indexOf('DROP INDEX uq_webinar_slide_anchor'));
+    expect(activeAnchorMigration).not.toMatch(/UPDATE\s+webinar_slides\s+SET\s+anchor/i);
   });
 });

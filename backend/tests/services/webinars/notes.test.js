@@ -6,7 +6,16 @@ const require = createRequire(import.meta.url);
 const dbPath = require.resolve('../../../db/connection');
 const notesPath = path.resolve(import.meta.dirname, '../../../services/webinars/notes.js');
 const originalDb = require.cache[dbPath];
-const db = { query: vi.fn() };
+const db = { query: vi.fn(), getConnection: vi.fn() };
+let lockedOwnerId;
+const connection = {
+  beginTransaction: vi.fn(),
+  commit: vi.fn(),
+  rollback: vi.fn(),
+  release: vi.fn(),
+  destroy: vi.fn(),
+  query: vi.fn(),
+};
 
 const slideId = '11111111-1111-4111-8111-111111111111';
 
@@ -16,7 +25,22 @@ function loadNotes() {
   return require(notesPath);
 }
 
-beforeEach(() => { db.query.mockReset(); });
+beforeEach(() => {
+  lockedOwnerId = 7;
+  db.query.mockReset();
+  db.getConnection.mockReset().mockResolvedValue(connection);
+  connection.beginTransaction.mockReset().mockResolvedValue(undefined);
+  connection.commit.mockReset().mockResolvedValue(undefined);
+  connection.rollback.mockReset().mockResolvedValue(undefined);
+  connection.release.mockReset();
+  connection.destroy.mockReset();
+  connection.query.mockReset().mockImplementation((sql, params) => {
+    if (sql.includes('FROM webinar_presentations') && sql.includes('FOR UPDATE')) {
+      return Promise.resolve([[{ id: params[0], primary_owner_user_id: lockedOwnerId }]]);
+    }
+    return db.query(sql, params);
+  });
+});
 
 afterEach(() => {
   delete require.cache[notesPath];
@@ -108,6 +132,46 @@ describe('Webinar Studio presenter notes', () => {
       const second = await addNote({ userId: 7, webinarId: 2, slideId, body: 'Second note' });
       expect(first.id).toBe(1);
       expect(second.id).toBe(2);
+    });
+  });
+
+  describe('locked webinar authorization', () => {
+    it.each([
+      ['add', notes => notes.addNote({ userId: 7, webinarId: 2, slideId, body: 'Mine' })],
+      ['update', notes => notes.updateNote({ userId: 7, webinarId: 2, noteId: 11, body: 'Mine' })],
+      ['delete', notes => notes.deleteNote({ userId: 7, webinarId: 2, noteId: 11 })],
+    ])('denies a stale former owner before a %s note write', async (_name, run) => {
+      lockedOwnerId = 8;
+      const notes = loadNotes();
+
+      await expect(run(notes)).rejects.toMatchObject({
+        code: 'WEBINAR_ACCESS_DENIED',
+        status: 403,
+      });
+      expect(connection.query).toHaveBeenCalledWith(
+        expect.stringMatching(/webinar_presentations[\s\S]*FOR UPDATE/),
+        [2],
+      );
+      expect(db.query).not.toHaveBeenCalled();
+      expect(connection.rollback).toHaveBeenCalledTimes(1);
+      expect(connection.commit).not.toHaveBeenCalled();
+    });
+
+    it('allows a server-asserted administrator to write their own note on another owner webinar', async () => {
+      lockedOwnerId = 8;
+      db.query
+        .mockResolvedValueOnce([[{ id: slideId }]])
+        .mockResolvedValueOnce([{ insertId: 5 }]);
+      const { addNote } = loadNotes();
+
+      await expect(addNote({
+        userId: 1,
+        actorIsAdmin: true,
+        webinarId: 2,
+        slideId,
+        body: 'Admin note',
+      })).resolves.toMatchObject({ id: 5, body: 'Admin note' });
+      expect(connection.commit).toHaveBeenCalledTimes(1);
     });
   });
 

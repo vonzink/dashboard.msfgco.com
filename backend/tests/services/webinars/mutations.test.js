@@ -23,6 +23,7 @@ function fakeDatabase({ webinar = currentWebinar(), slides = activeSlides(), own
     commit: vi.fn(async () => calls.push('commit')),
     rollback: vi.fn(async () => calls.push('rollback')),
     release: vi.fn(() => calls.push('release')),
+    destroy: vi.fn(() => calls.push('destroy')),
     query: vi.fn(async (sql, params = []) => {
       if (throwOn && sql.includes(throwOn)) throw new Error('write failed');
       if (sql.includes('FOR UPDATE') && sql.includes('webinar_presentations')) { calls.push(`lock:${params[0]}`); return [[webinar]]; }
@@ -70,6 +71,7 @@ function statefulMutationModel(initial) {
     commit: vi.fn(async () => { committed = transaction; transaction = null; calls.push('commit'); }),
     rollback: vi.fn(async () => { transaction = null; calls.push('rollback'); }),
     release: vi.fn(),
+    destroy: vi.fn(),
     query: vi.fn(async (sql, params = []) => {
       const db = state();
       if (sql.includes('FROM users')) return [[db.users.find(user => Number(user.id) === Number(params[0]) && Number(user.is_active) === 1)].filter(Boolean)];
@@ -211,12 +213,72 @@ describe('Webinar Studio live mutations', () => {
     expect(metadata.calls).not.toContain('commit');
   });
 
+  it.each([
+    ['content', primary => service({ validateCandidate: vi.fn().mockRejectedValue(primary) }), ({ api }) => api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml, masterCss: '' })],
+    ['create', primary => service({ validateCandidate: vi.fn().mockRejectedValue(primary) }), ({ api }) => api.createWebinar({ slug: 'intro', title: 'Intro', primaryOwnerUserId: 7, actorUserId: 1 })],
+    ['metadata', primary => service({ recordAuditEvent: vi.fn().mockRejectedValue(primary) }), ({ api }) => api.changeAudienceAccess({ webinarId: 2, enabled: true, actorUserId: 1 })],
+  ])('preserves the %s primary failure when rollback fails and destroys the connection', async (_name, setup, run) => {
+    const primary = new Error('primary transaction failure');
+    const rollback = new Error('rollback failure');
+    const fixture = setup(primary);
+    fixture.connection.rollback.mockImplementation(async () => {
+      fixture.calls.push('rollback');
+      throw rollback;
+    });
+
+    let thrown;
+    try {
+      await run(fixture);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AggregateError);
+    expect(thrown.errors).toEqual([primary, rollback]);
+    expect(thrown.cause).toBe(primary);
+    expect(thrown.primaryError).toBe(primary);
+    expect(thrown.rollbackError).toBe(rollback);
+    expect(fixture.connection.destroy).toHaveBeenCalledTimes(1);
+    expect(fixture.connection.release).not.toHaveBeenCalled();
+    expect(fixture.calls.slice(-2)).toEqual(['rollback', 'destroy']);
+  });
+
   it('returns private conflict metadata and never commits a stale write', async () => {
     const { api, calls } = service();
     await expect(api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 3, masterHtml, masterCss: '' }))
       .rejects.toMatchObject({ status: 409, code: 'VERSION_CONFLICT', currentVersion: 4, updatedBy: { id: 8, name: 'Another Editor' } });
     expect(calls).not.toContain('commit');
     expect(calls).toContain('rollback');
+  });
+
+  it.each([
+    ['save', ({ api }) => api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml, masterCss: '' })],
+    ['restore', ({ api }) => api.restoreRevision({ webinarId: 2, revisionId: 18, actorUserId: 7, expectedVersion: 4 })],
+  ])('denies a stale former owner %s after the locked row reflects reassignment', async (_name, run) => {
+    const fixture = service({ webinar: currentWebinar({ primary_owner_user_id: 8 }) });
+
+    await expect(run(fixture)).rejects.toMatchObject({
+      code: 'WEBINAR_ACCESS_DENIED',
+      status: 403,
+    });
+    expect(fixture.calls).toContain('lock:2');
+    expect(fixture.calls).toContain('rollback');
+    expect(fixture.calls).not.toContain('write');
+    expect(fixture.calls).not.toContain('commit');
+  });
+
+  it('allows a server-asserted administrator after locking a webinar owned by someone else', async () => {
+    const { api, calls } = service({ webinar: currentWebinar({ primary_owner_user_id: 8 }) });
+
+    await expect(api.saveMaster({
+      webinarId: 2,
+      actorUserId: 1,
+      actorIsAdmin: true,
+      expectedVersion: 4,
+      masterHtml,
+      masterCss: '',
+    })).resolves.toMatchObject({ liveVersion: 5 });
+    expect(calls).toContain('commit');
   });
 
   it('validates the complete candidate before beginning writes and fails closed for unavailable asset hooks', async () => {

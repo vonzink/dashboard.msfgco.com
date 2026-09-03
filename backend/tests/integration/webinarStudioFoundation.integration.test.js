@@ -6,7 +6,10 @@ import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const describeWithMysql = process.env.WEBINAR_TEST_DATABASE_URL ? describe : describe.skip;
-const migrationPath = path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql');
+const migrationPaths = [
+  path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql'),
+  path.resolve(import.meta.dirname, '../../db/migrations/092_webinar_active_slide_anchors.sql'),
+];
 const localMysqlHosts = new Set(['127.0.0.1', '::1', 'localhost']);
 const identifier = /^[A-Za-z0-9_]{1,64}$/;
 const NO_INTEGRATION_FAILURE = Symbol('no integration failure');
@@ -147,11 +150,13 @@ function finalizeIntegrationFailure({ hasPrimary, primary, cleanupFailures }) {
   return aggregate;
 }
 
-async function applyMigration091(connection) {
-  const migration = readFileSync(migrationPath, 'utf8');
-  for (const statement of migration.split(';')) {
-    const sql = statement.trim();
-    if (sql) await connection.query(sql);
+async function applyFoundationMigrations(connection) {
+  for (const migrationPath of migrationPaths) {
+    const migration = readFileSync(migrationPath, 'utf8');
+    for (const statement of migration.split(';')) {
+      const sql = statement.trim();
+      if (sql) await connection.query(sql);
+    }
   }
 }
 
@@ -218,6 +223,7 @@ const historySummaries = new Map([
   ['webinar_created', 'Created webinar'],
   ['master_saved', 'Updated master presentation'],
   ['slide_saved', 'Updated slide'],
+  ['slide_added', 'Added slide'],
   ['slide_archived', 'Archived slide'],
   ['revision_restored', 'Restored revision'],
 ]);
@@ -430,7 +436,7 @@ describeWithMysql('webinar studio foundation', () => {
         role VARCHAR(100) NOT NULL DEFAULT 'user',
         is_active TINYINT(1) NOT NULL DEFAULT 1
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-        await applyMigration091(setup);
+        await applyFoundationMigrations(setup);
         await setup.query(
         `INSERT INTO users (email, name, role, is_active) VALUES
          ('webinar-owner@example.test', 'Webinar Owner', 'user', 1),
@@ -500,9 +506,10 @@ describeWithMysql('webinar studio foundation', () => {
        AND TABLE_NAME IN ('webinar_presentations', 'webinar_slides', 'webinar_revisions')`,
     );
     expect(uniqueIndexes.map(row => row.INDEX_NAME)).toEqual(expect.arrayContaining([
-      'uq_webinar_slug', 'uq_webinar_slide_anchor', 'uq_webinar_slide_position',
+      'uq_webinar_slug', 'uq_webinar_slide_active_anchor', 'uq_webinar_slide_position',
       'uq_webinar_revision_version',
     ]));
+    expect(uniqueIndexes.map(row => row.INDEX_NAME)).not.toContain('uq_webinar_slide_anchor');
 
     const mutations = require('../../services/webinars/mutations');
     webinar = await mutations.createWebinar({
@@ -574,13 +581,39 @@ describeWithMysql('webinar studio foundation', () => {
     const [revisionThree] = await db.query(
       'SELECT id FROM webinar_revisions WHERE webinar_id = ? AND version = 3', [webinar.webinarId],
     );
-    expect(await mutations.restoreRevision({
-      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 4, revisionId: revisionThree[0].id,
+    expect(await mutations.addSlide({
+      webinarId: webinar.webinarId,
+      actorUserId: owner.id,
+      expectedVersion: 4,
+      anchor: 'opening',
+      title: 'Replacement opening',
+      targetSeconds: 30,
+      speakerNotes: '',
+      html: '<section>Replacement</section>',
+      css: '',
+      javascript: '',
     })).toMatchObject({ liveVersion: 5 });
-    const [restoredSlide] = await db.query(
-      'SELECT id, archived_at FROM webinar_slides WHERE id = ?', [stableSlideId],
+    const [replacementSlides] = await db.query(
+      `SELECT id, anchor FROM webinar_slides
+       WHERE webinar_id = ? AND archived_at IS NULL`,
+      [webinar.webinarId],
     );
-    expect(restoredSlide[0]).toMatchObject({ id: stableSlideId, archived_at: null });
+    expect(replacementSlides).toHaveLength(1);
+    expect(replacementSlides[0]).toMatchObject({ anchor: 'opening' });
+    const replacementSlideId = replacementSlides[0].id;
+    expect(replacementSlideId).not.toBe(stableSlideId);
+    expect(await mutations.restoreRevision({
+      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 5, revisionId: revisionThree[0].id,
+    })).toMatchObject({ liveVersion: 6 });
+    const [restoredSlides] = await db.query(
+      'SELECT id, anchor, archived_at FROM webinar_slides WHERE id IN (?, ?) ORDER BY id',
+      [stableSlideId, replacementSlideId],
+    );
+    expect(restoredSlides).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: stableSlideId, anchor: 'opening', archived_at: null }),
+      expect.objectContaining({ id: replacementSlideId, anchor: 'opening' }),
+    ]));
+    expect(restoredSlides.find(slide => slide.id === replacementSlideId).archived_at).not.toBeNull();
 
     const ownerNote = await notes.addNote({
       userId: owner.id, webinarId: webinar.webinarId, slideId: stableSlideId, body: sensitiveCanaries.note,
@@ -600,8 +633,8 @@ describeWithMysql('webinar studio foundation', () => {
     expect(JSON.stringify(resourcePolicyRows)).toContain(sensitiveCanaries.resourcePolicy);
 
     const history = await revisions.listHistory(webinar.webinarId);
-    expect(history).toHaveLength(5);
-    expect(history.map(item => item.version)).toEqual([5, 4, 3, 2, 1]);
+    expect(history).toHaveLength(6);
+    expect(history.map(item => item.version)).toEqual([6, 5, 4, 3, 2, 1]);
     assertSafeHistoryContract(history, sensitiveCanaries);
     const ownerHistory = await request('GET', `/api/webinars/${webinar.webinarId}/history`, undefined, owner);
     expect(ownerHistory.status).toBe(200);
@@ -614,10 +647,11 @@ describeWithMysql('webinar studio foundation', () => {
     expect(await notes.listNotes({ userId: admin.id, webinarId: webinar.webinarId })).toEqual([]);
     expect((await request('GET', `/api/webinars/${webinar.webinarId}/notes`, undefined, admin)).body).toEqual([]);
     await expect(notes.updateNote({
-      userId: admin.id, webinarId: webinar.webinarId, noteId: ownerNote.id, body: 'not allowed',
+      userId: admin.id, actorIsAdmin: true, webinarId: webinar.webinarId,
+      noteId: ownerNote.id, body: 'not allowed',
     })).rejects.toMatchObject({ code: 'NOTE_NOT_FOUND' });
     await expect(notes.deleteNote({
-      userId: admin.id, webinarId: webinar.webinarId, noteId: ownerNote.id,
+      userId: admin.id, actorIsAdmin: true, webinarId: webinar.webinarId, noteId: ownerNote.id,
     })).rejects.toMatchObject({ code: 'NOTE_NOT_FOUND' });
     const [notesAfterRejectedMutations] = await db.query(
       'SELECT * FROM webinar_presenter_notes WHERE webinar_id = ? ORDER BY id', [webinar.webinarId],

@@ -1,4 +1,5 @@
 const db = require('../../db/connection');
+const { runTransaction } = require('./transaction');
 
 const MAX_BODY_BYTES = 10000;
 
@@ -32,8 +33,8 @@ function mapNote(row) {
   };
 }
 
-async function assertSlideInWebinar(slideId, webinarId) {
-  const [rows] = await db.query(
+async function assertSlideInWebinar(connection, slideId, webinarId) {
+  const [rows] = await connection.query(
     `SELECT id FROM webinar_slides
      WHERE id = ? AND webinar_id = ? AND archived_at IS NULL`,
     [slideId, webinarId],
@@ -43,59 +44,96 @@ async function assertSlideInWebinar(slideId, webinarId) {
   }
 }
 
-async function listNotes({ userId, webinarId }) {
-  const [rows] = await db.query(
-    `SELECT id, slide_id, body, created_at, updated_at
-     FROM webinar_presenter_notes
-     WHERE user_id = ? AND webinar_id = ?
-     ORDER BY created_at ASC, id ASC`,
-    [userId, webinarId],
+async function assertLockedWebinarAccess(connection, { userId, actorIsAdmin, webinarId }) {
+  const [rows] = await connection.query(
+    `SELECT id, primary_owner_user_id
+     FROM webinar_presentations
+     WHERE id = ? AND archived_at IS NULL
+     FOR UPDATE`,
+    [webinarId],
   );
-  return rows.map(mapNote);
-}
-
-async function addNote({ userId, webinarId, slideId, body }) {
-  const trimmed = normalizeBody(body);
-  await assertSlideInWebinar(slideId, webinarId);
-  const [result] = await db.query(
-    `INSERT INTO webinar_presenter_notes
-       (user_id, webinar_id, slide_id, body, source_system, source_record_id)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [userId, webinarId, slideId, trimmed, null, null],
-  );
-  return { id: Number(result.insertId), slideId, body: trimmed };
-}
-
-async function updateNote({ userId, webinarId, noteId, body }) {
-  const trimmed = normalizeBody(body);
-  const [result] = await db.query(
-    `UPDATE webinar_presenter_notes
-     SET body = ?
-     WHERE id = ? AND user_id = ? AND webinar_id = ?`,
-    [trimmed, noteId, userId, webinarId],
-  );
-  if (!result.affectedRows) {
-    throw new WebinarNoteError('NOTE_NOT_FOUND', 'Note not found', { status: 404 });
+  const webinar = rows[0];
+  if (!webinar) {
+    throw new WebinarNoteError('WEBINAR_NOT_FOUND', 'Webinar not found', { status: 404 });
   }
-  return { id: Number(noteId), body: trimmed };
+  if (!Number.isSafeInteger(userId)
+    || userId <= 0
+    || (actorIsAdmin !== true && Number(webinar.primary_owner_user_id) !== userId)) {
+    throw new WebinarNoteError(
+      'WEBINAR_ACCESS_DENIED',
+      'Webinar owner or administrator access required',
+      { status: 403 },
+    );
+  }
 }
 
-async function deleteNote({ userId, webinarId, noteId }) {
-  const [result] = await db.query(
-    `DELETE FROM webinar_presenter_notes
-     WHERE id = ? AND user_id = ? AND webinar_id = ?`,
-    [noteId, userId, webinarId],
-  );
-  if (!result.affectedRows) {
-    throw new WebinarNoteError('NOTE_NOT_FOUND', 'Note not found', { status: 404 });
+function createNoteService({ db: connectionPool = db } = {}) {
+  async function listNotes({ userId, webinarId }) {
+    const [rows] = await connectionPool.query(
+      `SELECT id, slide_id, body, created_at, updated_at
+       FROM webinar_presenter_notes
+       WHERE user_id = ? AND webinar_id = ?
+       ORDER BY created_at ASC, id ASC`,
+      [userId, webinarId],
+    );
+    return rows.map(mapNote);
   }
-  return { id: Number(noteId) };
+
+  async function addNote(input) {
+    const trimmed = normalizeBody(input.body);
+    return runTransaction(connectionPool, async connection => {
+      await assertLockedWebinarAccess(connection, input);
+      await assertSlideInWebinar(connection, input.slideId, input.webinarId);
+      const [result] = await connection.query(
+        `INSERT INTO webinar_presenter_notes
+           (user_id, webinar_id, slide_id, body, source_system, source_record_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [input.userId, input.webinarId, input.slideId, trimmed, null, null],
+      );
+      return { id: Number(result.insertId), slideId: input.slideId, body: trimmed };
+    });
+  }
+
+  async function updateNote(input) {
+    const trimmed = normalizeBody(input.body);
+    return runTransaction(connectionPool, async connection => {
+      await assertLockedWebinarAccess(connection, input);
+      const [result] = await connection.query(
+        `UPDATE webinar_presenter_notes
+         SET body = ?
+         WHERE id = ? AND user_id = ? AND webinar_id = ?`,
+        [trimmed, input.noteId, input.userId, input.webinarId],
+      );
+      if (!result.affectedRows) {
+        throw new WebinarNoteError('NOTE_NOT_FOUND', 'Note not found', { status: 404 });
+      }
+      return { id: Number(input.noteId), body: trimmed };
+    });
+  }
+
+  async function deleteNote(input) {
+    return runTransaction(connectionPool, async connection => {
+      await assertLockedWebinarAccess(connection, input);
+      const [result] = await connection.query(
+        `DELETE FROM webinar_presenter_notes
+         WHERE id = ? AND user_id = ? AND webinar_id = ?`,
+        [input.noteId, input.userId, input.webinarId],
+      );
+      if (!result.affectedRows) {
+        throw new WebinarNoteError('NOTE_NOT_FOUND', 'Note not found', { status: 404 });
+      }
+      return { id: Number(input.noteId) };
+    });
+  }
+
+  return { listNotes, addNote, updateNote, deleteNote };
 }
+
+const service = createNoteService();
 
 module.exports = {
   WebinarNoteError,
-  listNotes,
-  addNote,
-  updateNote,
-  deleteNote,
+  assertLockedWebinarAccess,
+  createNoteService,
+  ...service,
 };
