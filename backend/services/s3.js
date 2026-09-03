@@ -7,9 +7,11 @@
  * Two S3 regions are used:
  *   • us-east-1  → forms library bucket  (msfg-mortgage-documents-prod)
  *   • us-west-2  → media bucket          (msfg-media: avatars, employee docs)
+ *   • us-west-2  → Plaud audio archive   (PLAUD_S3_BUCKET, see services/plaud)
  */
 
 const { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const logger = require('../lib/logger');
 
@@ -22,11 +24,15 @@ const BUCKETS = {
   forms: 'msfg-mortgage-documents-prod',
   media: 'msfg-media',
   dashboard: process.env.S3_BUCKET_NAME || 'msfg-dashboard-files',
+  plaud: process.env.PLAUD_S3_BUCKET || 'msfg-plaud-recordings',
 };
+
+/** Buckets that live in us-west-2. Everything else is served from us-east-1. */
+const WEST_BUCKETS = new Set([BUCKETS.media, BUCKETS.plaud]);
 
 /** Pick the right client for a given bucket. */
 function clientForBucket(bucket) {
-  return bucket === BUCKETS.media ? s3West : s3East;
+  return WEST_BUCKETS.has(bucket) ? s3West : s3East;
 }
 
 // ── Presigned URLs ───────────────────────────────────────────────
@@ -98,6 +104,35 @@ async function getObject(bucket, key) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+/**
+ * Upload a stream (or Buffer) to S3 without buffering it in memory.
+ * Uses the SDK's managed multipart Upload so large audio files stream
+ * straight through in ~5 MB parts.
+ *
+ * @param {string} bucket
+ * @param {string} key
+ * @param {import('stream').Readable|Buffer} body
+ * @param {object} [options]
+ * @param {string} [options.contentType='application/octet-stream']
+ * @param {Record<string,string>} [options.metadata]   S3 user metadata (x-amz-meta-*)
+ * @returns {Promise<{ bucket: string, key: string, etag: string|undefined }>}
+ */
+async function uploadStream(bucket, key, body, { contentType = 'application/octet-stream', metadata } = {}) {
+  const client = clientForBucket(bucket);
+  const upload = new Upload({
+    client,
+    params: {
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+      ...(metadata ? { Metadata: metadata } : {}),
+    },
+  });
+  const result = await upload.done();
+  return { bucket, key, etag: result?.ETag };
 }
 
 // ── Higher-Level Helpers ─────────────────────────────────────────
@@ -172,6 +207,7 @@ module.exports = {
   getUploadUrl,
   getDownloadUrl,
   getObject,
+  uploadStream,
   deleteObject,
   resolveUrl,
   resolveUrls,
