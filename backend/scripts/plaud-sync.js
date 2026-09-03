@@ -50,6 +50,12 @@ function parseArgs(argv) {
   return args;
 }
 
+/** Human-readable size: KB below 1 MB so a short clip doesn't print as "0.0 MB". */
+function formatSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 // ── Commands ─────────────────────────────────────────────────────
 
 /** Prove the wiring without touching the database or S3. */
@@ -73,7 +79,7 @@ async function sync(args) {
   const label = summary.dryRun ? 'DRY RUN' : 'SYNC';
   console.log(`\n${label}: seen ${summary.seen}, uploaded ${summary.uploaded}, skipped ${summary.skipped}, not ready ${summary.notReady}, failed ${summary.failed}`);
   for (const item of summary.items) {
-    const size = item.bytes ? ` (${(item.bytes / 1024 / 1024).toFixed(1)} MB)` : '';
+    const size = item.bytes ? ` (${formatSize(item.bytes)})` : '';
     const detail = item.key ? ` → ${item.key}${size}` : item.error ? ` — ${item.error}` : '';
     console.log(`  [${item.action}] ${item.name || item.id}${detail}`);
   }
