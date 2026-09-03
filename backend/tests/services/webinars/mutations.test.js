@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { createMutationService } = require('../../../services/webinars/mutations');
+const { LIMITS } = require('../../../services/webinars/limits');
 
 const stableId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
@@ -159,6 +160,39 @@ describe('Webinar Studio live mutations', () => {
     expect(calls).toEqual(expect.arrayContaining(['beginTransaction', 'lock:2', 'revision:5', 'commit']));
     expect(calls.indexOf('revision:5')).toBeGreaterThan(calls.indexOf('write'));
     expect(calls).not.toContain('rollback');
+  });
+
+  it('allows a small save when the server-loaded multi-slide deck exceeds the raw request limit', async () => {
+    const htmlWrapperBytes = Buffer.byteLength('<section></section>');
+    const largeHtml = `<section>${'h'.repeat(LIMITS.slide_html - htmlWrapperBytes)}</section>`;
+    const largeJavascript = `/*${'j'.repeat(LIMITS.slide_javascript - 4)}*/`;
+    const slides = [stableId, secondId, '33333333-3333-4333-8333-333333333333']
+      .map((id, position) => ({
+        id,
+        position,
+        anchor: `slide-${position + 1}`,
+        title: `Slide ${position + 1}`,
+        target_seconds: 0,
+        speaker_notes: '',
+        html: largeHtml,
+        css: '',
+        javascript: largeJavascript,
+      }));
+    const loadedDeckBytes = slides.reduce(
+      (total, slide) => total + Buffer.byteLength(slide.html) + Buffer.byteLength(slide.javascript),
+      0,
+    );
+    expect(loadedDeckBytes).toBeGreaterThan(LIMITS.request);
+
+    const { api, calls } = service({ slides });
+    await expect(api.saveMaster({
+      webinarId: 2,
+      actorUserId: 7,
+      expectedVersion: 4,
+      masterHtml,
+      masterCss: 'main { color: navy; }',
+    })).resolves.toMatchObject({ liveVersion: 5 });
+    expect(calls).toContain('commit');
   });
 
   it('returns the post-mutation database timestamp, never the row-lock timestamp', async () => {
