@@ -4,10 +4,18 @@ const { loadAssetConfig: defaultLoadAssetConfig } = require('../webinarAssets/co
 const { createReferenceService } = require('../webinarAssets/references');
 const { replaceAssetTokens } = require('../webinarAssets/tokens');
 const {
+  assertCandidateWithinLimits,
   exactHttpsOrigin,
   loadResourcePolicy: defaultLoadResourcePolicy,
+  validateAnchor,
+  validateCss,
+  validateJavascript,
   validateMasterHtml,
+  validateSlideHtml,
 } = require('./contentPolicy');
+
+const SLIDE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const MAX_TITLE_LENGTH = 255;
 
 const LIVE_BUNDLE_SQL = `SELECT p.id AS webinar_id, p.slug AS webinar_slug, p.title AS webinar_title,
        p.master_html, p.master_css, p.live_version,
@@ -48,6 +56,12 @@ function string(value) {
   return value;
 }
 
+function title(value) {
+  const normalized = string(value);
+  if (!normalized.trim() || normalized.length > MAX_TITLE_LENGTH) fail();
+  return normalized;
+}
+
 function normalizeOrigin(value) {
   const origin = exactHttpsOrigin(value);
   if (!origin) fail();
@@ -77,13 +91,39 @@ function sameWebinar(left, right) {
     && Number(left.live_version) === Number(right.live_version);
 }
 
+function validatePersistedContent(normalized, resourcePolicy) {
+  const candidate = {
+    webinarId: normalized.webinar.id,
+    masterHtml: normalized.master.html,
+    masterCss: normalized.master.css,
+    slides: normalized.slides,
+  };
+  const issues = [
+    ...validateMasterHtml(candidate.masterHtml, resourcePolicy).issues,
+    ...validateCss(candidate.masterCss, 'master_css', resourcePolicy).issues,
+  ];
+  for (const slide of candidate.slides) {
+    issues.push(
+      ...validateSlideHtml(slide.html, resourcePolicy).issues,
+      ...validateCss(slide.css, 'slide_css', resourcePolicy).issues,
+      ...validateJavascript(slide.javascript).issues,
+    );
+  }
+  if (issues.length) fail();
+  try {
+    assertCandidateWithinLimits(candidate, resourcePolicy);
+  } catch (error) {
+    fail(error);
+  }
+}
+
 function normalizeRows(rows, resourcePolicy) {
   if (!Array.isArray(rows) || !rows.length) fail();
   const first = rows[0];
   const webinar = {
     id: integer(first.webinar_id, { positive: true }),
     slug: string(first.webinar_slug),
-    title: string(first.webinar_title),
+    title: title(first.webinar_title),
     liveVersion: integer(first.live_version),
   };
   const master = {
@@ -92,11 +132,12 @@ function normalizeRows(rows, resourcePolicy) {
   };
 
   if (rows.some(row => !sameWebinar(first, row))) fail();
-  if (validateMasterHtml(master.html, resourcePolicy).issues.length) fail();
+  if (validateAnchor(webinar.slug).issues.length) fail();
 
   const slides = [];
   const positions = new Set();
   const slideIds = new Set();
+  const anchors = new Set();
   for (const row of rows) {
     if (row.slide_id === null || row.slide_id === undefined) {
       if (rows.length !== 1) fail();
@@ -104,21 +145,27 @@ function normalizeRows(rows, resourcePolicy) {
     }
     const position = integer(row.slide_position);
     const id = string(row.slide_id);
-    if (positions.has(position) || slideIds.has(id)) fail();
+    const anchor = string(row.slide_anchor);
+    if (!SLIDE_ID.test(id) || validateAnchor(anchor).issues.length
+      || positions.has(position) || slideIds.has(id) || anchors.has(anchor)) fail();
     positions.add(position);
     slideIds.add(id);
+    anchors.add(anchor);
     slides.push({
       id,
       position,
-      anchor: string(row.slide_anchor),
-      title: string(row.slide_title),
+      anchor,
+      title: title(row.slide_title),
       html: string(row.slide_html),
       css: string(row.slide_css),
       javascript: string(row.slide_javascript),
     });
   }
   slides.sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
-  return { webinar, master, slides };
+  if (slides.some((slide, index) => slide.position !== index)) fail();
+  const normalized = { webinar, master, slides };
+  validatePersistedContent(normalized, resourcePolicy);
+  return normalized;
 }
 
 function normalizedAssetEntries(assetUrls, assetOrigin) {
@@ -153,22 +200,6 @@ function toPublicBundle(rows, assetUrls, policy = defaultLoadResourcePolicy()) {
   };
 }
 
-function readOnlyReferenceConnection(connectionPool) {
-  return {
-    async query(sql, params) {
-      const normalized = sql.replace(/\s+/g, ' ').trim();
-      if (normalized === 'DELETE FROM webinar_asset_references WHERE webinar_id = ?') {
-        return [{ affectedRows: 0 }];
-      }
-      if (normalized.startsWith('INSERT INTO webinar_asset_references ')) {
-        return [{ affectedRows: 0 }];
-      }
-      if (!normalized.startsWith('SELECT ')) fail();
-      return connectionPool.query(sql, params);
-    },
-  };
-}
-
 function assertSourcesResolve(normalized, urlsByVersionId) {
   const sources = [normalized.master.html, normalized.master.css];
   for (const slide of normalized.slides) {
@@ -193,13 +224,11 @@ function createPublicBundleService({
       const assetConfig = loadAssetConfig();
       if (new URL(assetConfig.cdnBaseUrl).origin !== resourcePolicy.assetOrigin) fail();
 
-      // The reviewed reference service is the canonical validator for availability,
-      // family/archive state, checksum paths, and immutable public URLs. Its write
-      // phase is intentionally absorbed here because a public read must never alter
-      // the already-transactional live reference set.
+      // The reviewed reference service owns the canonical availability, family,
+      // checksum-path, and immutable public-URL checks. This entry point is pure.
       const referenceService = createReferenceService({ config: assetConfig });
-      const resolved = await referenceService.validateAndReplaceReferences(
-        readOnlyReferenceConnection(connectionPool),
+      const resolved = await referenceService.resolveAvailableReferences(
+        connectionPool,
         {
           webinarId: normalized.webinar.id,
           masterHtml: normalized.master.html,

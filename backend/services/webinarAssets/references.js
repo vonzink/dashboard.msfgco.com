@@ -35,60 +35,50 @@ function createReferenceService({
   publicUrl = makePublicUrl,
   collectTokens = collectSurfaceTokens,
 } = {}) {
-  async function selectVersionsForReference(connection, assetVersionIds) {
+  async function selectVersionsForReference(connection, assetVersionIds, { lock = false } = {}) {
     if (!assetVersionIds.length) return [];
     const placeholders = assetVersionIds.map(() => '?').join(', ');
-    await connection.query(
-      `SELECT a.id
-       FROM webinar_assets a
-       WHERE EXISTS (
-         SELECT 1
-         FROM webinar_asset_versions family_version
-         WHERE family_version.asset_id = a.id
-           AND family_version.id IN (${placeholders})
-       )
-       ORDER BY a.id
-       FOR UPDATE`,
-      assetVersionIds,
-    );
+    if (lock) {
+      await connection.query(
+        `SELECT a.id
+         FROM webinar_assets a
+         WHERE EXISTS (
+           SELECT 1
+           FROM webinar_asset_versions family_version
+           WHERE family_version.asset_id = a.id
+             AND family_version.id IN (${placeholders})
+         )
+         ORDER BY a.id
+         FOR UPDATE`,
+        assetVersionIds,
+      );
+    }
     const [rows] = await connection.query(
       `SELECT v.id, v.status, v.archived_at, v.sha256, v.s3_key,
               a.archived_at AS family_archived_at
        FROM webinar_asset_versions v
        JOIN webinar_assets a ON a.id = v.asset_id
        WHERE v.id IN (${placeholders})
-       ORDER BY v.id
-       FOR UPDATE`,
+       ORDER BY v.id${lock ? '\n       FOR UPDATE' : ''}`,
       assetVersionIds,
     );
     return rows;
   }
 
-  async function replaceWebinarReferences(connection, webinarId, references) {
-    await connection.query('DELETE FROM webinar_asset_references WHERE webinar_id = ?', [webinarId]);
-    for (const reference of references) {
-      await connection.query(
-        'INSERT INTO webinar_asset_references (webinar_id, slide_id, asset_version_id, surface) VALUES (?, ?, ?, ?)',
-        [webinarId, reference.slideId ?? null, reference.assetVersionId, reference.surface],
-      );
-    }
-  }
-
-  async function validateAndReplaceReferences(connection, candidate) {
+  function referencesFrom(candidate) {
     assertWebinarId(candidate?.webinarId);
-    let references;
     try {
-      references = collectTokens(candidate);
+      return collectTokens(candidate);
     } catch (error) {
       if (error?.code === 'ASSET_TOKEN_FORMAT') {
         throw new AssetReferenceError('ASSET_TOKEN_FORMAT', 'Asset token is invalid');
       }
       throw error;
     }
-    const assetVersionIds = sortedUnique(references.map(reference => reference.assetVersionId));
-    const versions = await selectVersionsForReference(connection, assetVersionIds);
-    const versionsById = new Map(versions.map(version => [version.id, version]));
+  }
 
+  function validateVersions(assetVersionIds, versions) {
+    const versionsById = new Map(versions.map(version => [version.id, version]));
     if (assetVersionIds.some(assetVersionId => !versionsById.has(assetVersionId))) {
       throw new AssetReferenceError('ASSET_NOT_FOUND', 'Asset version not found');
     }
@@ -104,16 +94,51 @@ function createReferenceService({
     })) {
       throw new AssetReferenceError('ASSET_NOT_AVAILABLE', 'Asset version is not available');
     }
+    return versionsById;
+  }
 
-    let urlsByVersionId = new Map();
-    if (assetVersionIds.length) {
-      const resolvedConfig = config || loadConfig();
-      urlsByVersionId = new Map(assetVersionIds.map(assetVersionId => {
-        const version = versionsById.get(assetVersionId);
-        return [assetVersionId, publicUrl(resolvedConfig, version.s3_key)];
-      }));
+  function publicUrls(assetVersionIds, versionsById) {
+    if (!assetVersionIds.length) return new Map();
+    const resolvedConfig = config || loadConfig();
+    return new Map(assetVersionIds.map(assetVersionId => {
+      const version = versionsById.get(assetVersionId);
+      return [assetVersionId, publicUrl(resolvedConfig, version.s3_key)];
+    }));
+  }
+
+  async function resolveReferences(connection, candidate, { lock = false } = {}) {
+    const references = referencesFrom(candidate);
+    const assetVersionIds = sortedUnique(references.map(reference => reference.assetVersionId));
+    const versions = await selectVersionsForReference(connection, assetVersionIds, { lock });
+    const versionsById = validateVersions(assetVersionIds, versions);
+    return {
+      references,
+      assetVersionIds,
+      urlsByVersionId: publicUrls(assetVersionIds, versionsById),
+    };
+  }
+
+  async function resolveAvailableReferences(connection, candidate) {
+    const { assetVersionIds, urlsByVersionId } = await resolveReferences(connection, candidate);
+    return { urlsByVersionId, assetVersionIds };
+  }
+
+  async function replaceWebinarReferences(connection, webinarId, references) {
+    await connection.query('DELETE FROM webinar_asset_references WHERE webinar_id = ?', [webinarId]);
+    for (const reference of references) {
+      await connection.query(
+        'INSERT INTO webinar_asset_references (webinar_id, slide_id, asset_version_id, surface) VALUES (?, ?, ?, ?)',
+        [webinarId, reference.slideId ?? null, reference.assetVersionId, reference.surface],
+      );
     }
+  }
 
+  async function validateAndReplaceReferences(connection, candidate) {
+    const { references, assetVersionIds, urlsByVersionId } = await resolveReferences(
+      connection,
+      candidate,
+      { lock: true },
+    );
     await replaceWebinarReferences(connection, candidate.webinarId, references);
     return { urlsByVersionId, assetVersionIds };
   }
@@ -132,7 +157,7 @@ function createReferenceService({
     }
   }
 
-  return { validateAndReplaceReferences, recordRevisionAssetReferences };
+  return { resolveAvailableReferences, validateAndReplaceReferences, recordRevisionAssetReferences };
 }
 
 const service = createReferenceService();

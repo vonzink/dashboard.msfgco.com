@@ -63,6 +63,39 @@ function connectionWith(rows = []) {
 }
 
 describe('webinar asset live and revision references', () => {
+  it('resolves canonical public asset URLs through one read-only non-locking query', async () => {
+    const { connection, calls } = connectionWith([available(FIRST_VERSION)]);
+    const service = createReferenceService({ config });
+
+    const result = await service.resolveAvailableReferences(connection, candidate({
+      masterCss: `body { background: url({{ASSET:${FIRST_VERSION}}}); }`,
+    }));
+
+    expect(result.assetVersionIds).toEqual([FIRST_VERSION]);
+    expect(result.urlsByVersionId.get(FIRST_VERSION)).toBe(
+      `https://assets.example/approved/sha256/${'a'.repeat(64)}/asset`,
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].sql).toContain('SELECT v.id, v.status, v.archived_at, v.sha256, v.s3_key');
+    expect(calls[0].sql).toContain('a.archived_at AS family_archived_at');
+    expect(calls[0].sql).not.toContain('FOR UPDATE');
+    expect(calls[0].sql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/);
+    expect(calls[0].params).toEqual([FIRST_VERSION]);
+  });
+
+  it('resolves an empty public dependency set without a query or asset configuration', async () => {
+    const { connection, calls } = connectionWith([]);
+    const service = createReferenceService({ config: null, loadConfig: vi.fn(() => {
+      throw new Error('configuration should not be loaded');
+    }) });
+
+    await expect(service.resolveAvailableReferences(connection, candidate())).resolves.toEqual({
+      assetVersionIds: [],
+      urlsByVersionId: new Map(),
+    });
+    expect(calls).toEqual([]);
+  });
+
   it('rejects a non-canonical token with a controlled client error before querying storage metadata', async () => {
     const { connection, calls } = connectionWith([]);
     const service = createReferenceService({ config });

@@ -158,16 +158,16 @@ describe('public Webinar Studio live bundle compiler', () => {
     expect(params).toEqual(['first-home-without-mystery']);
   });
 
-  it('sorts numeric positions deterministically and emits byte-identical JSON and ETags', async () => {
+  it('sorts contiguous numeric positions deterministically and emits byte-identical JSON and ETags', async () => {
     const rows = [
       ...liveRows({
         slide_id: SECOND_SLIDE,
-        slide_position: '10',
+        slide_position: '1',
         slide_anchor: 'later',
         slide_title: 'Later',
         slide_html: `<img src="{{ASSET:${SECOND_VERSION}}}">`,
       }),
-      ...liveRows({ slide_position: '2' }),
+      ...liveRows({ slide_position: '0' }),
     ];
     const state = {
       rows,
@@ -179,7 +179,7 @@ describe('public Webinar Studio live bundle compiler', () => {
       versions: [...state.versions].reverse(),
     }).api.getLiveBundleBySlug('first-home-without-mystery');
 
-    expect(first.bundle.slides.map(slide => slide.position)).toEqual([2, 10]);
+    expect(first.bundle.slides.map(slide => slide.position)).toEqual([0, 1]);
     expect(Object.keys(first.bundle.assets)).toEqual([FIRST_VERSION, SECOND_VERSION]);
     expect(second.json).toBe(first.json);
     expect(second.etag).toBe(first.etag);
@@ -210,6 +210,43 @@ describe('public Webinar Studio live bundle compiler', () => {
     const result = await service({ rows }).api.getLiveBundleBySlug('first-home-without-mystery');
     expect(Object.keys(result.bundle.assets)).toEqual([FIRST_VERSION]);
     expect(result.bundle.slides[0].javascript).toContain(`{{ASSET:${FIRST_VERSION}}}`);
+  });
+
+  it('resolves public assets without issuing DML or locking reads', async () => {
+    const { api, db } = service();
+    await api.getLiveBundleBySlug('first-home-without-mystery');
+
+    const sql = db.query.mock.calls.map(([statement]) => statement).join('\n');
+    expect(sql).not.toMatch(/\b(?:INSERT|UPDATE|DELETE)\b/);
+    expect(sql).not.toContain('FOR UPDATE');
+    expect(db.query).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    ['forbidden Master HTML', { master_html: '<script>alert(1)</script><main>{{SLIDE_CONTENT}}</main>' }],
+    ['a forbidden Master CSS import', { master_css: '@import "https://evil.example/master.css";' }],
+    ['an evil slide HTML URL', { slide_html: '<img src="https://evil.example/private.png">' }],
+    ['a forbidden CSS import', { slide_css: '@import "https://evil.example/theme.css";' }],
+    ['malformed CSS', { slide_css: '.slide { color: red' }],
+    ['invalid JavaScript', { slide_javascript: 'const broken = ;' }],
+    ['oversize slide HTML', { slide_html: 'x'.repeat(256001) }],
+  ])('fails closed when persisted live code contains %s', async (_label, override) => {
+    const { api } = service({ rows: liveRows(override) });
+    await expect(api.getLiveBundleBySlug('first-home-without-mystery')).rejects.toMatchObject({
+      status: 503,
+      code: 'PUBLIC_BUNDLE_INVALID',
+    });
+  });
+
+  it('revalidates persisted source when the server resource policy becomes tighter', async () => {
+    const rows = liveRows({
+      slide_html: '<link rel="stylesheet" href="https://legacy-styles.example/theme.css"><section>Previously admitted content</section>',
+    });
+    const { api } = service({ rows, versions: [] });
+    await expect(api.getLiveBundleBySlug('first-home-without-mystery')).rejects.toMatchObject({
+      status: 503,
+      code: 'PUBLIC_BUNDLE_INVALID',
+    });
   });
 
   it.each([
@@ -261,7 +298,35 @@ describe('public Webinar Studio live bundle compiler', () => {
     ['negative', liveRows({ slide_position: -1 })],
     ['fractional', liveRows({ slide_position: 1.5 })],
     ['nonnumeric', liveRows({ slide_position: 'first' })],
+    ['noncontiguous', [
+      ...liveRows({ slide_position: 0 }),
+      ...liveRows({ slide_id: SECOND_SLIDE, slide_position: 2, slide_anchor: 'third' }),
+    ]],
   ])('fails closed for %s live slide positions', async (_label, rows) => {
+    const { api } = service({ rows });
+    await expect(api.getLiveBundleBySlug('first-home-without-mystery')).rejects.toMatchObject({
+      status: 503,
+      code: 'PUBLIC_BUNDLE_INVALID',
+    });
+  });
+
+  it.each([
+    ['a malformed slide UUID', liveRows({ slide_id: 'not-a-slide-uuid' })],
+    ['an uppercase anchor', liveRows({ slide_anchor: 'Opening' })],
+    ['a duplicate slide UUID', [
+      ...liveRows({ slide_position: 0 }),
+      ...liveRows({ slide_position: 1, slide_anchor: 'second' }),
+    ]],
+    ['a duplicate slide anchor', [
+      ...liveRows({ slide_position: 0 }),
+      ...liveRows({ slide_id: SECOND_SLIDE, slide_position: 1 }),
+    ]],
+    ['a blank slide title', liveRows({ slide_title: '   ' })],
+    ['an overlong slide title', liveRows({ slide_title: 't'.repeat(256) })],
+    ['an invalid webinar slug', liveRows({ webinar_slug: 'First Home' })],
+    ['a blank webinar title', liveRows({ webinar_title: ' ' })],
+    ['an overlong webinar title', liveRows({ webinar_title: 'w'.repeat(256) })],
+  ])('fails closed for public metadata with %s', async (_label, rows) => {
     const { api } = service({ rows });
     await expect(api.getLiveBundleBySlug('first-home-without-mystery')).rejects.toMatchObject({
       status: 503,
