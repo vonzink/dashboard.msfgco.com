@@ -15,6 +15,7 @@ endpoint.
 | Disposable S3 lifecycle integration | Deliberately skipped because its exact disposable configuration was absent |
 | Production migration `095_webinar_studio_assets.sql` | **NOT PERFORMED — separate approval required** |
 | Production S3 bucket/prefix and policies | **UNVERIFIED / NOT PROVISIONED BY THIS PACKAGE** |
+| Browser presigned-PUT S3 CORS | **UNVERIFIED — DO NOT RUN WITHOUT SEPARATE DISPOSABLE/PRODUCTION APPROVAL** |
 | Production GuardDuty Malware Protection for S3 plan | **UNVERIFIED / NOT PROVISIONED BY THIS PACKAGE** |
 | Production CloudFront distribution and OAC | **UNVERIFIED / NOT PROVISIONED BY THIS PACKAGE** |
 | Production IAM changes | **UNVERIFIED / NOT PERFORMED BY THIS PACKAGE** |
@@ -76,6 +77,123 @@ aws s3api get-object-tagging \
   --bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>' \
   --key '<REVIEWED_QUARANTINE_OBJECT_KEY>'
 ```
+
+#### Browser presigned-PUT CORS gate
+
+**UNVERIFIED — DO NOT RUN WITHOUT SEPARATE DISPOSABLE/PRODUCTION APPROVAL**
+
+The production asset bucket must use the following exact upload CORS contract.
+It admits only the authenticated Dashboard origin, only `PUT`, and only the two
+headers sent by the presigned upload contract. `ETag` is the only exposed
+response header and the preflight cache is bounded to ten minutes. Do not add a
+wildcard origin or header and do not enable credentialed CORS.
+
+<!-- S3_BROWSER_UPLOAD_CORS_BEGIN -->
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["https://dashboard.msfgco.com"],
+      "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["Content-Type", "x-amz-meta-declaredbytes"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 600
+    }
+  ]
+}
+```
+<!-- S3_BROWSER_UPLOAD_CORS_END -->
+
+Local development uses a separate reviewed development/disposable bucket. Only
+the backend's documented port `8080` is intended, with both browser spellings
+listed explicitly. Never merge these localhost origins into the production
+bucket rule.
+
+<!-- S3_LOCAL_UPLOAD_CORS_BEGIN -->
+```json
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["http://localhost:8080", "http://127.0.0.1:8080"],
+      "AllowedMethods": ["PUT"],
+      "AllowedHeaders": ["Content-Type", "x-amz-meta-declaredbytes"],
+      "ExposeHeaders": ["ETag"],
+      "MaxAgeSeconds": 600
+    }
+  ]
+}
+```
+<!-- S3_LOCAL_UPLOAD_CORS_END -->
+
+First retrieve the currently applied rule with a separately reviewed read-only
+profile. Resolve every placeholder to one exact value before execution and
+record the returned JSON for review; this command does not change the bucket:
+
+```sh
+aws s3api get-bucket-cors \
+  --bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>' \
+  --profile '<REVIEWED_READ_ONLY_AWS_PROFILE>' \
+  --region '<REVIEWED_AWS_REGION>'
+```
+
+After the reviewed CORS rule is applied through a separately approved change,
+perform one browser-equivalent canary. Use the authenticated asset-intent API to
+create a presigned URL for one known disposable PNG. Independently verify that
+the URL names exactly
+`<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>`, that the local file is exactly
+`<REVIEWED_EXACT_DISPOSABLE_FILE_PATH>`, and that its decimal byte count is
+`<REVIEWED_EXACT_DECIMAL_FILE_BYTES>`. Treat the presigned URL as a secret and
+do not paste its query string into tickets or logs.
+
+```sh
+curl --fail-with-body --request OPTIONS \
+  --dump-header - \
+  --output /dev/null \
+  -H 'Origin: https://dashboard.msfgco.com' \
+  -H 'Access-Control-Request-Method: PUT' \
+  -H 'Access-Control-Request-Headers: content-type,x-amz-meta-declaredbytes' \
+  '<REVIEWED_PRESIGNED_PUT_URL>'
+
+curl --fail-with-body --request PUT \
+  --dump-header - \
+  --output /dev/null \
+  -H 'Origin: https://dashboard.msfgco.com' \
+  -H 'Content-Type: image/png' \
+  -H 'x-amz-meta-declaredbytes: <REVIEWED_EXACT_DECIMAL_FILE_BYTES>' \
+  --upload-file '<REVIEWED_EXACT_DISPOSABLE_FILE_PATH>' \
+  '<REVIEWED_PRESIGNED_PUT_URL>'
+```
+
+The OPTIONS response must be successful and return the exact Dashboard origin,
+`PUT`, and both requested headers. The PUT must be successful and return an
+`ETag`. Confirm only the enumerated object exists, then remove only that exact
+canary key using a separately reviewed mutation-capable profile:
+
+```sh
+aws s3api head-object \
+  --bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>' \
+  --key '<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>' \
+  --profile '<REVIEWED_MUTATION_CANARY_AWS_PROFILE>' \
+  --region '<REVIEWED_AWS_REGION>'
+
+aws s3api delete-object \
+  --bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>' \
+  --key '<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>' \
+  --profile '<REVIEWED_MUTATION_CANARY_AWS_PROFILE>' \
+  --region '<REVIEWED_AWS_REGION>'
+
+aws s3api head-object \
+  --bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>' \
+  --key '<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>' \
+  --profile '<REVIEWED_MUTATION_CANARY_AWS_PROFILE>' \
+  --region '<REVIEWED_AWS_REGION>'
+```
+
+The final HEAD must return `404`/`NotFound`. Any other result fails cleanup and
+blocks enablement. Never substitute a prefix, wildcard, recursive deletion, or
+batch delete for the exact key above. Repeat the canary against a separately
+reviewed development bucket with one of the two exact local origins when local
+browser upload testing is intended.
 
 ### 2. Fail-closed bucket policy
 
@@ -168,8 +286,12 @@ Only after gates 1–4 pass:
 3. configure `WEBINAR_ASSET_CDN_BASE_URL` with the reviewed HTTPS CDN base URL;
 4. configure `WEBINAR_ASSET_QUARANTINE_PREFIX` only if the reviewed prefix is not
    the default `quarantine/`;
-5. restart through the normal backend deployment procedure; and
-6. enable the authenticated asset upload controls only for the approved users.
+5. leave `WEBINAR_ASSET_INSPECTION_CONCURRENCY` unset for the conservative
+   default of `2`, or set a reviewed integer from `1` through `8` only after
+   memory, disk-I/O, ffprobe, and S3 upload load testing. Saturation deliberately
+   returns immediate `503 ASSET_INSPECTION_BUSY`; there is no unbounded queue;
+6. restart through the normal backend deployment procedure; and
+7. enable the authenticated asset upload controls only for the approved users.
 
 Absence or invalidity of the bucket/CDN configuration is intentionally fatal to
 asset operations. Do not work around that fail-closed behavior with a default
@@ -215,7 +337,7 @@ env -u WEBINAR_ASSET_TEST_ACK_DISPOSABLE \
   tests/integration/webinarAssets.integration.test.js
 ```
 
-Expected without configuration: one file, three inert safety tests passed, and
+Expected without configuration: one file, five inert safety tests passed, and
 two resource lifecycle tests deliberately skipped, exit zero, with no asset/AWS
 dependency load, S3 client construction, or request.
 
@@ -269,7 +391,7 @@ npx vitest run --config vitest.webinar-integration.config.js \
   tests/integration/webinarAssets.integration.test.js
 ```
 
-Result: 1 integration file, 3 inert safety tests passed and 2 resource lifecycle
+Result: 1 integration file, 5 inert safety tests passed and 2 resource lifecycle
 tests deliberately skipped, exit 0. No asset/AWS dependency was loaded and no S3
 client, request, or resource mutation occurred. The passing guards also prove a
 mocked mixed-success deletion response fails cleanup after every enumerated key

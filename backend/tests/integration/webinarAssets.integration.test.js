@@ -122,6 +122,60 @@ describe('webinar asset disposable integration guards', () => {
     })).rejects.toThrow(/Disposable asset cleanup failed/);
     expect(commands.filter(command => command.kind === 'head').map(command => command.input.Key)).toEqual(keys);
   });
+
+  it('pins separate exact production and local browser-upload CORS contracts without wildcards', () => {
+    const runbook = readFileSync(
+      new URL('../../../docs/webinar-studio/assets-runbook.md', import.meta.url),
+      'utf8',
+    );
+    const productionBlock = /<!-- S3_BROWSER_UPLOAD_CORS_BEGIN -->\s*```json\s*([\s\S]*?)\s*```\s*<!-- S3_BROWSER_UPLOAD_CORS_END -->/.exec(runbook);
+    const localBlock = /<!-- S3_LOCAL_UPLOAD_CORS_BEGIN -->\s*```json\s*([\s\S]*?)\s*```\s*<!-- S3_LOCAL_UPLOAD_CORS_END -->/.exec(runbook);
+    expect(productionBlock).not.toBeNull();
+    expect(localBlock).not.toBeNull();
+    const common = {
+      AllowedMethods: ['PUT'],
+      AllowedHeaders: ['Content-Type', 'x-amz-meta-declaredbytes'],
+      ExposeHeaders: ['ETag'],
+      MaxAgeSeconds: 600,
+    };
+    expect(JSON.parse(productionBlock[1])).toEqual({
+      CORSRules: [{
+        AllowedOrigins: ['https://dashboard.msfgco.com'],
+        ...common,
+      }],
+    });
+    expect(JSON.parse(localBlock[1])).toEqual({
+      CORSRules: [{
+        AllowedOrigins: ['http://localhost:8080', 'http://127.0.0.1:8080'],
+        ...common,
+      }],
+    });
+    expect(`${productionBlock[1]}${localBlock[1]}`).not.toContain('"*"');
+  });
+
+  it('requires reviewed read-only CORS evidence and an exact disposable preflight/PUT cleanup canary', () => {
+    const runbook = readFileSync(
+      new URL('../../../docs/webinar-studio/assets-runbook.md', import.meta.url),
+      'utf8',
+    );
+    for (const required of [
+      'aws s3api get-bucket-cors',
+      "--bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>'",
+      "--profile '<REVIEWED_READ_ONLY_AWS_PROFILE>'",
+      "--region '<REVIEWED_AWS_REGION>'",
+      "-H 'Origin: https://dashboard.msfgco.com'",
+      "-H 'Access-Control-Request-Method: PUT'",
+      "-H 'Access-Control-Request-Headers: content-type,x-amz-meta-declaredbytes'",
+      "--upload-file '<REVIEWED_EXACT_DISPOSABLE_FILE_PATH>'",
+      "--key '<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>'",
+      'aws s3api delete-object',
+      'aws s3api head-object',
+      '**UNVERIFIED — DO NOT RUN WITHOUT SEPARATE DISPOSABLE/PRODUCTION APPROVAL**',
+    ]) {
+      expect(runbook).toContain(required);
+    }
+    expect(runbook).not.toMatch(/delete-object[\s\S]{0,300}(?:--recursive|\*)/);
+  });
 });
 
 function parseDisposableConfig(env) {
