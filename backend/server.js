@@ -61,12 +61,75 @@ const askAiRoutes = require('./routes/askAi');
 const { createWebinarsRouter } = require('./routes/webinars');
 const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
 const { createWebinarAssetsRouter } = require('./routes/webinarAssets');
+const { createPublicWebinarsRouter } = require('./routes/publicWebinars');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
+const PUBLIC_WEBINAR_ORIGIN = 'https://msfgmortgage.com';
+const PUBLIC_RUNTIME_EVENT_BYTES = 2 * 1024;
+
+function exactOrigin(value) {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.origin !== value || parsed.username || parsed.password) return null;
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalDevelopmentOrigin(origin) {
+  const parsed = new URL(origin);
+  return ['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)
+    && ['http:', 'https:'].includes(parsed.protocol);
+}
+
+function loadPublicWebinarOrigins(env = process.env, configuredOrigins) {
+  const production = env.NODE_ENV === 'production';
+  const candidates = configuredOrigins === undefined
+    ? (env.PUBLIC_WEBINAR_ORIGINS || PUBLIC_WEBINAR_ORIGIN).split(',')
+    : configuredOrigins;
+  if (!Array.isArray(candidates)) throw new Error('Invalid public webinar origin configuration');
+
+  const origins = new Set([PUBLIC_WEBINAR_ORIGIN]);
+  for (const candidate of candidates) {
+    const origin = exactOrigin(typeof candidate === 'string' ? candidate.trim() : candidate);
+    const allowed = origin === PUBLIC_WEBINAR_ORIGIN
+      || (!production && origin && isLocalDevelopmentOrigin(origin));
+    if (!allowed) throw new Error('Invalid public webinar origin configuration');
+    origins.add(origin);
+  }
+  return Object.freeze([...origins]);
+}
+
+function requestPathname(req) {
+  return (req.originalUrl || req.url || '').split('?', 1)[0];
+}
+
+function isPublicWebinarRequest(req) {
+  const pathname = requestPathname(req);
+  return pathname === '/api/public/webinars' || pathname.startsWith('/api/public/webinars/');
+}
+
+function isPublicWebinarRuntimeEvent(req) {
+  return req.method === 'POST'
+    && /^\/api\/public\/webinars\/[^/]+\/runtime-events$/.test(requestPathname(req));
+}
+
+function corsOriginPolicy(origins, message) {
+  return (origin, callback) => {
+    if (!origin) return callback(null, false);
+    if (origins.includes(origin)) return callback(null, origin);
+    const error = new Error(message);
+    error.status = 403;
+    error.code = 'CORS_ORIGIN_DENIED';
+    return callback(error);
+  };
+}
 
 function createApp({
   webinarAuthenticate = authenticate,
@@ -75,8 +138,11 @@ function createApp({
   webinarIpWriteLimit = 300,
   webinarWriteLimit = 300,
   webinarAssetWriteLimit = 300,
+  publicWebinarOrigins,
+  publicWebinarRuntimeLimit = 60,
 } = {}) {
 const app = express();
+const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
 const webinarRecordOperationalEvent = webinarOperationalLogger
   ? createOperationalEventRecorder(webinarOperationalLogger)
   : recordOperationalEvent;
@@ -90,6 +156,10 @@ const webinarPresenterSettingsRoutes = createWebinarPresenterSettingsRouter({
 });
 const webinarAssetsRoutes = createWebinarAssetsRouter({
   catalog: webinarServices.assets,
+  recordOperationalEvent: webinarRecordOperationalEvent,
+});
+const publicWebinarsRoutes = createPublicWebinarsRouter({
+  getLiveBundleBySlug: webinarServices.publicBundle?.getLiveBundleBySlug,
   recordOperationalEvent: webinarRecordOperationalEvent,
 });
 
@@ -119,21 +189,30 @@ app.use(helmet({
   permittedCrossDomainPolicies: { permittedPolicies: 'none' },
 }));
 
-// CORS - restrict to your frontend domain
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin only in explicit development mode
-    if (!origin && process.env.NODE_ENV === 'development') {
-      return callback(null, true);
-    }
-    // Allow listed origins
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Active-Role']
+// Public webinar reads have a separate, non-credentialed browser boundary.
+// Adding an audience origin here must never add it to private Dashboard routes.
+app.use((req, res, next) => {
+  if (isPublicWebinarRequest(req)) {
+    res.vary('Origin');
+    if (req.method === 'OPTIONS') res.vary('Access-Control-Request-Headers');
+  }
+  next();
+});
+app.use(cors((req, callback) => {
+  if (isPublicWebinarRequest(req)) {
+    callback(null, {
+      origin: corsOriginPolicy(resolvedPublicWebinarOrigins, 'Public webinar origin not allowed'),
+      credentials: false,
+      methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type'],
+    });
+    return;
+  }
+  callback(null, {
+    origin: corsOriginPolicy(allowedOrigins, 'Not allowed by CORS'),
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Active-Role'],
+  });
 }));
 
 // Rate limiting - 1000 requests per 15 minutes per IP
@@ -214,6 +293,16 @@ const webinarAssetWriteLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
 });
 
+const publicWebinarRuntimeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: publicWebinarRuntimeLimit,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many runtime events, please slow down' },
+  skip: (req) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
+});
+app.use('/api/public/webinars', publicWebinarRuntimeLimiter);
+
 const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings', '/api/webinar-assets'];
 const WEBINAR_MAX_REQUEST_BYTES = LIMITS.request;
 function isWebinarStudioMutation(req) {
@@ -274,6 +363,26 @@ function parseWebinarRawJson(req, res, next) {
 
 // Closed header allowlists keep credentials and cookies out of request logs.
 app.use(createSafeHttpLogger(logger));
+
+function rejectOversizedPublicRuntimeEvent(req, res, next) {
+  if (!isPublicWebinarRuntimeEvent(req)) return next();
+  const contentLength = Number(req.get('content-length'));
+  if (Number.isFinite(contentLength) && contentLength > PUBLIC_RUNTIME_EVENT_BYTES) {
+    return res.status(413).json({ error: 'Runtime event exceeds 2 KiB limit' });
+  }
+  return next();
+}
+
+const publicRuntimeEventParser = express.json({
+  type: 'application/json',
+  limit: PUBLIC_RUNTIME_EVENT_BYTES,
+  strict: true,
+});
+
+// This parser is deliberately mounted before the Dashboard-wide 10 MiB parser.
+app.use(rejectOversizedPublicRuntimeEvent);
+app.post('/api/public/webinars/:slug/runtime-events', publicRuntimeEventParser);
+app.use('/api/public/webinars', publicWebinarsRoutes);
 
 // Body parsing
 app.use(rejectOversizedWebinarRequest);
@@ -376,6 +485,17 @@ app.use('/api/handbook', authenticate, handbookRoutes);
 // ERROR HANDLING
 // ======================
 app.use((err, req, res, next) => {
+  if (err.code === 'CORS_ORIGIN_DENIED' && err.status === 403) {
+    return res.status(403).json({ error: 'Origin not allowed' });
+  }
+  if (isPublicWebinarRuntimeEvent(req)) {
+    if (err.type === 'entity.too.large' || err.status === 413) {
+      return res.status(413).json({ error: 'Runtime event exceeds 2 KiB limit' });
+    }
+    if (err.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: 'Invalid runtime event' });
+    }
+  }
   logger.error({ err }, 'Unhandled error');
 
   if (isWebinarStudioMutation(req) && (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413)) {
@@ -413,6 +533,9 @@ app.locals.webinarStudio = {
   webinarIpWriteLimiter,
   webinarWriteLimiter,
   webinarAssetWriteLimiter,
+  publicWebinarRuntimeLimiter,
+  rejectOversizedPublicRuntimeEvent,
+  publicRuntimeEventParser,
 };
 return app;
 }
@@ -492,5 +615,6 @@ if (require.main === module) {
 module.exports = {
   app,
   createApp,
+  loadPublicWebinarOrigins,
   ...app.locals.webinarStudio,
 };
