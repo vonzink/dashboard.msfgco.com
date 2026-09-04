@@ -256,8 +256,14 @@ function createCatalogService({
       params.push(filters.mediaType.trim());
     }
     if (typeof filters.status === 'string' && filters.status.trim()) {
-      clauses.push('v.status = ?');
-      params.push(filters.status.trim());
+      const status = filters.status.trim();
+      if (status === 'archived') {
+        clauses.push('(v.status = ? OR a.archived_at IS NOT NULL)');
+      } else {
+        clauses.push('v.status = ?');
+        clauses.push('a.archived_at IS NULL');
+      }
+      params.push(status);
     }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const [rows] = await connectionPool.query(

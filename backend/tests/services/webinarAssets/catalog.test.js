@@ -95,7 +95,37 @@ function database(seed = initialState()) {
     }
 
     if (normalized.includes('FROM webinar_assets a') && normalized.includes('JOIN webinar_asset_versions v')) {
-      return [state.versions.flatMap(version => {
+      let parameterIndex = 0;
+      let filteredVersions = state.versions;
+      if (normalized.includes('(a.display_name LIKE ? OR a.description LIKE ?)')) {
+        const search = String(params[parameterIndex++] || '').replaceAll('%', '').toLowerCase();
+        parameterIndex += 1;
+        filteredVersions = filteredVersions.filter(version => {
+          const family = state.families.find(row => row.id === version.asset_id);
+          return family && `${family.display_name} ${family.description || ''}`.toLowerCase().includes(search);
+        });
+      }
+      if (normalized.includes('v.media_type = ?')) {
+        const mediaType = params[parameterIndex++];
+        filteredVersions = filteredVersions.filter(version => version.media_type === mediaType);
+      }
+      if (normalized.includes('(v.status = ? OR a.archived_at IS NOT NULL)')) {
+        const status = params[parameterIndex];
+        filteredVersions = filteredVersions.filter(version => {
+          const family = state.families.find(row => row.id === version.asset_id);
+          return version.status === status || Boolean(family?.archived_at);
+        });
+      } else if (normalized.includes('v.status = ?')) {
+        const status = params[parameterIndex];
+        filteredVersions = filteredVersions.filter(version => version.status === status);
+      }
+      if (normalized.includes('a.archived_at IS NULL')) {
+        filteredVersions = filteredVersions.filter(version => (
+          !state.families.find(row => row.id === version.asset_id)?.archived_at
+        ));
+      }
+
+      return [filteredVersions.flatMap(version => {
         const family = state.families.find(row => row.id === version.asset_id);
         if (!family) return [];
         return [{
@@ -1156,6 +1186,71 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(catalog[0].versions[0]).not.toHaveProperty('publicUrl');
     expect(catalog[0].versions[1]).not.toHaveProperty('publicUrl');
     expect(safeSerialization(catalog)).not.toMatch(/s3_key|private-brand-name|rejected-private|archived-private|uploadUrl/i);
+  });
+
+  it('does not return a logically archived child through the available-status filter', async () => {
+    const version = {
+      ...initialState().versions[0],
+      status: 'available',
+      sha256: SHA256,
+      s3_key: `approved/sha256/${SHA256}/asset`,
+    };
+    const family = {
+      ...initialState().families[0],
+      archived_at: '2026-09-04T12:00:00.000Z',
+    };
+    const { api } = fixture({
+      state: initialState({ families: [family], versions: [version] }),
+    });
+
+    const catalog = await api.listCatalog({
+      actorUserId: 7,
+      isAdmin: false,
+      status: 'available',
+    });
+
+    expect(catalog).toEqual([]);
+    expect(safeSerialization(catalog)).not.toContain(`https://assets.example/approved/sha256/${SHA256}/asset`);
+  });
+
+  it('returns every logically archived child through the archived-status filter without a URL', async () => {
+    const versions = [
+      {
+        ...initialState().versions[0],
+        status: 'available',
+        sha256: SHA256,
+        s3_key: `approved/sha256/${SHA256}/asset`,
+      },
+      {
+        ...initialState().versions[0],
+        id: SECOND_VERSION_ID,
+        version_number: 2,
+        status: 'rejected',
+        rejection_code: 'MALWARE_DETECTED',
+        s3_key: `quarantine/${SECOND_VERSION_ID}/private-rejected-name.png`,
+      },
+    ];
+    const family = {
+      ...initialState().families[0],
+      archived_at: '2026-09-04T12:00:00.000Z',
+    };
+    const { api } = fixture({
+      state: initialState({ families: [family], versions }),
+    });
+
+    const catalog = await api.listCatalog({
+      actorUserId: 7,
+      isAdmin: false,
+      status: 'archived',
+    });
+
+    expect(catalog).toHaveLength(1);
+    expect(catalog[0].versions).toEqual([
+      expect.objectContaining({ id: SECOND_VERSION_ID, status: 'archived' }),
+      expect.objectContaining({ id: VERSION_ID, status: 'archived' }),
+    ]);
+    expect(catalog[0].versions.every(version => !Object.hasOwn(version, 'publicUrl'))).toBe(true);
+    expect(safeSerialization(catalog)).not.toMatch(/private-rejected-name|approved\/sha256|s3_key/i);
   });
 
   it('limits family metadata changes to the creator or an administrator', async () => {
