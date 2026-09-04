@@ -137,6 +137,7 @@ function createApp({
   publicWebinarRuntimeLimit = 60,
   generalWriteLimit = 200,
   accessLogger = logger,
+  errorLogger = logger,
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
@@ -310,6 +311,13 @@ function isWebinarStudioMutation(req) {
       return pathname === prefix || pathname.startsWith(`${prefix}/`);
     });
 }
+
+function isPublicWebinarDecodeError(error, req) {
+  return error instanceof URIError
+    && (error.status === 400 || error.statusCode === 400)
+    && requestPathname(req).startsWith('/api/public/webinars/');
+}
+
 function rejectOversizedWebinarRequest(req, res, next) {
   if (!isWebinarStudioMutation(req)) {
     return next();
@@ -530,7 +538,11 @@ app.use((err, req, res, next) => {
   if (err.code === 'CORS_ORIGIN_DENIED' && err.status === 403) {
     return res.status(403).json({ error: 'Origin not allowed' });
   }
-  logger.error({ err }, 'Unhandled error');
+  if (isPublicWebinarDecodeError(err, req)) {
+    recordPublicRuntimeRejection(req, 404, 'WEBINAR_NOT_FOUND');
+    return res.status(404).json({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+  }
+  errorLogger.error({ err }, 'Unhandled error');
 
   if (isWebinarStudioMutation(req) && (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413)) {
     recordWebinarTransportRejection(req, 413, 'CONTENT_LIMIT_EXCEEDED');

@@ -50,6 +50,24 @@ describe('credential-safe HTTP request logging', () => {
       .toContain('LOG_RUNTIME_CHARSET_SECRET');
   });
 
+  it('redacts every path segment below the public webinar prefix without changing other URLs', () => {
+    const request = url => serializeRequest({
+      id: 1,
+      method: 'GET',
+      originalUrl: url,
+      headers: {},
+      socket: { remoteAddress: '127.0.0.1', remotePort: 1234 },
+    });
+
+    expect(request('/api/public/webinars/PUBLIC_URI_CANARY_%ZZ/live').url)
+      .toBe('/api/public/webinars/[redacted]');
+    expect(request('/api/public/webinars/PUBLIC_URI_CANARY_%C3%28/live?query=QUERY_URI_CANARY').url)
+      .toBe('/api/public/webinars/[redacted]');
+    expect(request('/api/public/webinars').url).toBe('/api/public/webinars');
+    expect(request('/api/announcements/PUBLIC_URI_CANARY_%ZZ').url)
+      .toBe('/api/announcements/PUBLIC_URI_CANARY_%ZZ');
+  });
+
   it('never serializes authorization, cookie, or set-cookie canaries', async () => {
     const chunks = [];
     const stream = new Writable({

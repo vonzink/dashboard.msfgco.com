@@ -28,6 +28,7 @@ let server;
 let getLiveBundleBySlug;
 let operationalLogger;
 let authenticate;
+let errorLogger;
 
 function identityMiddleware(req, res) {
   res.status(401).json({ error: 'Authentication required' });
@@ -38,6 +39,7 @@ async function listen(overrides = {}) {
     || vi.fn().mockResolvedValue({ bundle, json, etag });
   operationalLogger = overrides.operationalLogger || { info: vi.fn() };
   authenticate = overrides.authenticate || vi.fn(identityMiddleware);
+  errorLogger = overrides.errorLogger || { error: vi.fn() };
   const app = createApp({
     webinarAuthenticate: authenticate,
     webinarServices: { publicBundle: { getLiveBundleBySlug } },
@@ -46,6 +48,7 @@ async function listen(overrides = {}) {
     publicWebinarRuntimeLimit: overrides.publicWebinarRuntimeLimit || 1000,
     generalWriteLimit: overrides.generalWriteLimit || 200,
     accessLogger: overrides.accessLogger,
+    errorLogger,
   });
   return new Promise(resolve => {
     const listener = app.listen(0, () => resolve(listener));
@@ -228,6 +231,62 @@ describe('public live webinar reads', () => {
     expect(response.status).toBe(404);
     expect(JSON.parse(text)).toEqual({ error: 'Webinar not found' });
     expect(operationalLogger.info).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['GET live canonical malformed hex', 'GET', '/api/public/webinars/PUBLIC_URI_CANARY_%ZZ/live'],
+    ['GET live trailing incomplete escape', 'GET', '/api/public/webinars/PUBLIC_URI_CANARY_%/live/'],
+    ['GET live query invalid UTF-8', 'GET', '/api/public/webinars/PUBLIC_URI_CANARY_%C3%28/live?source=QUERY_URI_CANARY'],
+    ['POST runtime canonical malformed hex', 'POST', '/api/public/webinars/PUBLIC_URI_CANARY_%ZZ/runtime-events'],
+    ['POST runtime trailing incomplete escape', 'POST', '/api/public/webinars/PUBLIC_URI_CANARY_%/runtime-events/'],
+    ['POST runtime query invalid UTF-8', 'POST', '/api/public/webinars/PUBLIC_URI_CANARY_%C3%28/runtime-events?source=QUERY_URI_CANARY'],
+  ])('normalizes %s without leaking the URI failure', async (_label, method, path) => {
+    await new Promise(resolve => server.close(resolve));
+    const chunks = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const accessLogger = pino({ base: null, timestamp: false }, stream);
+    server = await listen({ accessLogger });
+
+    const { response, text } = await request(path, {
+      method,
+      origin: publicOrigin,
+      body: method === 'POST' ? runtimePayload() : undefined,
+    });
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(response.status).toBe(404);
+    expect(JSON.parse(text)).toEqual({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+    expect(text).not.toMatch(/PUBLIC_URI_CANARY|QUERY_URI_CANARY|%ZZ|%C3/i);
+    expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 404, reasonCode: 'WEBINAR_NOT_FOUND',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/PUBLIC_URI_CANARY|QUERY_URI_CANARY|URIError|decode|stack/i);
+    expect(errorLogger.error).not.toHaveBeenCalled();
+
+    const serializedAccess = chunks.join('');
+    expect(serializedAccess).not.toMatch(/PUBLIC_URI_CANARY|QUERY_URI_CANARY|%ZZ|%C3/i);
+    const records = serializedAccess.trim().split('\n').map(line => JSON.parse(line));
+    expect(records).toHaveLength(1);
+    expect(records[0].req.url).toBe('/api/public/webinars/[redacted]');
+  });
+
+  it('keeps malformed non-public parameter routes on the existing error path', async () => {
+    const { response, text } = await request('/api/schedule/sync/NON_PUBLIC_URI_CANARY_%ZZ/callback', {
+      origin: dashboardOrigin,
+    });
+
+    expect(response.status).toBe(400);
+    expect(JSON.parse(text)).not.toEqual({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+    expect(operationalLogger.info).not.toHaveBeenCalled();
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
   });
 
   it.each([

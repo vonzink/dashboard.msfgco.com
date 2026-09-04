@@ -11,6 +11,7 @@ const SAFE_RESPONSE_HEADERS = Object.freeze([
   'content-length',
   'content-type',
 ]);
+const PUBLIC_WEBINAR_PATH_PREFIX = '/api/public/webinars/';
 
 function serializeHeaders(headers, allowlist) {
   const safe = {};
@@ -40,6 +41,13 @@ function isPublicWebinarRuntimeRequest(req) {
     && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/.test(requestPathname(req) || '');
 }
 
+function requestLogPathname(req) {
+  const pathname = requestPathname(req);
+  return pathname?.startsWith(PUBLIC_WEBINAR_PATH_PREFIX)
+    ? `${PUBLIC_WEBINAR_PATH_PREFIX}[redacted]`
+    : pathname;
+}
+
 function serializeRequest(req) {
   const headers = serializeHeaders(req.headers, SAFE_REQUEST_HEADERS);
   if (isPublicWebinarRuntimeRequest(req)) {
@@ -49,7 +57,7 @@ function serializeRequest(req) {
   return {
     id: req.id,
     method: req.method,
-    url: requestPathname(req),
+    url: requestLogPathname(req),
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
     headers,
