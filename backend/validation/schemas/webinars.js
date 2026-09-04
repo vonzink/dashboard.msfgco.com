@@ -82,6 +82,7 @@ const writeSettings = z.object({
 
 module.exports = {
   LIMITS,
+  webinarSlug,
   createWebinar,
   saveMaster,
   addSlide,

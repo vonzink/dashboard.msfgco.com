@@ -3,6 +3,7 @@ const db = require('../../db/connection');
 const { loadAssetConfig: defaultLoadAssetConfig } = require('../webinarAssets/config');
 const { createReferenceService } = require('../webinarAssets/references');
 const { replaceAssetTokens } = require('../webinarAssets/tokens');
+const { webinarSlug: webinarSlugSchema } = require('../../validation/schemas/webinars');
 const {
   assertCandidateWithinLimits,
   exactHttpsOrigin,
@@ -60,6 +61,12 @@ function title(value) {
   const normalized = string(value);
   if (!normalized.trim() || normalized.length > MAX_TITLE_LENGTH) fail();
   return normalized;
+}
+
+function webinarSlug(value) {
+  const parsed = webinarSlugSchema.safeParse(value);
+  if (!parsed.success || parsed.data !== value) fail();
+  return parsed.data;
 }
 
 function normalizeOrigin(value) {
@@ -122,7 +129,7 @@ function normalizeRows(rows, resourcePolicy) {
   const first = rows[0];
   const webinar = {
     id: integer(first.webinar_id, { positive: true }),
-    slug: string(first.webinar_slug),
+    slug: webinarSlug(first.webinar_slug),
     title: title(first.webinar_title),
     liveVersion: integer(first.live_version),
   };
@@ -132,8 +139,6 @@ function normalizeRows(rows, resourcePolicy) {
   };
 
   if (rows.some(row => !sameWebinar(first, row))) fail();
-  if (validateAnchor(webinar.slug).issues.length) fail();
-
   const slides = [];
   const positions = new Set();
   const slideIds = new Set();

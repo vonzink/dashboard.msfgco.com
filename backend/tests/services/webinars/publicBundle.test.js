@@ -201,6 +201,24 @@ describe('public Webinar Studio live bundle compiler', () => {
     expect(db.query).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts a canonical webinar slug that begins with a number', async () => {
+    const result = await service({
+      rows: liveRows({ webinar_slug: '2026-home' }),
+    }).api.getLiveBundleBySlug('2026-home');
+    expect(result.bundle.webinar.slug).toBe('2026-home');
+  });
+
+  it.each(['first--home', 'first-home-'])(
+    'rejects the noncanonical webinar slug %s without weakening slide-anchor rules',
+    async webinarSlug => {
+      const { api } = service({ rows: liveRows({ webinar_slug: webinarSlug }) });
+      await expect(api.getLiveBundleBySlug(webinarSlug)).rejects.toMatchObject({
+        status: 503,
+        code: 'PUBLIC_BUNDLE_INVALID',
+      });
+    },
+  );
+
   it('deduplicates repeated canonical asset tokens into one immutable public-map entry', async () => {
     const rows = liveRows({
       master_css: `body{background:url({{ASSET:${FIRST_VERSION}}})}`,
