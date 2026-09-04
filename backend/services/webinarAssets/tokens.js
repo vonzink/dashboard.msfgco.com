@@ -1,8 +1,8 @@
 const ASSET_VERSION_ID = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
-const ASSET_TOKEN_PATTERN = new RegExp(`\\{\\{ASSET:(${ASSET_VERSION_ID})\\}\\}`, 'i');
-const ASSET_TOKEN_AT_START = new RegExp(`^\\{\\{ASSET:(${ASSET_VERSION_ID})\\}\\}`, 'i');
-const ASSET_TOKEN_GLOBAL = new RegExp(`\\{\\{ASSET:(${ASSET_VERSION_ID})\\}\\}`, 'gi');
-const ASSET_TOKEN_MARKER = /\{\{ASSET:/gi;
+const ASSET_TOKEN_PATTERN = new RegExp(`\\{\\{ASSET:(${ASSET_VERSION_ID})\\}\\}`);
+const ASSET_TOKEN_AT_START = new RegExp(`^\\{\\{ASSET:(${ASSET_VERSION_ID})\\}\\}`);
+const ASSET_TOKEN_GLOBAL = new RegExp(`\\{\\{ASSET:(${ASSET_VERSION_ID})\\}\\}`, 'g');
+const ASSET_TOKEN_MARKER = /\{\{ASSET:/g;
 
 function assetTokenError(code) {
   const error = new Error(code === 'ASSET_TOKEN_FORMAT'

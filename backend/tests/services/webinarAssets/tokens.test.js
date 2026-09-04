@@ -8,6 +8,8 @@ import {
 
 const firstVersionId = '11111111-1111-4111-8111-111111111111';
 const secondVersionId = '22222222-2222-4222-8222-222222222222';
+const lowercaseVersionIdWithLetter = '33333333-3333-4333-8333-33333333333a';
+const uppercaseVersionIdWithLetter = '33333333-3333-4333-8333-33333333333A';
 
 describe('Webinar Studio asset tokens', () => {
   it('recognizes only canonical UUID asset tokens and extracts every version ID', () => {
@@ -25,6 +27,19 @@ describe('Webinar Studio asset tokens', () => {
     expect(() => replaceAssetTokens('{{ASSET:not-a-uuid}}', new Map())).toThrowError(
       expect.objectContaining({ code: 'ASSET_TOKEN_FORMAT' }),
     );
+  });
+
+  it('rejects uppercase UUID text before URL lookup', () => {
+    const uppercaseToken = `{{ASSET:${uppercaseVersionIdWithLetter}}}`;
+
+    expect(ASSET_TOKEN_PATTERN.test(uppercaseToken)).toBe(false);
+    expect(() => extractAssetVersionIds(uppercaseToken)).toThrowError(
+      expect.objectContaining({ code: 'ASSET_TOKEN_FORMAT' }),
+    );
+    expect(() => replaceAssetTokens(
+      uppercaseToken,
+      new Map([[lowercaseVersionIdWithLetter, 'https://assets.example/versions/three.png']]),
+    )).toThrowError(expect.objectContaining({ code: 'ASSET_TOKEN_FORMAT' }));
   });
 
   it('replaces every resolvable token and rejects missing version URLs', () => {
