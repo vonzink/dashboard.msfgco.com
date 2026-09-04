@@ -12,7 +12,7 @@ const { authenticate } = require('./middleware/auth');
 const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
-const { createSafeHttpLogger } = require('./lib/httpLogging');
+const { createSafeHttpLogger, isPublicWebinarRuntimeRequest } = require('./lib/httpLogging');
 const websocket = require('./lib/websocket');
 const { LIMITS } = require('./services/webinars/limits');
 const {
@@ -115,11 +115,6 @@ function isPublicWebinarRequest(req) {
   return pathname === '/api/public/webinars' || pathname.startsWith('/api/public/webinars/');
 }
 
-function isPublicWebinarRuntimeEvent(req) {
-  return req.method === 'POST'
-    && /^\/api\/public\/webinars\/[^/]+\/runtime-events$/.test(requestPathname(req));
-}
-
 function corsOriginPolicy(origins, message) {
   return (origin, callback) => {
     if (!origin) return callback(null, false);
@@ -141,6 +136,7 @@ function createApp({
   publicWebinarOrigins,
   publicWebinarRuntimeLimit = 60,
   generalWriteLimit = 200,
+  accessLogger = logger,
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
@@ -240,7 +236,7 @@ const writeLimiter = rateLimit({
   // separately — see myFilesWriteLimiter below.
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || req.originalUrl.startsWith('/api/my-files')
-    || isPublicWebinarRuntimeEvent(req)
+    || isPublicWebinarRuntimeRequest(req)
     || isWebinarStudioMutation(req),
 });
 app.use('/api/', writeLimiter);
@@ -364,7 +360,7 @@ function parseWebinarRawJson(req, res, next) {
 }
 
 // Closed header allowlists keep credentials and cookies out of request logs.
-app.use(createSafeHttpLogger(logger));
+app.use(createSafeHttpLogger(accessLogger));
 
 function recordPublicRuntimeRejection(req, statusCode, reasonCode) {
   if (req.publicWebinarOperationalEventRecorded) return;
@@ -382,7 +378,7 @@ function rejectPublicRuntimeEvent(req, res, statusCode, reasonCode, message) {
 }
 
 function rejectInvalidPublicRuntimeTransport(req, res, next) {
-  if (!isPublicWebinarRuntimeEvent(req)) return next();
+  if (!isPublicWebinarRuntimeRequest(req)) return next();
   const contentLength = Number(req.get('content-length'));
   if (Number.isFinite(contentLength) && contentLength > PUBLIC_RUNTIME_EVENT_BYTES) {
     return rejectPublicRuntimeEvent(
@@ -409,7 +405,7 @@ const publicRuntimeEventParser = express.json({
 });
 
 function handlePublicRuntimeParserError(error, req, res, next) {
-  if (!isPublicWebinarRuntimeEvent(req)) return next(error);
+  if (!isPublicWebinarRuntimeRequest(req)) return next(error);
   if (error.type === 'entity.too.large' || error.status === 413) {
     return rejectPublicRuntimeEvent(
       req, res, 413, 'CONTENT_LIMIT_EXCEEDED', 'Runtime event exceeds 2 KiB limit',

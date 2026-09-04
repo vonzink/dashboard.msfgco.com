@@ -35,14 +35,24 @@ function requestPathname(requestOrUrl) {
   }
 }
 
+function isPublicWebinarRuntimeRequest(req) {
+  return req?.method === 'POST'
+    && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/.test(requestPathname(req) || '');
+}
+
 function serializeRequest(req) {
+  const headers = serializeHeaders(req.headers, SAFE_REQUEST_HEADERS);
+  if (isPublicWebinarRuntimeRequest(req)) {
+    delete headers['content-type'];
+    delete headers['content-encoding'];
+  }
   return {
     id: req.id,
     method: req.method,
     url: requestPathname(req),
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
-    headers: serializeHeaders(req.headers, SAFE_REQUEST_HEADERS),
+    headers,
   };
 }
 
@@ -72,6 +82,7 @@ module.exports = {
   SAFE_REQUEST_HEADERS,
   SAFE_RESPONSE_HEADERS,
   createSafeHttpLogger,
+  isPublicWebinarRuntimeRequest,
   requestPathname,
   serializeRequest,
   serializeResponse,

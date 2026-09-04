@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
 import { createRequire } from 'node:module';
+import { Writable } from 'node:stream';
+import { setImmediate } from 'node:timers';
+import pino from 'pino';
 
 const require = createRequire(import.meta.url);
 const { createApp, loadPublicWebinarOrigins } = require('../../server');
@@ -42,6 +45,7 @@ async function listen(overrides = {}) {
     publicWebinarOrigins: overrides.publicWebinarOrigins || [publicOrigin, 'http://localhost:4200'],
     publicWebinarRuntimeLimit: overrides.publicWebinarRuntimeLimit || 1000,
     generalWriteLimit: overrides.generalWriteLimit || 200,
+    accessLogger: overrides.accessLogger,
   });
   return new Promise(resolve => {
     const listener = app.listen(0, () => resolve(listener));
@@ -360,6 +364,88 @@ describe('public runtime telemetry', () => {
   });
 
   it.each([
+    [`/api/public/webinars/${slug}/runtime-events/`, undefined],
+    [`/api/public/webinars/${slug}/runtime-events/?source=PRIVATE_QUERY_CANARY`, undefined],
+  ])('applies identical valid semantics to %s', async (path) => {
+    const { response } = await request(path, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    });
+    expect(response.status).toBe(204);
+    expect(getLiveBundleBySlug).toHaveBeenCalledWith(slug);
+  });
+
+  it.each([
+    ['wrong media', { headers: { 'Content-Type': 'text/PRIVATE_MEDIA_CANARY' }, body: runtimePayload(), status: 400, code: 'UNSUPPORTED_MEDIA_TYPE' }],
+    ['unsupported charset', { headers: { 'Content-Type': 'application/json; charset=PRIVATE_CHARSET_CANARY' }, body: runtimePayload(), status: 400, code: 'UNSUPPORTED_MEDIA_TYPE' }],
+    ['unsupported encoding', { headers: { 'Content-Encoding': 'PRIVATE_ENCODING_CANARY' }, body: runtimePayload(), status: 400, code: 'UNSUPPORTED_MEDIA_TYPE' }],
+    ['oversize body', { headers: {}, body: `${runtimePayload()}${' '.repeat(2048)}`, status: 413, code: 'CONTENT_LIMIT_EXCEEDED' }],
+    ['malformed JSON', { headers: {}, body: '{"PRIVATE_JSON_CANARY":', status: 400, code: 'MALFORMED_JSON' }],
+  ])('normalizes trailing-slash %s through the exact transport boundary', async (_label, sample) => {
+    const { response, text } = await request(`/api/public/webinars/${slug}/runtime-events/`, {
+      method: 'POST', origin: publicOrigin, headers: sample.headers, body: sample.body,
+    });
+    expect(response.status).toBe(sample.status);
+    expect(JSON.parse(text).code).toBe(sample.code);
+    expect(text).not.toMatch(/PRIVATE_/);
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/PRIVATE_/);
+  });
+
+  it('does not recognize doubled/internal slashes or nearby route names as runtime events', async () => {
+    for (const path of [
+      `/api/public/webinars/${slug}/runtime-events//`,
+      `/api/public/webinars/${slug}//runtime-events`,
+      `/api/public/webinars/${slug}/runtime-events-nearby`,
+    ]) {
+      const result = await request(path, {
+        method: 'POST', origin: publicOrigin, body: runtimePayload(),
+      });
+      expect(result.response.status).toBe(404);
+    }
+    expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).not.toHaveBeenCalled();
+  });
+
+  it('removes runtime transport canaries from the actual access log, response, and event', async () => {
+    await new Promise(resolve => server.close(resolve));
+    const chunks = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const accessLogger = pino({ base: null, timestamp: false }, stream);
+    server = await listen({ accessLogger });
+
+    const samples = [
+      { path: '', headers: { 'Content-Type': 'text/ACCESS_MEDIA_SECRET' } },
+      { path: '/', headers: { 'Content-Type': 'application/json; charset=ACCESS_CHARSET_SECRET' } },
+      { path: '/', headers: { 'Content-Encoding': 'ACCESS_ENCODING_SECRET' } },
+    ];
+    let responses = '';
+    for (const sample of samples) {
+      const result = await request(`/api/public/webinars/${slug}/runtime-events${sample.path}`, {
+        method: 'POST', origin: publicOrigin, headers: sample.headers, body: runtimePayload(),
+      });
+      expect(result.response.status).toBe(400);
+      responses += result.text;
+    }
+    await new Promise(resolve => setImmediate(resolve));
+
+    const serializedAccess = chunks.join('');
+    const serializedEvents = JSON.stringify(operationalLogger.info.mock.calls);
+    for (const secret of ['ACCESS_MEDIA_SECRET', 'ACCESS_CHARSET_SECRET', 'ACCESS_ENCODING_SECRET']) {
+      expect(serializedAccess).not.toContain(secret);
+      expect(responses).not.toContain(secret);
+      expect(serializedEvents).not.toContain(secret);
+    }
+    const records = serializedAccess.trim().split('\n').map(line => JSON.parse(line));
+    expect(records).toHaveLength(3);
+    expect(records.every(record => record.req.headers['content-type'] === undefined)).toBe(true);
+  });
+
+  it.each([
     ['zero version', { liveVersion: 0 }],
     ['unsafe version', { liveVersion: Number.MAX_SAFE_INTEGER + 1 }],
     ['invalid slide UUID', { slideId: 'not-a-uuid' }],
@@ -480,11 +566,11 @@ describe('public runtime telemetry', () => {
     await new Promise(resolve => server.close(resolve));
     server = await listen({ publicWebinarRuntimeLimit: 1, generalWriteLimit: 1 });
 
-    const dashboardWrite = await request('/api/webinars', {
+    const dashboardWrite = await request('/api/announcements', {
       method: 'POST', origin: dashboardOrigin, body: '{}',
     });
     expect(dashboardWrite.response.status).toBe(401);
-    const firstPublic = await request(`/api/public/webinars/${slug}/runtime-events`, {
+    const firstPublic = await request(`/api/public/webinars/${slug}/runtime-events/`, {
       method: 'POST', origin: publicOrigin, body: runtimePayload(),
     });
     expect(firstPublic.response.status).toBe(204);
@@ -492,6 +578,10 @@ describe('public runtime telemetry', () => {
       method: 'POST', origin: publicOrigin, body: runtimePayload(),
     });
     expect(publicExcess.response.status).toBe(429);
+    const dashboardExcess = await request('/api/announcements', {
+      method: 'POST', origin: dashboardOrigin, body: '{}',
+    });
+    expect(dashboardExcess.response.status).toBe(429);
 
     await new Promise(resolve => server.close(resolve));
     server = await listen({ publicWebinarRuntimeLimit: 3, generalWriteLimit: 1 });
@@ -501,9 +591,32 @@ describe('public runtime telemetry', () => {
       });
       expect(publicWrite.response.status).toBe(204);
     }
-    const firstDashboardWrite = await request('/api/webinars', {
+    const firstDashboardWrite = await request('/api/announcements', {
       method: 'POST', origin: dashboardOrigin, body: '{}',
     });
     expect(firstDashboardWrite.response.status).toBe(401);
+    const secondDashboardExcess = await request('/api/announcements', {
+      method: 'POST', origin: dashboardOrigin, body: '{}',
+    });
+    expect(secondDashboardExcess.response.status).toBe(429);
+  });
+
+  it('does not exempt a nearby non-runtime public POST from the general write limiter', async () => {
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 10, generalWriteLimit: 1 });
+    const path = `/api/public/webinars/${slug}/runtime-events-nearby`;
+    expect((await request(path, { method: 'POST', origin: publicOrigin, body: '{}' })).response.status).toBe(404);
+    expect((await request(path, { method: 'POST', origin: publicOrigin, body: '{}' })).response.status).toBe(429);
+  });
+
+  it('shares one dedicated quota between canonical and trailing-slash runtime paths', async () => {
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 1 });
+    expect((await request(`/api/public/webinars/${slug}/runtime-events`, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    })).response.status).toBe(204);
+    expect((await request(`/api/public/webinars/${slug}/runtime-events/`, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    })).response.status).toBe(429);
   });
 });

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { Writable } from 'node:stream';
+import { setImmediate } from 'node:timers';
 import express from 'express';
 import pino from 'pino';
 
 const require = createRequire(import.meta.url);
-const { createSafeHttpLogger } = require('../../lib/httpLogging');
+const { createSafeHttpLogger, serializeRequest } = require('../../lib/httpLogging');
 
 let server;
 
@@ -16,6 +17,39 @@ afterEach(async () => {
 });
 
 describe('credential-safe HTTP request logging', () => {
+  it('omits attacker-controlled transport headers only for exact public runtime POST paths', () => {
+    const request = (url, method = 'POST') => serializeRequest({
+      id: 1,
+      method,
+      originalUrl: url,
+      headers: {
+        accept: '*/*',
+        'content-length': '95',
+        'content-type': 'application/json; charset=LOG_RUNTIME_CHARSET_SECRET',
+        'content-encoding': 'LOG_RUNTIME_ENCODING_SECRET',
+        'user-agent': 'test',
+      },
+      socket: { remoteAddress: '127.0.0.1', remotePort: 1234 },
+    });
+
+    for (const url of [
+      '/api/public/webinars/first-home/runtime-events',
+      '/api/public/webinars/first-home/runtime-events/',
+      '/api/public/webinars/first-home/runtime-events/?trace=LOG_QUERY_SECRET',
+    ]) {
+      expect(request(url).headers).toEqual({
+        accept: '*/*', 'content-length': '95', 'user-agent': 'test',
+      });
+    }
+
+    expect(request('/api/announcements').headers['content-type'])
+      .toContain('LOG_RUNTIME_CHARSET_SECRET');
+    expect(request('/api/public/webinars/first-home/runtime-events-nearby').headers['content-type'])
+      .toContain('LOG_RUNTIME_CHARSET_SECRET');
+    expect(request('/api/public/webinars/first-home/runtime-events', 'GET').headers['content-type'])
+      .toContain('LOG_RUNTIME_CHARSET_SECRET');
+  });
+
   it('never serializes authorization, cookie, or set-cookie canaries', async () => {
     const chunks = [];
     const stream = new Writable({
