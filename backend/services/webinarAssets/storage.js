@@ -16,7 +16,15 @@ const {
 
 const UPLOAD_URL_TTL_SECONDS = 10 * 60;
 const GUARDDUTY_SCAN_STATUS_TAG = 'GuardDutyMalwareScanStatus';
-const s3 = new S3Client({});
+
+function createAssetS3Client(options = {}) {
+  return new S3Client({
+    ...options,
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+  });
+}
+
+const s3 = createAssetS3Client();
 
 function storageError(code) {
   const error = new Error(code === 'ASSET_QUARANTINE_REQUIRED'
@@ -61,7 +69,7 @@ function assertUploadInput({ mimeType, declaredBytes }) {
   return rule;
 }
 
-async function createUploadUrl(input) {
+async function createUploadUrl(input, storageClient = s3) {
   const config = resolveConfig(input);
   assertUploadInput(input || {});
   const key = makeQuarantineKey(input.versionId, input.filename, config.quarantinePrefix);
@@ -72,7 +80,7 @@ async function createUploadUrl(input) {
     ContentLength: input.declaredBytes,
     Metadata: { declaredBytes: String(input.declaredBytes) },
   });
-  const uploadUrl = await getSignedUrl(s3, command, { expiresIn: UPLOAD_URL_TTL_SECONDS });
+  const uploadUrl = await getSignedUrl(storageClient, command, { expiresIn: UPLOAD_URL_TTL_SECONDS });
   return { uploadUrl, key, expiresInSeconds: UPLOAD_URL_TTL_SECONDS };
 }
 
@@ -131,6 +139,7 @@ async function copyApprovedObject(input) {
 
 module.exports = {
   UPLOAD_URL_TTL_SECONDS,
+  createAssetS3Client,
   createUploadUrl,
   headQuarantineObject,
   readScanStatus,

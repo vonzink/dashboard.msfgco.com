@@ -6,6 +6,11 @@ const require = createRequire(import.meta.url);
 const s3Path = require.resolve('@aws-sdk/client-s3');
 const presignerPath = require.resolve('@aws-sdk/s3-request-presigner');
 const storagePath = require.resolve('../../../services/webinarAssets/storage');
+const {
+  PutObjectCommand: RealPutObjectCommand,
+  S3Client: RealS3Client,
+} = require('@aws-sdk/client-s3');
+const { getSignedUrl: realGetSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const originals = {
   [s3Path]: require.cache[s3Path],
   [presignerPath]: require.cache[presignerPath],
@@ -14,6 +19,7 @@ const originals = {
 const sendMock = vi.fn();
 const getSignedUrl = vi.fn();
 let captured = [];
+let capturedClientConfigs = [];
 
 function makeCommand(name) {
   return class {
@@ -26,7 +32,13 @@ function makeCommand(name) {
 }
 
 const s3Module = {
-  S3Client: class { send(command) { return sendMock(command); } },
+  S3Client: class {
+    constructor(clientConfig) {
+      capturedClientConfigs.push(clientConfig);
+    }
+
+    send(command) { return sendMock(command); }
+  },
   PutObjectCommand: makeCommand('PutObject'),
   HeadObjectCommand: makeCommand('HeadObject'),
   GetObjectCommand: makeCommand('GetObject'),
@@ -63,6 +75,7 @@ beforeEach(() => {
   getSignedUrl.mockReset();
   getSignedUrl.mockResolvedValue('https://signed.example/upload');
   captured = [];
+  capturedClientConfigs = [];
   storage = loadStorage();
 });
 
@@ -75,6 +88,51 @@ afterEach(() => {
 });
 
 describe('Webinar Studio quarantine storage', () => {
+  it('configures the real presigner to omit empty-body checksums from non-empty browser PUT URLs', async () => {
+    expect(capturedClientConfigs).toEqual([{
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+    }]);
+
+    const client = new RealS3Client({
+      ...capturedClientConfigs[0],
+      region: 'us-east-1',
+      credentials: {
+        accessKeyId: 'deterministic-test-access-key',
+        secretAccessKey: 'deterministic-test-secret-key',
+      },
+    });
+    try {
+      const uploadUrl = await realGetSignedUrl(client, new RealPutObjectCommand({
+        Bucket: 'webinar-assets-test',
+        Key: quarantineKey,
+        ContentType: 'image/png',
+        ContentLength: 2048,
+        Metadata: { declaredBytes: '2048' },
+      }), { expiresIn: 600 });
+      const query = new URL(uploadUrl).searchParams;
+
+      expect(query.get('x-amz-meta-declaredbytes')).toBe('2048');
+      expect(query.has('x-amz-checksum-crc32')).toBe(false);
+      expect(query.has('x-amz-sdk-checksum-algorithm')).toBe(false);
+    } finally {
+      client.destroy();
+    }
+  });
+
+  it('keeps the checksum policy on explicitly configured asset clients', () => {
+    storage.createAssetS3Client({
+      endpoint: 'https://disposable-s3.example',
+      region: 'us-east-1',
+      requestChecksumCalculation: 'WHEN_SUPPORTED',
+    });
+
+    expect(capturedClientConfigs.at(-1)).toEqual({
+      endpoint: 'https://disposable-s3.example',
+      region: 'us-east-1',
+      requestChecksumCalculation: 'WHEN_REQUIRED',
+    });
+  });
+
   it('presigns only a quarantine PUT with type, declared bytes metadata, and a ten-minute lifetime', async () => {
     const result = await storage.createUploadUrl({
       config,
@@ -99,6 +157,21 @@ describe('Webinar Studio quarantine storage', () => {
       key: quarantineKey,
       expiresInSeconds: 600,
     });
+  });
+
+  it('can presign the same upload contract with an explicitly configured disposable client', async () => {
+    const disposableClient = { send: vi.fn() };
+
+    await storage.createUploadUrl({
+      config,
+      versionId,
+      filename: 'deck.png',
+      mimeType: 'image/png',
+      declaredBytes: 2048,
+    }, disposableClient);
+
+    const [put] = commandsOfType('PutObject');
+    expect(getSignedUrl).toHaveBeenCalledWith(disposableClient, put, { expiresIn: 600 });
   });
 
   it('reads only the GuardDuty malware status tag and treats its absence as processing', async () => {
