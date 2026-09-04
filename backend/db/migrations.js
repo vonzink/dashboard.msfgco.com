@@ -221,10 +221,16 @@ const ALTER_DROP_FIELD_OR_KEY = new RegExp(
   `^ALTER\\s+TABLE\\s+${SQL_TABLE_IDENTIFIER}\\s+DROP\\s+(?:COLUMN|INDEX|KEY)\\s+(?:IF\\s+EXISTS\\s+)?${SQL_IDENTIFIER}\\b`,
   'i',
 );
-const MYSQL8_ADD_COLUMN_IF_NOT_EXISTS = new RegExp(
-  `^(\\s*ALTER\\s+TABLE\\s+${SQL_TABLE_IDENTIFIER}\\s+ADD\\s+COLUMN)\\s+IF\\s+NOT\\s+EXISTS\\b`,
-  'i',
-);
+const MYSQL8_ADD_COLUMN_COMPATIBILITY = new Map([
+  ['038_pipeline_lo_display.sql', Object.freeze({
+    authored: 'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    executable: 'ALTER TABLE pipeline ADD COLUMN lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+  })],
+  ['039_investor_in_house_servicing.sql', Object.freeze({
+    authored: 'ALTER TABLE investors ADD COLUMN IF NOT EXISTS in_house_servicing VARCHAR(255) DEFAULT NULL AFTER epo',
+    executable: 'ALTER TABLE investors ADD COLUMN in_house_servicing VARCHAR(255) DEFAULT NULL AFTER epo',
+  })],
+]);
 const LEGACY_DATABASE_SELECTOR_SOURCES = new Set([
   '002_goals_funded_permissions.sql',
   'ADDITIONAL_TABLES.sql',
@@ -312,10 +318,10 @@ async function executeSqlStatements(
         executableStatement = configuredDatabaseStatement;
       }
     }
-    const mysql8CompatibleStatement = executableStatement.replace(
-      MYSQL8_ADD_COLUMN_IF_NOT_EXISTS,
-      '$1',
-    );
+    const mysql8Compatibility = MYSQL8_ADD_COLUMN_COMPATIBILITY.get(sourceName);
+    const mysql8CompatibleStatement = mysql8Compatibility?.authored === executableStatement
+      ? mysql8Compatibility.executable
+      : executableStatement;
     if (mysql8CompatibleStatement !== executableStatement) {
       migrationLogger.warn(
         { sourceName },

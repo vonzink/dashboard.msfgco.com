@@ -21,7 +21,12 @@ function serializeHeaders(headers, allowlist) {
   return safe;
 }
 
-function requestPathname(url) {
+function requestPathname(requestOrUrl) {
+  const url = typeof requestOrUrl === 'string'
+    ? requestOrUrl
+    : typeof requestOrUrl?.originalUrl === 'string'
+      ? requestOrUrl.originalUrl
+      : requestOrUrl?.url;
   if (typeof url !== 'string') return undefined;
   try {
     return new URL(url, 'http://request.invalid').pathname;
@@ -34,7 +39,7 @@ function serializeRequest(req) {
   return {
     id: req.id,
     method: req.method,
-    url: requestPathname(req.url),
+    url: requestPathname(req),
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
     headers: serializeHeaders(req.headers, SAFE_REQUEST_HEADERS),
@@ -67,6 +72,7 @@ module.exports = {
   SAFE_REQUEST_HEADERS,
   SAFE_RESPONSE_HEADERS,
   createSafeHttpLogger,
+  requestPathname,
   serializeRequest,
   serializeResponse,
 };

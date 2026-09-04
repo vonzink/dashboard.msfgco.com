@@ -1,5 +1,6 @@
 // Zod schemas for API input validation
 const { z } = require('zod');
+const { requestPathname } = require('../lib/httpLogging');
 
 // ── Helpers ─────────────────────────────────────
 const trimmedString = (max) => z.string().trim().min(1).max(max);
@@ -561,10 +562,9 @@ function validate(schema) {
       // Log the rejected body once so 400s are diagnosable from logs.
       // Pino already structures this; redaction below masks anything risky.
       const safeBody = redactSensitive(req.body);
-      // eslint-disable-next-line no-console
       console.warn('[validate] reject', JSON.stringify({
         method: req.method,
-        url: req.originalUrl,
+        url: requestPathname(req),
         issues: result.error.issues.map(i => ({ path: i.path.join('.'), code: i.code, message: i.message })),
         body: safeBody,
       }));

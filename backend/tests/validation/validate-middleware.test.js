@@ -67,6 +67,74 @@ describe('validate() middleware', () => {
 
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ field: 'name' }));
   });
+
+  it('logs only the pathname for invalid-body requests with query parameters', () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const query = [
+      'api_key=VALIDATION_API_KEY_4f91',
+      'token=VALIDATION_TOKEN_4f91',
+      'code=VALIDATION_OAUTH_CODE_4f91',
+      'state=VALIDATION_OAUTH_STATE_4f91',
+      'MiXeD_CrEdEnTiAl=VALIDATION_MIXED_CASE_4f91',
+      'encoded=VALIDATION_ENCODED%2FVALUE%3F4f91',
+      'duplicate=VALIDATION_DUPLICATE_ONE_4f91',
+      'duplicate=VALIDATION_DUPLICATE_TWO_4f91',
+      'page=VALIDATION_SAFE_LOOKING_4f91',
+    ].join('&');
+    const fallbackQuery = 'token=VALIDATION_URL_FALLBACK_4f91';
+
+    try {
+      for (const req of [
+        {
+          body: { name: '' },
+          method: 'POST',
+          originalUrl: `/validation-query-canary?${query}`,
+          url: `/validation-query-canary?${fallbackQuery}`,
+        },
+        {
+          body: { name: '' },
+          method: 'POST',
+          url: `/validation-url-fallback?${fallbackQuery}`,
+        },
+      ]) {
+        validate(schema)(req, mockRes(), vi.fn());
+      }
+
+      const records = warning.mock.calls.map(([, payload]) => JSON.parse(payload));
+      const serialized = JSON.stringify(warning.mock.calls);
+      expect(warning).toHaveBeenCalledTimes(2);
+      expect(records.map(record => record.url)).toEqual([
+        '/validation-query-canary',
+        '/validation-url-fallback',
+      ]);
+      expect(serialized).not.toContain('?');
+      for (const canary of [
+        'api_key=',
+        'token=',
+        'code=',
+        'state=',
+        'MiXeD_CrEdEnTiAl=',
+        'encoded=',
+        'duplicate=',
+        'page=',
+        'VALIDATION_API_KEY_4f91',
+        'VALIDATION_TOKEN_4f91',
+        'VALIDATION_OAUTH_CODE_4f91',
+        'VALIDATION_OAUTH_STATE_4f91',
+        'VALIDATION_MIXED_CASE_4f91',
+        'VALIDATION_ENCODED%2FVALUE%3F4f91',
+        'VALIDATION_ENCODED/VALUE?4f91',
+        'VALIDATION_DUPLICATE_ONE_4f91',
+        'VALIDATION_DUPLICATE_TWO_4f91',
+        'VALIDATION_SAFE_LOOKING_4f91',
+        'VALIDATION_URL_FALLBACK_4f91',
+      ]) {
+        expect(serialized).not.toContain(canary);
+      }
+    } finally {
+      warning.mockRestore();
+    }
+  });
 });
 
 describe('validateQuery() middleware', () => {

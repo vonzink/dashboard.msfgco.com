@@ -7,17 +7,21 @@ credential, DNS record, or public endpoint was changed.
 
 ## Deployment-hardening result
 
-- HTTP access logs serialize only the request pathname. Query strings are
-  omitted wholesale, including `api_key`, `token`, OAuth `code` and `state`,
-  mixed-case names, encoded values, duplicate parameters, and safe-looking
-  parameters. Authorization, cookie, and response set-cookie headers remain
-  omitted.
+- HTTP access logs and validation-rejection warnings use one shared request
+  pathname serializer. Query strings from `url` and `originalUrl` are omitted
+  wholesale, including `api_key`, `token`, OAuth `code` and `state`, mixed-case
+  names, encoded values, duplicate parameters, and safe-looking parameters.
+  Authorization, cookie, and response set-cookie headers remain omitted.
 - The migration parser is stateful across MySQL line comments, hash comments,
   block comments, single- and double-quoted strings, backtick identifiers,
   escaped delimiters, and doubled delimiters. Unterminated constructs fail with
   `MIGRATION_SQL_PARSE_ERROR` before any statement from that file executes.
 - Exact error-code/statement matching remains required for strict idempotency,
   including standalone `CREATE INDEX`; compound ALTER operations do not qualify.
+- The MySQL 8 `ADD COLUMN IF NOT EXISTS` compatibility rewrite is limited to the
+  exact authored statements in migrations 038 and 039. Canonical SQL, Studio
+  092+, unversioned/future sources, and mismatched statements reach MySQL
+  unchanged and fail closed.
 - An explicit compatibility boundary preserves the inherited best-effort
   behavior of immutable/current-main migrations 002 through 091: an unexpected
   error is logged with code and filename and the runner proceeds to the next
@@ -87,6 +91,14 @@ env -u WEBINAR_TEST_DATABASE_URL npx vitest run \
 Result: 1 test file and 5 tests skipped, exit 0. No MySQL connection, database,
 container, or teardown was attempted.
 
+Review fix round 1 did not rerun the disposable MySQL corpus. Its migration
+change only narrows the compatibility rewrite from a global pattern to the exact
+038/039 source-and-statement pairs already exercised by the recorded corpus.
+Focused tests execute both authorized pairs and prove that canonical, Studio,
+future, unversioned, and mismatched historical statements reach the executor
+byte-for-byte unchanged and propagate its parse failure. No runner ordering,
+schema, parser, error boundary, postflight, or migration file changed.
+
 ## Focused regression verification
 
 Executed from `backend/`:
@@ -94,6 +106,7 @@ Executed from `backend/`:
 ```sh
 npx vitest run \
   tests/lib/httpLogging.test.js \
+  tests/validation/validate-middleware.test.js \
   tests/db/migrations.test.js \
   tests/db/webinarStudioFoundationMigration.test.js \
   tests/db/webinarStudioMysqlLifecycle.test.js \
@@ -112,10 +125,10 @@ npx vitest run \
   tests/validation/webinars.schema.test.js
 ```
 
-Result: 17 test files and 491 tests passed. This includes 48 focused migration
+Result: 18 test files and 506 tests passed. This includes 55 focused migration
 parser/context/idempotency/boundary/postflight tests, 37 Studio migration and
-canonical-schema tests, 2 HTTP logging tests, and the deterministic
-create-success/start-failure cleanup regression.
+canonical-schema tests, 2 HTTP logging tests, 8 validation middleware tests,
+and the deterministic create-success/start-failure cleanup regression.
 
 ## Full backend verification
 
@@ -123,7 +136,7 @@ create-success/start-failure cleanup regression.
 TZ=UTC npm test -- --reporter=dot
 ```
 
-Result: 48 test files, 914 tests total: 912 passed and exactly the two accepted
+Result: 48 test files, 922 tests total: 920 passed and exactly the two accepted
 Calendar UI baseline tests failed. The default Vitest configuration excludes
 `tests/integration/**`; the disposable MySQL run above is separate.
 
@@ -135,7 +148,7 @@ The accepted failures are unchanged:
 ## Static and provenance checks
 
 ```sh
-npx eslint lib/httpLogging.js db/migrations.js
+npx eslint lib/httpLogging.js db/migrations.js validation/schemas.js
 ```
 
 Result: zero errors. Node printed the repository's existing typeless-package
@@ -144,9 +157,10 @@ ESLint configuration warning.
 ```sh
 npx eslint --no-config-lookup \
   --parser-options '{"sourceType":"module","ecmaVersion":"latest"}' \
-  --global process --global URL --global fetch --global setImmediate \
+  --global process --global URL --global fetch --global setImmediate --global console \
   --rule 'no-unused-vars:error' --rule 'no-undef:error' \
   tests/lib/httpLogging.test.js \
+  tests/validation/validate-middleware.test.js \
   tests/db/migrations.test.js \
   tests/db/webinarStudioFoundationMigration.test.js \
   tests/db/webinarStudioMysqlLifecycle.test.js \
@@ -170,6 +184,8 @@ checked byte-for-byte against `origin/main` and match.
 The clean starting Dashboard worktree was branch `codex/webinar-studio` at
 `b63f0db5de96bea2b83cebea38e4537a8a675e1c`. Local `origin/main` was
 `49cb9e4b982215c943d5f28e2c7da68fbe7df5fb` and is an ancestor of that base.
+Review fix round 1 began from the clean reviewed implementation commit
+`3be0176ff3e2ea6e979803caaf9b0f7f8f1ec1ba`.
 
 The following gates remain deliberately **UNPERFORMED**:
 

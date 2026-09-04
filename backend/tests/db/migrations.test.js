@@ -195,16 +195,69 @@ describe('migration execution', () => {
     expect(connection.query).not.toHaveBeenCalled();
   });
 
-  it('adapts the exact historical ADD COLUMN IF NOT EXISTS form for MySQL 8', async () => {
+  it.each([
+    [
+      '038_pipeline_lo_display.sql',
+      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+      'ALTER TABLE pipeline ADD COLUMN lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    ],
+    [
+      '039_investor_in_house_servicing.sql',
+      'ALTER TABLE investors ADD COLUMN IF NOT EXISTS in_house_servicing VARCHAR(255) DEFAULT NULL AFTER epo',
+      'ALTER TABLE investors ADD COLUMN in_house_servicing VARCHAR(255) DEFAULT NULL AFTER epo',
+    ],
+  ])('adapts only the exact historical MySQL 8 statement in %s', async (
+    sourceName,
+    authoredStatement,
+    expectedStatement,
+  ) => {
     const connection = { query: vi.fn().mockResolvedValue([[]]) };
 
-    await executeSqlStatements(connection, [
-      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL',
-    ], { migrationLogger: quietLogger });
+    await executeSqlStatements(connection, [authoredStatement], {
+      migrationLogger: quietLogger,
+      sourceName,
+    });
 
-    expect(connection.query).toHaveBeenCalledWith(
-      'ALTER TABLE pipeline ADD COLUMN lo_display VARCHAR(500) DEFAULT NULL',
-    );
+    expect(connection.query).toHaveBeenCalledWith(expectedStatement);
+  });
+
+  it.each([
+    [
+      '095_future.sql',
+      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    ],
+    [
+      'unversioned_future.sql',
+      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    ],
+    [
+      '092_webinar_studio_foundation.sql',
+      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    ],
+    [
+      'DATABASE_SCHEMA.sql',
+      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    ],
+    [
+      '038_pipeline_lo_display.sql',
+      'ALTER TABLE investors ADD COLUMN IF NOT EXISTS in_house_servicing VARCHAR(255) DEFAULT NULL AFTER epo',
+    ],
+    [
+      '039_investor_in_house_servicing.sql',
+      'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
+    ],
+  ])('leaves incompatible syntax unchanged and fails closed for %s', async (
+    sourceName,
+    authoredStatement,
+  ) => {
+    const failure = migrationError('ER_PARSE_ERROR');
+    const connection = { query: vi.fn().mockRejectedValue(failure) };
+
+    await expect(executeSqlStatements(connection, [authoredStatement], {
+      migrationLogger: quietLogger,
+      sourceName,
+    })).rejects.toBe(failure);
+    expect(connection.query).toHaveBeenCalledWith(authoredStatement);
   });
 
   it('binds migration 002 schema checks to the configured database', async () => {
