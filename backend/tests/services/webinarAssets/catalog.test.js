@@ -127,13 +127,24 @@ function database(seed = initialState()) {
 
     if (normalized.includes('FROM webinar_assets') && normalized.includes('WHERE id = ?') && normalized.includes('FOR UPDATE')) {
       stages.push('family-lock');
-      return [[state.families.find(row => row.id === params[0] && !row.archived_at)].filter(Boolean)];
+      const activeOnly = normalized.includes('archived_at IS NULL');
+      return [[state.families.find(row => row.id === params[0] && (!activeOnly || !row.archived_at))].filter(Boolean)];
     }
 
     if (normalized.includes('MAX(version_number)')) {
       stages.push('version-number');
       const matching = state.versions.filter(row => row.asset_id === params[0]);
       return [[{ maximum_version: matching.reduce((maximum, row) => Math.max(maximum, row.version_number), 0) }]];
+    }
+
+    if (normalized.includes('FROM webinar_asset_versions')
+      && normalized.includes("WHERE asset_id = ? AND status = 'processing'")
+      && normalized.includes('FOR UPDATE')) {
+      stages.push('pending-version-lock');
+      return [state.versions
+        .filter(row => row.asset_id === params[0] && row.status === 'processing')
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map(row => ({ id: row.id }))];
     }
 
     if (normalized.includes('FROM webinar_asset_versions') && normalized.includes('sha256 = ?')) {
@@ -211,6 +222,19 @@ function database(seed = initialState()) {
       Object.assign(version, { status: 'rejected', rejection_code: params[0] });
       stages.push('rejected-update');
       return [{ affectedRows: 1 }];
+    }
+
+    if (normalized.startsWith("UPDATE webinar_asset_versions SET status = 'archived'")
+      && normalized.includes("WHERE asset_id = ? AND status = 'processing'")) {
+      let affectedRows = 0;
+      state.versions.forEach(version => {
+        if (version.asset_id === params[0] && version.status === 'processing') {
+          Object.assign(version, { status: 'archived', archived_at: '2026-09-04T12:00:00.000Z' });
+          affectedRows += 1;
+        }
+      });
+      stages.push('pending-version-archive');
+      return [{ affectedRows }];
     }
 
     if (normalized.startsWith("UPDATE webinar_asset_versions SET status = 'archived'")) {
@@ -297,6 +321,242 @@ function fixture(overrides = {}) {
       : { inspectionConcurrency: overrides.inspectionConcurrency }),
   });
   return { ...model, api, storage, inspection, recordAuditEvent, recordOperationalEvent };
+}
+
+function immediateRowLock(onWait) {
+  let owner = null;
+  const waiters = [];
+  return {
+    async acquire(connectionId) {
+      if (owner === connectionId) return;
+      if (owner === null) {
+        owner = connectionId;
+        return;
+      }
+      onWait();
+      await new Promise(resolve => waiters.push({ connectionId, resolve }));
+    },
+    release(connectionId) {
+      if (owner !== connectionId) return;
+      const next = waiters.shift();
+      owner = next?.connectionId ?? null;
+      next?.resolve();
+    },
+  };
+}
+
+function archiveConfirmationRaceFixture({ pause }) {
+  const state = initialState();
+  const stages = [];
+  const pauseEntered = deferred();
+  const resume = deferred();
+  const familyWaitStarted = deferred();
+  let pauseUsed = false;
+  let nextConnectionId = 1;
+  const familyLock = immediateRowLock(() => familyWaitStarted.resolve());
+  const versionLock = immediateRowLock(() => {});
+
+  async function pauseAt(operation) {
+    if (pauseUsed || pause !== operation) return;
+    pauseUsed = true;
+    pauseEntered.resolve();
+    await resume.promise;
+  }
+
+  function versionRow(versionId) {
+    const version = state.versions.find(row => row.id === versionId);
+    const family = version && state.families.find(row => row.id === version.asset_id);
+    return version && family ? {
+      ...version,
+      family_created_by_user_id: family.created_by_user_id,
+      family_archived_at: family.archived_at,
+    } : null;
+  }
+
+  function catalogRows() {
+    return state.versions.flatMap(version => {
+      const family = state.families.find(row => row.id === version.asset_id);
+      if (!family) return [];
+      return [{
+        asset_id: family.id,
+        display_name: family.display_name,
+        description: family.description,
+        family_created_by_user_id: family.created_by_user_id,
+        family_created_at: family.created_at,
+        family_archived_at: family.archived_at,
+        version_id: version.id,
+        version_number: version.version_number,
+        media_type: version.media_type,
+        mime_type: version.mime_type,
+        byte_size: version.byte_size,
+        sha256: version.sha256,
+        s3_key: version.s3_key,
+        width: version.width,
+        height: version.height,
+        duration_ms: version.duration_ms,
+        status: version.status,
+        rejection_code: version.rejection_code,
+        uploaded_by_user_id: version.uploaded_by_user_id,
+        uploader_name: version.uploader_name,
+        version_created_at: version.created_at,
+        version_archived_at: version.archived_at,
+      }];
+    });
+  }
+
+  async function queryFor(connection, sql, params = []) {
+    const normalized = sql.replace(/\s+/g, ' ').trim();
+    if (normalized.includes('SELECT 1 AS allowed FROM webinar_presentations')) {
+      return [[{ allowed: 1 }]];
+    }
+    if (normalized.includes('FROM webinar_assets')
+      && normalized.includes('WHERE id = ?')
+      && normalized.includes('FOR UPDATE')) {
+      await familyLock.acquire(connection.id);
+      connection.familyLocked = true;
+      const activeOnly = normalized.includes('archived_at IS NULL');
+      const operation = activeOnly ? 'archive' : 'confirm';
+      stages.push(`${operation}-family-lock`);
+      await pauseAt(operation);
+      const family = state.families.find(row => row.id === params[0]);
+      return [[family && (!activeOnly || !family.archived_at) ? { ...family } : null].filter(Boolean)];
+    }
+    if (normalized.includes('FROM webinar_asset_versions v') && normalized.includes('WHERE v.id = ?')) {
+      if (normalized.includes('FOR UPDATE')) {
+        await versionLock.acquire(connection.id);
+        connection.versionLocked = true;
+        stages.push('confirm-version-lock');
+        if (!connection.familyLocked) await pauseAt('confirm');
+      }
+      return [[versionRow(params[0])].filter(Boolean)];
+    }
+    if (normalized.includes('FROM webinar_assets a') && normalized.includes('JOIN webinar_asset_versions v')) {
+      return [catalogRows()];
+    }
+    if (normalized.includes('FROM webinar_asset_versions') && normalized.includes('sha256 = ?')) {
+      return [[]];
+    }
+    if (normalized.includes('FROM webinar_asset_references ar')
+      && normalized.includes('JOIN webinar_asset_versions v')) {
+      return [[]];
+    }
+    if (normalized.includes('FROM webinar_revision_asset_references rar')
+      && normalized.includes('JOIN webinar_asset_versions v')) {
+      return [[]];
+    }
+    if (normalized.includes('FROM webinar_asset_versions')
+      && normalized.includes("WHERE asset_id = ? AND status = 'processing'")
+      && normalized.includes('FOR UPDATE')) {
+      await versionLock.acquire(connection.id);
+      connection.versionLocked = true;
+      stages.push('pending-version-lock');
+      return [state.versions
+        .filter(version => version.asset_id === params[0] && version.status === 'processing')
+        .sort((left, right) => left.id.localeCompare(right.id))
+        .map(version => ({ id: version.id }))];
+    }
+    if (normalized.startsWith("UPDATE webinar_asset_versions SET status = 'archived'")
+      && normalized.includes('WHERE asset_id = ?')) {
+      await versionLock.acquire(connection.id);
+      connection.versionLocked = true;
+      let affectedRows = 0;
+      state.versions.forEach(version => {
+        if (version.asset_id === params[0] && version.status === 'processing') {
+          Object.assign(version, { status: 'archived', archived_at: '2026-09-04T12:00:00.000Z' });
+          affectedRows += 1;
+        }
+      });
+      stages.push('pending-version-archive');
+      return [{ affectedRows }];
+    }
+    if (normalized.startsWith("UPDATE webinar_asset_versions SET status = 'archived'")) {
+      const version = state.versions.find(row => row.id === params[0]);
+      if (!version || version.status !== 'processing') return [{ affectedRows: 0 }];
+      Object.assign(version, { status: 'archived', archived_at: '2026-09-04T12:00:00.000Z' });
+      stages.push('version-archive');
+      return [{ affectedRows: 1 }];
+    }
+    if (normalized.startsWith("UPDATE webinar_asset_versions SET status = 'available'")) {
+      const version = state.versions.find(row => row.id === params[8]);
+      if (!version || version.status !== 'processing') return [{ affectedRows: 0 }];
+      Object.assign(version, {
+        status: 'available', sha256: params[0], s3_key: params[1], media_type: params[2],
+        mime_type: params[3], byte_size: params[4], width: params[5], height: params[6],
+        duration_ms: params[7], rejection_code: null,
+      });
+      stages.push('available-update');
+      return [{ affectedRows: 1 }];
+    }
+    if (normalized.startsWith('UPDATE webinar_assets SET archived_at = CURRENT_TIMESTAMP')) {
+      const family = state.families.find(row => row.id === params[0]);
+      if (!family || family.archived_at) return [{ affectedRows: 0 }];
+      family.archived_at = '2026-09-04T12:00:00.000Z';
+      stages.push('family-archive');
+      return [{ affectedRows: 1 }];
+    }
+    throw new Error(`Unhandled race test query: ${normalized}`);
+  }
+
+  function connection() {
+    const current = {
+      id: nextConnectionId,
+      familyLocked: false,
+      versionLocked: false,
+      beginTransaction: vi.fn(async () => stages.push(`begin-${current.id}`)),
+      commit: vi.fn(async () => {
+        stages.push(`commit-${current.id}`);
+        if (current.versionLocked) versionLock.release(current.id);
+        if (current.familyLocked) familyLock.release(current.id);
+      }),
+      rollback: vi.fn(async () => {
+        stages.push(`rollback-${current.id}`);
+        if (current.versionLocked) versionLock.release(current.id);
+        if (current.familyLocked) familyLock.release(current.id);
+      }),
+      release: vi.fn(),
+      destroy: vi.fn(),
+      query: vi.fn((sql, params) => queryFor(current, sql, params)),
+    };
+    nextConnectionId += 1;
+    return current;
+  }
+
+  const poolConnection = { id: 0, familyLocked: false, versionLocked: false };
+  const db = {
+    query: vi.fn((sql, params) => queryFor(poolConnection, sql, params)),
+    getConnection: vi.fn(async () => connection()),
+  };
+  const inspected = {
+    mediaType: 'image', mimeType: 'image/png', byteSize: 68, sha256: SHA256,
+    width: 1, height: 1, durationMs: null, approvedBody: Buffer.from('approved bytes'),
+  };
+  const storage = {
+    readScanStatus: vi.fn().mockResolvedValue('NO_THREATS_FOUND'),
+    readQuarantineObject: vi.fn().mockResolvedValue({ privateStream: true }),
+    makeApprovedKey: vi.fn(sha256 => `approved/sha256/${sha256}/asset`),
+    putApprovedObject: vi.fn().mockResolvedValue(undefined),
+  };
+  const inspection = {
+    inspectAsset: vi.fn(input => input.consumeApprovedBody(inspected)),
+  };
+  const api = createCatalogService({
+    db,
+    storage,
+    inspection,
+    recordAuditEvent: vi.fn().mockResolvedValue({ id: 1 }),
+    recordOperationalEvent: vi.fn(),
+    makePublicUrl: (_config, key) => `https://assets.example/${key}`,
+    config: { bucket: 'unused-in-tests', cdnBaseUrl: 'https://assets.example', quarantinePrefix: 'quarantine/' },
+  });
+  return {
+    api,
+    storage,
+    stages,
+    pauseEntered: pauseEntered.promise,
+    resume: () => resume.resolve(),
+    familyWaitStarted: familyWaitStarted.promise,
+    state: () => clone(state),
+  };
 }
 
 function safeSerialization(value) {
@@ -930,6 +1190,96 @@ describe('Webinar Studio shared asset catalog', () => {
       assetId: ASSET_ID, actorUserId: 1, isAdmin: true, archive: true,
     })).resolves.toEqual({ id: ASSET_ID, archived: true });
     expect(admin.state().families[0].archived_at).not.toBeNull();
+  });
+
+  it('archives pending children before a family archive completes and never confirms them afterward', async () => {
+    const current = fixture({
+      storage: { readScanStatus: vi.fn().mockResolvedValue('NO_THREATS_FOUND') },
+    });
+
+    await current.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 7, isAdmin: false, archive: true,
+    });
+    const confirmation = await current.api.confirmUpload({
+      versionId: VERSION_ID, actorUserId: 7, isAdmin: false,
+    });
+    const catalog = await current.api.listCatalog({ actorUserId: 7, isAdmin: false });
+
+    expect(confirmation).toEqual({ versionId: VERSION_ID, status: 'archived' });
+    expect(current.state().versions[0]).toMatchObject({ status: 'archived' });
+    expect(current.storage.readScanStatus).not.toHaveBeenCalled();
+    expect(current.inspection.inspectAsset).not.toHaveBeenCalled();
+    expect(current.storage.putApprovedObject).not.toHaveBeenCalled();
+    expect(current.recordOperationalEvent).not.toHaveBeenCalledWith(
+      'webinar.asset_available', expect.anything(),
+    );
+    expect(catalog[0].versions[0]).toMatchObject({ id: VERSION_ID, status: 'archived' });
+    expect(catalog[0].versions[0]).not.toHaveProperty('publicUrl');
+    expect(current.stages.indexOf('family-lock'))
+      .toBeLessThan(current.stages.indexOf('pending-version-lock'));
+    expect(current.stages.indexOf('pending-version-lock'))
+      .toBeLessThan(current.stages.indexOf('pending-version-archive'));
+    expect(current.stages.indexOf('pending-version-archive'))
+      .toBeLessThan(current.stages.indexOf('family-archive'));
+  });
+
+  it('makes confirmation wait when family archive owns the family lock first', async () => {
+    const current = archiveConfirmationRaceFixture({ pause: 'archive' });
+    const archive = current.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 7, isAdmin: false, archive: true,
+    });
+    await current.pauseEntered;
+
+    const confirmation = current.api.confirmUpload({
+      versionId: VERSION_ID, actorUserId: 7, isAdmin: false,
+    });
+    const beforeResume = await Promise.race([
+      current.familyWaitStarted.then(() => 'blocked-on-family'),
+      confirmation.then(() => 'confirmation-settled', () => 'confirmation-rejected'),
+    ]);
+    current.resume();
+    const [archiveResult, confirmationResult] = await Promise.all([archive, confirmation]);
+
+    expect(beforeResume).toBe('blocked-on-family');
+    expect(archiveResult).toEqual({ id: ASSET_ID, archived: true });
+    expect(confirmationResult).toEqual({ versionId: VERSION_ID, status: 'archived' });
+    expect(current.state().versions[0]).toMatchObject({ status: 'archived' });
+    expect(current.storage.putApprovedObject).not.toHaveBeenCalled();
+    expect(current.stages.indexOf('archive-family-lock'))
+      .toBeLessThan(current.stages.indexOf('pending-version-lock'));
+  });
+
+  it('makes family archive wait when confirmation owns the family lock first', async () => {
+    const current = archiveConfirmationRaceFixture({ pause: 'confirm' });
+    const confirmation = current.api.confirmUpload({
+      versionId: VERSION_ID, actorUserId: 7, isAdmin: false,
+    });
+    await current.pauseEntered;
+
+    const archive = current.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 7, isAdmin: false, archive: true,
+    });
+    const beforeResume = await Promise.race([
+      current.familyWaitStarted.then(() => 'blocked-on-family'),
+      archive.then(() => 'archive-settled', () => 'archive-rejected'),
+    ]);
+    current.resume();
+    const [confirmationResult, archiveResult] = await Promise.all([confirmation, archive]);
+    const confirmationAfterArchive = await current.api.confirmUpload({
+      versionId: VERSION_ID, actorUserId: 7, isAdmin: false,
+    });
+    const catalog = await current.api.listCatalog({ actorUserId: 7, isAdmin: false });
+
+    expect(beforeResume).toBe('blocked-on-family');
+    expect(confirmationResult).toMatchObject({ versionId: VERSION_ID, status: 'available' });
+    expect(archiveResult).toEqual({ id: ASSET_ID, archived: true });
+    expect(confirmationAfterArchive).toEqual({ versionId: VERSION_ID, status: 'archived' });
+    expect(confirmationAfterArchive).not.toHaveProperty('publicUrl');
+    expect(catalog[0].versions[0]).toMatchObject({ id: VERSION_ID, status: 'archived' });
+    expect(catalog[0].versions[0]).not.toHaveProperty('publicUrl');
+    expect(current.storage.putApprovedObject).toHaveBeenCalledOnce();
+    expect(current.stages.indexOf('confirm-family-lock'))
+      .toBeLessThan(current.stages.indexOf('confirm-version-lock'));
   });
 
   it('denies family archive to a contributor who did not create the family', async () => {

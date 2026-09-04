@@ -50,6 +50,11 @@ function connectionWith(rows = []) {
     connection: {
       query: vi.fn(async (sql, params = []) => {
         calls.push({ sql, params });
+        if (sql.includes('SELECT a.id')
+          && sql.includes('FROM webinar_assets a')
+          && sql.includes('WHERE EXISTS')) {
+          return [[{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }]];
+        }
         if (sql.includes('FROM webinar_asset_versions')) return [rows];
         return [{ affectedRows: 1 }];
       }),
@@ -108,7 +113,7 @@ describe('webinar asset live and revision references', () => {
     expect(calls.some(({ sql }) => sql.startsWith('DELETE FROM webinar_asset_references'))).toBe(false);
   });
 
-  it('locks every unique version and its family in one ordered query to serialize archive decisions', async () => {
+  it('locks every family before every version in deterministic order to serialize archive decisions', async () => {
     const { connection, calls } = connectionWith([
       available(FIRST_VERSION),
       available(SECOND_VERSION),
@@ -120,11 +125,20 @@ describe('webinar asset live and revision references', () => {
       masterCss: `body { background: url({{ASSET:${FIRST_VERSION}}}); }`,
     }));
 
-    const selection = calls.find(({ sql }) => sql.includes('FROM webinar_asset_versions'));
-    expect(selection.sql).toContain('JOIN webinar_assets');
-    expect(selection.sql).toContain('ORDER BY v.id');
-    expect(selection.sql).toContain('FOR UPDATE');
-    expect(selection.params).toEqual([FIRST_VERSION, SECOND_VERSION]);
+    const familySelectionIndex = calls.findIndex(({ sql }) => (
+      sql.includes('SELECT a.id')
+      && sql.includes('FROM webinar_assets a')
+      && sql.includes('WHERE EXISTS')
+    ));
+    const versionSelectionIndex = calls.findIndex(({ sql }) => sql.includes('FROM webinar_asset_versions v'));
+    expect(familySelectionIndex).toBeGreaterThanOrEqual(0);
+    expect(versionSelectionIndex).toBeGreaterThan(familySelectionIndex);
+    expect(calls[familySelectionIndex].sql).toContain('ORDER BY a.id');
+    expect(calls[familySelectionIndex].sql).toContain('FOR UPDATE');
+    expect(calls[familySelectionIndex].params).toEqual([FIRST_VERSION, SECOND_VERSION]);
+    expect(calls[versionSelectionIndex].sql).toContain('ORDER BY v.id');
+    expect(calls[versionSelectionIndex].sql).toContain('FOR UPDATE');
+    expect(calls[versionSelectionIndex].params).toEqual([FIRST_VERSION, SECOND_VERSION]);
   });
 
   it('replaces only one webinar complete reference set and deduplicates repeated surface tokens', async () => {

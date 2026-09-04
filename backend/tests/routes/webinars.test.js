@@ -320,6 +320,9 @@ async function useRealAssetReferenceMutation(versionRows, { collectTokens } = {}
         state().masterCss = params[1];
         return [{ affectedRows: 1 }];
       }
+      if (normalized.includes('FROM webinar_assets a') && normalized.includes('WHERE EXISTS')) {
+        return [versionRows.length ? [{ id: 'asset-family-for-route-test' }] : []];
+      }
       if (normalized.includes('FROM webinar_asset_versions v') && normalized.includes('WHERE v.id IN')) {
         return [structuredClone(versionRows)];
       }

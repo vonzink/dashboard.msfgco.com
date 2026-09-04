@@ -38,6 +38,19 @@ function createReferenceService({
   async function selectVersionsForReference(connection, assetVersionIds) {
     if (!assetVersionIds.length) return [];
     const placeholders = assetVersionIds.map(() => '?').join(', ');
+    await connection.query(
+      `SELECT a.id
+       FROM webinar_assets a
+       WHERE EXISTS (
+         SELECT 1
+         FROM webinar_asset_versions family_version
+         WHERE family_version.asset_id = a.id
+           AND family_version.id IN (${placeholders})
+       )
+       ORDER BY a.id
+       FOR UPDATE`,
+      assetVersionIds,
+    );
     const [rows] = await connection.query(
       `SELECT v.id, v.status, v.archived_at, v.sha256, v.s3_key,
               a.archived_at AS family_archived_at

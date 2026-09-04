@@ -144,6 +144,10 @@ function numberOrNull(value) {
   return value === null || value === undefined ? null : Number(value);
 }
 
+function isArchived(timestamp) {
+  return timestamp !== null && timestamp !== undefined;
+}
+
 function createCatalogService({
   db: connectionPool = db,
   storage = defaultStorage,
@@ -198,16 +202,27 @@ function createCatalogService({
   }
 
   function safeVersionResult(row, persistedActorUserId = null) {
-    const result = { versionId: row.id, status: row.status };
-    if (row.status === 'available') {
+    const status = isArchived(row.family_archived_at) ? 'archived' : row.status;
+    const result = { versionId: row.id, status };
+    if (status === 'available') {
       result.sha256 = row.sha256;
       result.publicUrl = persistedActorUserId === null
         ? publicUrlFor(row.s3_key, row.sha256)
         : persistedPublicUrlFor(row, persistedActorUserId);
-    } else if (row.status === 'rejected') {
+    } else if (status === 'rejected') {
       result.rejectionCode = row.rejection_code;
     }
     return result;
+  }
+
+  async function selectFamily(queryable, assetId, { lock = false, activeOnly = false } = {}) {
+    const [rows] = await queryable.query(
+      `SELECT id, created_by_user_id, display_name, description, created_at, archived_at
+       FROM webinar_assets
+       WHERE id = ?${activeOnly ? ' AND archived_at IS NULL' : ''}${lock ? '\n       FOR UPDATE' : ''}`,
+      [assetId],
+    );
+    return rows[0] || null;
   }
 
   async function selectVersion(queryable, versionId, { lock = false } = {}) {
@@ -277,6 +292,8 @@ function createCatalogService({
         };
         families.set(row.asset_id, family);
       }
+      const familyArchived = isArchived(row.family_archived_at);
+      const status = familyArchived ? 'archived' : row.status;
       const version = {
         id: row.version_id,
         versionNumber: Number(row.version_number),
@@ -287,14 +304,14 @@ function createCatalogService({
         width: numberOrNull(row.width),
         height: numberOrNull(row.height),
         durationMs: numberOrNull(row.duration_ms),
-        status: row.status,
-        rejectionCode: row.rejection_code,
+        status,
+        rejectionCode: status === 'rejected' ? row.rejection_code : null,
         uploadedByUserId: Number(row.uploaded_by_user_id),
         uploaderName: row.uploader_name || null,
         createdAt: row.version_created_at,
         archivedAt: row.version_archived_at,
       };
-      if (row.status === 'available') {
+      if (status === 'available') {
         version.publicUrl = persistedPublicUrlFor(row, filters.actorUserId);
       }
       family.versions.push(version);
@@ -451,7 +468,28 @@ function createCatalogService({
 
   async function transitionAvailable({ version, actorUserId, inspected }) {
     return runTransaction(connectionPool, async connection => {
+      const family = await selectFamily(connection, version.asset_id, { lock: true });
+      if (!family) throw processingUnavailable();
       const locked = await selectVersion(connection, version.id, { lock: true });
+      if (isArchived(family.archived_at)) {
+        const [archived] = await connection.query(
+          `UPDATE webinar_asset_versions
+           SET status = 'archived', archived_at = CURRENT_TIMESTAMP(3)
+           WHERE id = ? AND status = 'processing'`,
+          [locked.id],
+        );
+        if (archived.affectedRows) {
+          await recordAuditEvent(connection, {
+            actorUserId,
+            eventType: 'asset_version_archived',
+            targetType: 'asset_version',
+            targetId: locked.id,
+            metadata: { reason: 'family_archived' },
+          });
+        }
+        const current = await selectVersion(connection, locked.id);
+        return { result: safeVersionResult(current), transitioned: false };
+      }
       if (locked.status !== 'processing') {
         return { result: safeVersionResult(locked), transitioned: false };
       }
@@ -518,6 +556,7 @@ function createCatalogService({
   async function confirmUpload(input) {
     await assertAssetContributor(input);
     const version = await selectVersion(connectionPool, input.versionId);
+    if (isArchived(version.family_archived_at)) return safeVersionResult(version, input.actorUserId);
     if (version.status !== 'processing') return safeVersionResult(version, input.actorUserId);
 
     let scanStatus;
@@ -634,11 +673,15 @@ function createCatalogService({
   async function archiveVersion(input) {
     await assertAssetContributor(input);
     return runTransaction(connectionPool, async connection => {
+      const family = await selectFamily(connection, input.assetId, { lock: true });
       const version = await selectVersion(connection, input.versionId, { lock: true });
       if (version.asset_id !== input.assetId) {
         throw notFound('ASSET_VERSION_NOT_FOUND', 'Asset version not found');
       }
-      if (version.status === 'archived') return safeVersionResult(version);
+      if (!family) throw notFound('ASSET_NOT_FOUND', 'Asset family not found');
+      if (version.status === 'archived' || isArchived(family.archived_at)) {
+        return safeVersionResult({ ...version, family_archived_at: family.archived_at });
+      }
       if (input.isAdmin !== true && Number(version.uploaded_by_user_id) !== input.actorUserId) {
         throw accessDenied();
       }
@@ -694,14 +737,7 @@ function createCatalogService({
   async function updateFamily(input) {
     await assertAssetContributor(input);
     return runTransaction(connectionPool, async connection => {
-      const [rows] = await connection.query(
-        `SELECT id, created_by_user_id, display_name, description, created_at, archived_at
-         FROM webinar_assets
-         WHERE id = ? AND archived_at IS NULL
-         FOR UPDATE`,
-        [input.assetId],
-      );
-      const family = rows[0];
+      const family = await selectFamily(connection, input.assetId, { lock: true, activeOnly: true });
       if (!family) throw notFound('ASSET_NOT_FOUND', 'Asset family not found');
       if (input.isAdmin !== true && Number(family.created_by_user_id) !== input.actorUserId) {
         throw accessDenied();
@@ -711,6 +747,20 @@ function createCatalogService({
         const { live, history } = await familyReferenceRows(connection, family.id);
         if (live[0]) throw conflict('ASSET_IN_USE', 'Asset family is in current use');
         if (history[0]) throw conflict('ASSET_IN_USE_BY_REVISION', 'Asset family is required by revision history');
+        await connection.query(
+          `SELECT id
+           FROM webinar_asset_versions
+           WHERE asset_id = ? AND status = 'processing'
+           ORDER BY id
+           FOR UPDATE`,
+          [family.id],
+        );
+        await connection.query(
+          `UPDATE webinar_asset_versions
+           SET status = 'archived', archived_at = CURRENT_TIMESTAMP(3)
+           WHERE asset_id = ? AND status = 'processing'`,
+          [family.id],
+        );
         const [result] = await connection.query(
           `UPDATE webinar_assets SET archived_at = CURRENT_TIMESTAMP(3)
            WHERE id = ? AND archived_at IS NULL`,

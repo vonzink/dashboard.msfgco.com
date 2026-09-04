@@ -92,6 +92,10 @@ function statefulMutationModel(initial) {
       const db = state();
       if (sql.includes('FROM users')) return [[db.users.find(user => Number(user.id) === Number(params[0]) && Number(user.is_active) === 1)].filter(Boolean)];
       if (sql.includes('FROM webinar_revisions') && sql.includes('WHERE webinar_id = ? AND id = ?')) return [[db.revisions.find(row => Number(row.webinar_id) === Number(params[0]) && Number(row.id) === Number(params[1]))].filter(Boolean)];
+      if (sql.includes('FROM webinar_assets a') && sql.includes('WHERE EXISTS')) {
+        const matched = (db.assetVersions || []).filter(version => params.includes(version.id));
+        return [matched.length ? [{ id: 'asset-family-for-mutation-test' }] : []];
+      }
       if (sql.includes('FROM webinar_asset_versions')) {
         return [(db.assetVersions || []).filter(version => params.includes(version.id))];
       }
