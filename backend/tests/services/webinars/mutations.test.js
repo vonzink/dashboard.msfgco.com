@@ -7,16 +7,17 @@ const { LIMITS } = require('../../../services/webinars/limits');
 
 const stableId = '11111111-1111-4111-8111-111111111111';
 const secondId = '22222222-2222-4222-8222-222222222222';
+const assetVersionId = '33333333-3333-4333-8333-333333333333';
 const masterHtml = '<main>{{SLIDE_CONTENT}}</main>';
 
 afterEach(() => vi.unstubAllEnvs());
 
-function versionedSnapshot({ admissionVersion = 1, stylesheetOrigins = [] } = {}) {
+function versionedSnapshot({ admissionVersion = 1, assetOrigin = null, stylesheetOrigins = [] } = {}) {
   return {
     schemaVersion: 2,
     admissionPolicy: {
       version: admissionVersion,
-      resourcePolicy: { assetOrigin: null, stylesheetOrigins, fontOrigins: [] },
+      resourcePolicy: { assetOrigin, stylesheetOrigins, fontOrigins: [] },
     },
     webinar: { slug: 'restored-intro', title: 'Restored intro', masterHtml, masterCss: '' },
     slides: [{ id: stableId, position: 0, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' }],
@@ -91,6 +92,9 @@ function statefulMutationModel(initial) {
       const db = state();
       if (sql.includes('FROM users')) return [[db.users.find(user => Number(user.id) === Number(params[0]) && Number(user.is_active) === 1)].filter(Boolean)];
       if (sql.includes('FROM webinar_revisions') && sql.includes('WHERE webinar_id = ? AND id = ?')) return [[db.revisions.find(row => Number(row.webinar_id) === Number(params[0]) && Number(row.id) === Number(params[1]))].filter(Boolean)];
+      if (sql.includes('FROM webinar_asset_versions')) {
+        return [(db.assetVersions || []).filter(version => params.includes(version.id))];
+      }
       if (sql.includes('FOR UPDATE') && sql.includes('webinar_presentations')) {
         const row = presentation(params[0]);
         return [[row && { ...row, updater_name: 'Editor' }].filter(Boolean)];
@@ -122,6 +126,20 @@ function statefulMutationModel(initial) {
         db.revisions.push({ id, webinar_id: params[0], version: params[1], snapshot: params[2], change_type: params[3], change_summary: params[4], created_by_user_id: params[5] });
         return [{ insertId: id }];
       }
+      if (sql.startsWith('DELETE FROM webinar_asset_references')) {
+        if (db.assetReferences) {
+          db.assetReferences = db.assetReferences.filter(row => Number(row.webinar_id) !== Number(params[0]));
+        }
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.startsWith('INSERT INTO webinar_asset_references')) {
+        db.assetReferences.push({ webinar_id: params[0], slide_id: params[1], asset_version_id: params[2], surface: params[3] });
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.startsWith('INSERT INTO webinar_revision_asset_references')) {
+        db.revisionAssetReferences.push({ revision_id: params[0], asset_version_id: params[1] });
+        return [{ affectedRows: 1 }];
+      }
       if (sql.includes('UPDATE webinar_presentations SET live_version = ?')) {
         const row = presentation(params[2]); row.live_version = params[0]; row.updated_by_user_id = params[1]; row.updated_at = '2026-09-03T11:00:01.000Z'; return [{ affectedRows: 1 }];
       }
@@ -130,6 +148,12 @@ function statefulMutationModel(initial) {
       }
       if (sql.includes('UPDATE webinar_presentations SET slug = ?')) {
         const row = presentation(params[5]); Object.assign(row, { slug: params[0], title: params[1], master_html: params[2], master_css: params[3], updated_by_user_id: params[4], updated_at: '2026-09-03T11:00:01.000Z' }); return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE webinar_slides SET anchor = ?')) {
+        const slide = db.slides.find(row => row.id === params[8] && Number(row.webinar_id) === Number(params[9]));
+        if (!slide) return [{ affectedRows: 0 }];
+        Object.assign(slide, { anchor: params[0], title: params[1], target_seconds: params[2], speaker_notes: params[3], html: params[4], css: params[5], javascript: params[6] });
+        return [{ affectedRows: 1 }];
       }
       if (sql.includes('UPDATE webinar_slides SET position = NULL')) {
         db.slides.filter(slide => Number(slide.webinar_id) === Number(params[1]) && !slide.archived_at).forEach(slide => { slide.position = null; slide.archived_at = '2026-09-03T11:00:01.000Z'; }); return [{ affectedRows: 1 }];
@@ -221,7 +245,55 @@ describe('Webinar Studio live mutations', () => {
     connection.beginTransaction.mockImplementation(async () => stages.push('begin'));
     connection.commit.mockImplementation(async () => stages.push('commit'));
     await api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml, masterCss: '' });
-    expect(stages).toEqual(['begin', 'lock-version', 'complete-validation', 'asset-sync', 'normalized-writes', 'snapshot', 'revision', 'revision-assets', 'live-version', 'audit', 'commit']);
+    expect(stages).toEqual(['begin', 'lock-version', 'complete-validation', 'normalized-writes', 'asset-sync', 'snapshot', 'revision', 'revision-assets', 'live-version', 'audit', 'commit']);
+  });
+
+  it.each([
+    ['save Master', fixture => fixture.api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml, masterCss: '' })],
+    ['save slide', fixture => fixture.api.saveSlide({ webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' })],
+    ['add slide', fixture => fixture.api.addSlide({ webinarId: 2, actorUserId: 7, expectedVersion: 4, anchor: 'agenda', title: 'Agenda', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' })],
+    ['duplicate slide', fixture => fixture.api.duplicateSlide({ webinarId: 2, actorUserId: 7, expectedVersion: 4, sourceSlideId: stableId })],
+    ['reorder slides', fixture => fixture.api.reorderSlides({ webinarId: 2, actorUserId: 7, expectedVersion: 4, slideIds: [stableId] })],
+    ['archive slide', fixture => fixture.api.archiveSlide({ webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4 })],
+  ])('binds the complete post-transform candidate for %s before revision insertion', async (_label, run) => {
+    const stages = [];
+    const syncAssetReferences = vi.fn(async (_connection, candidate) => {
+      stages.push('references');
+      expect(candidate.webinarId).toBe(2);
+      expect(candidate.masterHtml).toBe(masterHtml);
+      expect(Array.isArray(candidate.slides)).toBe(true);
+      return { assetVersionIds: [] };
+    });
+    const recordRevisionAssetReferences = vi.fn(async () => stages.push('revision-references'));
+    const fixture = service({ syncAssetReferences, recordRevisionAssetReferences });
+    const originalQuery = fixture.connection.query.getMockImplementation();
+    fixture.connection.query.mockImplementation(async (sql, params) => {
+      if (sql.includes('INSERT INTO webinar_revisions')) stages.push('revision');
+      return originalQuery(sql, params);
+    });
+
+    await run(fixture);
+
+    expect(syncAssetReferences).toHaveBeenCalledTimes(1);
+    expect(recordRevisionAssetReferences).toHaveBeenCalledTimes(1);
+    expect(stages).toEqual(['references', 'revision', 'revision-references']);
+  });
+
+  it('binds the complete inserted candidate during webinar creation', async () => {
+    const syncAssetReferences = vi.fn().mockResolvedValue({ assetVersionIds: [] });
+    const recordRevisionAssetReferences = vi.fn().mockResolvedValue(undefined);
+    const fixture = service({ syncAssetReferences, recordRevisionAssetReferences });
+
+    await fixture.api.createWebinar({
+      slug: 'intro', title: 'Intro', primaryOwnerUserId: 7, actorUserId: 1,
+    });
+
+    expect(syncAssetReferences).toHaveBeenCalledWith(fixture.connection, expect.objectContaining({
+      webinarId: 2,
+      masterHtml: '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>',
+      slides: [expect.objectContaining({ position: 0, anchor: 'opening' })],
+    }));
+    expect(recordRevisionAssetReferences).toHaveBeenCalledWith(fixture.connection, 91, []);
   });
 
   it.each([
@@ -329,20 +401,160 @@ describe('Webinar Studio live mutations', () => {
     expect(calls).toContain('commit');
   });
 
-  it('validates the complete candidate before beginning writes and fails closed for unavailable asset hooks', async () => {
+  it('validates the complete candidate before beginning writes and rejects unknown asset versions', async () => {
     const { api, calls } = service();
     await expect(api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml: '<script>bad()</script>{{SLIDE_CONTENT}}', masterCss: '' }))
       .rejects.toMatchObject({ code: 'CONTENT_VALIDATION_FAILED' });
     expect(calls).not.toContain('write');
     expect(calls).not.toContain('revision:5');
 
+    vi.stubEnv('WEBINAR_ASSET_BUCKET', 'asset-test');
     vi.stubEnv('WEBINAR_ASSET_CDN_BASE_URL', 'https://assets.example');
     const unavailable = service();
     await expect(unavailable.api.saveSlide({ webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4, anchor: 'opening', title: 'Opening', targetSeconds: 0, speakerNotes: '', html: '<img src="{{ASSET:11111111-1111-4111-8111-111111111111}}">', css: '', javascript: '' }))
-      .rejects.toMatchObject({ code: 'ASSET_LIBRARY_NOT_READY' });
+      .rejects.toMatchObject({ status: 422, code: 'ASSET_NOT_FOUND' });
     expect(unavailable.calls).toContain('rollback');
     expect(unavailable.calls).not.toContain('revision:5');
     vi.unstubAllEnvs();
+  });
+
+  it('rolls back normalized rows, references, live version, and revisions when asset validation fails', async () => {
+    vi.stubEnv('WEBINAR_ASSET_BUCKET', 'asset-test');
+    vi.stubEnv('WEBINAR_ASSET_CDN_BASE_URL', 'https://assets.example');
+    const initial = {
+      users: [{ id: 7, name: 'Owner', is_active: 1 }],
+      presentations: [{ ...currentWebinar(), archived_at: null }],
+      slides: [{ ...activeSlides()[0], webinar_id: 2, archived_at: null }],
+      revisions: [],
+      audit: [],
+      assetVersions: [{
+        id: assetVersionId,
+        status: 'processing',
+        archived_at: null,
+        family_archived_at: null,
+        sha256: null,
+        s3_key: `quarantine/${assetVersionId}/image.png`,
+      }],
+      assetReferences: [{ webinar_id: 2, slide_id: stableId, asset_version_id: secondId, surface: 'slide_html' }],
+      revisionAssetReferences: [],
+      nextPresentationId: 3,
+      nextRevisionId: 90,
+    };
+    const model = statefulMutationModel(initial);
+    const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+    await expect(api.saveSlide({
+      webinarId: 2,
+      slideId: stableId,
+      actorUserId: 7,
+      expectedVersion: 4,
+      anchor: 'opening',
+      title: 'Opening changed',
+      targetSeconds: 10,
+      speakerNotes: '',
+      html: `<img src="{{ASSET:${assetVersionId}}}">`,
+      css: '',
+      javascript: '',
+    })).rejects.toMatchObject({ status: 422, code: 'ASSET_NOT_AVAILABLE' });
+
+    expect(model.committed()).toEqual(initial);
+    expect(model.calls).toContain('rollback');
+    expect(model.calls).not.toContain('commit');
+  });
+
+  it('stores tokens unchanged while replacing live references and recording exact revision dependencies', async () => {
+    vi.stubEnv('WEBINAR_ASSET_BUCKET', 'asset-test');
+    vi.stubEnv('WEBINAR_ASSET_CDN_BASE_URL', 'https://assets.example');
+    const token = `{{ASSET:${assetVersionId}}}`;
+    const initial = {
+      users: [{ id: 7, name: 'Owner', is_active: 1 }],
+      presentations: [{ ...currentWebinar(), archived_at: null }],
+      slides: [{ ...activeSlides()[0], webinar_id: 2, archived_at: null }],
+      revisions: [],
+      audit: [],
+      assetVersions: [{
+        id: assetVersionId,
+        status: 'available',
+        archived_at: null,
+        family_archived_at: null,
+        sha256: 'c'.repeat(64),
+        s3_key: `approved/sha256/${'c'.repeat(64)}/asset`,
+      }],
+      assetReferences: [],
+      revisionAssetReferences: [],
+      nextPresentationId: 3,
+      nextRevisionId: 90,
+    };
+    const model = statefulMutationModel(initial);
+    const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+    await expect(api.saveSlide({
+      webinarId: 2,
+      slideId: stableId,
+      actorUserId: 7,
+      expectedVersion: 4,
+      anchor: 'opening',
+      title: 'Opening',
+      targetSeconds: 0,
+      speakerNotes: '',
+      html: `<img src="${token}"><img src="${token}">`,
+      css: '',
+      javascript: '',
+    })).resolves.toMatchObject({ liveVersion: 5 });
+
+    const state = model.committed();
+    expect(state.assetReferences).toEqual([{ webinar_id: 2, slide_id: stableId, asset_version_id: assetVersionId, surface: 'slide_html' }]);
+    expect(state.revisionAssetReferences).toEqual([{ revision_id: 90, asset_version_id: assetVersionId }]);
+    expect(state.slides[0].html).toBe(`<img src="${token}"><img src="${token}">`);
+    expect(JSON.parse(state.revisions[0].snapshot).slides[0].html).toBe(`<img src="${token}"><img src="${token}">`);
+  });
+
+  it('restores and rebinds every exact historical asset version without rewriting snapshot tokens', async () => {
+    vi.stubEnv('WEBINAR_ASSET_BUCKET', 'asset-test');
+    vi.stubEnv('WEBINAR_ASSET_CDN_BASE_URL', 'https://assets.example');
+    const secondAssetVersionId = '44444444-4444-4444-8444-444444444444';
+    const restored = versionedSnapshot({ assetOrigin: 'https://assets.example' });
+    restored.webinar.masterCss = `:root { --logo: url({{ASSET:${secondAssetVersionId}}}); }`;
+    restored.slides[0].html = `<img src="{{ASSET:${assetVersionId}}}">`;
+    const initial = {
+      users: [{ id: 7, name: 'Owner', is_active: 1 }],
+      presentations: [{ ...currentWebinar(), archived_at: null }],
+      slides: [{ ...activeSlides()[0], webinar_id: 2, archived_at: null }],
+      revisions: [{ id: 18, webinar_id: 2, version: 2, snapshot: JSON.stringify(restored) }],
+      audit: [],
+      assetVersions: [
+        { id: assetVersionId, status: 'available', archived_at: null, family_archived_at: null, sha256: 'c'.repeat(64), s3_key: `approved/sha256/${'c'.repeat(64)}/asset` },
+        { id: secondAssetVersionId, status: 'available', archived_at: null, family_archived_at: null, sha256: 'd'.repeat(64), s3_key: `approved/sha256/${'d'.repeat(64)}/asset` },
+      ],
+      assetReferences: [{ webinar_id: 2, slide_id: stableId, asset_version_id: secondId, surface: 'slide_html' }],
+      revisionAssetReferences: [
+        { revision_id: 18, asset_version_id: assetVersionId },
+        { revision_id: 18, asset_version_id: secondAssetVersionId },
+      ],
+      nextPresentationId: 3,
+      nextRevisionId: 19,
+    };
+    const model = statefulMutationModel(initial);
+    const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+    await expect(api.restoreRevision({
+      webinarId: 2, revisionId: 18, actorUserId: 7, expectedVersion: 4,
+    })).resolves.toMatchObject({ liveVersion: 5 });
+
+    const state = model.committed();
+    expect(state.assetReferences).toEqual([
+      { webinar_id: 2, slide_id: null, asset_version_id: secondAssetVersionId, surface: 'master_css' },
+      { webinar_id: 2, slide_id: stableId, asset_version_id: assetVersionId, surface: 'slide_html' },
+    ]);
+    expect(state.revisionAssetReferences).toEqual([
+      { revision_id: 18, asset_version_id: assetVersionId },
+      { revision_id: 18, asset_version_id: secondAssetVersionId },
+      { revision_id: 19, asset_version_id: assetVersionId },
+      { revision_id: 19, asset_version_id: secondAssetVersionId },
+    ]);
+    const newSnapshot = JSON.parse(state.revisions.find(revision => revision.id === 19).snapshot);
+    expect(newSnapshot.webinar.masterCss).toContain(`{{ASSET:${secondAssetVersionId}}}`);
+    expect(newSnapshot.slides[0].html).toContain(`{{ASSET:${assetVersionId}}}`);
   });
 
   it('rejects asset tokens before an injected asset hook can allow an unconfigured origin', async () => {
@@ -359,6 +571,19 @@ describe('Webinar Studio live mutations', () => {
     await expect(api.saveMaster({ webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml, masterCss: 'x{}' })).rejects.toThrow('write failed');
     expect(calls).toContain('rollback');
     expect(calls).not.toContain('revision:5');
+  });
+
+  it('rolls back when validated live references do not match the persisted revision snapshot', async () => {
+    const syncAssetReferences = vi.fn().mockResolvedValue({ assetVersionIds: [assetVersionId] });
+    const { api, calls } = service({ syncAssetReferences });
+
+    await expect(api.saveMaster({
+      webinarId: 2, actorUserId: 7, expectedVersion: 4, masterHtml, masterCss: '',
+    })).rejects.toMatchObject({ code: 'ASSET_REFERENCE_STATE_MISMATCH', status: 500 });
+
+    expect(calls).toContain('rollback');
+    expect(calls).not.toContain('revision:5');
+    expect(calls).not.toContain('commit');
   });
 
   it('archives a slide without deleting its stable identity', async () => {

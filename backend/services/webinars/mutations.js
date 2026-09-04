@@ -6,6 +6,7 @@ const {
 } = require('./contentPolicy');
 const {
   RevisionError,
+  assetVersionIdsFromSnapshot,
   buildCompleteSnapshot,
   captureAdmissionPolicy,
   getRevisionForRestore,
@@ -13,6 +14,10 @@ const {
 } = require('./revisions');
 const { recordAuditEvent: defaultRecordAuditEvent } = require('./audit');
 const { aggregateRollbackFailure, runTransaction } = require('./transaction');
+const {
+  validateAndReplaceReferences: defaultSyncAssetReferences,
+  recordRevisionAssetReferences: defaultRecordRevisionAssetReferences,
+} = require('../webinarAssets/references');
 
 const SAFE_MASTER = '<main class="webinar-slide">{{SLIDE_CONTENT}}</main>';
 const ASSET_TOKEN = /\{\{ASSET:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\}\}/i;
@@ -142,17 +147,9 @@ function hasAssetTokens(value) {
   return Object.values(value).some(hasAssetTokens);
 }
 
-async function unavailableAssetSync(_connection, candidate) {
-  if (hasAssetTokens(candidate)) throw new WebinarMutationError('ASSET_LIBRARY_NOT_READY', 'Asset library is not ready', { status: 503 });
-  return { assetVersionIds: [] };
-}
-
-async function unavailableReferenceWriter(_connection, _revisionId, assetVersionIds) {
-  if (assetVersionIds?.length) throw new WebinarMutationError('ASSET_LIBRARY_NOT_READY', 'Asset library is not ready', { status: 503 });
-}
-
 function candidateFrom(webinar, slides) {
   return {
+    webinarId: Number(webinar.id),
     slug: webinar.slug,
     title: webinar.title,
     masterHtml: webinar.master_html,
@@ -178,6 +175,18 @@ function resultFor(webinar) {
   };
 }
 
+function assertExactAssetDependencies(validatedAssetVersionIds, snapshotAssetVersionIds) {
+  if (validatedAssetVersionIds.length === snapshotAssetVersionIds.length
+    && validatedAssetVersionIds.every((assetVersionId, index) => (
+      assetVersionId === snapshotAssetVersionIds[index]
+    ))) return;
+  throw new WebinarMutationError(
+    'ASSET_REFERENCE_STATE_MISMATCH',
+    'Webinar asset references did not match the revision snapshot',
+    { status: 500 },
+  );
+}
+
 async function readCurrentMetadata(connection, webinarId) {
   const [rows] = await connection.query(
     `SELECT id, live_version, updated_at, primary_owner_user_id, audience_enabled
@@ -197,8 +206,8 @@ async function findActiveOwner(connection, userId) {
 function createMutationService({
   db: connectionPool = db,
   validateCandidate: candidateValidator = validateCandidate,
-  syncAssetReferences = unavailableAssetSync,
-  recordRevisionAssetReferences = unavailableReferenceWriter,
+  syncAssetReferences = defaultSyncAssetReferences,
+  recordRevisionAssetReferences = defaultRecordRevisionAssetReferences,
   recordAuditEvent = defaultRecordAuditEvent,
 } = {}) {
   async function contentMutation({ webinarId, actorUserId, actorIsAdmin, expectedVersion, changeType, changeSummary, transform, apply }) {
@@ -214,12 +223,14 @@ function createMutationService({
         await candidateValidator(candidate, resourcePolicy);
         admissionPolicy = captureAdmissionPolicy(resourcePolicy);
       }
-      const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       await apply(connection, candidate, webinar);
+      const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       const snapshot = await buildCompleteSnapshot(connection, webinarId, { admissionPolicy });
+      const snapshotAssetVersionIds = assetVersionIdsFromSnapshot(snapshot);
+      assertExactAssetDependencies(assetVersionIds, snapshotAssetVersionIds);
       const liveVersion = Number(webinar.live_version) + 1;
       const revisionId = await insertRevision(connection, { webinarId, liveVersion, snapshot, changeType, changeSummary, actorUserId });
-      await recordRevisionAssetReferences(connection, revisionId, assetVersionIds);
+      await recordRevisionAssetReferences(connection, revisionId, snapshotAssetVersionIds);
       await connection.query(
         'UPDATE webinar_presentations SET live_version = ?, updated_by_user_id = ? WHERE id = ?',
         [liveVersion, actorUserId, webinarId],
@@ -393,7 +404,6 @@ function createMutationService({
       const resourcePolicy = validationPolicy();
       await candidateValidator(candidate, resourcePolicy);
       const admissionPolicy = captureAdmissionPolicy(resourcePolicy);
-      const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       const [created] = await connection.query(
         `INSERT INTO webinar_presentations
            (slug, title, primary_owner_user_id, master_html, master_css, audience_enabled, created_by_user_id, updated_by_user_id)
@@ -401,15 +411,19 @@ function createMutationService({
         [input.slug, input.title, input.primaryOwnerUserId, candidate.masterHtml, candidate.masterCss, input.actorUserId, input.actorUserId],
       );
       const webinarId = Number(created.insertId);
+      candidate.webinarId = webinarId;
       const slide = candidate.slides[0];
       await connection.query(
         `INSERT INTO webinar_slides (id, webinar_id, position, anchor, title, target_seconds, speaker_notes, html, css, javascript, created_by_user_id, updated_by_user_id)
          VALUES (?, ?, 0, 'opening', 'Opening', 0, '', '', '', '', ?, ?)`,
         [slide.id, webinarId, input.actorUserId, input.actorUserId],
       );
+      const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
       const snapshot = await buildCompleteSnapshot(connection, webinarId, { admissionPolicy });
+      const snapshotAssetVersionIds = assetVersionIdsFromSnapshot(snapshot);
+      assertExactAssetDependencies(assetVersionIds, snapshotAssetVersionIds);
       const revisionId = await insertRevision(connection, { webinarId, liveVersion: 1, snapshot, changeType: 'webinar_created', changeSummary: 'Created webinar', actorUserId: input.actorUserId });
-      await recordRevisionAssetReferences(connection, revisionId, assetVersionIds);
+      await recordRevisionAssetReferences(connection, revisionId, snapshotAssetVersionIds);
       await connection.query('UPDATE webinar_presentations SET live_version = 1, updated_by_user_id = ? WHERE id = ?', [input.actorUserId, webinarId]);
       await recordAuditEvent(connection, { webinarId, actorUserId: input.actorUserId, eventType: 'webinar_created', targetType: 'webinar', targetId: webinarId, metadata: { liveVersion: 1 } });
       const current = await readCurrentMetadata(connection, webinarId);
