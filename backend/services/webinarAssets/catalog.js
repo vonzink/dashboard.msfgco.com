@@ -9,6 +9,7 @@ const { runTransaction } = require('../webinars/transaction');
 
 const CLEAN_SCAN_STATUS = 'NO_THREATS_FOUND';
 const SAFE_INSPECTION_CODE = /^ASSET_INSPECTION_[A-Z0-9_]{1,43}$/;
+const CANONICAL_APPROVED_KEY = /^approved\/sha256\/([a-f0-9]{64})\/asset$/;
 
 class AssetCatalogError extends Error {
   constructor(code, message = 'Webinar asset operation failed', status = 400, cause = undefined) {
@@ -105,8 +106,15 @@ function createCatalogService({
   makePublicUrl = defaultMakePublicUrl,
   config = null,
 } = {}) {
-  function publicUrlFor(key) {
-    return makePublicUrl(config || loadAssetConfig(), key);
+  function canonicalApprovedKey(key, sha256) {
+    const match = typeof key === 'string' ? CANONICAL_APPROVED_KEY.exec(key) : null;
+    if (!match || match[1] !== sha256) throw processingUnavailable();
+    return key;
+  }
+
+  function publicUrlFor(key, sha256) {
+    const approvedKey = canonicalApprovedKey(key, sha256);
+    return makePublicUrl(config || loadAssetConfig(), approvedKey);
   }
 
   function storageInput(input) {
@@ -130,7 +138,7 @@ function createCatalogService({
     const result = { versionId: row.id, status: row.status };
     if (row.status === 'available') {
       result.sha256 = row.sha256;
-      result.publicUrl = publicUrlFor(row.s3_key);
+      result.publicUrl = publicUrlFor(row.s3_key, row.sha256);
     } else if (row.status === 'rejected') {
       result.rejectionCode = row.rejection_code;
     }
@@ -221,7 +229,7 @@ function createCatalogService({
         createdAt: row.version_created_at,
         archivedAt: row.version_archived_at,
       };
-      if (row.status === 'available') version.publicUrl = publicUrlFor(row.s3_key);
+      if (row.status === 'available') version.publicUrl = publicUrlFor(row.s3_key, row.sha256);
       family.versions.push(version);
     }
     for (const family of families.values()) {
@@ -389,9 +397,14 @@ function createCatalogService({
          FOR UPDATE`,
         [inspected.sha256],
       );
-      let approvedKey = duplicates[0]?.s3_key;
+      let approvedKey = duplicates[0]
+        ? canonicalApprovedKey(duplicates[0].s3_key, inspected.sha256)
+        : null;
       if (!approvedKey) {
-        approvedKey = storage.makeApprovedKey(inspected.sha256);
+        approvedKey = canonicalApprovedKey(
+          storage.makeApprovedKey(inspected.sha256),
+          inspected.sha256,
+        );
         await storeApprovedObject(approvedKey, inspected);
       }
       const [result] = await connection.query(

@@ -406,6 +406,53 @@ describe('Webinar Studio shared asset catalog', () => {
   });
 
   it.each([
+    ['a legacy filename leaf', `approved/sha256/${SHA256}/private-legacy-name.png`],
+    ['a path hash that disagrees with the version SHA-256', `approved/sha256/${OTHER_SHA256}/asset`],
+  ])('fails closed before emitting a terminal public URL for %s', async (_scenario, badKey) => {
+    const version = {
+      ...initialState().versions[0],
+      status: 'available',
+      sha256: SHA256,
+      s3_key: badKey,
+    };
+    const { api, storage } = fixture({ state: initialState({ versions: [version] }) });
+
+    let error;
+    try {
+      await api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject(PROCESSING_FAILURE);
+    expect(error.cause).toBeUndefined();
+    expect(safeSerialization(error)).not.toMatch(/private-legacy-name|approved\/sha256|\.png/i);
+    expect(storage.readScanStatus).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before listing a legacy filename-bearing available database key', async () => {
+    const legacyKey = `approved/sha256/${SHA256}/private-legacy-name.png`;
+    const version = {
+      ...initialState().versions[0],
+      status: 'available',
+      sha256: SHA256,
+      s3_key: legacyKey,
+    };
+    const { api } = fixture({ state: initialState({ versions: [version] }) });
+
+    let error;
+    try {
+      await api.listCatalog({ actorUserId: 7, isAdmin: false });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject(PROCESSING_FAILURE);
+    expect(error.cause).toBeUndefined();
+    expect(safeSerialization(error)).not.toMatch(/private-legacy-name|approved\/sha256|\.png/i);
+  });
+
+  it.each([
     ['THREATS_FOUND', 'MALWARE_DETECTED'],
     ['UNSUPPORTED', 'MALWARE_SCAN_FAILED'],
     ['ACCESS_DENIED', 'MALWARE_SCAN_FAILED'],
@@ -564,6 +611,37 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(storage.putApprovedObject).not.toHaveBeenCalled();
     expect(readState().versions.find(row => row.id === VERSION_ID).s3_key).toBe(existing.s3_key);
     expect(safeSerialization(result)).not.toContain('s3_key');
+  });
+
+  it('fails closed instead of reusing a legacy filename-bearing approved database key', async () => {
+    const legacyKey = `approved/sha256/${SHA256}/private-legacy-name.png`;
+    const existing = {
+      id: SECOND_VERSION_ID, asset_id: ASSET_ID, version_number: 2,
+      original_filename: 'different-private-name.png', media_type: 'image', mime_type: 'image/png',
+      byte_size: 68, sha256: SHA256, s3_key: legacyKey,
+      width: 1, height: 1, duration_ms: null, status: 'available', rejection_code: null,
+      uploaded_by_user_id: 7, uploader_name: 'Owner', created_at: '2026-09-04T09:00:00.000Z', archived_at: null,
+    };
+    const { api, storage, state } = fixture({
+      state: initialState({ versions: [...initialState().versions, existing] }),
+      storage: { readScanStatus: vi.fn().mockResolvedValue('NO_THREATS_FOUND') },
+    });
+
+    let error;
+    try {
+      await api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject(PROCESSING_FAILURE);
+    expect(error.cause).toBeUndefined();
+    expect(safeSerialization(error)).not.toMatch(/private-legacy-name|approved\/sha256|\.png/i);
+    expect(storage.putApprovedObject).not.toHaveBeenCalled();
+    expect(state().versions.find(row => row.id === VERSION_ID)).toMatchObject({
+      status: 'processing',
+      sha256: null,
+    });
   });
 
   it.each(['available', 'rejected', 'archived'])('does not re-scan or rewrite a terminal %s version', async status => {
