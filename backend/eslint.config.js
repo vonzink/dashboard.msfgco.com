@@ -42,7 +42,7 @@ export default [
     },
   },
   {
-    files: ["eslint.config.js", "tests/services/webinarAssets/inspection.test.js"],
+    files: ["eslint.config.js", "vitest*.config.js", "tests/**/*.test.js"],
     languageOptions: {
       sourceType: "module",
     },
