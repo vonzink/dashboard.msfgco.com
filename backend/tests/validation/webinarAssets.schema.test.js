@@ -69,6 +69,18 @@ describe('webinar asset schemas', () => {
     }
   });
 
+  it('enforces the MySQL TEXT limit in UTF-8 bytes for persisted descriptions', () => {
+    const withinLimit = '😀'.repeat(16383);
+    const overLimit = '😀'.repeat(16384);
+
+    expect(Buffer.byteLength(withinLimit, 'utf8')).toBe(65532);
+    expect(Buffer.byteLength(overLimit, 'utf8')).toBe(65536);
+    expect(schemas.createUploadIntent.safeParse({ ...validUpload, description: withinLimit }).success).toBe(true);
+    expect(schemas.updateFamily.safeParse({ description: withinLimit }).success).toBe(true);
+    expect(schemas.createUploadIntent.safeParse({ ...validUpload, description: overLimit }).success).toBe(false);
+    expect(schemas.updateFamily.safeParse({ description: overLimit }).success).toBe(false);
+  });
+
   it.each([
     '11111111-1111-4111-8111-111111111111',
     '22222222-2222-4222-8222-222222222222',

@@ -90,6 +90,7 @@ const webinarPresenterSettingsRoutes = createWebinarPresenterSettingsRouter({
 });
 const webinarAssetsRoutes = createWebinarAssetsRouter({
   catalog: webinarServices.assets,
+  recordOperationalEvent: webinarRecordOperationalEvent,
 });
 
 // ======================

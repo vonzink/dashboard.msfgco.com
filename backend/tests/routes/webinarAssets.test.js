@@ -79,6 +79,7 @@ function makeCatalog() {
 }
 
 let catalog;
+let operationalLogger;
 let server;
 
 async function start(overrides = {}) {
@@ -88,6 +89,7 @@ async function start(overrides = {}) {
     webinarWriteLimit: 1000,
     webinarAssetWriteLimit: 1000,
     webinarIpWriteLimit: 1000,
+    webinarOperationalLogger: operationalLogger,
     ...overrides,
   });
   server = await new Promise(resolve => {
@@ -97,6 +99,7 @@ async function start(overrides = {}) {
 
 beforeEach(async () => {
   catalog = makeCatalog();
+  operationalLogger = { info: vi.fn() };
   await start();
 });
 
@@ -204,12 +207,23 @@ describe('webinar asset API through the production application factory', () => {
   });
 
   it.each([
-    ['current live reference', 'ASSET_IN_USE', 'Asset version is in current use'],
-    ['revision reference', 'ASSET_IN_USE_BY_REVISION', 'Asset version is required by revision history'],
+    ['current live reference', 'ASSET_IN_USE', 'Asset is in current use'],
+    ['revision reference', 'ASSET_IN_USE_BY_REVISION', 'Asset is required by revision history'],
   ])('preserves a trusted 409 for %s', async (_label, code, message) => {
     catalog.archiveVersion.mockRejectedValueOnce(new AssetCatalogError(code, message, 409));
     expect(await request('PATCH', `/api/webinar-assets/${ASSET_ID}/versions/${VERSION_ID}`, { archive: true }))
       .toEqual({ status: 409, body: { error: message, code } });
+  });
+
+  it('uses family-safe wording for a family reference conflict', async () => {
+    catalog.updateFamily.mockRejectedValueOnce(new AssetCatalogError(
+      'ASSET_IN_USE', 'Asset family is in current use', 409,
+    ));
+    expect(await request('PATCH', `/api/webinar-assets/${ASSET_ID}`, { archive: true }))
+      .toEqual({
+        status: 409,
+        body: { error: 'Asset is in current use', code: 'ASSET_IN_USE' },
+      });
   });
 
   it('uses the canonical trusted message instead of a dependency-provided private message', async () => {
@@ -219,8 +233,65 @@ describe('webinar asset API through the production application factory', () => {
     expect(await request('PATCH', `/api/webinar-assets/${ASSET_ID}/versions/${VERSION_ID}`, { archive: true }))
       .toEqual({
         status: 409,
-        body: { error: 'Asset version is in current use', code: 'ASSET_IN_USE' },
+        body: { error: 'Asset is in current use', code: 'ASSET_IN_USE' },
       });
+  });
+
+  it.each([
+    {
+      label: 'validation', method: 'POST', path: '/api/webinar-assets/upload-intents',
+      body: { ...validUpload, actorUserId: 999 },
+      setup: () => {},
+      expected: {
+        event: 'webinar.validation_rejected', actorUserId: 7,
+        statusCode: 400, reasonCode: 'VALIDATION_FAILED',
+      },
+    },
+    {
+      label: 'authorization', method: 'PATCH', path: `/api/webinar-assets/${ASSET_ID}`,
+      body: { archive: true },
+      setup: () => catalog.updateFamily.mockRejectedValueOnce(new AssetCatalogError(
+        'WEBINAR_ACCESS_DENIED', 'bucket=private authorization context', 403,
+      )),
+      expected: {
+        event: 'webinar.authorization_denied', actorUserId: 7,
+        statusCode: 403, reasonCode: 'WEBINAR_ACCESS_DENIED',
+      },
+    },
+    {
+      label: 'conflict', method: 'PATCH',
+      path: `/api/webinar-assets/${ASSET_ID}/versions/${VERSION_ID}`,
+      body: { archive: true },
+      setup: () => catalog.archiveVersion.mockRejectedValueOnce(new AssetCatalogError(
+        'ASSET_IN_USE', 'quarantine/private reference detail', 409,
+      )),
+      expected: {
+        event: 'webinar.version_conflict', actorUserId: 7,
+        statusCode: 409, reasonCode: 'VERSION_CONFLICT', assetVersionId: VERSION_ID,
+      },
+    },
+    {
+      label: 'unknown service failure', method: 'GET', path: '/api/webinar-assets',
+      body: undefined,
+      setup: () => catalog.listCatalog.mockRejectedValueOnce(
+        new Error('ER_BAD_DB_ERROR bucket=private quarantine/private GuardDuty'),
+      ),
+      expected: {
+        event: 'webinar.database_failure', actorUserId: 7,
+        statusCode: 500, reasonCode: 'DATABASE_FAILURE',
+      },
+    },
+  ])('records one safe structured operational event for $label', async contract => {
+    contract.setup();
+    await request(contract.method, contract.path, contract.body);
+
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith(
+      contract.expected,
+      'webinar operational event',
+    );
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/bucket|quarantine|GuardDuty|ER_BAD_DB_ERROR|authorization context|reference detail/i);
   });
 
   it.each([

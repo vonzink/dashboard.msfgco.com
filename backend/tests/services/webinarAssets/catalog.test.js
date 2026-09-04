@@ -320,7 +320,7 @@ describe('Webinar Studio shared asset catalog', () => {
       () => api.createVersionIntent({ actorUserId: 8, isAdmin: false, assetId: ASSET_ID, filename: 'no.png', contentType: 'image/png', byteSize: 10 }),
       () => api.confirmUpload({ actorUserId: 8, isAdmin: false, versionId: VERSION_ID }),
       () => api.updateFamily({ actorUserId: 8, isAdmin: false, assetId: ASSET_ID, displayName: 'No' }),
-      () => api.archiveVersion({ actorUserId: 8, isAdmin: false, versionId: VERSION_ID }),
+      () => api.archiveVersion({ actorUserId: 8, isAdmin: false, assetId: ASSET_ID, versionId: VERSION_ID }),
       () => api.getUsage({ actorUserId: 8, isAdmin: false, versionId: VERSION_ID }),
     ];
 
@@ -662,17 +662,37 @@ describe('Webinar Studio shared asset catalog', () => {
   it('allows only the uploader to archive their unreferenced version, with an administrator override', async () => {
     const deniedVersion = { ...initialState().versions[0], uploaded_by_user_id: 8 };
     const denied = fixture({ state: initialState({ versions: [deniedVersion] }) });
-    await expect(denied.api.archiveVersion({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
+    await expect(denied.api.archiveVersion({ assetId: ASSET_ID, versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
       .rejects.toMatchObject({ status: 403, code: 'WEBINAR_ACCESS_DENIED' });
     expect(denied.state().versions[0].status).toBe('processing');
 
     const uploader = fixture();
-    await expect(uploader.api.archiveVersion({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
+    await expect(uploader.api.archiveVersion({ assetId: ASSET_ID, versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
       .resolves.toEqual({ versionId: VERSION_ID, status: 'archived' });
 
     const admin = fixture({ state: initialState({ presentations: [], versions: [deniedVersion] }) });
-    await expect(admin.api.archiveVersion({ versionId: VERSION_ID, actorUserId: 1, isAdmin: true }))
+    await expect(admin.api.archiveVersion({ assetId: ASSET_ID, versionId: VERSION_ID, actorUserId: 1, isAdmin: true }))
       .resolves.toEqual({ versionId: VERSION_ID, status: 'archived' });
+  });
+
+  it('rejects a version that does not belong to the asset family in the URL', async () => {
+    const { api, state, stages } = fixture();
+
+    await expect(api.archiveVersion({
+      assetId: NEW_ASSET_ID,
+      versionId: VERSION_ID,
+      actorUserId: 7,
+      isAdmin: false,
+    })).rejects.toMatchObject({
+      status: 404,
+      code: 'ASSET_VERSION_NOT_FOUND',
+      message: 'Asset version not found',
+    });
+
+    expect(state().versions[0].status).toBe('processing');
+    expect(stages).toContain('rollback');
+    expect(stages).not.toContain('live-reference-check');
+    expect(stages).not.toContain('version-archive');
   });
 
   it('checks both reference stores and denies archive for live use', async () => {
@@ -681,7 +701,7 @@ describe('Webinar Studio shared asset catalog', () => {
       slide_id: null, slide_title: null, surface: 'master_css',
     };
     const { api, state, stages } = fixture({ state: initialState({ liveReferences: [liveReference] }) });
-    await expect(api.archiveVersion({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
+    await expect(api.archiveVersion({ assetId: ASSET_ID, versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
       .rejects.toMatchObject({ status: 409, code: 'ASSET_IN_USE' });
     expect(state().versions[0].status).toBe('processing');
     expect(stages).toEqual(expect.arrayContaining(['live-reference-check', 'revision-reference-check', 'rollback']));
@@ -694,7 +714,7 @@ describe('Webinar Studio shared asset catalog', () => {
       webinar_title: 'First-time buyer', webinar_version: 4,
     };
     const { api, state, stages } = fixture({ state: initialState({ revisionReferences: [revisionReference] }) });
-    await expect(api.archiveVersion({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
+    await expect(api.archiveVersion({ assetId: ASSET_ID, versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
       .rejects.toMatchObject({ status: 409, code: 'ASSET_IN_USE_BY_REVISION' });
     expect(state().versions[0].status).toBe('processing');
     expect(stages).toEqual(expect.arrayContaining(['live-reference-check', 'revision-reference-check', 'rollback']));

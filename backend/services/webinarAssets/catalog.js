@@ -538,6 +538,9 @@ function createCatalogService({
     await assertAssetContributor(input);
     return runTransaction(connectionPool, async connection => {
       const version = await selectVersion(connection, input.versionId, { lock: true });
+      if (version.asset_id !== input.assetId) {
+        throw notFound('ASSET_VERSION_NOT_FOUND', 'Asset version not found');
+      }
       if (version.status === 'archived') return safeVersionResult(version);
       if (input.isAdmin !== true && Number(version.uploaded_by_user_id) !== input.actorUserId) {
         throw accessDenied();

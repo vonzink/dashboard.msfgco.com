@@ -9,7 +9,11 @@ const CONTENT_TYPES = Object.keys(MEDIA_RULES);
 const assetId = z.string().regex(UUID);
 const versionId = z.string().regex(UUID);
 const displayName = z.string().trim().min(1).max(255);
-const description = z.string().trim().max(65535).nullable();
+const description = z.string().trim().superRefine((value, context) => {
+  if (Buffer.byteLength(value, 'utf8') > 65535) {
+    context.addIssue({ code: 'custom', message: 'Must not exceed 65535 UTF-8 bytes' });
+  }
+}).nullable();
 const filename = z.string().trim().min(1).max(255);
 
 const uploadFields = {
