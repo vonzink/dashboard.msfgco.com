@@ -64,6 +64,57 @@ async function cleanupDisposableObjects({
   if (failures.length) throw new AggregateError(failures, 'Disposable asset cleanup failed');
 }
 
+async function performBrowserUploadCanary({
+  createUploadUrl,
+  storageClient,
+  fetchImpl,
+  registerCleanupKey,
+  HeadObjectCommand,
+  bucket,
+  config,
+  versionId,
+  filename,
+  mimeType,
+  bytes,
+  origin,
+}) {
+  if (!bytes?.length) throw new Error('Disposable browser canary must be non-empty');
+  const intent = await createUploadUrl({
+    config,
+    versionId,
+    filename,
+    mimeType,
+    declaredBytes: bytes.length,
+  }, storageClient);
+  registerCleanupKey(intent.key);
+
+  const query = new URL(intent.uploadUrl).searchParams;
+  if (query.get('x-amz-meta-declaredbytes') !== String(bytes.length)) {
+    throw new Error('Disposable upload intent did not hoist exact declared-byte metadata');
+  }
+  if (query.has('x-amz-checksum-crc32') || query.has('x-amz-sdk-checksum-algorithm')) {
+    throw new Error('Disposable upload intent signed an empty-body checksum');
+  }
+
+  const response = await fetchImpl(intent.uploadUrl, {
+    method: 'PUT',
+    headers: {
+      Origin: origin,
+      'Content-Type': mimeType,
+    },
+    body: bytes,
+  });
+  if (!response.ok) throw new Error(`Disposable browser PUT failed with HTTP ${response.status}`);
+
+  const head = await storageClient.send(new HeadObjectCommand({ Bucket: bucket, Key: intent.key }));
+  if (Number(head.ContentLength) !== bytes.length
+    || head.ContentType !== mimeType
+    || head.Metadata?.declaredbytes !== String(bytes.length)) {
+    throw new Error('Disposable browser PUT object metadata did not match the upload intent');
+  }
+  return { key: intent.key, contentLength: Number(head.ContentLength), metadata: head.Metadata };
+}
+
 describe('webinar asset disposable integration guards', () => {
   it('does not statically load S3 or the catalog before disposable configuration is accepted', () => {
     const source = readFileSync(import.meta.filename, 'utf8');
@@ -123,6 +174,79 @@ describe('webinar asset disposable integration guards', () => {
     expect(commands.filter(command => command.kind === 'head').map(command => command.input.Key)).toEqual(keys);
   });
 
+  it('models the configured canary as a non-empty browser PUT through the real upload-intent contract', async () => {
+    const bytes = Buffer.from('non-empty disposable browser upload');
+    const key = `quarantine/${randomUUID()}/browser-canary.png`;
+    const events = [];
+    let request;
+    class TestHeadCommand {
+      constructor(input) {
+        this.input = input;
+      }
+    }
+    const storageClient = {
+      send: async command => {
+        events.push('head');
+        expect(command.input).toEqual({ Bucket: 'webinar-studio-it-browser-contract', Key: key });
+        return {
+          ContentLength: bytes.length,
+          ContentType: 'image/png',
+          Metadata: { declaredbytes: String(bytes.length) },
+        };
+      },
+    };
+
+    const result = await performBrowserUploadCanary({
+      createUploadUrl: async (input, client) => {
+        events.push('intent');
+        expect(client).toBe(storageClient);
+        expect(input).toMatchObject({
+          filename: 'browser-canary.png',
+          mimeType: 'image/png',
+          declaredBytes: bytes.length,
+        });
+        return {
+          key,
+          uploadUrl: `https://disposable.example/${key}?x-amz-meta-declaredbytes=${bytes.length}`,
+        };
+      },
+      storageClient,
+      fetchImpl: async (url, options) => {
+        events.push('put');
+        request = { url, options };
+        return { ok: true, status: 200 };
+      },
+      registerCleanupKey: registeredKey => {
+        events.push('register');
+        expect(registeredKey).toBe(key);
+      },
+      HeadObjectCommand: TestHeadCommand,
+      bucket: 'webinar-studio-it-browser-contract',
+      config: {
+        bucket: 'webinar-studio-it-browser-contract',
+        cdnBaseUrl: 'https://assets.example',
+        quarantinePrefix: 'quarantine/',
+      },
+      versionId: randomUUID(),
+      filename: 'browser-canary.png',
+      mimeType: 'image/png',
+      bytes,
+      origin: 'http://localhost:3000',
+    });
+
+    expect(events).toEqual(['intent', 'register', 'put', 'head']);
+    expect(request.options).toEqual({
+      method: 'PUT',
+      headers: {
+        Origin: 'http://localhost:3000',
+        'Content-Type': 'image/png',
+      },
+      body: bytes,
+    });
+    expect(request.options.headers).not.toHaveProperty('x-amz-meta-declaredbytes');
+    expect(result).toMatchObject({ key, contentLength: bytes.length });
+  });
+
   it('pins separate exact production and local browser-upload CORS contracts without wildcards', () => {
     const runbook = readFileSync(
       new URL('../../../docs/webinar-studio/assets-runbook.md', import.meta.url),
@@ -134,7 +258,7 @@ describe('webinar asset disposable integration guards', () => {
     expect(localBlock).not.toBeNull();
     const common = {
       AllowedMethods: ['PUT'],
-      AllowedHeaders: ['Content-Type', 'x-amz-meta-declaredbytes'],
+      AllowedHeaders: ['Content-Type'],
       ExposeHeaders: ['ETag'],
       MaxAgeSeconds: 600,
     };
@@ -146,7 +270,7 @@ describe('webinar asset disposable integration guards', () => {
     });
     expect(JSON.parse(localBlock[1])).toEqual({
       CORSRules: [{
-        AllowedOrigins: ['http://localhost:8080', 'http://127.0.0.1:8080'],
+        AllowedOrigins: ['http://localhost:3000', 'http://localhost:3001'],
         ...common,
       }],
     });
@@ -158,14 +282,13 @@ describe('webinar asset disposable integration guards', () => {
       new URL('../../../docs/webinar-studio/assets-runbook.md', import.meta.url),
       'utf8',
     );
+    const canaryBlock = /<!-- S3_BROWSER_UPLOAD_CANARY_BEGIN -->\s*```sh\s*([\s\S]*?)\s*```\s*<!-- S3_BROWSER_UPLOAD_CANARY_END -->/.exec(runbook);
+    expect(canaryBlock).not.toBeNull();
     for (const required of [
       'aws s3api get-bucket-cors',
       "--bucket '<REVIEWED_WEBINAR_ASSET_BUCKET>'",
       "--profile '<REVIEWED_READ_ONLY_AWS_PROFILE>'",
       "--region '<REVIEWED_AWS_REGION>'",
-      "-H 'Origin: https://dashboard.msfgco.com'",
-      "-H 'Access-Control-Request-Method: PUT'",
-      "-H 'Access-Control-Request-Headers: content-type,x-amz-meta-declaredbytes'",
       "--upload-file '<REVIEWED_EXACT_DISPOSABLE_FILE_PATH>'",
       "--key '<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>'",
       'aws s3api delete-object',
@@ -174,6 +297,13 @@ describe('webinar asset disposable integration guards', () => {
     ]) {
       expect(runbook).toContain(required);
     }
+    expect(canaryBlock[1]).toContain("-H 'Origin: https://dashboard.msfgco.com'");
+    expect(canaryBlock[1]).toContain("-H 'Access-Control-Request-Method: PUT'");
+    expect(canaryBlock[1]).toContain("-H 'Access-Control-Request-Headers: content-type'");
+    expect(canaryBlock[1].match(/'<ACTUAL_PRESIGNED_UPLOAD_URL_RETURNED_BY_CREATE_UPLOAD_INTENT>'/g))
+      .toHaveLength(2);
+    expect(canaryBlock[1]).not.toContain('x-amz-meta-declaredbytes:');
+    expect(runbook).toMatch(/`x-amz-meta-declaredbytes` is hoisted into\s+that returned URL/);
     expect(runbook).not.toMatch(/delete-object[\s\S]{0,300}(?:--recursive|\*)/);
   });
 });
@@ -315,7 +445,8 @@ describeAssetIntegration(`webinar asset release (${skippedReason})`, () => {
   const safeVersionId = randomUUID();
   const rejectedVersionId = randomUUID();
   const familyId = randomUUID();
-  const safeQuarantineKey = `quarantine/integration/${runId}/${safeVersionId}.png`;
+  const safeUploadFilename = 'disposable-safe.png';
+  const safeQuarantineKey = `quarantine/${safeVersionId}/${safeUploadFilename}`;
   const rejectedQuarantineKey = `quarantine/integration/${runId}/${rejectedVersionId}.png`;
   const cleanupKeys = new Set([safeQuarantineKey, rejectedQuarantineKey]);
   let config;
@@ -338,6 +469,7 @@ describeAssetIntegration(`webinar asset release (${skippedReason})`, () => {
     const catalogModule = await import('../../services/webinarAssets/catalog.js');
     const inspectionModule = await import('../../services/webinarAssets/inspection.js');
     const configModule = await import('../../services/webinarAssets/config.js');
+    const storageModule = await import('../../services/webinarAssets/storage.js');
     const sharp = require('sharp');
     ({
       DeleteObjectsCommand,
@@ -347,13 +479,15 @@ describeAssetIntegration(`webinar asset release (${skippedReason})`, () => {
       PutObjectCommand,
       PutObjectTaggingCommand,
     } = aws);
-    const { S3Client } = aws;
     const createCatalogService = catalogModule.createCatalogService
       || catalogModule.default?.createCatalogService;
     const inspectAsset = inspectionModule.inspectAsset || inspectionModule.default?.inspectAsset;
     const makeApprovedKey = configModule.makeApprovedKey || configModule.default?.makeApprovedKey;
+    const createAssetS3Client = storageModule.createAssetS3Client
+      || storageModule.default?.createAssetS3Client;
+    const createUploadUrl = storageModule.createUploadUrl || storageModule.default?.createUploadUrl;
     gatedDependenciesLoaded = true;
-    s3 = new S3Client({
+    s3 = createAssetS3Client({
       endpoint: config.endpoint,
       region: config.region,
       credentials: config.credentials,
@@ -370,12 +504,27 @@ describeAssetIntegration(`webinar asset release (${skippedReason})`, () => {
     cleanupKeys.add(safeApprovedKey);
     cleanupKeys.add(rejectedApprovedKey);
 
-    await s3.send(new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: safeQuarantineKey,
-      Body: safeBytes,
-      ContentType: 'image/png',
-    }));
+    const browserUpload = await performBrowserUploadCanary({
+      createUploadUrl,
+      storageClient: s3,
+      fetchImpl: fetch,
+      registerCleanupKey: key => cleanupKeys.add(key),
+      HeadObjectCommand,
+      bucket: config.bucket,
+      config: {
+        bucket: config.bucket,
+        cdnBaseUrl: config.cdnBaseUrl,
+        quarantinePrefix: 'quarantine/',
+      },
+      versionId: safeVersionId,
+      filename: safeUploadFilename,
+      mimeType: 'image/png',
+      bytes: safeBytes,
+      origin: 'http://localhost:3000',
+    });
+    if (browserUpload.key !== safeQuarantineKey) {
+      throw new Error('Disposable browser upload intent returned an unexpected quarantine key');
+    }
     await s3.send(new PutObjectCommand({
       Bucket: config.bucket,
       Key: rejectedQuarantineKey,

@@ -83,8 +83,8 @@ aws s3api get-object-tagging \
 **UNVERIFIED — DO NOT RUN WITHOUT SEPARATE DISPOSABLE/PRODUCTION APPROVAL**
 
 The production asset bucket must use the following exact upload CORS contract.
-It admits only the authenticated Dashboard origin, only `PUT`, and only the two
-headers sent by the presigned upload contract. `ETag` is the only exposed
+It admits only the authenticated Dashboard origin, only `PUT`, and only the
+`Content-Type` header supplied by the browser. `ETag` is the only exposed
 response header and the preflight cache is bounded to ten minutes. Do not add a
 wildcard origin or header and do not enable credentialed CORS.
 
@@ -95,7 +95,7 @@ wildcard origin or header and do not enable credentialed CORS.
     {
       "AllowedOrigins": ["https://dashboard.msfgco.com"],
       "AllowedMethods": ["PUT"],
-      "AllowedHeaders": ["Content-Type", "x-amz-meta-declaredbytes"],
+      "AllowedHeaders": ["Content-Type"],
       "ExposeHeaders": ["ETag"],
       "MaxAgeSeconds": 600
     }
@@ -104,19 +104,20 @@ wildcard origin or header and do not enable credentialed CORS.
 ```
 <!-- S3_BROWSER_UPLOAD_CORS_END -->
 
-Local development uses a separate reviewed development/disposable bucket. Only
-the backend's documented port `8080` is intended, with both browser spellings
-listed explicitly. Never merge these localhost origins into the production
-bucket rule.
+Local development uses a separate reviewed development/disposable bucket. The
+reviewed frontend development origins are `http://localhost:3000` and
+`http://localhost:3001`; port `8080` is the backend API and is not a browser
+frontend origin. Never merge these localhost origins into the production bucket
+rule.
 
 <!-- S3_LOCAL_UPLOAD_CORS_BEGIN -->
 ```json
 {
   "CORSRules": [
     {
-      "AllowedOrigins": ["http://localhost:8080", "http://127.0.0.1:8080"],
+      "AllowedOrigins": ["http://localhost:3000", "http://localhost:3001"],
       "AllowedMethods": ["PUT"],
-      "AllowedHeaders": ["Content-Type", "x-amz-meta-declaredbytes"],
+      "AllowedHeaders": ["Content-Type"],
       "ExposeHeaders": ["ETag"],
       "MaxAgeSeconds": 600
     }
@@ -142,32 +143,40 @@ create a presigned URL for one known disposable PNG. Independently verify that
 the URL names exactly
 `<REVIEWED_EXACT_DISPOSABLE_QUARANTINE_KEY>`, that the local file is exactly
 `<REVIEWED_EXACT_DISPOSABLE_FILE_PATH>`, and that its decimal byte count is
-`<REVIEWED_EXACT_DECIMAL_FILE_BYTES>`. Treat the presigned URL as a secret and
-do not paste its query string into tickets or logs.
+`<REVIEWED_EXACT_DECIMAL_FILE_BYTES>`. Use the exact URL returned by that
+create-upload-intent request for both commands below; do not reconstruct an S3
+URL from the bucket or key. The signed `x-amz-meta-declaredbytes` is hoisted into
+that returned URL, so the browser does not send it as a request header. Treat
+the presigned URL as a secret and do not paste its query string into tickets or
+logs.
 
+<!-- S3_BROWSER_UPLOAD_CANARY_BEGIN -->
 ```sh
 curl --fail-with-body --request OPTIONS \
   --dump-header - \
   --output /dev/null \
   -H 'Origin: https://dashboard.msfgco.com' \
   -H 'Access-Control-Request-Method: PUT' \
-  -H 'Access-Control-Request-Headers: content-type,x-amz-meta-declaredbytes' \
-  '<REVIEWED_PRESIGNED_PUT_URL>'
+  -H 'Access-Control-Request-Headers: content-type' \
+  '<ACTUAL_PRESIGNED_UPLOAD_URL_RETURNED_BY_CREATE_UPLOAD_INTENT>'
 
 curl --fail-with-body --request PUT \
   --dump-header - \
   --output /dev/null \
   -H 'Origin: https://dashboard.msfgco.com' \
   -H 'Content-Type: image/png' \
-  -H 'x-amz-meta-declaredbytes: <REVIEWED_EXACT_DECIMAL_FILE_BYTES>' \
   --upload-file '<REVIEWED_EXACT_DISPOSABLE_FILE_PATH>' \
-  '<REVIEWED_PRESIGNED_PUT_URL>'
+  '<ACTUAL_PRESIGNED_UPLOAD_URL_RETURNED_BY_CREATE_UPLOAD_INTENT>'
 ```
+<!-- S3_BROWSER_UPLOAD_CANARY_END -->
 
 The OPTIONS response must be successful and return the exact Dashboard origin,
-`PUT`, and both requested headers. The PUT must be successful and return an
-`ETag`. Confirm only the enumerated object exists, then remove only that exact
-canary key using a separately reviewed mutation-capable profile:
+`PUT`, and the requested `content-type` header. The PUT must be successful and
+return an `ETag`. The subsequent HEAD metadata must report the exact decimal
+byte count in `declaredbytes`; do not add an `x-amz-meta-declaredbytes` request
+header because that signed metadata is already in the returned URL. Confirm
+only the enumerated object exists, then remove only that exact canary key using
+a separately reviewed mutation-capable profile:
 
 ```sh
 aws s3api head-object \
@@ -315,13 +324,16 @@ set:
 - `WEBINAR_ASSET_TEST_SECRET_ACCESS_KEY`
 
 The test uses only uniquely generated exact object keys in that explicitly
-acknowledged disposable bucket. It uploads two fixtures, proves a missing tag
-remains `processing`, manually applies the test-only clean and malicious tags,
-releases only exact `NO_THREATS_FOUND`, verifies the canonical opaque approved
-path and safe catalog response, proves the malicious result has no approved
-object, and deletes only its enumerated keys during cleanup. Cleanup treats any
-per-object S3 deletion error as a test failure and performs a HEAD absence check
-for every enumerated quarantine and approved key before it can pass.
+acknowledged disposable bucket. For the clean fixture it calls the production
+`createUploadUrl`, performs a non-empty HTTP PUT with only browser `Origin` and
+`Content-Type` headers, and HEAD-verifies the exact object size, type, and
+query-hoisted declared-byte metadata. It then proves a missing tag remains
+`processing`, manually applies the test-only clean and malicious tags, releases
+only exact `NO_THREATS_FOUND`, verifies the canonical opaque approved path and
+safe catalog response, and proves the malicious result has no approved object.
+Cleanup deletes only enumerated keys, treats any per-object S3 deletion error as
+a test failure, and performs a HEAD absence check for every enumerated
+quarantine and approved key before it can pass.
 
 From `backend/`, the inert check is:
 
@@ -337,7 +349,7 @@ env -u WEBINAR_ASSET_TEST_ACK_DISPOSABLE \
   tests/integration/webinarAssets.integration.test.js
 ```
 
-Expected without configuration: one file, five inert safety tests passed, and
+Expected without configuration: one file, six inert safety tests passed, and
 two resource lifecycle tests deliberately skipped, exit zero, with no asset/AWS
 dependency load, S3 client construction, or request.
 
@@ -391,7 +403,7 @@ npx vitest run --config vitest.webinar-integration.config.js \
   tests/integration/webinarAssets.integration.test.js
 ```
 
-Result: 1 integration file, 5 inert safety tests passed and 2 resource lifecycle
+Result: 1 integration file, 6 inert safety tests passed and 2 resource lifecycle
 tests deliberately skipped, exit 0. No asset/AWS dependency was loaded and no S3
 client, request, or resource mutation occurred. The passing guards also prove a
 mocked mixed-success deletion response fails cleanup after every enumerated key
