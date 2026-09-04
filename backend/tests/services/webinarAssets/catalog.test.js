@@ -415,7 +415,9 @@ describe('Webinar Studio shared asset catalog', () => {
       sha256: SHA256,
       s3_key: badKey,
     };
-    const { api, storage } = fixture({ state: initialState({ versions: [version] }) });
+    const { api, storage, recordOperationalEvent } = fixture({
+      state: initialState({ versions: [version] }),
+    });
 
     let error;
     try {
@@ -428,6 +430,15 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(error.cause).toBeUndefined();
     expect(safeSerialization(error)).not.toMatch(/private-legacy-name|approved\/sha256|\.png/i);
     expect(storage.readScanStatus).not.toHaveBeenCalled();
+    expect(recordOperationalEvent).toHaveBeenCalledTimes(1);
+    expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_scanner_failure', {
+      actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_SCANNER_FAILURE',
+    });
+    expect(Object.getOwnPropertySymbols(error).some(symbol => (
+      Object.getOwnPropertyDescriptor(error, symbol)?.enumerable === false
+    ))).toBe(true);
+    expect(safeSerialization(recordOperationalEvent.mock.calls))
+      .not.toMatch(/private-legacy-name|approved\/sha256|\.png|bucket|scanner details/i);
   });
 
   it('fails closed before listing a legacy filename-bearing available database key', async () => {
@@ -438,7 +449,9 @@ describe('Webinar Studio shared asset catalog', () => {
       sha256: SHA256,
       s3_key: legacyKey,
     };
-    const { api } = fixture({ state: initialState({ versions: [version] }) });
+    const { api, recordOperationalEvent } = fixture({
+      state: initialState({ versions: [version] }),
+    });
 
     let error;
     try {
@@ -450,6 +463,12 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(error).toMatchObject(PROCESSING_FAILURE);
     expect(error.cause).toBeUndefined();
     expect(safeSerialization(error)).not.toMatch(/private-legacy-name|approved\/sha256|\.png/i);
+    expect(recordOperationalEvent).toHaveBeenCalledTimes(1);
+    expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_scanner_failure', {
+      actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_SCANNER_FAILURE',
+    });
+    expect(safeSerialization(recordOperationalEvent.mock.calls))
+      .not.toMatch(/private-legacy-name|approved\/sha256|\.png|bucket|scanner details/i);
   });
 
   it.each([
@@ -489,6 +508,7 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_scanner_failure', {
       actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_SCANNER_FAILURE',
     });
+    expect(recordOperationalEvent).toHaveBeenCalledTimes(1);
     expect(safeSerialization(recordOperationalEvent.mock.calls)).not.toContain('private scanner details');
   });
 
@@ -532,6 +552,7 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_scanner_failure', {
       actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_SCANNER_FAILURE',
     });
+    expect(recordOperationalEvent).toHaveBeenCalledTimes(1);
     expect(safeSerialization(recordOperationalEvent.mock.calls)).not.toContain('private storage failure');
   });
 

@@ -10,6 +10,7 @@ const { runTransaction } = require('../webinars/transaction');
 const CLEAN_SCAN_STATUS = 'NO_THREATS_FOUND';
 const SAFE_INSPECTION_CODE = /^ASSET_INSPECTION_[A-Z0-9_]{1,43}$/;
 const CANONICAL_APPROVED_KEY = /^approved\/sha256\/([a-f0-9]{64})\/asset$/;
+const OPERATIONAL_EVENT_RECORDED = Symbol('webinarAssetOperationalEventRecorded');
 
 class AssetCatalogError extends Error {
   constructor(code, message = 'Webinar asset operation failed', status = 400, cause = undefined) {
@@ -43,6 +44,20 @@ function processingUnavailable(cause) {
     503,
     cause,
   );
+}
+
+function wasOperationalEventRecorded(error) {
+  return Boolean(error && typeof error === 'object' && error[OPERATIONAL_EVENT_RECORDED] === true);
+}
+
+function markOperationalEventRecorded(error) {
+  Object.defineProperty(error, OPERATIONAL_EVENT_RECORDED, {
+    value: true,
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return error;
 }
 
 function positiveId(value) {
@@ -117,6 +132,19 @@ function createCatalogService({
     return makePublicUrl(config || loadAssetConfig(), approvedKey);
   }
 
+  function persistedPublicUrlFor(row, actorUserId) {
+    try {
+      return publicUrlFor(row.s3_key, row.sha256);
+    } catch (error) {
+      if (error instanceof AssetCatalogError
+        && error.code === 'ASSET_SCANNER_FAILURE'
+        && error.status === 503) {
+        recordProcessingFailure(error, actorUserId, row.id || row.version_id);
+      }
+      throw error;
+    }
+  }
+
   function storageInput(input) {
     return config ? { ...input, config } : input;
   }
@@ -134,11 +162,13 @@ function createCatalogService({
     if (!rows[0]) throw accessDenied();
   }
 
-  function safeVersionResult(row) {
+  function safeVersionResult(row, persistedActorUserId = null) {
     const result = { versionId: row.id, status: row.status };
     if (row.status === 'available') {
       result.sha256 = row.sha256;
-      result.publicUrl = publicUrlFor(row.s3_key, row.sha256);
+      result.publicUrl = persistedActorUserId === null
+        ? publicUrlFor(row.s3_key, row.sha256)
+        : persistedPublicUrlFor(row, persistedActorUserId);
     } else if (row.status === 'rejected') {
       result.rejectionCode = row.rejection_code;
     }
@@ -229,7 +259,9 @@ function createCatalogService({
         createdAt: row.version_created_at,
         archivedAt: row.version_archived_at,
       };
-      if (row.status === 'available') version.publicUrl = publicUrlFor(row.s3_key, row.sha256);
+      if (row.status === 'available') {
+        version.publicUrl = persistedPublicUrlFor(row, filters.actorUserId);
+      }
       family.versions.push(version);
     }
     for (const family of families.values()) {
@@ -442,17 +474,22 @@ function createCatalogService({
     recordOperationalEvent(name, { actorUserId, assetVersionId: versionId, reasonCode });
   }
 
+  function recordProcessingFailure(error, actorUserId, versionId) {
+    if (wasOperationalEventRecorded(error)) return error;
+    operational('webinar.asset_scanner_failure', actorUserId, versionId, 'ASSET_SCANNER_FAILURE');
+    return markOperationalEventRecorded(error);
+  }
+
   async function confirmUpload(input) {
     await assertAssetContributor(input);
     const version = await selectVersion(connectionPool, input.versionId);
-    if (version.status !== 'processing') return safeVersionResult(version);
+    if (version.status !== 'processing') return safeVersionResult(version, input.actorUserId);
 
     let scanStatus;
     try {
       scanStatus = await storage.readScanStatus(storageInput({ key: version.s3_key }));
     } catch (error) {
-      operational('webinar.asset_scanner_failure', input.actorUserId, version.id, 'ASSET_SCANNER_FAILURE');
-      throw processingUnavailable(error);
+      throw recordProcessingFailure(processingUnavailable(error), input.actorUserId, version.id);
     }
     if (!scanStatus) {
       operational('webinar.asset_scan_pending', input.actorUserId, version.id, 'ASSET_SCAN_PENDING');
@@ -474,8 +511,7 @@ function createCatalogService({
     try {
       stream = await storage.readQuarantineObject(storageInput({ key: version.s3_key }));
     } catch (error) {
-      operational('webinar.asset_scanner_failure', input.actorUserId, version.id, 'ASSET_SCANNER_FAILURE');
-      throw processingUnavailable(error);
+      throw recordProcessingFailure(processingUnavailable(error), input.actorUserId, version.id);
     }
 
     let inspected;
@@ -510,9 +546,8 @@ function createCatalogService({
       }
       return transition.result;
     } catch (error) {
-      operational('webinar.asset_scanner_failure', input.actorUserId, version.id, 'ASSET_SCANNER_FAILURE');
-      if (error instanceof AssetCatalogError) throw error;
-      throw processingUnavailable(error);
+      const failure = error instanceof AssetCatalogError ? error : processingUnavailable(error);
+      throw recordProcessingFailure(failure, input.actorUserId, version.id);
     }
   }
 
@@ -709,6 +744,7 @@ const service = createCatalogService();
 module.exports = {
   AssetCatalogError,
   mapScanFailure,
+  wasOperationalEventRecorded,
   createCatalogService,
   ...service,
 };

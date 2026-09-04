@@ -127,6 +127,9 @@ function createWebinarAssetsRouter({
         recordSafeEvent(req, 'webinar.authorization_denied', 403, 'WEBINAR_ACCESS_DENIED');
       } else if (definition.status === 409) {
         recordSafeEvent(req, 'webinar.version_conflict', 409, 'VERSION_CONFLICT');
+      } else if (definition.status === 503
+        && !defaultCatalog.wasOperationalEventRecorded(error)) {
+        recordSafeEvent(req, 'webinar.asset_scanner_failure', 503, 'ASSET_SCANNER_FAILURE');
       }
       return res.status(definition.status).json({ error: definition.message, code: error.code });
     }

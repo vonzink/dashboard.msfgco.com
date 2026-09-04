@@ -3,7 +3,11 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { createApp } = require('../../server');
-const { AssetCatalogError } = require('../../services/webinarAssets/catalog');
+const {
+  AssetCatalogError,
+  createCatalogService,
+} = require('../../services/webinarAssets/catalog');
+const { createOperationalEventRecorder } = require('../../services/webinars/observability');
 
 const ASSET_ID = '11111111-1111-4111-8111-111111111111';
 const VERSION_ID = '22222222-2222-4222-8222-222222222222';
@@ -76,6 +80,51 @@ function makeCatalog() {
       history: [{ revisionId: 41, webinarId: 12, webinarTitle: 'First Home', webinarVersion: 3 }],
     }),
   };
+}
+
+function makeMalformedPersistedCatalog() {
+  const malformed = {
+    asset_id: ASSET_ID,
+    display_name: 'Legacy asset',
+    description: 'Legacy asset description',
+    family_created_by_user_id: 7,
+    family_created_at: '2026-09-04T10:00:00.000Z',
+    family_archived_at: null,
+    version_id: VERSION_ID,
+    version_number: 1,
+    media_type: 'image',
+    mime_type: 'image/png',
+    byte_size: 4096,
+    sha256: 'a'.repeat(64),
+    s3_key: `approved/sha256/${'a'.repeat(64)}/private-legacy-name.png`,
+    width: 1280,
+    height: 720,
+    duration_ms: null,
+    status: 'available',
+    rejection_code: null,
+    uploaded_by_user_id: 7,
+    uploader_name: 'Owner',
+    version_created_at: '2026-09-04T10:01:00.000Z',
+    version_archived_at: null,
+  };
+  const assetDb = {
+    query: vi.fn(async sql => {
+      if (sql.includes('SELECT 1 AS allowed')) return [[{ allowed: 1 }]];
+      if (sql.includes('FROM webinar_assets a')) return [[malformed]];
+      throw new Error('unexpected private database query');
+    }),
+  };
+  const service = createCatalogService({
+    db: assetDb,
+    recordOperationalEvent: createOperationalEventRecorder(operationalLogger),
+    makePublicUrl: (_config, key) => `https://assets.example/${key}`,
+    config: {
+      bucket: 'private-bucket',
+      cdnBaseUrl: 'https://assets.example',
+      quarantinePrefix: 'quarantine/',
+    },
+  });
+  return { ...makeCatalog(), listCatalog: service.listCatalog };
 }
 
 let catalog;
@@ -292,6 +341,59 @@ describe('webinar asset API through the production application factory', () => {
     );
     expect(JSON.stringify(operationalLogger.info.mock.calls))
       .not.toMatch(/bucket|quarantine|GuardDuty|ER_BAD_DB_ERROR|authorization context|reference detail/i);
+  });
+
+  it('records one safe event when a trusted scanner failure reaches the route unrecorded', async () => {
+    catalog.confirmUpload.mockRejectedValueOnce(new AssetCatalogError(
+      'ASSET_SCANNER_FAILURE',
+      'bucket=private quarantine/private scanner details',
+      503,
+    ));
+
+    expect(await request(
+      'POST',
+      `/api/webinar-assets/upload-intents/${VERSION_ID}/confirm`,
+      {},
+    )).toEqual({
+      status: 503,
+      body: {
+        error: 'Webinar asset processing is temporarily unavailable',
+        code: 'ASSET_SCANNER_FAILURE',
+      },
+    });
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.asset_scanner_failure',
+      actorUserId: 7,
+      assetVersionId: VERSION_ID,
+      statusCode: 503,
+      reasonCode: 'ASSET_SCANNER_FAILURE',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/bucket|quarantine|scanner details/i);
+  });
+
+  it('does not double-record a persisted-path failure already recorded by the catalog', async () => {
+    await new Promise(resolve => server.close(resolve));
+    catalog = makeMalformedPersistedCatalog();
+    await start();
+
+    expect(await request('GET', '/api/webinar-assets')).toEqual({
+      status: 503,
+      body: {
+        error: 'Webinar asset processing is temporarily unavailable',
+        code: 'ASSET_SCANNER_FAILURE',
+      },
+    });
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.asset_scanner_failure',
+      actorUserId: 7,
+      assetVersionId: VERSION_ID,
+      reasonCode: 'ASSET_SCANNER_FAILURE',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls))
+      .not.toMatch(/private-legacy-name|approved\/sha256|\.png|bucket|quarantine/i);
   });
 
   it.each([
