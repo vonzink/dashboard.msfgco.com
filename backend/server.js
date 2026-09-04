@@ -60,6 +60,7 @@ const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
 const { createWebinarsRouter } = require('./routes/webinars');
 const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
+const { createWebinarAssetsRouter } = require('./routes/webinarAssets');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
@@ -73,6 +74,7 @@ function createApp({
   webinarOperationalLogger = null,
   webinarIpWriteLimit = 300,
   webinarWriteLimit = 300,
+  webinarAssetWriteLimit = 300,
 } = {}) {
 const app = express();
 const webinarRecordOperationalEvent = webinarOperationalLogger
@@ -85,6 +87,9 @@ const webinarsRoutes = createWebinarsRouter({
 const webinarPresenterSettingsRoutes = createWebinarPresenterSettingsRouter({
   settings: webinarServices.settings,
   recordOperationalEvent: webinarRecordOperationalEvent,
+});
+const webinarAssetsRoutes = createWebinarAssetsRouter({
+  catalog: webinarServices.assets,
 });
 
 // ======================
@@ -198,7 +203,17 @@ const webinarWriteLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
 });
 
-const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings'];
+const webinarAssetWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: webinarAssetWriteLimit,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.user?.db?.id),
+  message: { error: 'Too many webinar asset requests, please slow down' },
+  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+});
+
+const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings', '/api/webinar-assets'];
 const WEBINAR_MAX_REQUEST_BYTES = LIMITS.request;
 function isWebinarStudioMutation(req) {
   return !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
@@ -305,6 +320,7 @@ app.get('/api/me', authenticate, (req, res) => {
 // check is intentionally scoped here and does not change existing route access.
 app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarsRoutes);
 app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarPresenterSettingsRoutes);
+app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarAssetWriteLimiter, webinarAssetsRoutes);
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);
@@ -395,6 +411,7 @@ app.locals.webinarStudio = {
   writeLimiter,
   webinarIpWriteLimiter,
   webinarWriteLimiter,
+  webinarAssetWriteLimiter,
 };
 return app;
 }
