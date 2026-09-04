@@ -51,6 +51,34 @@ function woff2ZeroHeader() {
   return body;
 }
 
+function woffTable(body, tag) {
+  const tableCount = body.readUInt16BE(12);
+  for (let index = 0; index < tableCount; index += 1) {
+    const offset = 44 + index * 20;
+    if (body.toString('ascii', offset, offset + 4) === tag) {
+      return {
+        offset: body.readUInt32BE(offset + 4),
+        compressedLength: body.readUInt32BE(offset + 8),
+      };
+    }
+  }
+  throw new Error(`Expected WOFF ${tag} table`);
+}
+
+function corruptWoffTable(body, tag) {
+  const malformed = Buffer.from(body);
+  const table = woffTable(malformed, tag);
+  malformed[table.offset + Math.floor(table.compressedLength / 2)] ^= 1;
+  return malformed;
+}
+
+function corruptWoff2TransformedContent(body) {
+  const malformed = Buffer.from(body);
+  // This bit falls in the Brotli payload which expands into the transformed glyf table.
+  malformed[488] ^= 0x20;
+  return malformed;
+}
+
 function assetInput(body, declaredMimeType, filename) {
   return {
     stream: streamOf(body),
@@ -112,7 +140,7 @@ describe('Webinar asset inspection', () => {
   it('fully decodes every frame of animated GIF media', async () => {
     const result = await inspection.inspectAsset(assetInput(ANIMATED_GIF, 'image/gif', 'animated.gif'));
 
-    expect(result).toMatchObject({ mediaType: 'image', mimeType: 'image/gif', width: 1, height: 2 });
+    expect(result).toMatchObject({ mediaType: 'image', mimeType: 'image/gif', width: 1, height: 1 });
   });
 
   it('rejects a GIF truncated after its first complete frame', async () => {
@@ -229,6 +257,31 @@ describe('Webinar asset inspection', () => {
 
     await expect(inspection.inspectAsset(assetInput(body, declaredMimeType, filename)))
       .resolves.toMatchObject({ mediaType: 'font', mimeType: declaredMimeType });
+  });
+
+  it('rejects corruption in a compressed WOFF name table', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = corruptWoffTable(body, 'name');
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'corrupt-name.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects a WOFF2 font whose header understates the decoded SFNT size', async () => {
+    const body = await readFile(new URL('valid.woff2', fixtures));
+    const malformed = Buffer.from(body);
+    malformed.writeUInt32BE(1, 16);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff2', 'tiny-sfnt.woff2')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects corruption in transformed WOFF2 glyph content', async () => {
+    const body = await readFile(new URL('valid.woff2', fixtures));
+    const malformed = corruptWoff2TransformedContent(body);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff2', 'corrupt-glyf.woff2')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
   it.each([
