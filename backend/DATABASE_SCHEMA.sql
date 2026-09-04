@@ -220,13 +220,13 @@ CREATE TABLE IF NOT EXISTS goals (
 
 CREATE TABLE IF NOT EXISTS user_preferences (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL UNIQUE,
-    theme VARCHAR(20) DEFAULT 'light', -- light, dark
-    default_goal_period VARCHAR(20) DEFAULT 'monthly',
+    user_id INT NOT NULL,
+    preference_key VARCHAR(100) NOT NULL,
+    preference_value TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    INDEX idx_user (user_id)
+    UNIQUE KEY uq_user_pref (user_id, preference_key),
+    INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 
@@ -373,8 +373,12 @@ ON DUPLICATE KEY UPDATE
   name='Zachary Zink',
   initials='ZZ';
 
-INSERT INTO user_preferences (user_id, theme, default_goal_period)
-SELECT id, 'light', 'monthly' FROM users WHERE email = 'zachary.zink@msfg.us'
+INSERT INTO user_preferences (user_id, preference_key, preference_value)
+SELECT id, 'theme', 'light' FROM users WHERE email = 'zachary.zink@msfg.us'
 ON DUPLICATE KEY UPDATE
-  theme='light',
-  default_goal_period='monthly';
+  preference_value='light';
+
+INSERT INTO user_preferences (user_id, preference_key, preference_value)
+SELECT id, 'default_goal_period', 'monthly' FROM users WHERE email = 'zachary.zink@msfg.us'
+ON DUPLICATE KEY UPDATE
+  preference_value='monthly';

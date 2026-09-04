@@ -2,24 +2,43 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const migration = fs.readFileSync(
-  path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql'),
-  'utf8'
-);
-const activeAnchorMigration = fs.readFileSync(
-  path.resolve(import.meta.dirname, '../../db/migrations/092_webinar_active_slide_anchors.sql'),
-  'utf8',
-);
-const usersActiveMigration = fs.readFileSync(
-  path.resolve(import.meta.dirname, '../../db/migrations/093_users_is_active.sql'),
-  'utf8',
-);
+const migrationsDirectory = path.resolve(import.meta.dirname, '../../db/migrations');
+const migrationFiles = fs.readdirSync(migrationsDirectory).filter(file => file.endsWith('.sql'));
+const studioMigrationFiles = [
+  '092_webinar_studio_foundation.sql',
+  '093_webinar_active_slide_anchors.sql',
+  '094_users_is_active.sql',
+];
+const obsoleteStudioMigrationFiles = [
+  '091_webinar_studio_foundation.sql',
+  '092_webinar_active_slide_anchors.sql',
+  '093_users_is_active.sql',
+];
+function readMigration(file) {
+  const migrationPath = path.join(migrationsDirectory, file);
+  return fs.existsSync(migrationPath) ? fs.readFileSync(migrationPath, 'utf8') : '';
+}
+const migration = readMigration(studioMigrationFiles[0]);
+const activeAnchorMigration = readMigration(studioMigrationFiles[1]);
+const usersActiveMigration = readMigration(studioMigrationFiles[2]);
 const canonicalSchema = fs.readFileSync(
   path.resolve(import.meta.dirname, '../../DATABASE_SCHEMA.sql'),
   'utf8',
 );
 
-describe('091 webinar studio foundation migration', () => {
+describe('Webinar Studio migration ordinals', () => {
+  it('uses the exact collision-free 092 through 094 Studio sequence', () => {
+    for (const studioFile of studioMigrationFiles) {
+      const ordinal = studioFile.slice(0, 3);
+      expect(migrationFiles.filter(file => file.startsWith(`${ordinal}_`))).toEqual([studioFile]);
+    }
+    for (const obsoleteFile of obsoleteStudioMigrationFiles) {
+      expect(migrationFiles).not.toContain(obsoleteFile);
+    }
+  });
+});
+
+describe('092 webinar studio foundation migration', () => {
   it.each([
     'webinar_presentations',
     'webinar_slides',
@@ -85,7 +104,7 @@ describe('091 webinar studio foundation migration', () => {
   });
 });
 
-describe('092 active slide anchor migration', () => {
+describe('093 active slide anchor migration', () => {
   it('preserves historical anchors while enforcing uniqueness only for active slides', () => {
     expect(activeAnchorMigration).toContain('active_anchor VARCHAR(190)');
     expect(activeAnchorMigration).toMatch(/CASE WHEN archived_at IS NULL THEN anchor ELSE NULL END/i);
@@ -112,5 +131,27 @@ describe('users.is_active schema compatibility', () => {
       'ALTER TABLE users ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 1',
     );
     expect(usersActiveMigration).toMatch(/IF\s*\(\s*@\w+\s*=\s*0/i);
+  });
+});
+
+describe('canonical user preferences schema', () => {
+  it('matches the migrated key-value shape and seeds both former defaults as keys', () => {
+    const preferencesTable = canonicalSchema.match(
+      /CREATE TABLE IF NOT EXISTS user_preferences \([\s\S]*?\n\)/,
+    )?.[0];
+
+    expect(preferencesTable).toContain('preference_key VARCHAR(100) NOT NULL');
+    expect(preferencesTable).toContain('preference_value TEXT');
+    expect(preferencesTable).toContain('UNIQUE KEY uq_user_pref (user_id, preference_key)');
+    expect(preferencesTable).not.toMatch(/\btheme\b|\bdefault_goal_period\b/);
+    expect(canonicalSchema).toMatch(
+      /INSERT INTO user_preferences \(user_id, preference_key, preference_value\)[\s\S]*?'theme', 'light'/,
+    );
+    expect(canonicalSchema).toMatch(
+      /INSERT INTO user_preferences \(user_id, preference_key, preference_value\)[\s\S]*?'default_goal_period', 'monthly'/,
+    );
+    expect(canonicalSchema).not.toContain(
+      'INSERT INTO user_preferences (user_id, theme, default_goal_period)',
+    );
   });
 });

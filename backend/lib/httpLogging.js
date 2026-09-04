@@ -21,11 +21,20 @@ function serializeHeaders(headers, allowlist) {
   return safe;
 }
 
+function requestPathname(url) {
+  if (typeof url !== 'string') return undefined;
+  try {
+    return new URL(url, 'http://request.invalid').pathname;
+  } catch {
+    return url.split('?', 1)[0];
+  }
+}
+
 function serializeRequest(req) {
   return {
     id: req.id,
     method: req.method,
-    url: req.url,
+    url: requestPathname(req.url),
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
     headers: serializeHeaders(req.headers, SAFE_REQUEST_HEADERS),

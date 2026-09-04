@@ -1,16 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
 const describeWithMysql = process.env.WEBINAR_TEST_DATABASE_URL ? describe : describe.skip;
-const migrationPaths = [
-  path.resolve(import.meta.dirname, '../../db/migrations/091_webinar_studio_foundation.sql'),
-  path.resolve(import.meta.dirname, '../../db/migrations/092_webinar_active_slide_anchors.sql'),
-  path.resolve(import.meta.dirname, '../../db/migrations/093_users_is_active.sql'),
-];
 const localMysqlHosts = new Set(['127.0.0.1', '::1', 'localhost']);
 const identifier = /^[A-Za-z0-9_]{1,64}$/;
 const NO_INTEGRATION_FAILURE = Symbol('no integration failure');
@@ -29,6 +23,8 @@ let admin;
 let other;
 let webinar;
 let disposableLifecycle;
+const migrationCompletions = [];
+const legacyCompatibilityWarnings = [];
 let primaryFailure;
 let hasPrimaryFailure = false;
 
@@ -160,18 +156,27 @@ function finalizeIntegrationFailure({ hasPrimary, primary, cleanupFailures }) {
   return aggregate;
 }
 
-async function applyFoundationMigrations(connection) {
-  for (const migrationPath of migrationPaths) {
-    const migration = readFileSync(migrationPath, 'utf8');
-    for (const statement of migration.split(';')) {
-      const sql = statement.trim();
-      if (sql) await connection.query(sql);
-    }
-  }
-}
-
 function testIdentity(user) {
   return { db: { id: user.id, role: user.role, is_active: 1 }, groups: [user.role] };
+}
+
+async function applyLegacyMigrationPrerequisites(connection, migrations, databaseName, migrationLogger) {
+  await migrations.executeSqlFile(
+    connection,
+    path.resolve(import.meta.dirname, '../../DATABASE_SCHEMA.sql'),
+    { intendedDatabase: databaseName, migrationLogger },
+  );
+  await migrations.executeSqlFile(
+    connection,
+    path.resolve(import.meta.dirname, '../../../docs/legacy-sql/ADDITIONAL_TABLES.sql'),
+    { intendedDatabase: databaseName, migrationLogger },
+  );
+  await connection.query(`CREATE TABLE title_companies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    company_name VARCHAR(255) NOT NULL,
+    license_number VARCHAR(100) NULL,
+    website VARCHAR(500) NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
 }
 
 async function request(method, requestPath, body, user) {
@@ -441,27 +446,6 @@ describeWithMysql('webinar studio foundation', () => {
       createdDatabase = disposableLifecycle.name;
 
       const target = { ...source, database: createdDatabase };
-      const setup = await mysql.createConnection(target);
-      try {
-        await setup.query(`CREATE TABLE users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        name VARCHAR(255) NOT NULL,
-        role VARCHAR(100) NOT NULL DEFAULT 'user'
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
-        await setup.query(
-        `INSERT INTO users (email, name, role) VALUES
-         ('webinar-owner@example.test', 'Webinar Owner', 'user'),
-         ('webinar-admin@example.test', 'Webinar Admin', 'admin'),
-         ('webinar-other@example.test', 'Webinar Other', 'user')`,
-        );
-        await applyFoundationMigrations(setup);
-        const [users] = await setup.query('SELECT id, email, role, is_active FROM users ORDER BY id');
-        [owner, admin, other] = users;
-      } finally {
-        await setup.end();
-      }
-
       process.env.DB_HOST = target.host;
       process.env.DB_PORT = String(target.port);
       process.env.DB_USER = target.user;
@@ -469,7 +453,59 @@ describeWithMysql('webinar studio foundation', () => {
       process.env.DB_NAME = createdDatabase;
 
       db = require('../../db/connection');
-      ({ verifyWebinarStudioSchema } = require('../../db/migrations'));
+      const migrations = require('../../db/migrations');
+      ({ verifyWebinarStudioSchema } = migrations);
+      const migrationLogger = {
+        info(first, second) {
+          const message = typeof second === 'string' ? second : first;
+          if (message === 'Migrations completed') migrationCompletions.push(message);
+        },
+        warn(details, message) {
+          if (message === 'Legacy migration failed; continuing at the compatibility boundary') {
+            legacyCompatibilityWarnings.push(details);
+          }
+        },
+        error() {},
+      };
+      const bootstrapConnection = await mysql.createConnection(target);
+      try {
+        await applyLegacyMigrationPrerequisites(
+          bootstrapConnection,
+          migrations,
+          createdDatabase,
+          migrationLogger,
+        );
+      } finally {
+        await bootstrapConnection.end();
+      }
+      await migrations.runMigrations({ connectionPool: db, migrationLogger });
+      await migrations.runMigrations({ connectionPool: db, migrationLogger });
+
+      const setup = await mysql.createConnection(target);
+      try {
+        await setup.query(
+          `INSERT INTO users (email, name, role) VALUES
+           ('webinar-owner@example.test', 'Webinar Owner', 'user'),
+           ('webinar-admin@example.test', 'Webinar Admin', 'admin'),
+           ('webinar-other@example.test', 'Webinar Other', 'user')`,
+        );
+        const [users] = await setup.query(
+          `SELECT id, email, role, is_active FROM users
+           WHERE email IN (?, ?, ?)`,
+          [
+            'webinar-owner@example.test',
+            'webinar-admin@example.test',
+            'webinar-other@example.test',
+          ],
+        );
+        const usersByEmail = new Map(users.map(user => [user.email, user]));
+        owner = usersByEmail.get('webinar-owner@example.test');
+        admin = usersByEmail.get('webinar-admin@example.test');
+        other = usersByEmail.get('webinar-other@example.test');
+      } finally {
+        await setup.end();
+      }
+
       ({ createMutationService } = require('../../services/webinars/mutations'));
       notes = require('../../services/webinars/notes');
       revisions = require('../../services/webinars/revisions');
@@ -505,6 +541,13 @@ describeWithMysql('webinar studio foundation', () => {
 
   it('uses the exact migration constraints and real private services without leaking state', async () => {
     try {
+    expect(migrationCompletions).toEqual(['Migrations completed', 'Migrations completed']);
+    expect(legacyCompatibilityWarnings).toContainEqual({
+      code: 'ER_FK_CANNOT_DROP_PARENT',
+      file: '051_investor_notes.sql',
+    });
+    expect(legacyCompatibilityWarnings.every(({ file }) => Number(file.slice(0, 3)) <= 91))
+      .toBe(true);
     expect([owner.is_active, admin.is_active, other.is_active]).toEqual([1, 1, 1]);
     await expect(verifyWebinarStudioSchema(db, createdDatabase)).resolves.toBeUndefined();
     const [foreignKeys] = await db.query(

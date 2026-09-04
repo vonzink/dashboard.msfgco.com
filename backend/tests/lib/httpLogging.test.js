@@ -54,4 +54,61 @@ describe('credential-safe HTTP request logging', () => {
     expect(serialized.toLowerCase()).not.toContain('authorization');
     expect(serialized.toLowerCase()).not.toContain('set-cookie');
   });
+
+  it('serializes only the pathname for requests with any query parameters', async () => {
+    const chunks = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const testLogger = pino({ base: null, timestamp: false }, stream);
+    const app = express();
+    app.use(createSafeHttpLogger(testLogger));
+    app.get('/logging-query-canary', (_req, res) => res.json({ ok: true }));
+    server = await new Promise(resolve => {
+      const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
+    });
+
+    const query = [
+      'api_key=LOG_QUERY_API_KEY_6b45',
+      'token=LOG_QUERY_TOKEN_6b45',
+      'code=LOG_QUERY_OAUTH_CODE_6b45',
+      'state=LOG_QUERY_OAUTH_STATE_6b45',
+      'MiXeD_CrEdEnTiAl=LOG_QUERY_MIXED_CASE_6b45',
+      'encoded=LOG_QUERY_ENCODED%2FVALUE%3F6b45',
+      'duplicate=LOG_QUERY_DUPLICATE_ONE_6b45',
+      'duplicate=LOG_QUERY_DUPLICATE_TWO_6b45',
+      'page=LOG_QUERY_SAFE_LOOKING_6b45',
+    ].join('&');
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}/logging-query-canary?${query}`,
+    );
+    await response.text();
+    await new Promise(resolve => setImmediate(resolve));
+
+    const serialized = chunks.join('');
+    const records = serialized.trim().split('\n').map(line => JSON.parse(line));
+    const urlValues = records.flatMap(record => (
+      Object.entries(record.req || {})
+        .filter(([key]) => key.toLowerCase().includes('url'))
+        .map(([, value]) => value)
+    ));
+    expect(urlValues).toEqual(['/logging-query-canary']);
+    for (const canary of [
+      'LOG_QUERY_API_KEY_6b45',
+      'LOG_QUERY_TOKEN_6b45',
+      'LOG_QUERY_OAUTH_CODE_6b45',
+      'LOG_QUERY_OAUTH_STATE_6b45',
+      'LOG_QUERY_MIXED_CASE_6b45',
+      'LOG_QUERY_ENCODED%2FVALUE%3F6b45',
+      'LOG_QUERY_ENCODED/VALUE?6b45',
+      'LOG_QUERY_DUPLICATE_ONE_6b45',
+      'LOG_QUERY_DUPLICATE_TWO_6b45',
+      'LOG_QUERY_SAFE_LOOKING_6b45',
+    ]) {
+      expect(serialized).not.toContain(canary);
+    }
+  });
 });
