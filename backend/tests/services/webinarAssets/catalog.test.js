@@ -12,6 +12,11 @@ const NEW_VERSION_ID = '55555555-5555-4555-8555-555555555555';
 const THIRD_VERSION_ID = '66666666-6666-4666-8666-666666666666';
 const SHA256 = 'a'.repeat(64);
 const OTHER_SHA256 = 'b'.repeat(64);
+const PROCESSING_FAILURE = Object.freeze({
+  status: 503,
+  code: 'ASSET_SCANNER_FAILURE',
+  message: 'Webinar asset processing is temporarily unavailable',
+});
 
 function clone(value) {
   return structuredClone(value);
@@ -133,6 +138,20 @@ function database(seed = initialState()) {
       return [state.revisionReferences.filter(row => row.asset_version_id === params[0]).map(row => ({ ...row }))];
     }
 
+    if (normalized.includes('FROM webinar_asset_references ar') && normalized.includes('JOIN webinar_asset_versions v')) {
+      stages.push('family-live-reference-check');
+      return [state.liveReferences.filter(reference => state.versions.some(version => (
+        version.id === reference.asset_version_id && version.asset_id === params[0]
+      ))).slice(0, 1)];
+    }
+
+    if (normalized.includes('FROM webinar_revision_asset_references rar') && normalized.includes('JOIN webinar_asset_versions v')) {
+      stages.push('family-revision-reference-check');
+      return [state.revisionReferences.filter(reference => state.versions.some(version => (
+        version.id === reference.asset_version_id && version.asset_id === params[0]
+      ))).slice(0, 1)];
+    }
+
     if (normalized.includes('FROM webinar_asset_references') && normalized.includes('asset_version_id = ?')) {
       stages.push('live-reference-check');
       return [state.liveReferences.filter(row => row.asset_version_id === params[0]).slice(0, 1)];
@@ -238,7 +257,7 @@ function fixture(overrides = {}) {
     })),
     readScanStatus: vi.fn().mockResolvedValue(null),
     readQuarantineObject: vi.fn().mockResolvedValue({ privateStream: true }),
-    makeApprovedKey: vi.fn((sha256) => `approved/sha256/${sha256}/private-upload-name.png`),
+    makeApprovedKey: vi.fn((sha256) => `approved/sha256/${sha256}/asset`),
     putApprovedObject: vi.fn().mockResolvedValue(undefined),
     ...overrides.storage,
   };
@@ -269,6 +288,13 @@ function fixture(overrides = {}) {
 
 function safeSerialization(value) {
   return JSON.stringify(value);
+}
+
+function expectSafeProcessingFailure(error, cause) {
+  expect(error).toMatchObject(PROCESSING_FAILURE);
+  expect(error.cause).toBe(cause);
+  expect(Object.prototype.propertyIsEnumerable.call(error, 'cause')).toBe(false);
+  expect(safeSerialization(error)).not.toMatch(/private|bucket|quarantine|request/i);
 }
 
 describe('Webinar Studio shared asset catalog', () => {
@@ -368,8 +394,10 @@ describe('Webinar Studio shared asset catalog', () => {
         versionId: VERSION_ID,
         status: 'available',
         sha256: SHA256,
-        publicUrl: `https://assets.example/approved/sha256/${SHA256}/private-upload-name.png`,
+        publicUrl: `https://assets.example/approved/sha256/${SHA256}/asset`,
       });
+    expect(safeSerialization(await api.listCatalog({ actorUserId: 7, isAdmin: false })))
+      .not.toContain('private-brand-name.png');
     expect(storage.putApprovedObject).toHaveBeenCalledOnce();
     expect(state().versions[0]).toMatchObject({ status: 'available', sha256: SHA256, width: 1, height: 1 });
     expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_available', {
@@ -403,8 +431,13 @@ describe('Webinar Studio shared asset catalog', () => {
     const { api, state, recordOperationalEvent } = fixture({
       storage: { readScanStatus: vi.fn().mockRejectedValue(scannerFailure) },
     });
-    await expect(api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
-      .rejects.toBe(scannerFailure);
+    let error;
+    try {
+      await api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false });
+    } catch (caught) {
+      error = caught;
+    }
+    expectSafeProcessingFailure(error, scannerFailure);
     expect(state().versions[0].status).toBe('processing');
     expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_scanner_failure', {
       actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_SCANNER_FAILURE',
@@ -441,8 +474,13 @@ describe('Webinar Studio shared asset catalog', () => {
       },
     });
 
-    await expect(api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false }))
-      .rejects.toBe(storageFailure);
+    let error;
+    try {
+      await api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false });
+    } catch (caught) {
+      error = caught;
+    }
+    expectSafeProcessingFailure(error, storageFailure);
     expect(state().versions[0]).toMatchObject({ status: 'processing', rejection_code: null });
     expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_scanner_failure', {
       actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_SCANNER_FAILURE',
@@ -485,11 +523,33 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(state().versions[0]).toMatchObject({ status: 'available', sha256: SHA256 });
   });
 
+  it('converts an unknown approved-release failure to the generic trusted processing error', async () => {
+    const releaseFailure = Object.assign(new Error('private bucket/key/request details'), {
+      bucket: 'private-bucket',
+      requestId: 'private-request',
+    });
+    const { api, state } = fixture({
+      storage: {
+        readScanStatus: vi.fn().mockResolvedValue('NO_THREATS_FOUND'),
+        putApprovedObject: vi.fn().mockRejectedValue(releaseFailure),
+      },
+    });
+
+    let error;
+    try {
+      await api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false });
+    } catch (caught) {
+      error = caught;
+    }
+    expectSafeProcessingFailure(error, releaseFailure);
+    expect(state().versions[0]).toMatchObject({ status: 'processing', rejection_code: null });
+  });
+
   it('reuses an available approved object with the same SHA-256 instead of storing duplicate bytes', async () => {
     const existing = {
       id: SECOND_VERSION_ID, asset_id: ASSET_ID, version_number: 2,
       original_filename: 'different-private-name.png', media_type: 'image', mime_type: 'image/png',
-      byte_size: 68, sha256: SHA256, s3_key: `approved/sha256/${SHA256}/existing.png`,
+      byte_size: 68, sha256: SHA256, s3_key: `approved/sha256/${SHA256}/asset`,
       width: 1, height: 1, duration_ms: null, status: 'available', rejection_code: null,
       uploaded_by_user_id: 7, uploader_name: 'Owner', created_at: '2026-09-04T09:00:00.000Z', archived_at: null,
     };
@@ -511,7 +571,7 @@ describe('Webinar Studio shared asset catalog', () => {
     const archivedAt = status === 'archived' ? '2026-09-04T12:00:00.000Z' : null;
     const version = { ...initialState().versions[0], status, rejection_code: rejectionCode, archived_at: archivedAt };
     if (status === 'available') {
-      Object.assign(version, { sha256: SHA256, s3_key: `approved/sha256/${SHA256}/existing.png` });
+      Object.assign(version, { sha256: SHA256, s3_key: `approved/sha256/${SHA256}/asset` });
     }
     const { api, storage, connection } = fixture({ state: initialState({ versions: [version] }) });
 
@@ -593,7 +653,7 @@ describe('Webinar Studio shared asset catalog', () => {
     const versions = [
       {
         ...initialState().versions[0], status: 'available', sha256: SHA256,
-        s3_key: `approved/sha256/${SHA256}/available.png`,
+        s3_key: `approved/sha256/${SHA256}/asset`,
       },
       {
         ...initialState().versions[0], id: SECOND_VERSION_ID, version_number: 2,
@@ -603,7 +663,7 @@ describe('Webinar Studio shared asset catalog', () => {
       {
         ...initialState().versions[0], id: THIRD_VERSION_ID, version_number: 3,
         status: 'archived', archived_at: '2026-09-04T12:00:00.000Z', sha256: OTHER_SHA256,
-        s3_key: `approved/sha256/${OTHER_SHA256}/archived-private.png`,
+        s3_key: `approved/sha256/${OTHER_SHA256}/asset`,
       },
     ];
     const { api } = fixture({ state: initialState({ versions }) });
@@ -618,7 +678,7 @@ describe('Webinar Studio shared asset catalog', () => {
         expect.objectContaining({ id: SECOND_VERSION_ID, versionNumber: 2, status: 'rejected', rejectionCode: 'MALWARE_DETECTED' }),
         expect.objectContaining({
           id: VERSION_ID, versionNumber: 1, status: 'available',
-          publicUrl: `https://assets.example/approved/sha256/${SHA256}/available.png`,
+          publicUrl: `https://assets.example/approved/sha256/${SHA256}/asset`,
         }),
       ],
     })]);
@@ -645,5 +705,53 @@ describe('Webinar Studio shared asset catalog', () => {
     await expect(admin.api.updateFamily({
       assetId: ASSET_ID, actorUserId: 1, isAdmin: true, displayName: 'Admin label',
     })).resolves.toMatchObject({ id: ASSET_ID, displayName: 'Admin label' });
+  });
+
+  it('allows the family creator and an administrator to archive an unreferenced family', async () => {
+    const creator = fixture();
+    await expect(creator.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 7, isAdmin: false, archive: true,
+    })).resolves.toEqual({ id: ASSET_ID, archived: true });
+    expect(creator.state().families[0].archived_at).not.toBeNull();
+
+    const admin = fixture({ state: initialState({ presentations: [] }) });
+    await expect(admin.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 1, isAdmin: true, archive: true,
+    })).resolves.toEqual({ id: ASSET_ID, archived: true });
+    expect(admin.state().families[0].archived_at).not.toBeNull();
+  });
+
+  it('denies family archive to a contributor who did not create the family', async () => {
+    const outsider = fixture({ state: initialState({
+      presentations: [{ id: 13, primary_owner_user_id: 8, archived_at: null }],
+    }) });
+    await expect(outsider.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 8, isAdmin: false, archive: true,
+    })).rejects.toMatchObject({ status: 403, code: 'WEBINAR_ACCESS_DENIED' });
+    expect(outsider.state().families[0].archived_at).toBeNull();
+  });
+
+  it('checks both stores and denies family archive for live use', async () => {
+    const liveReference = { asset_version_id: VERSION_ID, webinar_id: 12, surface: 'master_css' };
+    const current = fixture({ state: initialState({ liveReferences: [liveReference] }) });
+    await expect(current.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 7, isAdmin: false, archive: true,
+    })).rejects.toMatchObject({ status: 409, code: 'ASSET_IN_USE' });
+    expect(current.stages).toEqual(expect.arrayContaining([
+      'family-live-reference-check', 'family-revision-reference-check', 'rollback',
+    ]));
+    expect(current.state().families[0].archived_at).toBeNull();
+  });
+
+  it('checks both stores and denies family archive for revision-only use', async () => {
+    const revisionReference = { asset_version_id: VERSION_ID, revision_id: 91 };
+    const current = fixture({ state: initialState({ revisionReferences: [revisionReference] }) });
+    await expect(current.api.updateFamily({
+      assetId: ASSET_ID, actorUserId: 7, isAdmin: false, archive: true,
+    })).rejects.toMatchObject({ status: 409, code: 'ASSET_IN_USE_BY_REVISION' });
+    expect(current.stages).toEqual(expect.arrayContaining([
+      'family-live-reference-check', 'family-revision-reference-check', 'rollback',
+    ]));
+    expect(current.state().families[0].archived_at).toBeNull();
   });
 });

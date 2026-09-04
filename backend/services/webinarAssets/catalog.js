@@ -11,8 +11,8 @@ const CLEAN_SCAN_STATUS = 'NO_THREATS_FOUND';
 const SAFE_INSPECTION_CODE = /^ASSET_INSPECTION_[A-Z0-9_]{1,43}$/;
 
 class AssetCatalogError extends Error {
-  constructor(code, message = 'Webinar asset operation failed', status = 400) {
-    super(message);
+  constructor(code, message = 'Webinar asset operation failed', status = 400, cause = undefined) {
+    super(message, cause === undefined ? undefined : { cause });
     this.name = 'AssetCatalogError';
     this.code = code;
     this.status = status;
@@ -33,6 +33,15 @@ function notFound(code, message) {
 
 function conflict(code, message) {
   return new AssetCatalogError(code, message, 409);
+}
+
+function processingUnavailable(cause) {
+  return new AssetCatalogError(
+    'ASSET_SCANNER_FAILURE',
+    'Webinar asset processing is temporarily unavailable',
+    503,
+    cause,
+  );
 }
 
 function positiveId(value) {
@@ -382,7 +391,7 @@ function createCatalogService({
       );
       let approvedKey = duplicates[0]?.s3_key;
       if (!approvedKey) {
-        approvedKey = storage.makeApprovedKey(inspected.sha256, locked.original_filename);
+        approvedKey = storage.makeApprovedKey(inspected.sha256);
         await storeApprovedObject(approvedKey, inspected);
       }
       const [result] = await connection.query(
@@ -430,7 +439,7 @@ function createCatalogService({
       scanStatus = await storage.readScanStatus(storageInput({ key: version.s3_key }));
     } catch (error) {
       operational('webinar.asset_scanner_failure', input.actorUserId, version.id, 'ASSET_SCANNER_FAILURE');
-      throw error;
+      throw processingUnavailable(error);
     }
     if (!scanStatus) {
       operational('webinar.asset_scan_pending', input.actorUserId, version.id, 'ASSET_SCAN_PENDING');
@@ -453,7 +462,7 @@ function createCatalogService({
       stream = await storage.readQuarantineObject(storageInput({ key: version.s3_key }));
     } catch (error) {
       operational('webinar.asset_scanner_failure', input.actorUserId, version.id, 'ASSET_SCANNER_FAILURE');
-      throw error;
+      throw processingUnavailable(error);
     }
 
     let inspected;
@@ -489,7 +498,8 @@ function createCatalogService({
       return transition.result;
     } catch (error) {
       operational('webinar.asset_scanner_failure', input.actorUserId, version.id, 'ASSET_SCANNER_FAILURE');
-      throw error;
+      if (error instanceof AssetCatalogError) throw error;
+      throw processingUnavailable(error);
     }
   }
 

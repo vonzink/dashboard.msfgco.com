@@ -53,7 +53,7 @@ const config = {
 };
 const versionId = '11111111-1111-4111-8111-111111111111';
 const quarantineKey = `quarantine/${versionId}/deck.png`;
-const approvedKey = `approved/sha256/${'a'.repeat(64)}/deck.png`;
+const approvedKey = `approved/sha256/${'a'.repeat(64)}/asset`;
 
 let storage;
 
@@ -118,7 +118,7 @@ describe('Webinar Studio quarantine storage', () => {
   });
 
   it('refuses operations on keys outside the configured quarantine prefix', async () => {
-    await expect(storage.readScanStatus({ config, key: `approved/sha256/${'a'.repeat(64)}/deck.png` }))
+    await expect(storage.readScanStatus({ config, key: approvedKey }))
       .rejects.toMatchObject({ code: 'ASSET_QUARANTINE_REQUIRED' });
     expect(commandsOfType('GetObjectTagging')).toHaveLength(0);
   });
@@ -192,10 +192,11 @@ describe('Webinar Studio quarantine storage', () => {
 
   it('rejects malformed approved-key overrides before issuing an immutable write', async () => {
     for (const malformedKey of [
-      'approved/sha256/not-a-hash/deck.png',
-      `approved/sha256/${'A'.repeat(64)}/deck.png`,
-      `approved/sha256/${'a'.repeat(64)}/nested/deck.png`,
-      `approved/sha256/${'a'.repeat(64)}/ deck.png `,
+      'approved/sha256/not-a-hash/asset',
+      `approved/sha256/${'A'.repeat(64)}/asset`,
+      `approved/sha256/${'a'.repeat(64)}/private-upload-name.png`,
+      `approved/sha256/${'a'.repeat(64)}/nested/asset`,
+      `approved/sha256/${'a'.repeat(64)}/ asset `,
     ]) {
       await expect(storage.putApprovedObject({ config, approvedKey: malformedKey, body: Buffer.alloc(0) }))
         .rejects.toMatchObject({ code: 'ASSET_STORAGE_INVALID' });

@@ -72,9 +72,9 @@ function makeQuarantineKey(versionId, filename, quarantinePrefix = 'quarantine/'
   return `${normalizeQuarantinePrefix(quarantinePrefix)}${versionId.trim()}/${sanitizeFilename(filename)}`;
 }
 
-function makeApprovedKey(sha256, filename) {
+function makeApprovedKey(sha256) {
   if (typeof sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(sha256)) throw assetConfigError('ASSET_CONFIG_INVALID');
-  return `approved/sha256/${sha256}/${sanitizeFilename(filename)}`;
+  return `approved/sha256/${sha256}/asset`;
 }
 
 function makePublicUrl(config, approvedKey) {

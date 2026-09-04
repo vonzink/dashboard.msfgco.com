@@ -48,10 +48,11 @@ describe('Webinar Studio asset configuration', () => {
     })).toThrowError(expect.objectContaining({ code: 'ASSET_CONFIG_INVALID' }));
   });
 
-  it('makes quarantine keys path-safe and approved keys content-addressed', () => {
+  it('makes quarantine keys path-safe and approved keys content-addressed without upload names', () => {
     expect(makeQuarantineKey(versionId, '../../logo.png')).toBe(`quarantine/${versionId}/logo.png`);
-    expect(makeApprovedKey('a'.repeat(64), '../brand mark.png'))
-      .toBe(`approved/sha256/${'a'.repeat(64)}/brand mark.png`);
+    const approvedKey = makeApprovedKey('a'.repeat(64), '../private brand mark.png');
+    expect(approvedKey).toBe(`approved/sha256/${'a'.repeat(64)}/asset`);
+    expect(approvedKey).not.toContain('private brand mark.png');
   });
 
   it('encodes approved key components in public URLs and never exposes quarantine objects', () => {
@@ -60,8 +61,8 @@ describe('Webinar Studio asset configuration', () => {
       WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example/',
     });
 
-    expect(makePublicUrl(config, `approved/sha256/${'a'.repeat(64)}/brand mark.png`))
-      .toBe(`https://assets.example/approved/sha256/${'a'.repeat(64)}/brand%20mark.png`);
+    expect(makePublicUrl(config, `approved/sha256/${'a'.repeat(64)}/asset`))
+      .toBe(`https://assets.example/approved/sha256/${'a'.repeat(64)}/asset`);
     expect(() => makePublicUrl(config, `quarantine/${versionId}/logo.png`)).toThrowError(
       expect.objectContaining({ code: 'ASSET_QUARANTINE_PRIVATE' }),
     );

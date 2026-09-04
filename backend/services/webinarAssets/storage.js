@@ -43,8 +43,8 @@ function assertQuarantineKey(config, key) {
 }
 
 function assertApprovedKey(key) {
-  const match = typeof key === 'string' && /^approved\/sha256\/([a-f0-9]{64})\/([^/]+)$/.exec(key);
-  if (!match || makeApprovedKey(match[1], match[2]) !== key) throw storageError('ASSET_STORAGE_INVALID');
+  const match = typeof key === 'string' && /^approved\/sha256\/([a-f0-9]{64})\/asset$/.exec(key);
+  if (!match || makeApprovedKey(match[1]) !== key) throw storageError('ASSET_STORAGE_INVALID');
   return key;
 }
 
@@ -98,7 +98,7 @@ async function readQuarantineObject(input) {
 
 async function putApprovedObject(input) {
   const config = resolveConfig(input);
-  const approvedKey = assertApprovedKey(input?.approvedKey || makeApprovedKey(input?.sha256, input?.filename));
+  const approvedKey = assertApprovedKey(input?.approvedKey || makeApprovedKey(input?.sha256));
   return s3.send(new PutObjectCommand({
     Bucket: config.bucket,
     Key: approvedKey,
@@ -117,7 +117,7 @@ function encodeCopySource(bucket, key) {
 async function copyApprovedObject(input) {
   const config = resolveConfig(input);
   const sourceKey = assertQuarantineKey(config, input?.sourceKey);
-  const approvedKey = assertApprovedKey(input?.approvedKey || makeApprovedKey(input?.sha256, input?.filename));
+  const approvedKey = assertApprovedKey(input?.approvedKey || makeApprovedKey(input?.sha256));
   return s3.send(new CopyObjectCommand({
     Bucket: config.bucket,
     Key: approvedKey,
