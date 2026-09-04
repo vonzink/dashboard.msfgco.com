@@ -40,6 +40,14 @@ describe('Webinar Studio asset configuration', () => {
     });
   });
 
+  it('rejects a quarantine prefix that could overlap the public approved namespace', () => {
+    expect(() => loadAssetConfig({
+      WEBINAR_ASSET_BUCKET: 'webinar-assets',
+      WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example',
+      WEBINAR_ASSET_QUARANTINE_PREFIX: 'approved/',
+    })).toThrowError(expect.objectContaining({ code: 'ASSET_CONFIG_INVALID' }));
+  });
+
   it('makes quarantine keys path-safe and approved keys content-addressed', () => {
     expect(makeQuarantineKey(versionId, '../../logo.png')).toBe(`quarantine/${versionId}/logo.png`);
     expect(makeApprovedKey('a'.repeat(64), '../brand mark.png'))

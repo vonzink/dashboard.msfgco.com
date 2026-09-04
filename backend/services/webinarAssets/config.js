@@ -35,6 +35,9 @@ function normalizeQuarantinePrefix(value) {
   if (!normalized || normalized.split('/').some(segment => !segment || segment === '.' || segment === '..')) {
     throw assetConfigError('ASSET_CONFIG_INVALID');
   }
+  if (normalized === 'approved' || normalized.startsWith('approved/')) {
+    throw assetConfigError('ASSET_CONFIG_INVALID');
+  }
   return `${normalized}/`;
 }
 

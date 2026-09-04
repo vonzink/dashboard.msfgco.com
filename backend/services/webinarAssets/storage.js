@@ -27,7 +27,12 @@ function storageError(code) {
 }
 
 function resolveConfig(input) {
-  return input?.config || loadAssetConfig();
+  if (!input?.config) return loadAssetConfig();
+  return loadAssetConfig({
+    WEBINAR_ASSET_BUCKET: input.config.bucket,
+    WEBINAR_ASSET_CDN_BASE_URL: input.config.cdnBaseUrl,
+    WEBINAR_ASSET_QUARANTINE_PREFIX: input.config.quarantinePrefix,
+  });
 }
 
 function assertQuarantineKey(config, key) {
@@ -38,7 +43,8 @@ function assertQuarantineKey(config, key) {
 }
 
 function assertApprovedKey(key) {
-  if (typeof key !== 'string' || !key.startsWith('approved/sha256/')) throw storageError('ASSET_STORAGE_INVALID');
+  const match = typeof key === 'string' && /^approved\/sha256\/([a-f0-9]{64})\/([^/]+)$/.exec(key);
+  if (!match || makeApprovedKey(match[1], match[2]) !== key) throw storageError('ASSET_STORAGE_INVALID');
   return key;
 }
 
@@ -100,6 +106,7 @@ async function putApprovedObject(input) {
     ContentType: input?.mimeType,
     ContentLength: input?.byteSize,
     CacheControl: 'public, max-age=31536000, immutable',
+    IfNoneMatch: '*',
   }));
 }
 
@@ -118,6 +125,7 @@ async function copyApprovedObject(input) {
     ContentType: input?.mimeType,
     MetadataDirective: input?.mimeType ? 'REPLACE' : undefined,
     CacheControl: 'public, max-age=31536000, immutable',
+    IfNoneMatch: '*',
   }));
 }
 

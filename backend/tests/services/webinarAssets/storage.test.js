@@ -53,6 +53,7 @@ const config = {
 };
 const versionId = '11111111-1111-4111-8111-111111111111';
 const quarantineKey = `quarantine/${versionId}/deck.png`;
+const approvedKey = `approved/sha256/${'a'.repeat(64)}/deck.png`;
 
 let storage;
 
@@ -120,5 +121,85 @@ describe('Webinar Studio quarantine storage', () => {
     await expect(storage.readScanStatus({ config, key: `approved/sha256/${'a'.repeat(64)}/deck.png` }))
       .rejects.toMatchObject({ code: 'ASSET_QUARANTINE_REQUIRED' });
     expect(commandsOfType('GetObjectTagging')).toHaveLength(0);
+  });
+
+  it('validates every injected config through the same fail-closed rules before calling S3', async () => {
+    const invalidConfigs = [
+      { cdnBaseUrl: 'https://assets.example', quarantinePrefix: 'quarantine/' },
+      { bucket: 'webinar-assets', quarantinePrefix: 'quarantine/' },
+      { bucket: 'webinar-assets', cdnBaseUrl: 'http://assets.example', quarantinePrefix: 'quarantine/' },
+      { bucket: 'webinar-assets', cdnBaseUrl: 'https://assets.example', quarantinePrefix: 'approved/' },
+    ];
+
+    for (const invalidConfig of invalidConfigs) {
+      await expect(storage.headQuarantineObject({ config: invalidConfig, key: quarantineKey }))
+        .rejects.toMatchObject({ code: expect.stringMatching(/^ASSET_CONFIG_/) });
+    }
+    expect(captured).toEqual([]);
+  });
+
+  it('heads and reads only a configured quarantine object', async () => {
+    const head = { ContentLength: 10, ContentType: 'image/png' };
+    const body = Buffer.from('asset bytes');
+    sendMock.mockResolvedValueOnce(head).mockResolvedValueOnce({ Body: body });
+
+    await expect(storage.headQuarantineObject({ config, key: quarantineKey })).resolves.toBe(head);
+    await expect(storage.readQuarantineObject({ config, key: quarantineKey })).resolves.toBe(body);
+
+    expect(commandsOfType('HeadObject').map(command => command.input)).toEqual([
+      { Bucket: 'webinar-assets', Key: quarantineKey },
+    ]);
+    expect(commandsOfType('GetObject').map(command => command.input)).toEqual([
+      { Bucket: 'webinar-assets', Key: quarantineKey },
+    ]);
+  });
+
+  it('guards immutable approved writes and copies with a create-only destination condition', async () => {
+    const body = Buffer.from('approved asset');
+    await storage.putApprovedObject({
+      config,
+      approvedKey,
+      body,
+      mimeType: 'image/png',
+      byteSize: body.length,
+    });
+    await storage.copyApprovedObject({
+      config,
+      approvedKey,
+      sourceKey: quarantineKey,
+      mimeType: 'image/png',
+    });
+
+    expect(commandsOfType('PutObject').map(command => command.input)).toEqual([{
+      Bucket: 'webinar-assets',
+      Key: approvedKey,
+      Body: body,
+      ContentType: 'image/png',
+      ContentLength: body.length,
+      CacheControl: 'public, max-age=31536000, immutable',
+      IfNoneMatch: '*',
+    }]);
+    expect(commandsOfType('CopyObject').map(command => command.input)).toEqual([{
+      Bucket: 'webinar-assets',
+      Key: approvedKey,
+      CopySource: `webinar-assets/${quarantineKey}`,
+      ContentType: 'image/png',
+      MetadataDirective: 'REPLACE',
+      CacheControl: 'public, max-age=31536000, immutable',
+      IfNoneMatch: '*',
+    }]);
+  });
+
+  it('rejects malformed approved-key overrides before issuing an immutable write', async () => {
+    for (const malformedKey of [
+      'approved/sha256/not-a-hash/deck.png',
+      `approved/sha256/${'A'.repeat(64)}/deck.png`,
+      `approved/sha256/${'a'.repeat(64)}/nested/deck.png`,
+      `approved/sha256/${'a'.repeat(64)}/ deck.png `,
+    ]) {
+      await expect(storage.putApprovedObject({ config, approvedKey: malformedKey, body: Buffer.alloc(0) }))
+        .rejects.toMatchObject({ code: 'ASSET_STORAGE_INVALID' });
+    }
+    expect(commandsOfType('PutObject')).toHaveLength(0);
   });
 });
