@@ -1,6 +1,7 @@
 const { createHash, randomUUID } = require('node:crypto');
 const { execFile } = require('node:child_process');
-const { rm, writeFile } = require('node:fs/promises');
+const { createReadStream } = require('node:fs');
+const { open, rm } = require('node:fs/promises');
 const { inflateSync } = require('node:zlib');
 const path = require('node:path');
 const { tmpdir } = require('node:os');
@@ -1055,6 +1056,20 @@ async function detectMimeType(body, declaredMimeType) {
   }
 }
 
+function canonicalDetectedMimeType(mimeType) {
+  return ({ 'audio/x-wav': 'audio/wav', 'image/jpg': 'image/jpeg' })[mimeType] || mimeType;
+}
+
+async function detectMimeTypeFromFile(file) {
+  try {
+    const { fileTypeFromFile } = await import('file-type');
+    const detected = await fileTypeFromFile(file);
+    return detected ? canonicalDetectedMimeType(detected.mime) : null;
+  } catch {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset type detection failed');
+  }
+}
+
 function execFfprobe(file) {
   return new Promise((resolve, reject) => {
     execFile(ffprobe.path, [
@@ -1070,32 +1085,162 @@ function execFfprobe(file) {
   });
 }
 
-async function probeDuration(body, mimeType) {
-  const extension = EXTENSIONS[mimeType];
-  const temporaryFile = path.join(tmpdir(), `webinar-asset-${randomUUID()}${extension}`);
-  let durationMs;
-  let failure;
+async function probeDuration(temporaryFile) {
   try {
-    await writeFile(temporaryFile, body, { flag: 'wx' });
     const output = await execFfprobe(temporaryFile);
     const seconds = Number(JSON.parse(output).format?.duration);
     if (!Number.isFinite(seconds) || seconds < 0) {
       throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset duration is invalid');
     }
-    durationMs = Math.round(seconds * 1000);
+    return Math.round(seconds * 1000);
   } catch (error) {
-    failure = error instanceof AssetInspectionError
-      ? error
-      : inspectionError('ASSET_INSPECTION_PROBE_FAILED', 'Unable to inspect asset duration');
+    if (error instanceof AssetInspectionError) throw error;
+    throw inspectionError('ASSET_INSPECTION_PROBE_FAILED', 'Unable to inspect asset duration');
+  }
+}
+
+async function writeAll(fileHandle, chunk) {
+  let offset = 0;
+  while (offset < chunk.length) {
+    const { bytesWritten } = await fileHandle.write(chunk, offset, chunk.length - offset, null);
+    if (!Number.isSafeInteger(bytesWritten) || bytesWritten <= 0) {
+      throw inspectionError('ASSET_INSPECTION_INVALID', 'Unable to write temporary asset file');
+    }
+    offset += bytesWritten;
+  }
+}
+
+async function spoolMediaStream({ stream, fileHandle, maximum, declaredBytes }) {
+  if (!stream || typeof stream[Symbol.asyncIterator] !== 'function') {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset body must be a readable stream');
+  }
+
+  const hash = createHash('sha256');
+  let byteSize = 0;
+  try {
+    for await (const piece of stream) {
+      const chunk = Buffer.isBuffer(piece) ? piece : Buffer.from(piece);
+      if (chunk.length > maximum - byteSize) {
+        stream.destroy();
+        throw inspectionError('ASSET_INSPECTION_TOO_LARGE', 'Asset exceeds its size limit');
+      }
+      if (chunk.length > declaredBytes - byteSize) {
+        stream.destroy();
+        throw inspectionError('ASSET_INSPECTION_SIZE_MISMATCH', 'Asset size does not match its declaration');
+      }
+      await writeAll(fileHandle, chunk);
+      hash.update(chunk);
+      byteSize += chunk.length;
+    }
+  } catch (error) {
+    if (error instanceof AssetInspectionError) throw error;
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Unable to read asset body');
+  }
+  if (byteSize !== declaredBytes) {
+    throw inspectionError('ASSET_INSPECTION_SIZE_MISMATCH', 'Asset size does not match its declaration');
+  }
+  return { byteSize, sha256: hash.digest('hex') };
+}
+
+async function closeApprovedStream(stream) {
+  if (!stream || stream.closed) return;
+  await new Promise(resolve => {
+    stream.once('close', resolve);
+    stream.destroy();
+    if (stream.closed) resolve();
+  });
+}
+
+async function inspectStreamedMedia({
+  stream,
+  declaredBytes,
+  mimeType,
+  rule,
+  consumeApprovedBody,
+}) {
+  const extension = EXTENSIONS[mimeType];
+  const temporaryFile = path.join(tmpdir(), `webinar-asset-${randomUUID()}${extension}`);
+  let fileHandle;
+  let approvedStream;
+  let created = false;
+  let failure;
+  let outcome;
+
+  try {
+    fileHandle = await open(temporaryFile, 'wx', 0o600);
+    created = true;
+    const content = await spoolMediaStream({
+      stream,
+      fileHandle,
+      maximum: rule.maxBytes,
+      declaredBytes,
+    });
+    await fileHandle.close();
+    fileHandle = null;
+
+    const actualMimeType = await detectMimeTypeFromFile(temporaryFile);
+    if (!actualMimeType) {
+      throw inspectionError('ASSET_INSPECTION_UNSUPPORTED', 'Asset bytes are not an approved media type');
+    }
+    if (actualMimeType !== mimeType) {
+      throw inspectionError('ASSET_INSPECTION_MIME_MISMATCH', 'Asset MIME type does not match its bytes');
+    }
+    const inspected = {
+      mediaType: rule.mediaType,
+      mimeType,
+      byteSize: content.byteSize,
+      sha256: content.sha256,
+      width: null,
+      height: null,
+      durationMs: await probeDuration(temporaryFile),
+    };
+
+    if (typeof consumeApprovedBody === 'function') {
+      approvedStream = createReadStream(temporaryFile, { flags: 'r' });
+      try {
+        outcome = await consumeApprovedBody({ ...inspected, approvedBody: approvedStream });
+      } catch (error) {
+        failure = error;
+      }
+    } else {
+      outcome = inspected;
+    }
+  } catch (error) {
+    if (!failure) {
+      failure = error instanceof AssetInspectionError
+        ? error
+        : inspectionError('ASSET_INSPECTION_INVALID', 'Asset inspection failed');
+    }
   } finally {
     try {
-      await rm(temporaryFile, { force: true });
+      await closeApprovedStream(approvedStream);
     } catch {
-      if (!failure) failure = inspectionError('ASSET_INSPECTION_CLEANUP_FAILED', 'Unable to remove temporary asset file');
+      if (!failure) {
+        failure = inspectionError('ASSET_INSPECTION_CLEANUP_FAILED', 'Unable to close temporary asset stream');
+      }
+    }
+    if (fileHandle) {
+      try {
+        await fileHandle.close();
+      } catch {
+        if (!failure) {
+          failure = inspectionError('ASSET_INSPECTION_CLEANUP_FAILED', 'Unable to close temporary asset file');
+        }
+      }
+    }
+    if (created) {
+      try {
+        await rm(temporaryFile, { force: true });
+      } catch {
+        if (!failure) {
+          failure = inspectionError('ASSET_INSPECTION_CLEANUP_FAILED', 'Unable to remove temporary asset file');
+        }
+      }
     }
   }
+
   if (failure) throw failure;
-  return durationMs;
+  return outcome;
 }
 
 async function inspectRaster(body) {
@@ -1111,7 +1256,13 @@ async function inspectRaster(body) {
   return { width: metadata.width, height: frameHeight };
 }
 
-async function inspectAsset({ stream, declaredMimeType, declaredBytes, filename } = {}) {
+async function inspectAsset({
+  stream,
+  declaredMimeType,
+  declaredBytes,
+  filename,
+  consumeApprovedBody,
+} = {}) {
   const mimeType = normalizedMimeType(declaredMimeType);
   const rule = MEDIA_RULES[mimeType];
   if (!rule || typeof filename !== 'string' || !filename.trim() || !Number.isSafeInteger(declaredBytes) || declaredBytes < 0) {
@@ -1121,6 +1272,17 @@ async function inspectAsset({ stream, declaredMimeType, declaredBytes, filename 
     throw inspectionError('ASSET_INSPECTION_TOO_LARGE', 'Asset exceeds its size limit');
   }
 
+  if (rule.mediaType === 'audio' || rule.mediaType === 'video') {
+    return inspectStreamedMedia({
+      stream,
+      declaredBytes,
+      mimeType,
+      rule,
+      consumeApprovedBody,
+    });
+  }
+
+  let inspected;
   try {
     const body = await readLimitedStream(stream, rule.maxBytes);
     if (body.length !== declaredBytes) {
@@ -1135,24 +1297,23 @@ async function inspectAsset({ stream, declaredMimeType, declaredBytes, filename 
     if (rule.mediaType === 'font') await validateFont(approvedBody, mimeType);
     if (rule.mediaType === 'image') validateAnimatedContainer(approvedBody, mimeType);
     const dimensions = rule.mediaType === 'image' ? await inspectRaster(approvedBody) : {};
-    const durationMs = (rule.mediaType === 'audio' || rule.mediaType === 'video')
-      ? await probeDuration(approvedBody, mimeType)
-      : null;
-
-    return {
+    inspected = {
       mediaType: rule.mediaType,
       mimeType,
       byteSize: approvedBody.length,
       sha256: createHash('sha256').update(approvedBody).digest('hex'),
       width: dimensions.width ?? null,
       height: dimensions.height ?? null,
-      durationMs,
+      durationMs: null,
       approvedBody,
     };
   } catch (error) {
     if (error instanceof AssetInspectionError) throw error;
     throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset inspection failed');
   }
+  return typeof consumeApprovedBody === 'function'
+    ? consumeApprovedBody(inspected)
+    : inspected;
 }
 
 module.exports = {

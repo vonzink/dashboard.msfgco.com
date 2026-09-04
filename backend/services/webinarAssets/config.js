@@ -1,4 +1,6 @@
 const MiB = 1024 * 1024;
+const DEFAULT_INSPECTION_CONCURRENCY = 2;
+const MAX_INSPECTION_CONCURRENCY = 8;
 
 const MEDIA_RULES = Object.freeze({
   'image/png': Object.freeze({ mediaType: 'image', maxBytes: 20 * MiB }),
@@ -41,6 +43,20 @@ function normalizeQuarantinePrefix(value) {
   return `${normalized}/`;
 }
 
+function normalizeInspectionConcurrency(value) {
+  if (value === undefined || value === null || value === '') return DEFAULT_INSPECTION_CONCURRENCY;
+  const normalized = typeof value === 'string' ? value.trim() : value;
+  const capacity = Number(normalized);
+  if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > MAX_INSPECTION_CONCURRENCY) {
+    throw assetConfigError('ASSET_CONFIG_INVALID');
+  }
+  return capacity;
+}
+
+function loadInspectionConcurrency(env = process.env) {
+  return normalizeInspectionConcurrency(env.WEBINAR_ASSET_INSPECTION_CONCURRENCY);
+}
+
 function loadAssetConfig(env = process.env) {
   const bucket = typeof env.WEBINAR_ASSET_BUCKET === 'string' ? env.WEBINAR_ASSET_BUCKET.trim() : '';
   const rawCdnBaseUrl = typeof env.WEBINAR_ASSET_CDN_BASE_URL === 'string'
@@ -64,6 +80,7 @@ function loadAssetConfig(env = process.env) {
     bucket,
     cdnBaseUrl,
     quarantinePrefix: normalizeQuarantinePrefix(env.WEBINAR_ASSET_QUARANTINE_PREFIX),
+    inspectionConcurrency: loadInspectionConcurrency(env),
   });
 }
 
@@ -91,8 +108,11 @@ function makePublicUrl(config, approvedKey) {
 }
 
 module.exports = {
+  DEFAULT_INSPECTION_CONCURRENCY,
+  MAX_INSPECTION_CONCURRENCY,
   MEDIA_RULES,
   loadAssetConfig,
+  loadInspectionConcurrency,
   makeQuarantineKey,
   makeApprovedKey,
   makePublicUrl,

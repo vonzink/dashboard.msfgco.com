@@ -373,6 +373,35 @@ describe('webinar asset API through the production application factory', () => {
       .not.toMatch(/bucket|quarantine|scanner details/i);
   });
 
+  it('returns the closed busy response when inspection admission is saturated', async () => {
+    catalog.confirmUpload.mockRejectedValueOnce(new AssetCatalogError(
+      'ASSET_INSPECTION_BUSY',
+      'private capacity and queue details',
+      503,
+    ));
+
+    expect(await request(
+      'POST',
+      `/api/webinar-assets/upload-intents/${VERSION_ID}/confirm`,
+      {},
+    )).toEqual({
+      status: 503,
+      body: {
+        error: 'Webinar asset inspection is busy',
+        code: 'ASSET_INSPECTION_BUSY',
+      },
+    });
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.asset_inspection_busy',
+      actorUserId: 7,
+      assetVersionId: VERSION_ID,
+      statusCode: 503,
+      reasonCode: 'ASSET_INSPECTION_BUSY',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/private|capacity|queue/i);
+  });
+
   it('does not double-record a persisted-path failure already recorded by the catalog', async () => {
     await new Promise(resolve => server.close(resolve));
     catalog = makeMalformedPersistedCatalog();

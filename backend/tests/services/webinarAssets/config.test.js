@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MEDIA_RULES,
   loadAssetConfig,
+  loadInspectionConcurrency,
   makeApprovedKey,
   makePublicUrl,
   makeQuarantineKey,
@@ -37,7 +38,29 @@ describe('Webinar Studio asset configuration', () => {
       bucket: 'webinar-assets',
       cdnBaseUrl: 'https://assets.example',
       quarantinePrefix: 'quarantine/',
+      inspectionConcurrency: 2,
     });
+  });
+
+  it('uses a conservative inspection capacity and accepts only bounded integer overrides', () => {
+    const base = {
+      WEBINAR_ASSET_BUCKET: 'webinar-assets',
+      WEBINAR_ASSET_CDN_BASE_URL: 'https://assets.example',
+    };
+    expect(loadAssetConfig(base).inspectionConcurrency).toBe(2);
+    expect(loadAssetConfig({
+      ...base,
+      WEBINAR_ASSET_INSPECTION_CONCURRENCY: '4',
+    }).inspectionConcurrency).toBe(4);
+    expect(loadInspectionConcurrency({
+      WEBINAR_ASSET_INSPECTION_CONCURRENCY: '4',
+    })).toBe(4);
+    for (const value of ['0', '9', '1.5', 'not-a-number']) {
+      expect(() => loadAssetConfig({
+        ...base,
+        WEBINAR_ASSET_INSPECTION_CONCURRENCY: value,
+      })).toThrowError(expect.objectContaining({ code: 'ASSET_CONFIG_INVALID' }));
+    }
   });
 
   it('rejects a quarantine prefix that could overlap the public approved namespace', () => {

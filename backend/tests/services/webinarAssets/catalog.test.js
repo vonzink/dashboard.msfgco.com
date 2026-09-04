@@ -22,6 +22,16 @@ function clone(value) {
   return structuredClone(value);
 }
 
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
+
 function initialState(overrides = {}) {
   return {
     presentations: [{ id: 12, title: 'First-time buyer', primary_owner_user_id: 7, archived_at: null }],
@@ -282,6 +292,9 @@ function fixture(overrides = {}) {
     randomUUID: () => uuidValues.shift(),
     makePublicUrl: (_config, key) => `https://assets.example/${key}`,
     config: { bucket: 'unused-in-tests', cdnBaseUrl: 'https://assets.example', quarantinePrefix: 'quarantine/' },
+    ...(overrides.inspectionConcurrency === undefined
+      ? {}
+      : { inspectionConcurrency: overrides.inspectionConcurrency }),
   });
   return { ...model, api, storage, inspection, recordAuditEvent, recordOperationalEvent };
 }
@@ -403,6 +416,85 @@ describe('Webinar Studio shared asset catalog', () => {
     expect(recordOperationalEvent).toHaveBeenCalledWith('webinar.asset_available', {
       actorUserId: 7, assetVersionId: VERSION_ID, reasonCode: 'ASSET_AVAILABLE',
     });
+  });
+
+  it('bounds concurrent inspection, rejects saturation immediately, and recovers every permit', async () => {
+    const versions = [
+      { ...initialState().versions[0], original_filename: 'first.png' },
+      {
+        ...initialState().versions[0], id: SECOND_VERSION_ID, version_number: 2,
+        original_filename: 'second.png', s3_key: `quarantine/${SECOND_VERSION_ID}/second.png`,
+      },
+      {
+        ...initialState().versions[0], id: THIRD_VERSION_ID, version_number: 3,
+        original_filename: 'third.png', s3_key: `quarantine/${THIRD_VERSION_ID}/third.png`,
+      },
+    ];
+    const gates = [deferred(), deferred(), deferred()];
+    const inspected = {
+      mediaType: 'image', mimeType: 'image/png', byteSize: 68, sha256: SHA256,
+      width: 1, height: 1, durationMs: null, approvedBody: Buffer.from('approved bytes'),
+    };
+    let active = 0;
+    let maximumActive = 0;
+    let allowThirdInspection = false;
+    const inspectAsset = vi.fn(async input => {
+      const invocation = inspectAsset.mock.calls.length - 1;
+      if (invocation >= gates.length) throw new Error('unexpected extra inspection');
+      if (invocation === 2 && !allowThirdInspection) {
+        throw Object.assign(new Error('third inspection should have been denied admission'), {
+          code: 'ASSET_INSPECTION_INVALID',
+        });
+      }
+      active += 1;
+      maximumActive = Math.max(maximumActive, active);
+      try {
+        const result = await gates[invocation].promise;
+        return typeof input.consumeApprovedBody === 'function'
+          ? input.consumeApprovedBody(result)
+          : result;
+      } finally {
+        active -= 1;
+      }
+    });
+    const current = fixture({
+      state: initialState({ versions }),
+      storage: { readScanStatus: vi.fn().mockResolvedValue('NO_THREATS_FOUND') },
+      inspection: { inspectAsset },
+      inspectionConcurrency: 2,
+    });
+
+    const first = current.api.confirmUpload({ versionId: VERSION_ID, actorUserId: 7, isAdmin: false });
+    await vi.waitFor(() => expect(inspectAsset).toHaveBeenCalledTimes(1));
+    const second = current.api.confirmUpload({ versionId: SECOND_VERSION_ID, actorUserId: 7, isAdmin: false });
+    await vi.waitFor(() => expect(inspectAsset).toHaveBeenCalledTimes(2));
+    expect(active).toBe(2);
+
+    await expect(current.api.confirmUpload({
+      versionId: THIRD_VERSION_ID, actorUserId: 7, isAdmin: false,
+    })).rejects.toMatchObject({
+      status: 503,
+      code: 'ASSET_INSPECTION_BUSY',
+      message: 'Webinar asset inspection is busy',
+    });
+    expect(inspectAsset).toHaveBeenCalledTimes(2);
+    expect(current.storage.readQuarantineObject).toHaveBeenCalledTimes(2);
+
+    gates[0].resolve(inspected);
+    await expect(first).resolves.toMatchObject({ versionId: VERSION_ID, status: 'available' });
+    allowThirdInspection = true;
+    const recovered = current.api.confirmUpload({
+      versionId: THIRD_VERSION_ID, actorUserId: 7, isAdmin: false,
+    });
+    await vi.waitFor(() => expect(inspectAsset).toHaveBeenCalledTimes(3));
+    expect(active).toBe(2);
+
+    gates[1].resolve(inspected);
+    await expect(second).resolves.toMatchObject({ versionId: SECOND_VERSION_ID, status: 'available' });
+    gates[2].resolve(inspected);
+    await expect(recovered).resolves.toMatchObject({ versionId: THIRD_VERSION_ID, status: 'available' });
+    expect(active).toBe(0);
+    expect(maximumActive).toBe(2);
   });
 
   it.each([

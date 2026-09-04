@@ -22,6 +22,10 @@ const CONTROLLED_ERRORS = Object.freeze({
     status: 503,
     message: 'Webinar asset processing is temporarily unavailable',
   }),
+  ASSET_INSPECTION_BUSY: Object.freeze({
+    status: 503,
+    message: 'Webinar asset inspection is busy',
+  }),
 });
 
 function pickDefined(source, keys) {
@@ -129,7 +133,11 @@ function createWebinarAssetsRouter({
         recordSafeEvent(req, 'webinar.version_conflict', 409, 'VERSION_CONFLICT');
       } else if (definition.status === 503
         && !defaultCatalog.wasOperationalEventRecorded(error)) {
-        recordSafeEvent(req, 'webinar.asset_scanner_failure', 503, 'ASSET_SCANNER_FAILURE');
+        if (error.code === 'ASSET_INSPECTION_BUSY') {
+          recordSafeEvent(req, 'webinar.asset_inspection_busy', 503, error.code);
+        } else {
+          recordSafeEvent(req, 'webinar.asset_scanner_failure', 503, 'ASSET_SCANNER_FAILURE');
+        }
       }
       return res.status(definition.status).json({ error: definition.message, code: error.code });
     }

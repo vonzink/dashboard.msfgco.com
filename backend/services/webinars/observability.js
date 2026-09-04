@@ -5,7 +5,7 @@ const EVENT_NAMES = new Set([
   'webinar.authorization_denied', 'webinar.database_failure', 'webinar.restore_succeeded',
   'webinar.public_delivery_failure', 'webinar.public_runtime_error', 'webinar.asset_scan_pending',
   'webinar.asset_scan_rejected', 'webinar.asset_inspection_rejected', 'webinar.asset_available',
-  'webinar.asset_scanner_failure',
+  'webinar.asset_scanner_failure', 'webinar.asset_inspection_busy',
 ]);
 const SAFE_FIELDS = new Set(['webinarId', 'slideId', 'revisionId', 'actorUserId', 'liveVersion', 'statusCode', 'reasonCode', 'durationMs', 'assetVersionId']);
 
@@ -24,6 +24,7 @@ const CONTROLLED_REASON_CODE_DEFINITIONS = Object.freeze({
   ANCHOR_CONFLICT: reasonCodeDefinition(409, 'webinar.version_conflict'),
   ANCHOR_FORMAT: reasonCodeDefinition(),
   ASSET_AVAILABLE: reasonCodeDefinition(),
+  ASSET_INSPECTION_BUSY: reasonCodeDefinition(503, 'webinar.asset_inspection_busy'),
   ASSET_INSPECTION_REJECTED: reasonCodeDefinition(),
   ASSET_LIBRARY_NOT_READY: reasonCodeDefinition(503, 'webinar.validation_rejected'),
   ASSET_NOT_AVAILABLE: reasonCodeDefinition(422, 'webinar.validation_rejected'),

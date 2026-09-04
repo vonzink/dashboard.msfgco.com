@@ -1,6 +1,12 @@
 const { randomUUID: defaultRandomUUID } = require('node:crypto');
 const db = require('../../db/connection');
-const { MEDIA_RULES, loadAssetConfig, makePublicUrl: defaultMakePublicUrl } = require('./config');
+const {
+  MAX_INSPECTION_CONCURRENCY,
+  MEDIA_RULES,
+  loadAssetConfig,
+  loadInspectionConcurrency,
+  makePublicUrl: defaultMakePublicUrl,
+} = require('./config');
 const defaultStorage = require('./storage');
 const defaultInspection = require('./inspection');
 const { recordAuditEvent: defaultRecordAuditEvent } = require('../webinars/audit');
@@ -44,6 +50,33 @@ function processingUnavailable(cause) {
     503,
     cause,
   );
+}
+
+function inspectionBusy() {
+  return new AssetCatalogError(
+    'ASSET_INSPECTION_BUSY',
+    'Webinar asset inspection is busy',
+    503,
+  );
+}
+
+function createImmediateSemaphore(capacity) {
+  if (!Number.isSafeInteger(capacity) || capacity < 1 || capacity > MAX_INSPECTION_CONCURRENCY) {
+    throw new AssetCatalogError('ASSET_CONFIG_INVALID', 'Webinar asset configuration is invalid', 500);
+  }
+  let active = 0;
+  return {
+    tryAcquire() {
+      if (active >= capacity) return null;
+      active += 1;
+      let released = false;
+      return () => {
+        if (released) return;
+        released = true;
+        active -= 1;
+      };
+    },
+  };
 }
 
 function wasOperationalEventRecorded(error) {
@@ -120,7 +153,9 @@ function createCatalogService({
   randomUUID = defaultRandomUUID,
   makePublicUrl = defaultMakePublicUrl,
   config = null,
+  inspectionConcurrency = config?.inspectionConcurrency ?? loadInspectionConcurrency(),
 } = {}) {
+  const inspectionSemaphore = createImmediateSemaphore(inspectionConcurrency);
   function canonicalApprovedKey(key, sha256) {
     const match = typeof key === 'string' ? CANONICAL_APPROVED_KEY.exec(key) : null;
     if (!match || match[1] !== sha256) throw processingUnavailable();
@@ -507,47 +542,74 @@ function createCatalogService({
       return transition.result;
     }
 
-    let stream;
-    try {
-      stream = await storage.readQuarantineObject(storageInput({ key: version.s3_key }));
-    } catch (error) {
-      throw recordProcessingFailure(processingUnavailable(error), input.actorUserId, version.id);
+    const releaseInspectionPermit = inspectionSemaphore.tryAcquire();
+    if (!releaseInspectionPermit) {
+      const error = inspectionBusy();
+      operational('webinar.asset_inspection_busy', input.actorUserId, version.id, error.code);
+      throw markOperationalEventRecorded(error);
     }
 
-    let inspected;
     try {
-      inspected = await inspection.inspectAsset({
-        stream,
-        declaredMimeType: version.mime_type,
-        declaredBytes: Number(version.byte_size),
-        filename: version.original_filename,
-      });
-    } catch (error) {
-      const transition = await transitionRejected({
-        versionId: version.id,
-        actorUserId: input.actorUserId,
-        rejectionCode: inspectionRejectionCode(error),
-      });
-      if (transition.transitioned) {
-        operational(
-          'webinar.asset_inspection_rejected',
-          input.actorUserId,
-          version.id,
-          'ASSET_INSPECTION_REJECTED',
-        );
+      let stream;
+      try {
+        stream = await storage.readQuarantineObject(storageInput({ key: version.s3_key }));
+      } catch (error) {
+        throw recordProcessingFailure(processingUnavailable(error), input.actorUserId, version.id);
       }
-      return transition.result;
-    }
 
-    try {
-      const transition = await transitionAvailable({ version, actorUserId: input.actorUserId, inspected });
+      let releaseStarted = false;
+      let inspectionPassed = false;
+      let transition;
+      try {
+        const outcome = await inspection.inspectAsset({
+          stream,
+          declaredMimeType: version.mime_type,
+          declaredBytes: Number(version.byte_size),
+          filename: version.original_filename,
+          consumeApprovedBody: async inspected => {
+            releaseStarted = true;
+            transition = await transitionAvailable({
+              version,
+              actorUserId: input.actorUserId,
+              inspected,
+            });
+            return transition;
+          },
+        });
+        inspectionPassed = true;
+        if (!releaseStarted) {
+          transition = await transitionAvailable({
+            version,
+            actorUserId: input.actorUserId,
+            inspected: outcome,
+          });
+        }
+      } catch (error) {
+        if (releaseStarted || inspectionPassed) {
+          const failure = error instanceof AssetCatalogError ? error : processingUnavailable(error);
+          throw recordProcessingFailure(failure, input.actorUserId, version.id);
+        }
+        transition = await transitionRejected({
+          versionId: version.id,
+          actorUserId: input.actorUserId,
+          rejectionCode: inspectionRejectionCode(error),
+        });
+        if (transition.transitioned) {
+          operational(
+            'webinar.asset_inspection_rejected',
+            input.actorUserId,
+            version.id,
+            'ASSET_INSPECTION_REJECTED',
+          );
+        }
+      }
+
       if (transition.transitioned) {
         operational('webinar.asset_available', input.actorUserId, version.id, 'ASSET_AVAILABLE');
       }
       return transition.result;
-    } catch (error) {
-      const failure = error instanceof AssetCatalogError ? error : processingUnavailable(error);
-      throw recordProcessingFailure(failure, input.actorUserId, version.id);
+    } finally {
+      releaseInspectionPermit();
     }
   }
 

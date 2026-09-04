@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { access, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
 import { deflateSync, inflateSync } from 'node:zlib';
@@ -281,6 +281,7 @@ function assetInput(body, declaredMimeType, filename) {
 let inspection;
 let execFileSpy;
 let rmSpy;
+let openSpy;
 
 function streamOf(body) {
   return Readable.from([body]);
@@ -288,12 +289,14 @@ function streamOf(body) {
 
 beforeEach(() => {
   execFileSpy = vi.spyOn(childProcess, 'execFile');
+  openSpy = vi.spyOn(fsPromises, 'open');
   delete require.cache[inspectionPath];
   inspection = require('../../../services/webinarAssets/inspection');
 });
 
 afterEach(() => {
   execFileSpy.mockRestore();
+  openSpy.mockRestore();
   rmSpy?.mockRestore();
   rmSpy = undefined;
   delete require.cache[inspectionPath];
@@ -674,6 +677,95 @@ describe('Webinar asset inspection', () => {
         declaredBytes: body.length,
         filename,
       })).resolves.toMatchObject({ mediaType, mimeType: declaredMimeType, durationMs: 1234 });
+    }
+  });
+
+  it('spools media once to a restrictive file and streams approved bytes without Buffer.concat', async () => {
+    const body = wavHeader();
+    const probeOutput = JSON.stringify({ format: { duration: '1.234' } });
+    execFileSpy.mockImplementation((file, args, options, callback) => callback(null, probeOutput, ''));
+    const concatSpy = vi.spyOn(Buffer, 'concat');
+    let temporaryFile;
+
+    try {
+      const result = await inspection.inspectAsset({
+        ...assetInput(body, 'audio/wav', 'track.wav'),
+        consumeApprovedBody: async inspected => {
+          temporaryFile = openSpy.mock.calls.at(-1)[0];
+          expect(execFileSpy.mock.calls.at(-1)[1].at(-1)).toBe(temporaryFile);
+          expect((await stat(temporaryFile)).mode & 0o777).toBe(0o600);
+          expect(Buffer.isBuffer(inspected.approvedBody)).toBe(false);
+
+          const received = Buffer.alloc(inspected.byteSize);
+          let offset = 0;
+          for await (const chunk of inspected.approvedBody) {
+            Buffer.from(chunk).copy(received, offset);
+            offset += chunk.length;
+          }
+          expect(offset).toBe(body.length);
+          expect(received.equals(body)).toBe(true);
+          return { stored: true, sha256: inspected.sha256 };
+        },
+      });
+
+      expect(result).toEqual({
+        stored: true,
+        sha256: '4f8734c5e13ac599e168cf247a51c1dd0758537ce00bf16d7fed1a3d14d07041',
+      });
+      expect(openSpy).toHaveBeenCalledWith(expect.stringMatching(/webinar-asset-.*\.wav$/), 'wx', 0o600);
+      expect(concatSpy).not.toHaveBeenCalled();
+      await expect(access(temporaryFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    } finally {
+      concatSpy.mockRestore();
+    }
+  });
+
+  it('removes the exact streamed-media temp file after source, probe, and approved-consumer failures', async () => {
+    const privateConsumerFailure = new Error('private approved destination failure');
+    const cases = [
+      {
+        expected: 'ASSET_INSPECTION_INVALID',
+        input: () => ({
+          stream: Readable.from((async function* () {
+            yield wavHeader();
+            throw new Error('private source failure');
+          }())),
+          declaredMimeType: 'audio/wav',
+          declaredBytes: wavHeader().length,
+          filename: 'source.wav',
+        }),
+        probe: () => {},
+      },
+      {
+        expected: 'ASSET_INSPECTION_PROBE_FAILED',
+        input: () => assetInput(wavHeader(), 'audio/wav', 'probe.wav'),
+        probe: () => execFileSpy.mockImplementation((file, args, options, callback) => callback(new Error('private probe failure'))),
+      },
+      {
+        expected: privateConsumerFailure,
+        input: () => ({
+          ...assetInput(wavHeader(), 'audio/wav', 'consumer.wav'),
+          consumeApprovedBody: async () => { throw privateConsumerFailure; },
+        }),
+        probe: () => execFileSpy.mockImplementation((file, args, options, callback) => callback(null, '{"format":{"duration":"1"}}', '')),
+      },
+    ];
+
+    for (const testCase of cases) {
+      execFileSpy.mockReset();
+      testCase.probe();
+      let failure;
+      try {
+        await inspection.inspectAsset(testCase.input());
+      } catch (error) {
+        failure = error;
+      }
+      if (typeof testCase.expected === 'string') expect(failure).toMatchObject({ code: testCase.expected });
+      else expect(failure).toBe(testCase.expected);
+
+      const temporaryFile = openSpy.mock.calls.at(-1)[0];
+      expect(temporaryFile).toMatch(/webinar-asset-.*\.wav$/);
+      await expect(access(temporaryFile)).rejects.toMatchObject({ code: 'ENOENT' });
     }
   });
 

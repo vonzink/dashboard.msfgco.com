@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'module';
+import { Readable } from 'node:stream';
 
 const require = createRequire(import.meta.url);
 const s3Path = require.resolve('@aws-sdk/client-s3');
@@ -155,13 +156,14 @@ describe('Webinar Studio quarantine storage', () => {
   });
 
   it('guards immutable approved writes and copies with a create-only destination condition', async () => {
-    const body = Buffer.from('approved asset');
+    const approvedBytes = Buffer.from('approved asset');
+    const body = Readable.from([approvedBytes]);
     await storage.putApprovedObject({
       config,
       approvedKey,
       body,
       mimeType: 'image/png',
-      byteSize: body.length,
+      byteSize: approvedBytes.length,
     });
     await storage.copyApprovedObject({
       config,
@@ -175,7 +177,7 @@ describe('Webinar Studio quarantine storage', () => {
       Key: approvedKey,
       Body: body,
       ContentType: 'image/png',
-      ContentLength: body.length,
+      ContentLength: approvedBytes.length,
       CacheControl: 'public, max-age=31536000, immutable',
       IfNoneMatch: '*',
     }]);
