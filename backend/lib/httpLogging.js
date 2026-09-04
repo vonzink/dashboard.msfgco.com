@@ -23,18 +23,35 @@ function serializeHeaders(headers, allowlist) {
   return safe;
 }
 
+function hasInvalidRequestTargetCharacter(requestTarget) {
+  for (const character of requestTarget) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint <= 0x20 || codePoint === 0x7f || codePoint === 0xa0 || codePoint === 0xfeff) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function requestPathname(requestOrUrl) {
-  const url = typeof requestOrUrl === 'string'
+  const requestTarget = typeof requestOrUrl === 'string'
     ? requestOrUrl
     : typeof requestOrUrl?.originalUrl === 'string'
       ? requestOrUrl.originalUrl
       : requestOrUrl?.url;
-  if (typeof url !== 'string') return undefined;
-  try {
-    return new URL(url, 'http://request.invalid').pathname;
-  } catch {
-    return url.split('?', 1)[0];
+  if (typeof requestTarget !== 'string' || requestTarget[0] !== '/') return undefined;
+
+  // Browsers send origin-form request targets. Keep that target byte-for-byte
+  // (apart from its query) so policy decisions match Express's raw routing.
+  // WHATWG URL parsing is deliberately avoided: it rewrites backslashes and
+  // dot segments before our CORS, quota, and logging classifiers see them.
+  // Fragments and whitespace/control characters are not valid in origin-form;
+  // fail them closed instead of assigning ambiguous public-route semantics.
+  if (requestTarget.includes('#') || hasInvalidRequestTargetCharacter(requestTarget)) {
+    return undefined;
   }
+  const queryIndex = requestTarget.indexOf('?');
+  return queryIndex === -1 ? requestTarget : requestTarget.slice(0, queryIndex);
 }
 
 function isPublicWebinarRequest(req) {

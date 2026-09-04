@@ -6,7 +6,13 @@ import express from 'express';
 import pino from 'pino';
 
 const require = createRequire(import.meta.url);
-const { createSafeHttpLogger, serializeRequest } = require('../../lib/httpLogging');
+const {
+  createSafeHttpLogger,
+  isPublicWebinarRequest,
+  isPublicWebinarRuntimeRequest,
+  requestPathname,
+  serializeRequest,
+} = require('../../lib/httpLogging');
 
 let server;
 
@@ -17,6 +23,50 @@ afterEach(async () => {
 });
 
 describe('credential-safe HTTP request logging', () => {
+  it('classifies only exact raw origin-form public paths without URL normalization', () => {
+    const lookalikes = [
+      '/api/public/webinars\\x\\runtime-events',
+      '/api/else/../public/webinars/x/runtime-events',
+      '/api//public/webinars/x/runtime-events',
+      '/api/else/%2e%2e/public/webinars/x/runtime-events',
+      '/api/public/webinars%5Cx%5Cruntime-events',
+    ];
+
+    for (const originalUrl of lookalikes) {
+      const req = { method: 'POST', originalUrl };
+      expect(requestPathname(req), originalUrl).toBe(originalUrl);
+      expect(isPublicWebinarRequest(req), originalUrl).toBe(false);
+      expect(isPublicWebinarRuntimeRequest(req), originalUrl).toBe(false);
+
+      const serialized = serializeRequest({
+        ...req,
+        id: 1,
+        headers: {
+          'content-type': 'application/json; charset=RAW_LOOKALIKE_CANARY',
+          'content-encoding': 'RAW_LOOKALIKE_ENCODING_CANARY',
+        },
+        socket: { remoteAddress: '127.0.0.1', remotePort: 1234 },
+      });
+      expect(serialized.url, originalUrl).toBe(originalUrl);
+      expect(serialized.headers['content-type'], originalUrl)
+        .toBe('application/json; charset=RAW_LOOKALIKE_CANARY');
+    }
+
+    for (const unsupported of [
+      'http://example.test/api/public/webinars/x/runtime-events',
+      '/api/public/webinars/x/runtime-events#fragment',
+      '*',
+    ]) {
+      const req = { method: 'POST', originalUrl: unsupported };
+      expect(requestPathname(req), unsupported).toBeUndefined();
+      expect(isPublicWebinarRequest(req), unsupported).toBe(false);
+      expect(isPublicWebinarRuntimeRequest(req), unsupported).toBe(false);
+    }
+
+    expect(requestPathname('/api/public/webinars/x/runtime-events/?trace=secret'))
+      .toBe('/api/public/webinars/x/runtime-events/');
+  });
+
   it('omits attacker-controlled transport headers only for exact public runtime POST paths', () => {
     const request = (url, method = 'POST') => serializeRequest({
       id: 1,

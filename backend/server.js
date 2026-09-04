@@ -296,9 +296,9 @@ const publicWebinarRuntimeLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many runtime events, please slow down' },
-  skip: (req) => ['GET', 'HEAD', 'OPTIONS'].includes(req.method),
+  skip: (req) => !isPublicWebinarRuntimeRequest(req),
 });
-app.use('/api/public/webinars', publicWebinarRuntimeLimiter);
+app.use(publicWebinarRuntimeLimiter);
 
 const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings', '/api/webinar-assets'];
 const WEBINAR_MAX_REQUEST_BYTES = LIMITS.request;
@@ -367,6 +367,16 @@ function parseWebinarRawJson(req, res, next) {
 
 // Closed header allowlists keep credentials and cookies out of request logs.
 app.use(createSafeHttpLogger(accessLogger));
+
+// Express 4's legacy URL parser can route unsupported absolute-form or
+// fragment-bearing request targets as though they were ordinary paths. Keep
+// those targets on the non-public boundary before any public body parser or
+// handler runs. Public classification itself always uses the raw origin-form
+// representation above.
+app.use('/api/public/webinars', (req, res, next) => {
+  if (isPublicWebinarRequest(req)) return next();
+  return res.status(404).json({ error: 'Not found' });
+});
 
 function recordPublicRuntimeRejection(req, statusCode, reasonCode) {
   if (req.publicWebinarOperationalEventRecorded) return;

@@ -23,6 +23,15 @@ const bundle = {
   resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] },
 };
 const json = JSON.stringify(bundle);
+const rawNonPublicRuntimeLookalikes = Object.freeze([
+  ['backslash separators', `/api/public/webinars\\${slug}\\runtime-events`],
+  ['literal dot segment', `/api/else/../public/webinars/${slug}/runtime-events`],
+  ['repeated slash', `/api//public/webinars/${slug}/runtime-events`],
+  ['encoded dot segment', `/api/else/%2e%2e/public/webinars/${slug}/runtime-events`],
+  ['encoded backslashes', `/api/public/webinars%5C${slug}%5Cruntime-events`],
+  ['absolute-form target', `http://msfgmortgage.com/api/public/webinars/${slug}/runtime-events`],
+  ['fragment-bearing target', `/api/public/webinars/${slug}/runtime-events#fragment`],
+]);
 
 let server;
 let getLiveBundleBySlug;
@@ -94,6 +103,43 @@ function requestWithDeclaredLength(path, contentLength) {
     });
     req.on('error', reject);
     req.end('x'.repeat(contentLength));
+  });
+}
+
+function rawRequest(target, {
+  method = 'POST',
+  origin,
+  headers = {},
+  body = runtimePayload(),
+} = {}) {
+  return new Promise((resolve, reject) => {
+    const requestHeaders = { ...headers };
+    if (origin !== undefined) requestHeaders.Origin = origin;
+    if (body !== undefined) {
+      if (!Object.keys(requestHeaders).some(name => name.toLowerCase() === 'content-type')) {
+        requestHeaders['Content-Type'] = 'application/json';
+      }
+      requestHeaders['Content-Length'] = Buffer.byteLength(body);
+    }
+    const req = http.request({
+      host: '127.0.0.1',
+      port: server.address().port,
+      path: target,
+      method,
+      headers: requestHeaders,
+    }, response => {
+      let responseBody = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { responseBody += chunk; });
+      response.on('end', () => resolve({
+        status: response.statusCode,
+        headers: response.headers,
+        body: responseBody,
+      }));
+    });
+    req.on('error', reject);
+    if (body !== undefined) req.write(body);
+    req.end();
   });
 }
 
@@ -248,6 +294,20 @@ describe('public live webinar reads', () => {
     expect(privateRequest.response.headers.get('access-control-allow-credentials')).toBe('true');
     expect(authenticate).toHaveBeenCalledTimes(1);
   });
+
+  it.each(rawNonPublicRuntimeLookalikes)(
+    'keeps the %s lookalike on private CORS with no webinar event',
+    async (_label, target) => {
+      const result = await rawRequest(target, { origin: publicOrigin });
+
+      expect(result.status).toBe(403);
+      expect(result.headers['access-control-allow-origin']).toBeUndefined();
+      expect(result.headers['access-control-allow-credentials']).toBeUndefined();
+      expect(result.body).not.toMatch(/RAW_LOOKALIKE|runtime|slide|source|stack/i);
+      expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+      expect(operationalLogger.info).not.toHaveBeenCalled();
+    },
+  );
 
   it('returns 404 for a missing, archived, or audience-disabled slug', async () => {
     getLiveBundleBySlug.mockResolvedValueOnce(null);
@@ -550,6 +610,67 @@ describe('public runtime telemetry', () => {
     }
     expect(getLiveBundleBySlug).not.toHaveBeenCalled();
     expect(operationalLogger.info).not.toHaveBeenCalled();
+  });
+
+  it.each(rawNonPublicRuntimeLookalikes)(
+    'routes the %s lookalike through only the general write quota',
+    async (_label, target) => {
+      await new Promise(resolve => server.close(resolve));
+      server = await listen({ publicWebinarRuntimeLimit: 1, generalWriteLimit: 1 });
+
+      const firstLookalike = await rawRequest(target);
+      expect(firstLookalike.status).toBe(404);
+      expect(JSON.parse(firstLookalike.body)).toEqual({ error: 'Not found' });
+      expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+      expect(operationalLogger.info).not.toHaveBeenCalled();
+
+      expect((await rawRequest(target)).status).toBe(429);
+      expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+      expect(operationalLogger.info).not.toHaveBeenCalled();
+
+      const canonical = await rawRequest(`/api/public/webinars/${slug}/runtime-events`);
+      expect(canonical.status).toBe(204);
+      expect((await rawRequest(`/api/public/webinars/${slug}/runtime-events`)).status).toBe(429);
+    },
+  );
+
+  it('logs raw non-public lookalikes with ordinary header policy and no query data', async () => {
+    await new Promise(resolve => server.close(resolve));
+    const chunks = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const accessLogger = pino({ base: null, timestamp: false }, stream);
+    server = await listen({ accessLogger });
+
+    const queryCanary = 'RAW_LOOKALIKE_QUERY_SECRET';
+    const samples = rawNonPublicRuntimeLookalikes.map(([label, target], index) => ({
+      label,
+      target: index === 1 ? `${target}?trace=${queryCanary}` : target,
+      expectedPath: index < 5 ? target : undefined,
+    }));
+    for (const sample of samples) {
+      const result = await rawRequest(sample.target, {
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      });
+      expect(result.status, sample.label).toBe(404);
+    }
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).not.toHaveBeenCalled();
+    const serialized = chunks.join('');
+    expect(serialized).not.toContain(queryCanary);
+    const records = serialized.trim().split('\n').map(line => JSON.parse(line));
+    expect(records).toHaveLength(samples.length);
+    for (const [index, record] of records.entries()) {
+      expect(record.req.url, samples[index].label).toBe(samples[index].expectedPath);
+      expect(record.req.headers['content-type'], samples[index].label)
+        .toBe('application/json; charset=utf-8');
+    }
   });
 
   it('removes runtime transport canaries from the actual access log, response, and event', async () => {
