@@ -6,6 +6,7 @@ const defaultRepository = require('../services/webinars/repository');
 const defaultRevisions = require('../services/webinars/revisions');
 const defaultMutations = require('../services/webinars/mutations');
 const defaultNotes = require('../services/webinars/notes');
+const defaultAssetReferences = require('../services/webinarAssets/references');
 const {
   getControlledReasonCodeDefinition,
   recordOperationalEvent: defaultRecordOperationalEvent,
@@ -16,6 +17,12 @@ const webinarIdSchema = z.coerce.number().int().positive();
 const revisionIdSchema = z.coerce.number().int().positive();
 const noteIdSchema = z.coerce.number().int().positive();
 const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+const CONTROLLED_ASSET_REFERENCE_ERRORS = Object.freeze({
+  ASSET_NOT_FOUND: Object.freeze({ status: 422, message: 'Asset version not found' }),
+  ASSET_NOT_AVAILABLE: Object.freeze({ status: 422, message: 'Asset version is not available' }),
+  ASSET_TOKEN_FORMAT: Object.freeze({ status: 422, message: 'Asset token is invalid' }),
+  ASSET_REFERENCE_INVALID: Object.freeze({ status: 400, message: 'Webinar asset reference is invalid' }),
+});
 
 function createWebinarsRouter({
   repository = defaultRepository,
@@ -131,6 +138,25 @@ function createWebinarsRouter({
   }
 
   function respondWithServiceError(req, res, error) {
+    const assetReferenceDefinition = error instanceof defaultAssetReferences.AssetReferenceError
+      ? CONTROLLED_ASSET_REFERENCE_ERRORS[error.code]
+      : null;
+    if (assetReferenceDefinition && error.status === assetReferenceDefinition.status) {
+      const fields = {
+        actorUserId: getUserId(req),
+        statusCode: assetReferenceDefinition.status,
+        reasonCode: error.code,
+      };
+      if (req.params.id && Number.isSafeInteger(Number(req.params.id)) && Number(req.params.id) > 0) {
+        fields.webinarId = Number(req.params.id);
+      }
+      recordOperationalEvent('webinar.validation_rejected', fields);
+      return res.status(assetReferenceDefinition.status).json({
+        error: assetReferenceDefinition.message,
+        code: error.code,
+      });
+    }
+
     const definition = getControlledReasonCodeDefinition(error.code);
     const controlled = isTrustedServiceError(error)
       && definition
