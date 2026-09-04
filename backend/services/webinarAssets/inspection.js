@@ -4,6 +4,7 @@ const { rm, writeFile } = require('node:fs/promises');
 const { inflateSync } = require('node:zlib');
 const path = require('node:path');
 const { tmpdir } = require('node:os');
+const { TextDecoder } = require('node:util');
 const sanitizeHtml = require('sanitize-html');
 const sharp = require('sharp');
 const ffprobe = require('ffprobe-static');
@@ -19,6 +20,7 @@ const WOFF_HEADER_BYTES = 44;
 const WOFF2_HEADER_BYTES = 48;
 const MAX_RASTER_PIXELS = 100_000_000;
 const MAX_FONT_SFNT_BYTES = 64 * 1024 * 1024;
+const MAX_CMAP_MAPPING_WORK = 1_000_000;
 const SFNT_HEADER_BYTES = 12;
 const SFNT_TABLE_DIRECTORY_BYTES = 16;
 const WOFF_TABLE_DIRECTORY_BYTES = 20;
@@ -266,9 +268,10 @@ function validateNameTable(name) {
 }
 
 function validateCmapGroups(
-  cmap, offset, length, groupCount, groupOffset, numGlyphs, constantGlyph, maximumCode,
+  cmap, offset, length, groupCount, groupOffset, numGlyphs, constantGlyph, maximumCode, work,
 ) {
   if (length !== groupOffset + groupCount * 12) throw fontInvalid();
+  consumeCmapWork(work, groupCount);
   let previousEnd = -1;
   for (let index = 0; index < groupCount; index += 1) {
     const group = offset + groupOffset + index * 12;
@@ -282,7 +285,13 @@ function validateCmapGroups(
   }
 }
 
-function validateCmapFormatTwo(cmap, offset, length, numGlyphs) {
+function consumeCmapWork(work, mappings) {
+  if (!Number.isSafeInteger(mappings) || mappings < 0
+    || mappings > MAX_CMAP_MAPPING_WORK - work.mappings) throw fontInvalid();
+  work.mappings += mappings;
+}
+
+function validateCmapFormatTwo(cmap, offset, length, numGlyphs, work) {
   if (length < 526) throw fontInvalid();
   let maximumKey = 0;
   for (let index = 0; index < 256; index += 1) {
@@ -303,6 +312,7 @@ function validateCmapFormatTwo(cmap, offset, length, numGlyphs) {
     const glyphStart = subHeader + 6 + rangeOffset;
     if (entryCount > 0 && (glyphStart < offset + subHeadersEnd
       || !hasValidRange(offset + length, glyphStart, entryCount * 2))) throw fontInvalid();
+    consumeCmapWork(work, entryCount);
     for (let glyphIndex = 0; glyphIndex < entryCount; glyphIndex += 1) {
       const storedGlyph = cmap.readUInt16BE(glyphStart + glyphIndex * 2);
       const mappedGlyph = storedGlyph === 0 ? 0 : (storedGlyph + delta) & 0xffff;
@@ -311,7 +321,7 @@ function validateCmapFormatTwo(cmap, offset, length, numGlyphs) {
   }
 }
 
-function validateCmapFormatFour(cmap, offset, length, numGlyphs) {
+function validateCmapFormatFour(cmap, offset, length, numGlyphs, work) {
   if (length < 24 || length % 2 !== 0) throw fontInvalid();
   const segmentBytes = cmap.readUInt16BE(offset + 6);
   if (segmentBytes === 0 || segmentBytes % 2 !== 0) throw fontInvalid();
@@ -336,8 +346,11 @@ function validateCmapFormatFour(cmap, offset, length, numGlyphs) {
     const delta = cmap.readInt16BE(deltas + index * 2);
     const rangeOffsetPosition = rangeOffsets + index * 2;
     const rangeOffset = cmap.readUInt16BE(rangeOffsetPosition);
-    if (start > end || end <= previousEnd || rangeOffset % 2 !== 0) throw fontInvalid();
+    if (start > end || end <= previousEnd || start <= previousEnd || rangeOffset % 2 !== 0) {
+      throw fontInvalid();
+    }
     if (index === segmentCount - 1 && (start !== 0xffff || end !== 0xffff)) throw fontInvalid();
+    consumeCmapWork(work, end - start + 1);
     for (let codePoint = start; codePoint <= end; codePoint += 1) {
       let glyph;
       if (rangeOffset === 0) {
@@ -358,10 +371,11 @@ function readUInt24BE(body, offset) {
   return body[offset] * 0x10000 + body[offset + 1] * 0x100 + body[offset + 2];
 }
 
-function validateCmapFormatFourteen(cmap, offset, length, numGlyphs) {
+function validateCmapFormatFourteen(cmap, offset, length, numGlyphs, work) {
   const recordCount = cmap.readUInt32BE(offset + 6);
   const recordsEnd = 10 + recordCount * 11;
   if (recordsEnd > length) throw fontInvalid();
+  consumeCmapWork(work, recordCount);
   let previousSelector = -1;
   for (let index = 0; index < recordCount; index += 1) {
     const record = offset + 10 + index * 11;
@@ -374,6 +388,7 @@ function validateCmapFormatFourteen(cmap, offset, length, numGlyphs) {
       if (defaultOffset < recordsEnd || defaultOffset + 4 > length) throw fontInvalid();
       const rangeCount = cmap.readUInt32BE(offset + defaultOffset);
       if (defaultOffset + 4 + rangeCount * 4 > length) throw fontInvalid();
+      consumeCmapWork(work, rangeCount);
       let previousEnd = -1;
       for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex += 1) {
         const range = offset + defaultOffset + 4 + rangeIndex * 4;
@@ -387,6 +402,7 @@ function validateCmapFormatFourteen(cmap, offset, length, numGlyphs) {
       if (nonDefaultOffset < recordsEnd || nonDefaultOffset + 4 > length) throw fontInvalid();
       const mappingCount = cmap.readUInt32BE(offset + nonDefaultOffset);
       if (nonDefaultOffset + 4 + mappingCount * 5 > length) throw fontInvalid();
+      consumeCmapWork(work, mappingCount);
       let previousCodePoint = -1;
       for (let mappingIndex = 0; mappingIndex < mappingCount; mappingIndex += 1) {
         const mapping = offset + nonDefaultOffset + 4 + mappingIndex * 5;
@@ -399,9 +415,10 @@ function validateCmapFormatFourteen(cmap, offset, length, numGlyphs) {
   }
 }
 
-function validateCmapSubtable(cmap, offset, platformId, encodingId, numGlyphs) {
+function validateCmapSubtable(cmap, offset, expectedFormat, numGlyphs, work) {
   assertRange(cmap.length, offset, 2);
   const format = cmap.readUInt16BE(offset);
+  if (format !== expectedFormat) throw fontInvalid();
   let length;
   if ([0, 2, 4, 6].includes(format)) {
     assertRange(cmap.length, offset, 4);
@@ -413,7 +430,6 @@ function validateCmapSubtable(cmap, offset, platformId, encodingId, numGlyphs) {
   } else if (format === 14) {
     assertRange(cmap.length, offset, 6);
     length = cmap.readUInt32BE(offset + 2);
-    if (platformId !== 0 || encodingId !== 5) throw fontInvalid();
   } else {
     throw fontInvalid();
   }
@@ -422,41 +438,50 @@ function validateCmapSubtable(cmap, offset, platformId, encodingId, numGlyphs) {
 
   if (format === 0) {
     if (length !== 262) throw fontInvalid();
+    consumeCmapWork(work, 256);
     for (let index = 0; index < 256; index += 1) {
       if (cmap[offset + 6 + index] >= numGlyphs) throw fontInvalid();
     }
   } else if (format === 2) {
-    validateCmapFormatTwo(cmap, offset, length, numGlyphs);
+    validateCmapFormatTwo(cmap, offset, length, numGlyphs, work);
   } else if (format === 4) {
-    validateCmapFormatFour(cmap, offset, length, numGlyphs);
+    validateCmapFormatFour(cmap, offset, length, numGlyphs, work);
   } else if (format === 6) {
     if (length < 10) throw fontInvalid();
     const firstCode = cmap.readUInt16BE(offset + 6);
     const entryCount = cmap.readUInt16BE(offset + 8);
     if (length !== 10 + entryCount * 2 || firstCode + entryCount > 0x10000) throw fontInvalid();
+    consumeCmapWork(work, entryCount);
     for (let index = 0; index < entryCount; index += 1) {
       if (cmap.readUInt16BE(offset + 10 + index * 2) >= numGlyphs) throw fontInvalid();
     }
   } else if (format === 8) {
     if (length < 8208) throw fontInvalid();
     const groupCount = cmap.readUInt32BE(offset + 8204);
-    validateCmapGroups(cmap, offset, length, groupCount, 8208, numGlyphs, false, 0xffffffff);
+    validateCmapGroups(cmap, offset, length, groupCount, 8208, numGlyphs, false, 0xffffffff, work);
   } else if (format === 10) {
     if (length < 20) throw fontInvalid();
     const firstCode = cmap.readUInt32BE(offset + 12);
     const entryCount = cmap.readUInt32BE(offset + 16);
     if (entryCount > (length - 20) / 2 || length !== 20 + entryCount * 2
       || firstCode + entryCount > 0x110000) throw fontInvalid();
+    consumeCmapWork(work, entryCount);
     for (let index = 0; index < entryCount; index += 1) {
       if (cmap.readUInt16BE(offset + 20 + index * 2) >= numGlyphs) throw fontInvalid();
     }
   } else if (format === 12 || format === 13) {
     if (length < 16) throw fontInvalid();
     const groupCount = cmap.readUInt32BE(offset + 12);
-    validateCmapGroups(cmap, offset, length, groupCount, 16, numGlyphs, format === 13, 0x10ffff);
+    validateCmapGroups(
+      cmap, offset, length, groupCount, 16, numGlyphs, format === 13, 0x10ffff, work,
+    );
   } else {
-    validateCmapFormatFourteen(cmap, offset, length, numGlyphs);
+    validateCmapFormatFourteen(cmap, offset, length, numGlyphs, work);
   }
+}
+
+function validateCmapRecord(format, platformId, encodingId) {
+  if (format === 14 && (platformId !== 0 || encodingId !== 5)) throw fontInvalid();
 }
 
 function validateCmapTable(cmap, numGlyphs) {
@@ -465,7 +490,9 @@ function validateCmapTable(cmap, numGlyphs) {
   const recordsEnd = 4 + recordCount * 8;
   if (recordCount === 0) throw fontInvalid();
   assertRange(cmap.length, 4, recordCount * 8);
-  const validatedOffsets = new Set();
+  const validatedSubtables = new Set();
+  const validatedRecordIndexes = [];
+  const work = { mappings: 0 };
   let previousPlatform = -1;
   let previousEncoding = -1;
   for (let index = 0; index < recordCount; index += 1) {
@@ -477,17 +504,25 @@ function validateCmapTable(cmap, numGlyphs) {
       || offset < recordsEnd) throw fontInvalid();
     previousPlatform = platformId;
     previousEncoding = encodingId;
-    const key = `${offset}:${platformId}:${encodingId}`;
-    if (!validatedOffsets.has(key)) {
-      validateCmapSubtable(cmap, offset, platformId, encodingId, numGlyphs);
-      validatedOffsets.add(key);
+    assertRange(cmap.length, offset, 2);
+    const format = cmap.readUInt16BE(offset);
+    validateCmapRecord(format, platformId, encodingId);
+    const key = `${offset}:${format}`;
+    if (!validatedSubtables.has(key)) {
+      validateCmapSubtable(cmap, offset, format, numGlyphs, work);
+      validatedSubtables.add(key);
+      validatedRecordIndexes.push(index);
     }
   }
+  return validatedRecordIndexes;
 }
 
-function validateSimpleGlyph(glyf, start, end, contourCount, maxp) {
+function validateSimpleGlyph(glyf, start, end, contourCount, maxp, declaredBounds) {
   let cursor = start + 10;
-  if (contourCount === 0 && cursor === end) return [];
+  if (contourCount === 0 && cursor === end) {
+    if (Object.values(declaredBounds).some(value => value !== 0)) throw fontInvalid();
+    return [];
+  }
   assertRange(end, cursor, contourCount * 2 + 2);
   let finalEndpoint = -1;
   for (let index = 0; index < contourCount; index += 1) {
@@ -518,11 +553,43 @@ function validateSimpleGlyph(glyf, start, end, contourCount, maxp) {
     for (let index = 0; index <= repetitions; index += 1) flags.push(flag);
   }
 
-  let coordinateBytes = 0;
-  for (const flag of flags) coordinateBytes += flag & 0x02 ? 1 : flag & 0x10 ? 0 : 2;
-  for (const flag of flags) coordinateBytes += flag & 0x04 ? 1 : flag & 0x20 ? 0 : 2;
-  assertRange(end, cursor, coordinateBytes);
-  cursor += coordinateBytes;
+  let x = 0;
+  let xMin = Infinity;
+  let xMax = -Infinity;
+  for (const flag of flags) {
+    if (flag & 0x02) {
+      assertRange(end, cursor, 1);
+      const delta = glyf[cursor++];
+      x += flag & 0x10 ? delta : -delta;
+    } else if (!(flag & 0x10)) {
+      assertRange(end, cursor, 2);
+      x += glyf.readInt16BE(cursor);
+      cursor += 2;
+    }
+    xMin = Math.min(xMin, x);
+    xMax = Math.max(xMax, x);
+  }
+
+  let y = 0;
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (const flag of flags) {
+    if (flag & 0x04) {
+      assertRange(end, cursor, 1);
+      const delta = glyf[cursor++];
+      y += flag & 0x20 ? delta : -delta;
+    } else if (!(flag & 0x20)) {
+      assertRange(end, cursor, 2);
+      y += glyf.readInt16BE(cursor);
+      cursor += 2;
+    }
+    yMin = Math.min(yMin, y);
+    yMax = Math.max(yMax, y);
+  }
+  if (pointCount === 0) {
+    if (Object.values(declaredBounds).some(value => value !== 0)) throw fontInvalid();
+  } else if (xMin !== declaredBounds.xMin || yMin !== declaredBounds.yMin
+    || xMax !== declaredBounds.xMax || yMax !== declaredBounds.yMax) throw fontInvalid();
   if (end - cursor > 3) throw fontInvalid();
   assertNullBytes(glyf, cursor, end);
   return [];
@@ -628,7 +695,7 @@ function validateTrueTypeOutlines(tables, head, maxp) {
     const yMax = glyf.readInt16BE(start + 8);
     if (xMin > xMax || yMin > yMax) throw fontInvalid();
     componentsByGlyph[glyphId] = contourCount >= 0
-      ? validateSimpleGlyph(glyf, start, end, contourCount, maxp)
+      ? validateSimpleGlyph(glyf, start, end, contourCount, maxp, { xMin, yMin, xMax, yMax })
       : validateCompositeGlyph(glyf, start, end, glyphId, maxp.numGlyphs, maxp);
   }
   validateCompositeGraph(componentsByGlyph, maxp.maxComponentDepth);
@@ -703,9 +770,9 @@ function validateSfnt(sfnt, expectedLength, verifyChecksums) {
   const maxpValues = validateHeadAndMaxp(head, maxp, tables.has('glyf') || tables.has('loca'));
   const headValues = { indexToLocFormat: head.readInt16BE(50) };
   validateNameTable(name);
-  validateCmapTable(cmap, maxpValues.numGlyphs);
+  const cmapRecordIndexes = validateCmapTable(cmap, maxpValues.numGlyphs);
   validateTrueTypeOutlines(tables, headValues, maxpValues);
-  return { tables, numGlyphs: maxpValues.numGlyphs };
+  return { tables, numGlyphs: maxpValues.numGlyphs, cmapRecordIndexes };
 }
 
 function buildSfnt(flavor, tables, expectedLength) {
@@ -773,7 +840,8 @@ function validateWoffMetadata(metadata) {
     if (depth === 0 && text.trim()) invalid = true;
   });
   try {
-    parser.write(metadata.toString('utf8')).close();
+    const source = new TextDecoder('utf-8', { fatal: true }).decode(metadata);
+    parser.write(source).close();
   } catch {
     invalid = true;
   }
@@ -921,7 +989,7 @@ function validateWoff2Directory(body) {
   return expectedLength;
 }
 
-function forceFontkitValidation(sfnt, expectedGlyphs) {
+function forceFontkitValidation(sfnt, expectedGlyphs, cmapRecordIndexes) {
   const font = fontkit.create(sfnt);
   if (!Number.isSafeInteger(font.numGlyphs) || font.numGlyphs !== expectedGlyphs
     || !font.name || !font.cmap || !Array.isArray(font.cmap.tables)) throw fontInvalid();
@@ -930,8 +998,9 @@ function forceFontkitValidation(sfnt, expectedGlyphs) {
     const descriptor = Object.getOwnPropertyDescriptor(font, tag);
     if (descriptor?.get && font[tag] === undefined) throw fontInvalid();
   }
-  for (const record of font.cmap.tables) {
-    if (!record.table) throw fontInvalid();
+  for (const recordIndex of cmapRecordIndexes) {
+    const record = font.cmap.tables[recordIndex];
+    if (!record?.table) throw fontInvalid();
   }
   for (let glyphId = 0; glyphId < font.numGlyphs; glyphId += 1) {
     const glyph = font.getGlyph(glyphId);
@@ -957,7 +1026,7 @@ async function validateFont(body, mimeType) {
       sfnt = Buffer.from(await wawoff.decompress(body));
     }
     const validated = validateSfnt(sfnt, expectedLength, true);
-    forceFontkitValidation(sfnt, validated.numGlyphs);
+    forceFontkitValidation(sfnt, validated.numGlyphs, validated.cmapRecordIndexes);
   } catch (error) {
     if (error instanceof AssetInspectionError) throw error;
     throw fontInvalid();

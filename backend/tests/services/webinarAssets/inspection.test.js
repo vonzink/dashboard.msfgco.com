@@ -103,6 +103,7 @@ function rebuildChecksummedWoff(body, targetTag, mutate) {
   const directoryEnd = 44 + tableCount * 20;
   const tables = [];
   let outputLength = directoryEnd;
+  let decodedLength = 12 + tableCount * 16;
 
   for (let index = 0; index < tableCount; index += 1) {
     const entry = 44 + index * 20;
@@ -110,19 +111,24 @@ function rebuildChecksummedWoff(body, targetTag, mutate) {
     const offset = body.readUInt32BE(entry + 4);
     const compressedLength = body.readUInt32BE(entry + 8);
     const originalLength = body.readUInt32BE(entry + 12);
-    const data = compressedLength < originalLength
+    let data = compressedLength < originalLength
       ? inflateSync(body.subarray(offset, offset + compressedLength))
       : Buffer.from(body.subarray(offset, offset + compressedLength));
-    if (tag === targetTag) mutate(data);
+    if (tag === targetTag) {
+      const replacement = mutate(data);
+      if (Buffer.isBuffer(replacement)) data = replacement;
+    }
     const compressed = deflateSync(data);
     const encoded = compressed.length < data.length ? compressed : data;
     tables.push({ tag, data, encoded, offset: outputLength });
     outputLength = alignToFour(outputLength + encoded.length);
+    decodedLength += alignToFour(data.length);
   }
 
   const rebuilt = Buffer.alloc(outputLength);
   body.copy(rebuilt, 0, 0, 44);
   rebuilt.writeUInt32BE(rebuilt.length, 8);
+  rebuilt.writeUInt32BE(decodedLength, 16);
   for (let index = 0; index < tables.length; index += 1) {
     const entry = 44 + index * 20;
     const table = tables[index];
@@ -134,6 +140,84 @@ function rebuildChecksummedWoff(body, targetTag, mutate) {
     table.encoded.copy(rebuilt, table.offset);
   }
   return rebuilt;
+}
+
+function addWoffMetadata(body, metadata) {
+  if (body.length % 4 !== 0) throw new Error('Expected aligned WOFF fixture data');
+  const encoded = deflateSync(metadata);
+  const rebuilt = Buffer.concat([body, encoded]);
+  rebuilt.writeUInt32BE(rebuilt.length, 8);
+  rebuilt.writeUInt32BE(body.length, 24);
+  rebuilt.writeUInt32BE(encoded.length, 28);
+  rebuilt.writeUInt32BE(metadata.length, 32);
+  return rebuilt;
+}
+
+function zeroGlyphFormatFour(mappedCodePoints = 30_000) {
+  const length = 32 + mappedCodePoints * 2;
+  if (mappedCodePoints < 1 || mappedCodePoints >= 0xffff || length > 0xffff) {
+    throw new Error('Expected a format-4-sized mapping count');
+  }
+  const subtable = Buffer.alloc(length);
+  subtable.writeUInt16BE(4, 0);
+  subtable.writeUInt16BE(length, 2);
+  subtable.writeUInt16BE(4, 6);
+  subtable.writeUInt16BE(4, 8);
+  subtable.writeUInt16BE(1, 10);
+  subtable.writeUInt16BE(0, 12);
+  subtable.writeUInt16BE(mappedCodePoints - 1, 14);
+  subtable.writeUInt16BE(0xffff, 16);
+  subtable.writeUInt16BE(0, 18);
+  subtable.writeUInt16BE(0, 20);
+  subtable.writeUInt16BE(0xffff, 22);
+  subtable.writeInt16BE(0, 24);
+  subtable.writeInt16BE(1, 26);
+  subtable.writeUInt16BE(4, 28);
+  subtable.writeUInt16BE(0, 30);
+  return subtable;
+}
+
+function cmapWithFormatFourRecords(recordCount, uniqueSubtables) {
+  const subtable = zeroGlyphFormatFour();
+  const recordsEnd = 4 + recordCount * 8;
+  const subtableCount = uniqueSubtables ? recordCount : 1;
+  const cmap = Buffer.alloc(recordsEnd + subtable.length * subtableCount);
+  cmap.writeUInt16BE(0, 0);
+  cmap.writeUInt16BE(recordCount, 2);
+  for (let index = 0; index < recordCount; index += 1) {
+    const record = 4 + index * 8;
+    cmap.writeUInt16BE(index === 0 ? 0 : 1, record);
+    cmap.writeUInt16BE(index === 0 ? 3 : index - 1, record + 2);
+    cmap.writeUInt32BE(recordsEnd + (uniqueSubtables ? index * subtable.length : 0), record + 4);
+  }
+  for (let index = 0; index < subtableCount; index += 1) {
+    subtable.copy(cmap, recordsEnd + index * subtable.length);
+  }
+  return cmap;
+}
+
+function cmapWithInvalidFormatFourteenAlias() {
+  const formatFour = zeroGlyphFormatFour(1);
+  const recordsEnd = 28;
+  const formatFourteenOffset = recordsEnd + formatFour.length;
+  const cmap = Buffer.alloc(formatFourteenOffset + 10);
+  cmap.writeUInt16BE(0, 0);
+  cmap.writeUInt16BE(3, 2);
+  for (const [index, platformId, encodingId, offset] of [
+    [0, 0, 3, recordsEnd],
+    [1, 0, 5, formatFourteenOffset],
+    [2, 3, 1, formatFourteenOffset],
+  ]) {
+    const record = 4 + index * 8;
+    cmap.writeUInt16BE(platformId, record);
+    cmap.writeUInt16BE(encodingId, record + 2);
+    cmap.writeUInt32BE(offset, record + 4);
+  }
+  formatFour.copy(cmap, recordsEnd);
+  cmap.writeUInt16BE(14, formatFourteenOffset);
+  cmap.writeUInt32BE(10, formatFourteenOffset + 2);
+  cmap.writeUInt32BE(0, formatFourteenOffset + 6);
+  return cmap;
 }
 
 function sfntTable(body, tag) {
@@ -161,6 +245,23 @@ async function woff2WithDescendingSimpleGlyphEndpoints(body) {
     throw new Error('Expected the fixture first glyph to have contour endpoints 3 and 7');
   }
   sfnt.writeUInt16BE(65_535, firstGlyph + 10);
+  sfnt.writeUInt32BE(
+    fontTableChecksum(sfnt.subarray(glyf.offset, glyf.offset + glyf.length)),
+    glyf.directoryOffset + 4,
+  );
+  return Buffer.from(await wawoff.compress(sfnt));
+}
+
+async function woff2WithSimpleGlyphBounds(body, bounds) {
+  const sfnt = Buffer.from(await wawoff.decompress(body));
+  const glyf = sfntTable(sfnt, 'glyf');
+  const firstGlyph = glyf.offset;
+  const actualBounds = [2, 4, 6, 8].map(offset => sfnt.readInt16BE(firstGlyph + offset));
+  if (sfnt.readInt16BE(firstGlyph) !== 2
+    || actualBounds.some((value, index) => value !== [50, 0, 459, 474][index])) {
+    throw new Error('Expected the fixture first glyph bounds to be 50,0-459,474');
+  }
+  bounds.forEach((value, index) => sfnt.writeInt16BE(value, firstGlyph + 2 + index * 2));
   sfnt.writeUInt32BE(
     fontTableChecksum(sfnt.subarray(glyf.offset, glyf.offset + glyf.length)),
     glyf.directoryOffset + 4,
@@ -369,6 +470,56 @@ describe('Webinar asset inspection', () => {
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
+  it('rejects overlapping format-4 cmap segments with valid table checksums', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = rebuildChecksummedWoff(body, 'cmap', cmap => {
+      const subtableOffset = cmap.readUInt32BE(8);
+      const segmentCount = cmap.readUInt16BE(subtableOffset + 6) / 2;
+      const endCodes = subtableOffset + 14;
+      const startCodes = endCodes + segmentCount * 2 + 2;
+      if (cmap.readUInt16BE(startCodes) !== 32 || cmap.readUInt16BE(endCodes) !== 47
+        || cmap.readUInt16BE(startCodes + 2) !== 48 || cmap.readUInt16BE(endCodes + 2) !== 57) {
+        throw new Error('Expected adjacent fixture cmap segments 32-47 and 48-57');
+      }
+      cmap.writeUInt16BE(40, startCodes + 2);
+    });
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'overlap-cmap.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('validates one shared cmap subtable once across aliased encoding records', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    // Revalidating all 34 aliases would charge 34 * (30,000 mappings + sentinel) > 1,000,000.
+    const aliased = rebuildChecksummedWoff(
+      body, 'cmap', () => cmapWithFormatFourRecords(34, false),
+    );
+
+    await expect(inspection.inspectAsset(assetInput(aliased, 'font/woff', 'aliased-cmap.woff')))
+      .resolves.toMatchObject({ mediaType: 'font', mimeType: 'font/woff' });
+  });
+
+  it('validates format-specific encoding constraints for every aliased cmap record', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = rebuildChecksummedWoff(
+      body, 'cmap', () => cmapWithInvalidFormatFourteenAlias(),
+    );
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'invalid-alias.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects aggregate cmap validation work above one million unique mappings', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    // Each record points to a distinct 30,001-mapping subtable: 1,020,034 total mappings.
+    const excessive = rebuildChecksummedWoff(
+      body, 'cmap', () => cmapWithFormatFourRecords(34, true),
+    );
+
+    await expect(inspection.inspectAsset(assetInput(excessive, 'font/woff', 'excessive-cmap.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
   it('rejects a WOFF whose table payloads are relocated off four-byte boundaries', async () => {
     const body = await readFile(new URL('valid.woff', fixtures));
     const tableCount = body.readUInt16BE(12);
@@ -428,6 +579,19 @@ describe('Webinar asset inspection', () => {
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
+  it('rejects compressed WOFF metadata containing invalid UTF-8', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const metadata = Buffer.concat([
+      Buffer.from('<metadata version="1.0">'),
+      Buffer.from([0xff]),
+      Buffer.from('</metadata>'),
+    ]);
+    const malformed = addWoffMetadata(body, metadata);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'invalid-utf8.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
   it('rejects a WOFF2 font whose header understates the decoded SFNT size', async () => {
     const body = await readFile(new URL('valid.woff2', fixtures));
     const malformed = Buffer.from(body);
@@ -450,6 +614,17 @@ describe('Webinar asset inspection', () => {
     const malformed = await woff2WithDescendingSimpleGlyphEndpoints(body);
 
     await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff2', 'invalid-glyph.woff2')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it.each([
+    ['0,0-0,0', [0, 0, 0, 0]],
+    ['0,0-1,1', [0, 0, 1, 1]],
+  ])('rejects a checksummed WOFF2 simple-glyph bbox changed to %s', async (name, bounds) => {
+    const body = await readFile(new URL('valid.woff2', fixtures));
+    const malformed = await woff2WithSimpleGlyphBounds(body, bounds);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff2', 'invalid-bbox.woff2')))
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
