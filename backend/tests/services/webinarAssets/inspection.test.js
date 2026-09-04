@@ -4,10 +4,11 @@ import { Readable } from 'node:stream';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
+const fsPromises = require('node:fs/promises');
 const childProcess = require('node:child_process');
 const inspectionPath = require.resolve('../../../services/webinarAssets/inspection');
 const fixtures = new URL('../../fixtures/webinar-assets/', import.meta.url);
-const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cfc00000040101801d0b98b10000000049454e44ae426082', 'hex');
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNg+M/wHwAF/gL+Zl9+gAAAAABJRU5ErkJggg==', 'base64');
 const MP4 = Buffer.from('000000186674797069736f6d0000020069736f6d69736f32617663316d703431', 'hex');
 
 function wavHeader() {
@@ -26,8 +27,41 @@ function wavHeader() {
   return body;
 }
 
+function woff({ reserved = 0, totalLength = 68, tableOffset = 64, compressedLength = 4, originalLength = 4 } = {}) {
+  const body = Buffer.alloc(68);
+  body.write('wOFF', 0);
+  body.writeUInt32BE(0x00010000, 4);
+  body.writeUInt32BE(totalLength, 8);
+  body.writeUInt16BE(1, 12);
+  body.writeUInt16BE(reserved, 14);
+  body.writeUInt32BE(28, 16);
+  body.writeUInt16BE(1, 20);
+  body.write('name', 44);
+  body.writeUInt32BE(tableOffset, 48);
+  body.writeUInt32BE(compressedLength, 52);
+  body.writeUInt32BE(originalLength, 56);
+  body.write('test', 64);
+  return body;
+}
+
+function woff2ZeroHeader() {
+  const body = Buffer.alloc(48);
+  body.write('wOF2', 0);
+  return body;
+}
+
+function assetInput(body, declaredMimeType, filename) {
+  return {
+    stream: streamOf(body),
+    declaredMimeType,
+    declaredBytes: body.length,
+    filename,
+  };
+}
+
 let inspection;
 let execFileSpy;
+let rmSpy;
 
 function streamOf(body) {
   return Readable.from([body]);
@@ -41,6 +75,8 @@ beforeEach(() => {
 
 afterEach(() => {
   execFileSpy.mockRestore();
+  rmSpy?.mockRestore();
+  rmSpy = undefined;
   delete require.cache[inspectionPath];
 });
 
@@ -63,6 +99,13 @@ describe('Webinar asset inspection', () => {
       approvedBody: PNG,
     });
     expect(result.sha256).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('rejects a truncated PNG after a full raster decode', async () => {
+    const truncated = PNG.subarray(0, -18);
+
+    await expect(inspection.inspectAsset(assetInput(truncated, 'image/png', 'truncated.png')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
   it('rejects a .mp4 filename whose bytes are not a video', async () => {
@@ -139,6 +182,49 @@ describe('Webinar asset inspection', () => {
     expect(result.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it.each([
+    ['trailing text', '<svg xmlns="http://www.w3.org/2000/svg"></svg>unsafe'],
+    ['multiple roots', '<svg xmlns="http://www.w3.org/2000/svg"></svg><svg xmlns="http://www.w3.org/2000/svg"></svg>'],
+    ['mismatched tags', '<svg xmlns="http://www.w3.org/2000/svg"><g></svg>'],
+    ['unclosed root', '<svg xmlns="http://www.w3.org/2000/svg"><g></g>'],
+    ['wrong namespace', '<svg xmlns="https://example.test/not-svg"></svg>'],
+  ])('rejects SVG with %s', async (name, source) => {
+    const body = Buffer.from(source);
+
+    await expect(inspection.inspectAsset(assetInput(body, 'image/svg+xml', 'mark.svg')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it.each([
+    ['a zeroed WOFF header', Buffer.from('774f464600000000000000000000000000000000000000000000000000000000000000000000000000000000', 'hex'), 'font/woff', 'empty.woff'],
+    ['a truncated WOFF container', woff().subarray(0, 60), 'font/woff', 'truncated.woff'],
+    ['a WOFF reserved field', woff({ reserved: 1 }), 'font/woff', 'reserved.woff'],
+    ['a WOFF table outside the container', woff({ tableOffset: 65, compressedLength: 4 }), 'font/woff', 'bounds.woff'],
+    ['a WOFF compressed length larger than original', woff({ compressedLength: 5, originalLength: 4 }), 'font/woff', 'compressed.woff'],
+    ['a zeroed WOFF2 header', woff2ZeroHeader(), 'font/woff2', 'empty.woff2'],
+  ])('rejects %s', async (name, body, declaredMimeType, filename) => {
+    await expect(inspection.inspectAsset(assetInput(body, declaredMimeType, filename)))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('does not decode a complete non-SVG upload as UTF-8 before type detection', async () => {
+    const body = woff();
+    const originalToString = Buffer.prototype.toString;
+    const toStringSpy = vi.spyOn(Buffer.prototype, 'toString').mockImplementation(function (...args) {
+      if (this === body && args[1] === undefined && args[2] === undefined) {
+        throw new Error('complete upload was decoded as UTF-8');
+      }
+      return originalToString.apply(this, args);
+    });
+
+    try {
+      await expect(inspection.inspectAsset(assetInput(body, 'font/woff', 'body.woff')))
+        .resolves.toMatchObject({ mediaType: 'font', mimeType: 'font/woff' });
+    } finally {
+      toStringSpy.mockRestore();
+    }
+  });
+
   it('normalizes ffprobe duration seconds to milliseconds for audio and video', async () => {
     const probeOutput = JSON.stringify({ format: { duration: '1.234' } });
     execFileSpy.mockImplementation((file, args, options, callback) => callback(null, probeOutput, ''));
@@ -154,5 +240,27 @@ describe('Webinar asset inspection', () => {
         filename,
       })).resolves.toMatchObject({ mediaType, mimeType: declaredMimeType, durationMs: 1234 });
     }
+  });
+
+  it('keeps the primary ffprobe error when temporary-file cleanup also fails', async () => {
+    execFileSpy.mockImplementation((file, args, options, callback) => callback(new Error('ffprobe failed')));
+    rmSpy = vi.spyOn(fsPromises, 'rm').mockRejectedValue(new Error('cleanup failed'));
+    delete require.cache[inspectionPath];
+    inspection = require('../../../services/webinarAssets/inspection');
+    const body = wavHeader();
+
+    await expect(inspection.inspectAsset(assetInput(body, 'audio/wav', 'track.wav')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_PROBE_FAILED' });
+  });
+
+  it('normalizes a successful probe cleanup failure', async () => {
+    execFileSpy.mockImplementation((file, args, options, callback) => callback(null, '{"format":{"duration":"1"}}', ''));
+    rmSpy = vi.spyOn(fsPromises, 'rm').mockRejectedValue(new Error('cleanup failed'));
+    delete require.cache[inspectionPath];
+    inspection = require('../../../services/webinarAssets/inspection');
+    const body = wavHeader();
+
+    await expect(inspection.inspectAsset(assetInput(body, 'audio/wav', 'track.wav')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_CLEANUP_FAILED' });
   });
 });

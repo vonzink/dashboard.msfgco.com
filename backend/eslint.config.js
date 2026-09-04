@@ -42,6 +42,12 @@ export default [
     },
   },
   {
+    files: ["eslint.config.js", "tests/services/webinarAssets/inspection.test.js"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
+  {
     ignores: ["node_modules/", "*.bak", "*.bak.*"],
   },
 ];

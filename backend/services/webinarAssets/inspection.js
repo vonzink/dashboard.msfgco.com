@@ -3,13 +3,18 @@ const { execFile } = require('node:child_process');
 const { rm, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 const { tmpdir } = require('node:os');
+const { brotliDecompressSync, inflateRawSync } = require('node:zlib');
 const sanitizeHtml = require('sanitize-html');
 const sharp = require('sharp');
 const ffprobe = require('ffprobe-static');
-const { parseDocument } = require('htmlparser2');
+const { SaxesParser } = require('saxes');
 const { MEDIA_RULES } = require('./config');
 
 const PROBE_TIMEOUT_MS = 10_000;
+const SVG_PREFIX_BYTES = 1024;
+const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+const WOFF_HEADER_BYTES = 44;
+const WOFF2_HEADER_BYTES = 48;
 const SVG_TAGS = [
   'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
   'text', 'tspan', 'defs', 'linearGradient', 'radialGradient', 'stop', 'clipPath',
@@ -59,20 +64,41 @@ function safeSvgAttribute(name, value) {
   return true;
 }
 
-function svgRoot(source) {
-  const document = parseDocument(source, {
-    xmlMode: true,
-    lowerCaseTags: false,
-    lowerCaseAttributeNames: false,
+function assertStrictSvgDocument(source) {
+  let root;
+  let rootCount = 0;
+  let depth = 0;
+  let invalid = false;
+  const parser = new SaxesParser({ xmlns: true });
+  parser.on('error', () => { invalid = true; });
+  parser.on('doctype', () => { invalid = true; });
+  parser.on('opentag', tag => {
+    if (depth === 0) {
+      root = tag;
+      rootCount += 1;
+    }
+    depth += 1;
   });
-  return document.children.find(node => node.type === 'tag' && node.name.toLowerCase() === 'svg');
+  parser.on('closetag', () => { depth -= 1; });
+  parser.on('text', text => {
+    if (depth === 0 && text.trim()) invalid = true;
+  });
+  parser.on('comment', () => {
+    if (depth === 0) invalid = true;
+  });
+  try {
+    parser.write(source).close();
+  } catch {
+    invalid = true;
+  }
+  if (invalid || depth !== 0 || rootCount !== 1 || root?.name !== 'svg' || root.uri !== SVG_NAMESPACE) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'SVG source is invalid');
+  }
 }
 
 function sanitizeSvg(source) {
   const sourceText = Buffer.isBuffer(source) ? source.toString('utf8') : String(source);
-  if (!/^\s*(?:<\?xml[\s\S]*?\?>\s*)?<svg(?:\s|>)/i.test(sourceText) || !svgRoot(sourceText)) {
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'SVG source is invalid');
-  }
+  assertStrictSvgDocument(sourceText);
 
   const sanitized = sanitizeHtml(sourceText, {
     allowedTags: SVG_TAGS,
@@ -93,10 +119,7 @@ function sanitizeSvg(source) {
       }),
     },
   });
-  const root = svgRoot(sanitized);
-  if (!root || root.name.toLowerCase() !== 'svg') {
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'SVG sanitization produced invalid markup');
-  }
+  assertStrictSvgDocument(sanitized);
   return Buffer.from(sanitized, 'utf8');
 }
 
@@ -130,14 +153,135 @@ async function readLimitedStream(stream, maximum) {
   return Buffer.concat(chunks, byteSize);
 }
 
-async function detectMimeType(body) {
-  if (/^\s*(?:<\?xml[\s\S]*?\?>\s*)?<svg(?:\s|>)/i.test(body.toString('utf8'))) {
+function hasPrefix(body, text) {
+  return body.length >= text.length && body.subarray(0, text.length).equals(Buffer.from(text));
+}
+
+function looksLikeSvg(body) {
+  return /^\s*(?:<\?xml[\s\S]*?\?>\s*)?<svg(?:\s|>)/i.test(body.subarray(0, SVG_PREFIX_BYTES).toString('utf8'));
+}
+
+function assertRange(offset, length, total) {
+  return Number.isSafeInteger(offset)
+    && Number.isSafeInteger(length)
+    && offset >= 0
+    && length >= 0
+    && offset <= total
+    && length <= total - offset;
+}
+
+function assertOptionalRange(offset, length, originalLength, total) {
+  if (offset === 0) return length === 0 && originalLength === 0;
+  return length > 0 && originalLength > 0 && assertRange(offset, length, total);
+}
+
+function validateWoff(body) {
+  if (body.length < WOFF_HEADER_BYTES
+    || body.readUInt32BE(8) !== body.length
+    || body.readUInt16BE(12) === 0
+    || body.readUInt16BE(14) !== 0) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF container is invalid');
+  }
+  const tableCount = body.readUInt16BE(12);
+  const directoryEnd = WOFF_HEADER_BYTES + tableCount * 20;
+  if (!assertRange(WOFF_HEADER_BYTES, tableCount * 20, body.length)
+    || body.readUInt32BE(16) < 12 + tableCount * 16
+    || !assertOptionalRange(body.readUInt32BE(24), body.readUInt32BE(28), body.readUInt32BE(32), body.length)
+    || !assertOptionalRange(body.readUInt32BE(36), body.readUInt32BE(40), body.readUInt32BE(40), body.length)) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF container is invalid');
+  }
+  for (let index = 0; index < tableCount; index += 1) {
+    const entry = WOFF_HEADER_BYTES + index * 20;
+    const offset = body.readUInt32BE(entry + 4);
+    const compressedLength = body.readUInt32BE(entry + 8);
+    const originalLength = body.readUInt32BE(entry + 12);
+    if (offset < directoryEnd || compressedLength === 0 || originalLength === 0
+      || compressedLength > originalLength || !assertRange(offset, compressedLength, body.length)) {
+      throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF table is invalid');
+    }
+    if (compressedLength < originalLength) {
+      try {
+        if (inflateRawSync(body.subarray(offset, offset + compressedLength)).length !== originalLength) {
+          throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF table is invalid');
+        }
+      } catch (error) {
+        if (error instanceof AssetInspectionError) throw error;
+        throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF table is invalid');
+      }
+    }
+  }
+}
+
+function readBase128(body, offset) {
+  let value = 0;
+  for (let count = 0; count < 5; count += 1) {
+    if (offset >= body.length) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+    const byte = body[offset];
+    if (count === 0 && byte === 0x80) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+    value = value * 128 + (byte & 0x7f);
+    offset += 1;
+    if (value > 0x7fffffff) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+    if ((byte & 0x80) === 0) return { value, offset };
+  }
+  throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+}
+
+function validateWoff2(body) {
+  if (body.length < WOFF2_HEADER_BYTES
+    || body.readUInt32BE(8) !== body.length
+    || body.readUInt16BE(12) === 0
+    || body.readUInt16BE(14) !== 0
+    || body.readUInt32BE(16) < 12 + body.readUInt16BE(12) * 16
+    || body.readUInt32BE(20) === 0
+    || !assertOptionalRange(body.readUInt32BE(28), body.readUInt32BE(32), body.readUInt32BE(36), body.length)
+    || !assertOptionalRange(body.readUInt32BE(40), body.readUInt32BE(44), body.readUInt32BE(44), body.length)) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 container is invalid');
+  }
+  let offset = WOFF2_HEADER_BYTES;
+  const tableCount = body.readUInt16BE(12);
+  for (let index = 0; index < tableCount; index += 1) {
+    if (offset >= body.length) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+    const flags = body[offset++];
+    const tagIndex = flags & 0x3f;
+    if (tagIndex === 0x3f) offset += 4;
+    if (offset > body.length) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+    const original = readBase128(body, offset);
+    if (original.value === 0) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
+    offset = original.offset;
+  }
+  const compressedLength = body.readUInt32BE(20);
+  if (!assertRange(offset, compressedLength, body.length)) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 compressed data is invalid');
+  }
+  try {
+    if (brotliDecompressSync(body.subarray(offset, offset + compressedLength)).length === 0) {
+      throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 compressed data is invalid');
+    }
+  } catch (error) {
+    if (error instanceof AssetInspectionError) throw error;
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 compressed data is invalid');
+  }
+}
+
+function validateFont(body, mimeType) {
+  if (mimeType === 'font/woff') validateWoff(body);
+  else validateWoff2(body);
+}
+
+async function detectMimeType(body, declaredMimeType) {
+  if (hasPrefix(body, 'wOFF')) return 'font/woff';
+  if (hasPrefix(body, 'wOF2')) return 'font/woff2';
+  if (declaredMimeType === 'image/svg+xml' || looksLikeSvg(body)) {
     return 'image/svg+xml';
   }
-  const { fileTypeFromBuffer } = await import('file-type');
-  const detected = await fileTypeFromBuffer(body);
-  if (!detected) return null;
-  return ({ 'audio/x-wav': 'audio/wav', 'image/jpg': 'image/jpeg' })[detected.mime] || detected.mime;
+  try {
+    const { fileTypeFromBuffer } = await import('file-type');
+    const detected = await fileTypeFromBuffer(body);
+    if (!detected) return null;
+    return ({ 'audio/x-wav': 'audio/wav', 'image/jpg': 'image/jpeg' })[detected.mime] || detected.mime;
+  } catch {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset type detection failed');
+  }
 }
 
 function execFfprobe(file) {
@@ -158,6 +302,8 @@ function execFfprobe(file) {
 async function probeDuration(body, mimeType) {
   const extension = EXTENSIONS[mimeType];
   const temporaryFile = path.join(tmpdir(), `webinar-asset-${randomUUID()}${extension}`);
+  let durationMs;
+  let failure;
   try {
     await writeFile(temporaryFile, body, { flag: 'wx' });
     const output = await execFfprobe(temporaryFile);
@@ -165,13 +311,27 @@ async function probeDuration(body, mimeType) {
     if (!Number.isFinite(seconds) || seconds < 0) {
       throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset duration is invalid');
     }
-    return Math.round(seconds * 1000);
+    durationMs = Math.round(seconds * 1000);
   } catch (error) {
-    if (error instanceof AssetInspectionError) throw error;
-    throw inspectionError('ASSET_INSPECTION_PROBE_FAILED', 'Unable to inspect asset duration');
+    failure = error instanceof AssetInspectionError
+      ? error
+      : inspectionError('ASSET_INSPECTION_PROBE_FAILED', 'Unable to inspect asset duration');
   } finally {
-    await rm(temporaryFile, { force: true });
+    try {
+      await rm(temporaryFile, { force: true });
+    } catch {
+      if (!failure) failure = inspectionError('ASSET_INSPECTION_CLEANUP_FAILED', 'Unable to remove temporary asset file');
+    }
   }
+  if (failure) throw failure;
+  return durationMs;
+}
+
+async function inspectRaster(body) {
+  const decoded = sharp(body, { failOn: 'error' });
+  const metadata = await decoded.metadata();
+  await sharp(body, { failOn: 'error' }).ensureAlpha().raw().toBuffer();
+  return metadata;
 }
 
 async function inspectAsset({ stream, declaredMimeType, declaredBytes, filename } = {}) {
@@ -184,33 +344,37 @@ async function inspectAsset({ stream, declaredMimeType, declaredBytes, filename 
     throw inspectionError('ASSET_INSPECTION_TOO_LARGE', 'Asset exceeds its size limit');
   }
 
-  const body = await readLimitedStream(stream, rule.maxBytes);
-  if (body.length !== declaredBytes) {
-    throw inspectionError('ASSET_INSPECTION_SIZE_MISMATCH', 'Asset size does not match its declaration');
+  try {
+    const body = await readLimitedStream(stream, rule.maxBytes);
+    if (body.length !== declaredBytes) {
+      throw inspectionError('ASSET_INSPECTION_SIZE_MISMATCH', 'Asset size does not match its declaration');
+    }
+
+    const actualMimeType = await detectMimeType(body, mimeType);
+    if (!actualMimeType) throw inspectionError('ASSET_INSPECTION_UNSUPPORTED', 'Asset bytes are not an approved media type');
+    if (actualMimeType !== mimeType) throw inspectionError('ASSET_INSPECTION_MIME_MISMATCH', 'Asset MIME type does not match its bytes');
+
+    const approvedBody = rule.mediaType === 'svg' ? sanitizeSvg(body) : body;
+    if (rule.mediaType === 'font') validateFont(approvedBody, mimeType);
+    const dimensions = rule.mediaType === 'image' ? await inspectRaster(approvedBody) : {};
+    const durationMs = (rule.mediaType === 'audio' || rule.mediaType === 'video')
+      ? await probeDuration(approvedBody, mimeType)
+      : null;
+
+    return {
+      mediaType: rule.mediaType,
+      mimeType,
+      byteSize: approvedBody.length,
+      sha256: createHash('sha256').update(approvedBody).digest('hex'),
+      width: dimensions.width ?? null,
+      height: dimensions.height ?? null,
+      durationMs,
+      approvedBody,
+    };
+  } catch (error) {
+    if (error instanceof AssetInspectionError) throw error;
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Asset inspection failed');
   }
-
-  const actualMimeType = await detectMimeType(body);
-  if (!actualMimeType) throw inspectionError('ASSET_INSPECTION_UNSUPPORTED', 'Asset bytes are not an approved media type');
-  if (actualMimeType !== mimeType) throw inspectionError('ASSET_INSPECTION_MIME_MISMATCH', 'Asset MIME type does not match its bytes');
-
-  const approvedBody = rule.mediaType === 'svg' ? sanitizeSvg(body) : body;
-  const dimensions = rule.mediaType === 'image'
-    ? await sharp(approvedBody, { failOn: 'error' }).metadata()
-    : {};
-  const durationMs = (rule.mediaType === 'audio' || rule.mediaType === 'video')
-    ? await probeDuration(approvedBody, mimeType)
-    : null;
-
-  return {
-    mediaType: rule.mediaType,
-    mimeType,
-    byteSize: approvedBody.length,
-    sha256: createHash('sha256').update(approvedBody).digest('hex'),
-    width: dimensions.width ?? null,
-    height: dimensions.height ?? null,
-    durationMs,
-    approvedBody,
-  };
 }
 
 module.exports = {
