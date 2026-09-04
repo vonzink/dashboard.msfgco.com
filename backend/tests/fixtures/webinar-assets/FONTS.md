@@ -6,6 +6,9 @@
 - package: https://www.npmjs.com/package/@fontsource/hanken-grotesk
 - source repository: https://github.com/fontsource/font-files/tree/main/fonts/google/hanken-grotesk
 - font license: SIL Open Font License 1.1 (`OFL-1.1`)
+- upstream copyright: Copyright 2021 The Hanken Grotesk Project Authors
+  (https://github.com/marcologous/hanken-grotesk)
 
-They are committed only as test fixtures for container validation. The source package's `LICENSE`
-file must accompany any redistribution outside this repository.
+They are committed only as test fixtures for container validation. `OFL.txt` alongside the binaries
+contains the complete license and required copyright notice; keep those files together when copying
+or redistributing these fixtures.

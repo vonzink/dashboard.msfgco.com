@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
+import { deflateSync, inflateSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const fsPromises = require('node:fs/promises');
 const childProcess = require('node:child_process');
+const wawoff = require('wawoff2');
 const inspectionPath = require.resolve('../../../services/webinarAssets/inspection');
 const fixtures = new URL('../../fixtures/webinar-assets/', import.meta.url);
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNg+M/wHwAF/gL+Zl9+gAAAAABJRU5ErkJggg==', 'base64');
@@ -77,6 +79,93 @@ function corruptWoff2TransformedContent(body) {
   // This bit falls in the Brotli payload which expands into the transformed glyf table.
   malformed[488] ^= 0x20;
   return malformed;
+}
+
+function alignToFour(value) {
+  return Math.ceil(value / 4) * 4;
+}
+
+function fontTableChecksum(table, zeroHeadAdjustment = false) {
+  let checksum = 0;
+  for (let offset = 0; offset < table.length; offset += 4) {
+    let word = 0;
+    for (let byte = 0; byte < 4 && offset + byte < table.length; byte += 1) {
+      if (zeroHeadAdjustment && offset + byte >= 8 && offset + byte < 12) continue;
+      word |= table[offset + byte] << (24 - byte * 8);
+    }
+    checksum = (checksum + (word >>> 0)) >>> 0;
+  }
+  return checksum;
+}
+
+function rebuildChecksummedWoff(body, targetTag, mutate) {
+  const tableCount = body.readUInt16BE(12);
+  const directoryEnd = 44 + tableCount * 20;
+  const tables = [];
+  let outputLength = directoryEnd;
+
+  for (let index = 0; index < tableCount; index += 1) {
+    const entry = 44 + index * 20;
+    const tag = body.toString('ascii', entry, entry + 4);
+    const offset = body.readUInt32BE(entry + 4);
+    const compressedLength = body.readUInt32BE(entry + 8);
+    const originalLength = body.readUInt32BE(entry + 12);
+    const data = compressedLength < originalLength
+      ? inflateSync(body.subarray(offset, offset + compressedLength))
+      : Buffer.from(body.subarray(offset, offset + compressedLength));
+    if (tag === targetTag) mutate(data);
+    const compressed = deflateSync(data);
+    const encoded = compressed.length < data.length ? compressed : data;
+    tables.push({ tag, data, encoded, offset: outputLength });
+    outputLength = alignToFour(outputLength + encoded.length);
+  }
+
+  const rebuilt = Buffer.alloc(outputLength);
+  body.copy(rebuilt, 0, 0, 44);
+  rebuilt.writeUInt32BE(rebuilt.length, 8);
+  for (let index = 0; index < tables.length; index += 1) {
+    const entry = 44 + index * 20;
+    const table = tables[index];
+    rebuilt.write(table.tag, entry, 4, 'ascii');
+    rebuilt.writeUInt32BE(table.offset, entry + 4);
+    rebuilt.writeUInt32BE(table.encoded.length, entry + 8);
+    rebuilt.writeUInt32BE(table.data.length, entry + 12);
+    rebuilt.writeUInt32BE(fontTableChecksum(table.data, table.tag === 'head'), entry + 16);
+    table.encoded.copy(rebuilt, table.offset);
+  }
+  return rebuilt;
+}
+
+function sfntTable(body, tag) {
+  const tableCount = body.readUInt16BE(4);
+  for (let index = 0; index < tableCount; index += 1) {
+    const directoryOffset = 12 + index * 16;
+    if (body.toString('ascii', directoryOffset, directoryOffset + 4) === tag) {
+      return {
+        directoryOffset,
+        offset: body.readUInt32BE(directoryOffset + 8),
+        length: body.readUInt32BE(directoryOffset + 12),
+      };
+    }
+  }
+  throw new Error(`Expected SFNT ${tag} table`);
+}
+
+async function woff2WithDescendingSimpleGlyphEndpoints(body) {
+  const sfnt = Buffer.from(await wawoff.decompress(body));
+  const glyf = sfntTable(sfnt, 'glyf');
+  const firstGlyph = glyf.offset;
+  if (sfnt.readInt16BE(firstGlyph) < 2
+    || sfnt.readUInt16BE(firstGlyph + 10) !== 3
+    || sfnt.readUInt16BE(firstGlyph + 12) !== 7) {
+    throw new Error('Expected the fixture first glyph to have contour endpoints 3 and 7');
+  }
+  sfnt.writeUInt16BE(65_535, firstGlyph + 10);
+  sfnt.writeUInt32BE(
+    fontTableChecksum(sfnt.subarray(glyf.offset, glyf.offset + glyf.length)),
+    glyf.directoryOffset + 4,
+  );
+  return Buffer.from(await wawoff.compress(sfnt));
 }
 
 function assetInput(body, declaredMimeType, filename) {
@@ -267,6 +356,78 @@ describe('Webinar asset inspection', () => {
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
+  it.each([
+    ['name record count', 'name', table => table.writeUInt16BE(65_535, 2)],
+    ['name string storage offset', 'name', table => table.writeUInt16BE(table.length + 1, 4)],
+    ['cmap version', 'cmap', table => table.writeUInt16BE(1, 0)],
+    ['cmap encoding record count', 'cmap', table => table.writeUInt16BE(65_535, 2)],
+  ])('rejects a checksummed WOFF with an invalid %s', async (name, tag, mutate) => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = rebuildChecksummedWoff(body, tag, mutate);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', `invalid-${tag}.woff`)))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects a WOFF whose table payloads are relocated off four-byte boundaries', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const tableCount = body.readUInt16BE(12);
+    const directoryEnd = 44 + tableCount * 20;
+    const malformed = Buffer.alloc(body.length + 1);
+    body.copy(malformed, 0, 0, directoryEnd);
+    body.copy(malformed, directoryEnd + 1, directoryEnd);
+    malformed.writeUInt32BE(malformed.length, 8);
+    for (let index = 0; index < tableCount; index += 1) {
+      const entry = 44 + index * 20;
+      malformed.writeUInt32BE(body.readUInt32BE(entry + 4) + 1, entry + 4);
+    }
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'misaligned.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects trailing WOFF junk even when the declared container length includes it', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = Buffer.concat([body, Buffer.from([0])]);
+    malformed.writeUInt32BE(malformed.length, 8);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'trailing.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects non-null WOFF table padding', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = Buffer.from(body);
+    const firstTable = woffTable(malformed, 'GDEF');
+    malformed[firstTable.offset + firstTable.compressedLength] = 1;
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'padding.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects a misaligned WOFF private-data block', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = Buffer.concat([body, Buffer.from([0, 0xab])]);
+    malformed.writeUInt32BE(malformed.length, 8);
+    malformed.writeUInt32BE(body.length + 1, 36);
+    malformed.writeUInt32BE(1, 40);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'private.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects a WOFF metadata block that is not valid compressed metadata', async () => {
+    const body = await readFile(new URL('valid.woff', fixtures));
+    const malformed = Buffer.concat([body, Buffer.from('test')]);
+    malformed.writeUInt32BE(malformed.length, 8);
+    malformed.writeUInt32BE(body.length, 24);
+    malformed.writeUInt32BE(4, 28);
+    malformed.writeUInt32BE(4, 32);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff', 'metadata.woff')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
   it('rejects a WOFF2 font whose header understates the decoded SFNT size', async () => {
     const body = await readFile(new URL('valid.woff2', fixtures));
     const malformed = Buffer.from(body);
@@ -281,6 +442,14 @@ describe('Webinar asset inspection', () => {
     const malformed = corruptWoff2TransformedContent(body);
 
     await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff2', 'corrupt-glyf.woff2')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('rejects checksummed WOFF2 glyph data with descending contour endpoints', async () => {
+    const body = await readFile(new URL('valid.woff2', fixtures));
+    const malformed = await woff2WithDescendingSimpleGlyphEndpoints(body);
+
+    await expect(inspection.inspectAsset(assetInput(malformed, 'font/woff2', 'invalid-glyph.woff2')))
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 

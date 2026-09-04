@@ -203,6 +203,460 @@ function tableChecksum(table, zeroHeadAdjustment = false) {
   return checksum;
 }
 
+function assertRange(total, offset, length) {
+  if (!hasValidRange(total, offset, length)) throw fontInvalid();
+}
+
+function assertNullBytes(body, start, end) {
+  assertRange(body.length, start, end - start);
+  for (let offset = start; offset < end; offset += 1) {
+    if (body[offset] !== 0) throw fontInvalid();
+  }
+}
+
+function validateNameTable(name) {
+  if (name.length < 6) throw fontInvalid();
+  const version = name.readUInt16BE(0);
+  const recordCount = name.readUInt16BE(2);
+  const storageOffset = name.readUInt16BE(4);
+  if (![0, 1].includes(version) || recordCount === 0) throw fontInvalid();
+
+  const recordsEnd = 6 + recordCount * 12;
+  assertRange(name.length, 6, recordCount * 12);
+  let headerEnd = recordsEnd;
+  let languageTagCount = 0;
+  if (version === 1) {
+    assertRange(name.length, recordsEnd, 2);
+    languageTagCount = name.readUInt16BE(recordsEnd);
+    headerEnd += 2 + languageTagCount * 4;
+    assertRange(name.length, recordsEnd + 2, languageTagCount * 4);
+  }
+  if (storageOffset < headerEnd || storageOffset > name.length) throw fontInvalid();
+
+  let previousKey = null;
+  for (let index = 0; index < recordCount; index += 1) {
+    const record = 6 + index * 12;
+    const key = [
+      name.readUInt16BE(record),
+      name.readUInt16BE(record + 2),
+      name.readUInt16BE(record + 4),
+      name.readUInt16BE(record + 6),
+    ];
+    if (previousKey) {
+      for (let part = 0; part < key.length; part += 1) {
+        if (key[part] === previousKey[part]) continue;
+        if (key[part] < previousKey[part]) throw fontInvalid();
+        break;
+      }
+    }
+    previousKey = key;
+    const stringLength = name.readUInt16BE(record + 8);
+    const stringOffset = name.readUInt16BE(record + 10);
+    assertRange(name.length, storageOffset + stringOffset, stringLength);
+  }
+
+  if (version === 1) {
+    for (let index = 0; index < languageTagCount; index += 1) {
+      const record = recordsEnd + 2 + index * 4;
+      const stringLength = name.readUInt16BE(record);
+      const stringOffset = name.readUInt16BE(record + 2);
+      assertRange(name.length, storageOffset + stringOffset, stringLength);
+    }
+  }
+}
+
+function validateCmapGroups(
+  cmap, offset, length, groupCount, groupOffset, numGlyphs, constantGlyph, maximumCode,
+) {
+  if (length !== groupOffset + groupCount * 12) throw fontInvalid();
+  let previousEnd = -1;
+  for (let index = 0; index < groupCount; index += 1) {
+    const group = offset + groupOffset + index * 12;
+    const start = cmap.readUInt32BE(group);
+    const end = cmap.readUInt32BE(group + 4);
+    const glyph = cmap.readUInt32BE(group + 8);
+    if (start > end || start <= previousEnd || end > maximumCode) throw fontInvalid();
+    const lastGlyph = constantGlyph ? glyph : glyph + (end - start);
+    if (lastGlyph >= numGlyphs) throw fontInvalid();
+    previousEnd = end;
+  }
+}
+
+function validateCmapFormatTwo(cmap, offset, length, numGlyphs) {
+  if (length < 526) throw fontInvalid();
+  let maximumKey = 0;
+  for (let index = 0; index < 256; index += 1) {
+    const key = cmap.readUInt16BE(offset + 6 + index * 2);
+    if (key % 8 !== 0) throw fontInvalid();
+    maximumKey = Math.max(maximumKey, key);
+  }
+  const subHeaderCount = maximumKey / 8 + 1;
+  const subHeadersEnd = 518 + subHeaderCount * 8;
+  if (subHeadersEnd > length) throw fontInvalid();
+  for (let index = 0; index < subHeaderCount; index += 1) {
+    const subHeader = offset + 518 + index * 8;
+    const firstCode = cmap.readUInt16BE(subHeader);
+    const entryCount = cmap.readUInt16BE(subHeader + 2);
+    const delta = cmap.readInt16BE(subHeader + 4);
+    const rangeOffset = cmap.readUInt16BE(subHeader + 6);
+    if (firstCode + entryCount > 256 || rangeOffset % 2 !== 0) throw fontInvalid();
+    const glyphStart = subHeader + 6 + rangeOffset;
+    if (entryCount > 0 && (glyphStart < offset + subHeadersEnd
+      || !hasValidRange(offset + length, glyphStart, entryCount * 2))) throw fontInvalid();
+    for (let glyphIndex = 0; glyphIndex < entryCount; glyphIndex += 1) {
+      const storedGlyph = cmap.readUInt16BE(glyphStart + glyphIndex * 2);
+      const mappedGlyph = storedGlyph === 0 ? 0 : (storedGlyph + delta) & 0xffff;
+      if (mappedGlyph >= numGlyphs) throw fontInvalid();
+    }
+  }
+}
+
+function validateCmapFormatFour(cmap, offset, length, numGlyphs) {
+  if (length < 24 || length % 2 !== 0) throw fontInvalid();
+  const segmentBytes = cmap.readUInt16BE(offset + 6);
+  if (segmentBytes === 0 || segmentBytes % 2 !== 0) throw fontInvalid();
+  const segmentCount = segmentBytes / 2;
+  const arraysEnd = 16 + segmentCount * 8;
+  if (arraysEnd > length) throw fontInvalid();
+  const powerOfTwo = 2 ** Math.floor(Math.log2(segmentCount));
+  if (cmap.readUInt16BE(offset + 8) !== powerOfTwo * 2
+    || cmap.readUInt16BE(offset + 10) !== Math.log2(powerOfTwo)
+    || cmap.readUInt16BE(offset + 12) !== segmentBytes - powerOfTwo * 2) throw fontInvalid();
+  const endCodes = offset + 14;
+  const reservedPad = endCodes + segmentCount * 2;
+  const startCodes = reservedPad + 2;
+  const deltas = startCodes + segmentCount * 2;
+  const rangeOffsets = deltas + segmentCount * 2;
+  if (cmap.readUInt16BE(reservedPad) !== 0) throw fontInvalid();
+
+  let previousEnd = -1;
+  for (let index = 0; index < segmentCount; index += 1) {
+    const start = cmap.readUInt16BE(startCodes + index * 2);
+    const end = cmap.readUInt16BE(endCodes + index * 2);
+    const delta = cmap.readInt16BE(deltas + index * 2);
+    const rangeOffsetPosition = rangeOffsets + index * 2;
+    const rangeOffset = cmap.readUInt16BE(rangeOffsetPosition);
+    if (start > end || end <= previousEnd || rangeOffset % 2 !== 0) throw fontInvalid();
+    if (index === segmentCount - 1 && (start !== 0xffff || end !== 0xffff)) throw fontInvalid();
+    for (let codePoint = start; codePoint <= end; codePoint += 1) {
+      let glyph;
+      if (rangeOffset === 0) {
+        glyph = (codePoint + delta) & 0xffff;
+      } else {
+        const glyphPosition = rangeOffsetPosition + rangeOffset + (codePoint - start) * 2;
+        if (glyphPosition < offset + arraysEnd || glyphPosition + 2 > offset + length) throw fontInvalid();
+        glyph = cmap.readUInt16BE(glyphPosition);
+        if (glyph !== 0) glyph = (glyph + delta) & 0xffff;
+      }
+      if (glyph >= numGlyphs) throw fontInvalid();
+    }
+    previousEnd = end;
+  }
+}
+
+function readUInt24BE(body, offset) {
+  return body[offset] * 0x10000 + body[offset + 1] * 0x100 + body[offset + 2];
+}
+
+function validateCmapFormatFourteen(cmap, offset, length, numGlyphs) {
+  const recordCount = cmap.readUInt32BE(offset + 6);
+  const recordsEnd = 10 + recordCount * 11;
+  if (recordsEnd > length) throw fontInvalid();
+  let previousSelector = -1;
+  for (let index = 0; index < recordCount; index += 1) {
+    const record = offset + 10 + index * 11;
+    const selector = readUInt24BE(cmap, record);
+    const defaultOffset = cmap.readUInt32BE(record + 3);
+    const nonDefaultOffset = cmap.readUInt32BE(record + 7);
+    if (selector <= previousSelector || selector > 0x10ffff) throw fontInvalid();
+    previousSelector = selector;
+    if (defaultOffset !== 0) {
+      if (defaultOffset < recordsEnd || defaultOffset + 4 > length) throw fontInvalid();
+      const rangeCount = cmap.readUInt32BE(offset + defaultOffset);
+      if (defaultOffset + 4 + rangeCount * 4 > length) throw fontInvalid();
+      let previousEnd = -1;
+      for (let rangeIndex = 0; rangeIndex < rangeCount; rangeIndex += 1) {
+        const range = offset + defaultOffset + 4 + rangeIndex * 4;
+        const start = readUInt24BE(cmap, range);
+        const end = start + cmap[range + 3];
+        if (start <= previousEnd || end > 0x10ffff) throw fontInvalid();
+        previousEnd = end;
+      }
+    }
+    if (nonDefaultOffset !== 0) {
+      if (nonDefaultOffset < recordsEnd || nonDefaultOffset + 4 > length) throw fontInvalid();
+      const mappingCount = cmap.readUInt32BE(offset + nonDefaultOffset);
+      if (nonDefaultOffset + 4 + mappingCount * 5 > length) throw fontInvalid();
+      let previousCodePoint = -1;
+      for (let mappingIndex = 0; mappingIndex < mappingCount; mappingIndex += 1) {
+        const mapping = offset + nonDefaultOffset + 4 + mappingIndex * 5;
+        const codePoint = readUInt24BE(cmap, mapping);
+        const glyph = cmap.readUInt16BE(mapping + 3);
+        if (codePoint <= previousCodePoint || codePoint > 0x10ffff || glyph >= numGlyphs) throw fontInvalid();
+        previousCodePoint = codePoint;
+      }
+    }
+  }
+}
+
+function validateCmapSubtable(cmap, offset, platformId, encodingId, numGlyphs) {
+  assertRange(cmap.length, offset, 2);
+  const format = cmap.readUInt16BE(offset);
+  let length;
+  if ([0, 2, 4, 6].includes(format)) {
+    assertRange(cmap.length, offset, 4);
+    length = cmap.readUInt16BE(offset + 2);
+  } else if ([8, 10, 12, 13].includes(format)) {
+    assertRange(cmap.length, offset, 8);
+    if (cmap.readUInt16BE(offset + 2) !== 0) throw fontInvalid();
+    length = cmap.readUInt32BE(offset + 4);
+  } else if (format === 14) {
+    assertRange(cmap.length, offset, 6);
+    length = cmap.readUInt32BE(offset + 2);
+    if (platformId !== 0 || encodingId !== 5) throw fontInvalid();
+  } else {
+    throw fontInvalid();
+  }
+  if (length === 0) throw fontInvalid();
+  assertRange(cmap.length, offset, length);
+
+  if (format === 0) {
+    if (length !== 262) throw fontInvalid();
+    for (let index = 0; index < 256; index += 1) {
+      if (cmap[offset + 6 + index] >= numGlyphs) throw fontInvalid();
+    }
+  } else if (format === 2) {
+    validateCmapFormatTwo(cmap, offset, length, numGlyphs);
+  } else if (format === 4) {
+    validateCmapFormatFour(cmap, offset, length, numGlyphs);
+  } else if (format === 6) {
+    if (length < 10) throw fontInvalid();
+    const firstCode = cmap.readUInt16BE(offset + 6);
+    const entryCount = cmap.readUInt16BE(offset + 8);
+    if (length !== 10 + entryCount * 2 || firstCode + entryCount > 0x10000) throw fontInvalid();
+    for (let index = 0; index < entryCount; index += 1) {
+      if (cmap.readUInt16BE(offset + 10 + index * 2) >= numGlyphs) throw fontInvalid();
+    }
+  } else if (format === 8) {
+    if (length < 8208) throw fontInvalid();
+    const groupCount = cmap.readUInt32BE(offset + 8204);
+    validateCmapGroups(cmap, offset, length, groupCount, 8208, numGlyphs, false, 0xffffffff);
+  } else if (format === 10) {
+    if (length < 20) throw fontInvalid();
+    const firstCode = cmap.readUInt32BE(offset + 12);
+    const entryCount = cmap.readUInt32BE(offset + 16);
+    if (entryCount > (length - 20) / 2 || length !== 20 + entryCount * 2
+      || firstCode + entryCount > 0x110000) throw fontInvalid();
+    for (let index = 0; index < entryCount; index += 1) {
+      if (cmap.readUInt16BE(offset + 20 + index * 2) >= numGlyphs) throw fontInvalid();
+    }
+  } else if (format === 12 || format === 13) {
+    if (length < 16) throw fontInvalid();
+    const groupCount = cmap.readUInt32BE(offset + 12);
+    validateCmapGroups(cmap, offset, length, groupCount, 16, numGlyphs, format === 13, 0x10ffff);
+  } else {
+    validateCmapFormatFourteen(cmap, offset, length, numGlyphs);
+  }
+}
+
+function validateCmapTable(cmap, numGlyphs) {
+  if (cmap.length < 12 || cmap.readUInt16BE(0) !== 0) throw fontInvalid();
+  const recordCount = cmap.readUInt16BE(2);
+  const recordsEnd = 4 + recordCount * 8;
+  if (recordCount === 0) throw fontInvalid();
+  assertRange(cmap.length, 4, recordCount * 8);
+  const validatedOffsets = new Set();
+  let previousPlatform = -1;
+  let previousEncoding = -1;
+  for (let index = 0; index < recordCount; index += 1) {
+    const record = 4 + index * 8;
+    const platformId = cmap.readUInt16BE(record);
+    const encodingId = cmap.readUInt16BE(record + 2);
+    const offset = cmap.readUInt32BE(record + 4);
+    if (platformId < previousPlatform || (platformId === previousPlatform && encodingId < previousEncoding)
+      || offset < recordsEnd) throw fontInvalid();
+    previousPlatform = platformId;
+    previousEncoding = encodingId;
+    const key = `${offset}:${platformId}:${encodingId}`;
+    if (!validatedOffsets.has(key)) {
+      validateCmapSubtable(cmap, offset, platformId, encodingId, numGlyphs);
+      validatedOffsets.add(key);
+    }
+  }
+}
+
+function validateSimpleGlyph(glyf, start, end, contourCount, maxp) {
+  let cursor = start + 10;
+  if (contourCount === 0 && cursor === end) return [];
+  assertRange(end, cursor, contourCount * 2 + 2);
+  let finalEndpoint = -1;
+  for (let index = 0; index < contourCount; index += 1) {
+    const endpoint = glyf.readUInt16BE(cursor + index * 2);
+    if (endpoint <= finalEndpoint) throw fontInvalid();
+    finalEndpoint = endpoint;
+  }
+  cursor += contourCount * 2;
+  const instructionLength = glyf.readUInt16BE(cursor);
+  cursor += 2;
+  assertRange(end, cursor, instructionLength);
+  cursor += instructionLength;
+  const pointCount = finalEndpoint + 1;
+  if (contourCount > maxp.maxContours || pointCount > maxp.maxPoints
+    || instructionLength > maxp.maxInstructionBytes) throw fontInvalid();
+
+  const flags = [];
+  while (flags.length < pointCount) {
+    assertRange(end, cursor, 1);
+    const flag = glyf[cursor++];
+    if (flag & 0x80 || (flag & 0x40 && flags.length > 0)) throw fontInvalid();
+    let repetitions = 0;
+    if (flag & 0x08) {
+      assertRange(end, cursor, 1);
+      repetitions = glyf[cursor++];
+    }
+    if (flags.length + repetitions + 1 > pointCount) throw fontInvalid();
+    for (let index = 0; index <= repetitions; index += 1) flags.push(flag);
+  }
+
+  let coordinateBytes = 0;
+  for (const flag of flags) coordinateBytes += flag & 0x02 ? 1 : flag & 0x10 ? 0 : 2;
+  for (const flag of flags) coordinateBytes += flag & 0x04 ? 1 : flag & 0x20 ? 0 : 2;
+  assertRange(end, cursor, coordinateBytes);
+  cursor += coordinateBytes;
+  if (end - cursor > 3) throw fontInvalid();
+  assertNullBytes(glyf, cursor, end);
+  return [];
+}
+
+function validateCompositeGlyph(glyf, start, end, glyphId, numGlyphs, maxp) {
+  let cursor = start + 10;
+  let flags = 0x20;
+  let componentCount = 0;
+  let hasInstructions = false;
+  const components = [];
+  while (flags & 0x20) {
+    assertRange(end, cursor, 4);
+    flags = glyf.readUInt16BE(cursor);
+    const componentGlyph = glyf.readUInt16BE(cursor + 2);
+    cursor += 4;
+    const transformCount = Number(Boolean(flags & 0x0008))
+      + Number(Boolean(flags & 0x0040)) + Number(Boolean(flags & 0x0080));
+    if (flags & 0xe010 || transformCount > 1 || (flags & 0x0800 && flags & 0x1000)
+      || (componentCount === 0 && !(flags & 0x0002))
+      || componentGlyph >= numGlyphs || componentGlyph === glyphId) throw fontInvalid();
+    const argumentBytes = flags & 0x0001 ? 4 : 2;
+    const transformBytes = flags & 0x0008 ? 2 : flags & 0x0040 ? 4 : flags & 0x0080 ? 8 : 0;
+    assertRange(end, cursor, argumentBytes + transformBytes);
+    cursor += argumentBytes + transformBytes;
+    hasInstructions ||= Boolean(flags & 0x0100);
+    componentCount += 1;
+    if (componentCount > maxp.maxComponentElements) throw fontInvalid();
+    components.push(componentGlyph);
+  }
+  if (componentCount === 0) throw fontInvalid();
+  if (hasInstructions) {
+    assertRange(end, cursor, 2);
+    const instructionLength = glyf.readUInt16BE(cursor);
+    cursor += 2;
+    assertRange(end, cursor, instructionLength);
+    cursor += instructionLength;
+    if (instructionLength > maxp.maxInstructionBytes) throw fontInvalid();
+  }
+  if (end - cursor > 3) throw fontInvalid();
+  assertNullBytes(glyf, cursor, end);
+  return components;
+}
+
+function validateCompositeGraph(componentsByGlyph, maximumDepth) {
+  const states = new Uint8Array(componentsByGlyph.length);
+  const depths = new Uint16Array(componentsByGlyph.length);
+  for (let root = 0; root < componentsByGlyph.length; root += 1) {
+    if (states[root] !== 0) continue;
+    const stack = [{ glyph: root, childIndex: 0 }];
+    states[root] = 1;
+    while (stack.length > 0) {
+      const frame = stack.at(-1);
+      const children = componentsByGlyph[frame.glyph];
+      if (frame.childIndex < children.length) {
+        const child = children[frame.childIndex++];
+        if (states[child] === 1) throw fontInvalid();
+        if (states[child] === 0) {
+          states[child] = 1;
+          stack.push({ glyph: child, childIndex: 0 });
+        }
+      } else {
+        let depth = 0;
+        for (const child of children) depth = Math.max(depth, depths[child] + 1);
+        if (depth > maximumDepth) throw fontInvalid();
+        depths[frame.glyph] = depth;
+        states[frame.glyph] = 2;
+        stack.pop();
+      }
+    }
+  }
+}
+
+function validateTrueTypeOutlines(tables, head, maxp) {
+  const glyf = tables.get('glyf');
+  const loca = tables.get('loca');
+  if (!glyf && !loca) return;
+  if (!glyf || !loca || maxp.version !== 0x00010000 || ![0, 1].includes(head.indexToLocFormat)) {
+    throw fontInvalid();
+  }
+  const entryBytes = head.indexToLocFormat === 0 ? 2 : 4;
+  if (loca.length !== (maxp.numGlyphs + 1) * entryBytes) throw fontInvalid();
+  const offsets = [];
+  for (let index = 0; index <= maxp.numGlyphs; index += 1) {
+    const offset = head.indexToLocFormat === 0
+      ? loca.readUInt16BE(index * 2) * 2
+      : loca.readUInt32BE(index * 4);
+    if (offset > glyf.length || (index > 0 && offset < offsets[index - 1])) throw fontInvalid();
+    offsets.push(offset);
+  }
+  if (offsets.at(-1) !== glyf.length) throw fontInvalid();
+
+  const componentsByGlyph = Array.from({ length: maxp.numGlyphs }, () => []);
+  for (let glyphId = 0; glyphId < maxp.numGlyphs; glyphId += 1) {
+    const start = offsets[glyphId];
+    const end = offsets[glyphId + 1];
+    if (start === end) continue;
+    if (end - start < 10) throw fontInvalid();
+    const contourCount = glyf.readInt16BE(start);
+    const xMin = glyf.readInt16BE(start + 2);
+    const yMin = glyf.readInt16BE(start + 4);
+    const xMax = glyf.readInt16BE(start + 6);
+    const yMax = glyf.readInt16BE(start + 8);
+    if (xMin > xMax || yMin > yMax) throw fontInvalid();
+    componentsByGlyph[glyphId] = contourCount >= 0
+      ? validateSimpleGlyph(glyf, start, end, contourCount, maxp)
+      : validateCompositeGlyph(glyf, start, end, glyphId, maxp.numGlyphs, maxp);
+  }
+  validateCompositeGraph(componentsByGlyph, maxp.maxComponentDepth);
+}
+
+function validateHeadAndMaxp(head, maxp, hasTrueTypeOutlines) {
+  if (head.length !== 54 || head.readUInt32BE(0) !== 0x00010000
+    || head.readUInt32BE(12) !== 0x5f0f3cf5
+    || head.readUInt16BE(18) < 16 || head.readUInt16BE(18) > 16_384
+    || ![0, 1].includes(head.readInt16BE(50)) || head.readInt16BE(52) !== 0) throw fontInvalid();
+  if (maxp.length < 6) throw fontInvalid();
+  const version = maxp.readUInt32BE(0);
+  const numGlyphs = maxp.readUInt16BE(4);
+  if (numGlyphs === 0 || (version === 0x00005000 && maxp.length !== 6)
+    || (version === 0x00010000 && maxp.length !== 32)
+    || ![0x00005000, 0x00010000].includes(version)
+    || (hasTrueTypeOutlines && version !== 0x00010000)) throw fontInvalid();
+  return {
+    version,
+    numGlyphs,
+    maxPoints: version === 0x00010000 ? maxp.readUInt16BE(6) : 0,
+    maxContours: version === 0x00010000 ? maxp.readUInt16BE(8) : 0,
+    maxInstructionBytes: version === 0x00010000 ? maxp.readUInt16BE(26) : 0,
+    maxComponentElements: version === 0x00010000 ? maxp.readUInt16BE(28) : 0,
+    maxComponentDepth: version === 0x00010000 ? maxp.readUInt16BE(30) : 0,
+  };
+}
+
 function validateSfnt(sfnt, expectedLength, verifyChecksums) {
   if (!Buffer.isBuffer(sfnt) || sfnt.length !== expectedLength || sfnt.length > MAX_FONT_SFNT_BYTES
     || sfnt.length < SFNT_HEADER_BYTES) throw fontInvalid();
@@ -213,6 +667,7 @@ function validateSfnt(sfnt, expectedLength, verifyChecksums) {
 
   const tables = new Map();
   const ranges = [];
+  let previousTag = null;
   for (let index = 0; index < tableCount; index += 1) {
     const entry = SFNT_HEADER_BYTES + index * SFNT_TABLE_DIRECTORY_BYTES;
     const tag = sfnt.toString('ascii', entry, entry + 4);
@@ -221,22 +676,36 @@ function validateSfnt(sfnt, expectedLength, verifyChecksums) {
     const length = sfnt.readUInt32BE(entry + 12);
     if (!tag || tables.has(tag) || length === 0 || offset % 4 !== 0
       || offset < directoryEnd || !hasValidRange(sfnt.length, offset, length)) throw fontInvalid();
+    const tagBytes = sfnt.subarray(entry, entry + 4);
+    if (previousTag && Buffer.compare(previousTag, tagBytes) >= 0) throw fontInvalid();
+    previousTag = tagBytes;
     const table = sfnt.subarray(offset, offset + length);
     if (verifyChecksums && tableChecksum(table, tag === 'head') !== checksum) throw fontInvalid();
     tables.set(tag, table);
-    ranges.push([offset, alignToFour(offset + length)]);
+    ranges.push({ offset, end: offset + length, paddedEnd: alignToFour(offset + length) });
   }
-  ranges.sort((left, right) => left[0] - right[0]);
-  if (ranges.some((range, index) => index > 0 && range[0] < ranges[index - 1][1])) throw fontInvalid();
-  if (ranges.at(-1)?.[1] !== sfnt.length) throw fontInvalid();
+  ranges.sort((left, right) => left.offset - right.offset);
+  let expectedOffset = directoryEnd;
+  for (const range of ranges) {
+    if (range.offset !== expectedOffset) throw fontInvalid();
+    assertNullBytes(sfnt, range.end, range.paddedEnd);
+    expectedOffset = range.paddedEnd;
+  }
+  if (expectedOffset !== sfnt.length || (verifyChecksums && tableChecksum(sfnt) !== 0xb1b0afba)) {
+    throw fontInvalid();
+  }
 
   const head = tables.get('head');
   const maxp = tables.get('maxp');
   const cmap = tables.get('cmap');
   const name = tables.get('name');
-  if (!head || head.length < 54 || head.readUInt32BE(12) !== 0x5f0f3cf5
-    || !maxp || maxp.length < 6 || maxp.readUInt16BE(4) === 0
-    || !cmap || cmap.length < 4 || !name || name.length < 6) throw fontInvalid();
+  if (!head || !maxp || !cmap || !name) throw fontInvalid();
+  const maxpValues = validateHeadAndMaxp(head, maxp, tables.has('glyf') || tables.has('loca'));
+  const headValues = { indexToLocFormat: head.readInt16BE(50) };
+  validateNameTable(name);
+  validateCmapTable(cmap, maxpValues.numGlyphs);
+  validateTrueTypeOutlines(tables, headValues, maxpValues);
+  return { tables, numGlyphs: maxpValues.numGlyphs };
 }
 
 function buildSfnt(flavor, tables, expectedLength) {
@@ -250,16 +719,66 @@ function buildSfnt(flavor, tables, expectedLength) {
   sfnt.writeUInt16BE(tableCount * 16 - powerOfTwo * 16, 10);
   let directoryOffset = SFNT_HEADER_BYTES;
   let dataOffset = SFNT_HEADER_BYTES + tableCount * SFNT_TABLE_DIRECTORY_BYTES;
-  for (const table of tables.sort((left, right) => left.tag.localeCompare(right.tag))) {
+  let headOffset;
+  for (const table of tables.sort((left, right) => Buffer.compare(
+    Buffer.from(left.tag, 'ascii'), Buffer.from(right.tag, 'ascii'),
+  ))) {
     sfnt.write(table.tag, directoryOffset, 4, 'ascii');
     sfnt.writeUInt32BE(table.checksum, directoryOffset + 4);
     sfnt.writeUInt32BE(dataOffset, directoryOffset + 8);
     sfnt.writeUInt32BE(table.data.length, directoryOffset + 12);
     table.data.copy(sfnt, dataOffset);
+    if (table.tag === 'head') headOffset = dataOffset;
     directoryOffset += SFNT_TABLE_DIRECTORY_BYTES;
     dataOffset += alignToFour(table.data.length);
   }
+  if (headOffset !== undefined) {
+    sfnt.writeUInt32BE(0, headOffset + 8);
+    sfnt.writeUInt32BE((0xb1b0afba - tableChecksum(sfnt)) >>> 0, headOffset + 8);
+  }
   return sfnt;
+}
+
+function inflateExactly(body, expectedLength) {
+  if (expectedLength === 0 || expectedLength > MAX_FONT_SFNT_BYTES) throw fontInvalid();
+  try {
+    const inflated = inflateSync(body, { info: true, maxOutputLength: expectedLength });
+    if (inflated.buffer.length !== expectedLength || inflated.engine.bytesWritten !== body.length) {
+      throw fontInvalid();
+    }
+    return inflated.buffer;
+  } catch (error) {
+    if (error instanceof AssetInspectionError) throw error;
+    throw fontInvalid();
+  }
+}
+
+function validateWoffMetadata(metadata) {
+  let depth = 0;
+  let roots = 0;
+  let root;
+  let invalid = false;
+  const parser = new SaxesParser();
+  parser.on('error', () => { invalid = true; });
+  parser.on('doctype', () => { invalid = true; });
+  parser.on('opentag', tag => {
+    if (depth === 0) {
+      root = tag;
+      roots += 1;
+    }
+    depth += 1;
+  });
+  parser.on('closetag', () => { depth -= 1; });
+  parser.on('text', text => {
+    if (depth === 0 && text.trim()) invalid = true;
+  });
+  try {
+    parser.write(metadata.toString('utf8')).close();
+  } catch {
+    invalid = true;
+  }
+  if (invalid || depth !== 0 || roots !== 1 || root?.name !== 'metadata'
+    || root?.attributes?.version !== '1.0') throw fontInvalid();
 }
 
 function validateWoff(body) {
@@ -271,6 +790,7 @@ function validateWoff(body) {
   const tables = [];
   const seenTags = new Set();
   const containerRanges = [];
+  let previousTag = null;
   let decodedLength = SFNT_HEADER_BYTES + tableCount * SFNT_TABLE_DIRECTORY_BYTES;
   for (let index = 0; index < tableCount; index += 1) {
     const entry = WOFF_HEADER_BYTES + index * WOFF_TABLE_DIRECTORY_BYTES;
@@ -279,35 +799,30 @@ function validateWoff(body) {
     const compressedLength = body.readUInt32BE(entry + 8);
     const originalLength = body.readUInt32BE(entry + 12);
     const checksum = body.readUInt32BE(entry + 16);
+    const tagBytes = body.subarray(entry, entry + 4);
     if (!tag || seenTags.has(tag) || originalLength === 0 || compressedLength === 0
-      || compressedLength > originalLength || offset < directoryEnd
+      || compressedLength > originalLength || offset < directoryEnd || offset % 4 !== 0
+      || (previousTag && Buffer.compare(previousTag, tagBytes) >= 0)
       || !hasValidRange(body.length, offset, compressedLength)) throw fontInvalid();
+    previousTag = tagBytes;
     decodedLength += alignToFour(originalLength);
     if (decodedLength > MAX_FONT_SFNT_BYTES) throw fontInvalid();
-    let data;
-    try {
-      if (compressedLength < originalLength) {
-        const inflated = inflateSync(body.subarray(offset, offset + compressedLength), {
-          info: true,
-          maxOutputLength: originalLength,
-        });
-        if (inflated.buffer.length !== originalLength || inflated.engine.bytesWritten !== compressedLength) {
-          throw fontInvalid();
-        }
-        data = inflated.buffer;
-      } else {
-        data = body.subarray(offset, offset + compressedLength);
-      }
-    } catch (error) {
-      if (error instanceof AssetInspectionError) throw error;
-      throw fontInvalid();
-    }
+    const encoded = body.subarray(offset, offset + compressedLength);
+    const data = compressedLength < originalLength ? inflateExactly(encoded, originalLength) : encoded;
     if (tableChecksum(data, tag === 'head') !== checksum) throw fontInvalid();
     seenTags.add(tag);
-    containerRanges.push([offset, offset + compressedLength]);
+    containerRanges.push({ offset, end: offset + compressedLength, paddedEnd: alignToFour(offset + compressedLength) });
     tables.push({ tag, checksum, data });
   }
   if (decodedLength !== expectedLength) throw fontInvalid();
+  containerRanges.sort((left, right) => left.offset - right.offset);
+  let containerOffset = directoryEnd;
+  for (const range of containerRanges) {
+    if (range.offset !== containerOffset) throw fontInvalid();
+    assertNullBytes(body, range.end, range.paddedEnd);
+    containerOffset = range.paddedEnd;
+  }
+
   const metadataOffset = body.readUInt32BE(24);
   const metadataLength = body.readUInt32BE(28);
   const metadataOriginalLength = body.readUInt32BE(32);
@@ -315,14 +830,25 @@ function validateWoff(body) {
   const privateLength = body.readUInt32BE(40);
   if ((metadataOffset === 0) !== (metadataLength === 0) || (metadataLength === 0) !== (metadataOriginalLength === 0)
     || (privateOffset === 0) !== (privateLength === 0)
-    || (metadataLength > 0 && !hasValidRange(body.length, metadataOffset, metadataLength))
-    || (privateLength > 0 && !hasValidRange(body.length, privateOffset, privateLength))) throw fontInvalid();
-  if (metadataLength > 0) containerRanges.push([metadataOffset, metadataOffset + metadataLength]);
-  if (privateLength > 0) containerRanges.push([privateOffset, privateOffset + privateLength]);
-  containerRanges.sort((left, right) => left[0] - right[0]);
-  if (containerRanges.some((range, index) => index > 0 && range[0] < containerRanges[index - 1][1])) throw fontInvalid();
+    || (metadataLength > 0 && (metadataOffset % 4 !== 0 || metadataOffset !== containerOffset
+      || !hasValidRange(body.length, metadataOffset, metadataLength)))
+    || (privateLength > 0 && (privateOffset % 4 !== 0
+      || !hasValidRange(body.length, privateOffset, privateLength)))) throw fontInvalid();
+  if (metadataLength > 0) {
+    const metadata = inflateExactly(
+      body.subarray(metadataOffset, metadataOffset + metadataLength), metadataOriginalLength,
+    );
+    validateWoffMetadata(metadata);
+    containerOffset = metadataOffset + metadataLength;
+  }
+  if (privateLength > 0) {
+    const privateStart = alignToFour(containerOffset);
+    if (privateOffset !== privateStart) throw fontInvalid();
+    assertNullBytes(body, containerOffset, privateStart);
+    containerOffset = privateOffset + privateLength;
+  }
+  if (containerOffset !== body.length) throw fontInvalid();
   const sfnt = buildSfnt(body.readUInt32BE(4), tables, expectedLength);
-  validateSfnt(sfnt, expectedLength, true);
   return sfnt;
 }
 
@@ -331,6 +857,7 @@ function readBase128(body, state) {
   for (let index = 0; index < 5; index += 1) {
     if (state.offset >= body.length || value & 0xe0000000) throw fontInvalid();
     const byte = body[state.offset++];
+    if (index === 0 && byte === 0x80) throw fontInvalid();
     value = (value << 7) | (byte & 0x7f);
     if ((byte & 0x80) === 0) return value;
   }
@@ -394,6 +921,26 @@ function validateWoff2Directory(body) {
   return expectedLength;
 }
 
+function forceFontkitValidation(sfnt, expectedGlyphs) {
+  const font = fontkit.create(sfnt);
+  if (!Number.isSafeInteger(font.numGlyphs) || font.numGlyphs !== expectedGlyphs
+    || !font.name || !font.cmap || !Array.isArray(font.cmap.tables)) throw fontInvalid();
+  for (const tag of Object.keys(font.directory.tables)) {
+    if (tag === 'glyf') continue;
+    const descriptor = Object.getOwnPropertyDescriptor(font, tag);
+    if (descriptor?.get && font[tag] === undefined) throw fontInvalid();
+  }
+  for (const record of font.cmap.tables) {
+    if (!record.table) throw fontInvalid();
+  }
+  for (let glyphId = 0; glyphId < font.numGlyphs; glyphId += 1) {
+    const glyph = font.getGlyph(glyphId);
+    if (!glyph || !Array.isArray(glyph.path?.commands) || !Number.isFinite(glyph.advanceWidth)) {
+      throw fontInvalid();
+    }
+  }
+}
+
 async function validateFont(body, mimeType) {
   const minimum = mimeType === 'font/woff' ? WOFF_HEADER_BYTES : WOFF2_HEADER_BYTES;
   if (body.length < minimum || body.readUInt32BE(8) !== body.length
@@ -409,9 +956,8 @@ async function validateFont(body, mimeType) {
       expectedLength = validateWoff2Directory(body);
       sfnt = Buffer.from(await wawoff.decompress(body));
     }
-    validateSfnt(sfnt, expectedLength, true);
-    const font = fontkit.create(sfnt);
-    if (!Number.isSafeInteger(font.numGlyphs) || font.numGlyphs < 1) throw fontInvalid();
+    const validated = validateSfnt(sfnt, expectedLength, true);
+    forceFontkitValidation(sfnt, validated.numGlyphs);
   } catch (error) {
     if (error instanceof AssetInspectionError) throw error;
     throw fontInvalid();
