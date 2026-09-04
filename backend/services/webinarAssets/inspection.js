@@ -3,10 +3,10 @@ const { execFile } = require('node:child_process');
 const { rm, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 const { tmpdir } = require('node:os');
-const { brotliDecompressSync, inflateRawSync } = require('node:zlib');
 const sanitizeHtml = require('sanitize-html');
 const sharp = require('sharp');
 const ffprobe = require('ffprobe-static');
+const fontkit = require('fontkit');
 const { SaxesParser } = require('saxes');
 const { MEDIA_RULES } = require('./config');
 
@@ -15,6 +15,8 @@ const SVG_PREFIX_BYTES = 1024;
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const WOFF_HEADER_BYTES = 44;
 const WOFF2_HEADER_BYTES = 48;
+const MAX_RASTER_PIXELS = 100_000_000;
+const MAX_FONT_SFNT_BYTES = 64 * 1024 * 1024;
 const SVG_TAGS = [
   'svg', 'g', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
   'text', 'tspan', 'defs', 'linearGradient', 'radialGradient', 'stop', 'clipPath',
@@ -161,111 +163,30 @@ function looksLikeSvg(body) {
   return /^\s*(?:<\?xml[\s\S]*?\?>\s*)?<svg(?:\s|>)/i.test(body.subarray(0, SVG_PREFIX_BYTES).toString('utf8'));
 }
 
-function assertRange(offset, length, total) {
-  return Number.isSafeInteger(offset)
-    && Number.isSafeInteger(length)
-    && offset >= 0
-    && length >= 0
-    && offset <= total
-    && length <= total - offset;
-}
-
-function assertOptionalRange(offset, length, originalLength, total) {
-  if (offset === 0) return length === 0 && originalLength === 0;
-  return length > 0 && originalLength > 0 && assertRange(offset, length, total);
-}
-
-function validateWoff(body) {
-  if (body.length < WOFF_HEADER_BYTES
-    || body.readUInt32BE(8) !== body.length
-    || body.readUInt16BE(12) === 0
-    || body.readUInt16BE(14) !== 0) {
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF container is invalid');
-  }
-  const tableCount = body.readUInt16BE(12);
-  const directoryEnd = WOFF_HEADER_BYTES + tableCount * 20;
-  if (!assertRange(WOFF_HEADER_BYTES, tableCount * 20, body.length)
-    || body.readUInt32BE(16) < 12 + tableCount * 16
-    || !assertOptionalRange(body.readUInt32BE(24), body.readUInt32BE(28), body.readUInt32BE(32), body.length)
-    || !assertOptionalRange(body.readUInt32BE(36), body.readUInt32BE(40), body.readUInt32BE(40), body.length)) {
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF container is invalid');
-  }
-  for (let index = 0; index < tableCount; index += 1) {
-    const entry = WOFF_HEADER_BYTES + index * 20;
-    const offset = body.readUInt32BE(entry + 4);
-    const compressedLength = body.readUInt32BE(entry + 8);
-    const originalLength = body.readUInt32BE(entry + 12);
-    if (offset < directoryEnd || compressedLength === 0 || originalLength === 0
-      || compressedLength > originalLength || !assertRange(offset, compressedLength, body.length)) {
-      throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF table is invalid');
-    }
-    if (compressedLength < originalLength) {
-      try {
-        if (inflateRawSync(body.subarray(offset, offset + compressedLength)).length !== originalLength) {
-          throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF table is invalid');
-        }
-      } catch (error) {
-        if (error instanceof AssetInspectionError) throw error;
-        throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF table is invalid');
-      }
-    }
-  }
-}
-
-function readBase128(body, offset) {
-  let value = 0;
-  for (let count = 0; count < 5; count += 1) {
-    if (offset >= body.length) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-    const byte = body[offset];
-    if (count === 0 && byte === 0x80) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-    value = value * 128 + (byte & 0x7f);
-    offset += 1;
-    if (value > 0x7fffffff) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-    if ((byte & 0x80) === 0) return { value, offset };
-  }
-  throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-}
-
-function validateWoff2(body) {
-  if (body.length < WOFF2_HEADER_BYTES
+function validateFont(body, mimeType) {
+  const minimum = mimeType === 'font/woff' ? WOFF_HEADER_BYTES : WOFF2_HEADER_BYTES;
+  if (body.length < minimum
     || body.readUInt32BE(8) !== body.length
     || body.readUInt16BE(12) === 0
     || body.readUInt16BE(14) !== 0
-    || body.readUInt32BE(16) < 12 + body.readUInt16BE(12) * 16
-    || body.readUInt32BE(20) === 0
-    || !assertOptionalRange(body.readUInt32BE(28), body.readUInt32BE(32), body.readUInt32BE(36), body.length)
-    || !assertOptionalRange(body.readUInt32BE(40), body.readUInt32BE(44), body.readUInt32BE(44), body.length)) {
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 container is invalid');
-  }
-  let offset = WOFF2_HEADER_BYTES;
-  const tableCount = body.readUInt16BE(12);
-  for (let index = 0; index < tableCount; index += 1) {
-    if (offset >= body.length) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-    const flags = body[offset++];
-    const tagIndex = flags & 0x3f;
-    if (tagIndex === 0x3f) offset += 4;
-    if (offset > body.length) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-    const original = readBase128(body, offset);
-    if (original.value === 0) throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 table directory is invalid');
-    offset = original.offset;
-  }
-  const compressedLength = body.readUInt32BE(20);
-  if (!assertRange(offset, compressedLength, body.length)) {
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 compressed data is invalid');
+    || body.readUInt32BE(16) > MAX_FONT_SFNT_BYTES) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Font container is invalid');
   }
   try {
-    if (brotliDecompressSync(body.subarray(offset, offset + compressedLength)).length === 0) {
-      throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 compressed data is invalid');
+    const font = fontkit.create(body);
+    if (!Number.isSafeInteger(font.numGlyphs) || font.numGlyphs < 1) {
+      throw inspectionError('ASSET_INSPECTION_INVALID', 'Font container is invalid');
     }
   } catch (error) {
     if (error instanceof AssetInspectionError) throw error;
-    throw inspectionError('ASSET_INSPECTION_INVALID', 'WOFF2 compressed data is invalid');
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Font container is invalid');
   }
 }
 
-function validateFont(body, mimeType) {
-  if (mimeType === 'font/woff') validateWoff(body);
-  else validateWoff2(body);
+function validateAnimatedContainer(body, mimeType) {
+  if (mimeType === 'image/gif' && body.at(-1) !== 0x3b) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'GIF container is incomplete');
+  }
 }
 
 async function detectMimeType(body, declaredMimeType) {
@@ -328,9 +249,15 @@ async function probeDuration(body, mimeType) {
 }
 
 async function inspectRaster(body) {
-  const decoded = sharp(body, { failOn: 'error' });
+  const options = { animated: true, failOn: 'error', limitInputPixels: MAX_RASTER_PIXELS };
+  const decoded = sharp(body, options);
   const metadata = await decoded.metadata();
-  await sharp(body, { failOn: 'error' }).ensureAlpha().raw().toBuffer();
+  const frameHeight = metadata.pageHeight || metadata.height;
+  const frames = metadata.pages || 1;
+  if (!metadata.width || !frameHeight || metadata.width * frameHeight * frames > MAX_RASTER_PIXELS) {
+    throw inspectionError('ASSET_INSPECTION_INVALID', 'Raster dimensions exceed the inspection limit');
+  }
+  await sharp(body, options).ensureAlpha().raw().toBuffer();
   return metadata;
 }
 
@@ -356,6 +283,7 @@ async function inspectAsset({ stream, declaredMimeType, declaredBytes, filename 
 
     const approvedBody = rule.mediaType === 'svg' ? sanitizeSvg(body) : body;
     if (rule.mediaType === 'font') validateFont(approvedBody, mimeType);
+    if (rule.mediaType === 'image') validateAnimatedContainer(approvedBody, mimeType);
     const dimensions = rule.mediaType === 'image' ? await inspectRaster(approvedBody) : {};
     const durationMs = (rule.mediaType === 'audio' || rule.mediaType === 'video')
       ? await probeDuration(approvedBody, mimeType)

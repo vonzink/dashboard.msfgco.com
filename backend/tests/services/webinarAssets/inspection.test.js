@@ -10,6 +10,7 @@ const inspectionPath = require.resolve('../../../services/webinarAssets/inspecti
 const fixtures = new URL('../../fixtures/webinar-assets/', import.meta.url);
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mNg+M/wHwAF/gL+Zl9+gAAAAABJRU5ErkJggg==', 'base64');
 const MP4 = Buffer.from('000000186674797069736f6d0000020069736f6d69736f32617663316d703431', 'hex');
+const ANIMATED_GIF = Buffer.from('47494638396101000100800000000000ffffff21f90401000000002c000000000100010000020244010021f90401000000002c00000000010001000002024401003b', 'hex');
 
 function wavHeader() {
   const body = Buffer.alloc(44);
@@ -105,6 +106,19 @@ describe('Webinar asset inspection', () => {
     const truncated = PNG.subarray(0, -18);
 
     await expect(inspection.inspectAsset(assetInput(truncated, 'image/png', 'truncated.png')))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
+  it('fully decodes every frame of animated GIF media', async () => {
+    const result = await inspection.inspectAsset(assetInput(ANIMATED_GIF, 'image/gif', 'animated.gif'));
+
+    expect(result).toMatchObject({ mediaType: 'image', mimeType: 'image/gif', width: 1, height: 2 });
+  });
+
+  it('rejects a GIF truncated after its first complete frame', async () => {
+    const truncated = ANIMATED_GIF.subarray(0, -5);
+
+    await expect(inspection.inspectAsset(assetInput(truncated, 'image/gif', 'truncated.gif')))
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
@@ -207,8 +221,32 @@ describe('Webinar asset inspection', () => {
       .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
   });
 
+  it.each([
+    ['font/woff', 'valid.woff'],
+    ['font/woff2', 'valid.woff2'],
+  ])('accepts a real valid %s container', async (declaredMimeType, filename) => {
+    const body = await readFile(new URL(filename, fixtures));
+
+    await expect(inspection.inspectAsset(assetInput(body, declaredMimeType, filename)))
+      .resolves.toMatchObject({ mediaType: 'font', mimeType: declaredMimeType });
+  });
+
+  it.each([
+    ['WOFF declared SFNT size above 64 MiB', 'valid.woff', 'font/woff', 16],
+    ['WOFF2 declared SFNT size above 64 MiB', 'valid.woff2', 'font/woff2', 16],
+    ['a WOFF2 transform-version inconsistency', 'valid.woff2', 'font/woff2', 48],
+  ])('rejects %s', async (name, filename, declaredMimeType, offset) => {
+    const body = await readFile(new URL(filename, fixtures));
+    const malformed = Buffer.from(body);
+    if (offset === 16) malformed.writeUInt32BE(64 * 1024 * 1024 + 1, offset);
+    else malformed[offset] = 0xff;
+
+    await expect(inspection.inspectAsset(assetInput(malformed, declaredMimeType, filename)))
+      .rejects.toMatchObject({ code: 'ASSET_INSPECTION_INVALID' });
+  });
+
   it('does not decode a complete non-SVG upload as UTF-8 before type detection', async () => {
-    const body = woff();
+    const body = await readFile(new URL('valid.woff', fixtures));
     const originalToString = Buffer.prototype.toString;
     const toStringSpy = vi.spyOn(Buffer.prototype, 'toString').mockImplementation(function (...args) {
       if (this === body && args[1] === undefined && args[2] === undefined) {

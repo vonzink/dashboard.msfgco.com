@@ -30,6 +30,7 @@
     "express-rate-limit": "^7.5.0",
     "ffprobe-static": "^3.1.0",
     "file-type": "^20.5.0",
+    "fontkit": "^2.0.4",
     "helmet": "^8.0.0",
     "htmlparser2": "^10.1.0",
     "jose": "^6.0.0",
