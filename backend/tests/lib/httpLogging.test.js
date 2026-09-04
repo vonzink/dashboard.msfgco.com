@@ -36,6 +36,8 @@ describe('credential-safe HTTP request logging', () => {
       '/api/public/webinars/first-home/runtime-events',
       '/api/public/webinars/first-home/runtime-events/',
       '/api/public/webinars/first-home/runtime-events/?trace=LOG_QUERY_SECRET',
+      '/API/PUBLIC/WEBINARS/first-home/RUNTIME-EVENTS',
+      '/Api/Public/Webinars/first-home/Runtime-Events/?trace=LOG_MIXED_QUERY_SECRET',
     ]) {
       expect(request(url).headers).toEqual({
         accept: '*/*', 'content-length': '95', 'user-agent': 'test',
@@ -63,6 +65,11 @@ describe('credential-safe HTTP request logging', () => {
       .toBe('/api/public/webinars/[redacted]');
     expect(request('/api/public/webinars/PUBLIC_URI_CANARY_%C3%28/live?query=QUERY_URI_CANARY').url)
       .toBe('/api/public/webinars/[redacted]');
+    expect(request('/API/PUBLIC/WEBINARS/MIXED_CASE_CANARY/live').url)
+      .toBe('/api/public/webinars/[redacted]');
+    expect(request('/Api/Public/Webinars/MIXED_URI_CANARY_%ZZ/LiVe?query=MIXED_QUERY_CANARY').url)
+      .toBe('/api/public/webinars/[redacted]');
+    expect(request('/API/PUBLIC/WEBINARS').url).toBe('/api/public/webinars/[redacted]');
     expect(request('/api/public/webinars').url).toBe('/api/public/webinars');
     expect(request('/api/announcements/PUBLIC_URI_CANARY_%ZZ').url)
       .toBe('/api/announcements/PUBLIC_URI_CANARY_%ZZ');

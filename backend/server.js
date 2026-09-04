@@ -12,7 +12,12 @@ const { authenticate } = require('./middleware/auth');
 const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
-const { createSafeHttpLogger, isPublicWebinarRuntimeRequest } = require('./lib/httpLogging');
+const {
+  createSafeHttpLogger,
+  hasInvalidPublicWebinarPathCasing,
+  isPublicWebinarRequest,
+  isPublicWebinarRuntimeRequest,
+} = require('./lib/httpLogging');
 const websocket = require('./lib/websocket');
 const { LIMITS } = require('./services/webinars/limits');
 const {
@@ -106,15 +111,6 @@ function loadPublicWebinarOrigins(env = process.env, configuredOrigins) {
   return Object.freeze([...origins]);
 }
 
-function requestPathname(req) {
-  return (req.originalUrl || req.url || '').split('?', 1)[0];
-}
-
-function isPublicWebinarRequest(req) {
-  const pathname = requestPathname(req);
-  return pathname === '/api/public/webinars' || pathname.startsWith('/api/public/webinars/');
-}
-
 function corsOriginPolicy(origins, message) {
   return (origin, callback) => {
     if (!origin) return callback(null, false);
@@ -203,6 +199,7 @@ app.use(cors((req, callback) => {
       credentials: false,
       methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
       allowedHeaders: ['Content-Type'],
+      preflightContinue: hasInvalidPublicWebinarPathCasing(req),
     });
     return;
   }
@@ -238,6 +235,7 @@ const writeLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || req.originalUrl.startsWith('/api/my-files')
     || isPublicWebinarRuntimeRequest(req)
+    || hasInvalidPublicWebinarPathCasing(req)
     || isWebinarStudioMutation(req),
 });
 app.use('/api/', writeLimiter);
@@ -315,7 +313,7 @@ function isWebinarStudioMutation(req) {
 function isPublicWebinarDecodeError(error, req) {
   return error instanceof URIError
     && (error.status === 400 || error.statusCode === 400)
-    && requestPathname(req).startsWith('/api/public/webinars/');
+    && isPublicWebinarRequest(req);
 }
 
 function rejectOversizedWebinarRequest(req, res, next) {
@@ -385,6 +383,12 @@ function rejectPublicRuntimeEvent(req, res, statusCode, reasonCode, message) {
   return res.status(statusCode).json({ error: message, code: reasonCode });
 }
 
+function rejectInvalidPublicWebinarPathCasing(req, res, next) {
+  if (!hasInvalidPublicWebinarPathCasing(req)) return next();
+  recordPublicRuntimeRejection(req, 404, 'WEBINAR_NOT_FOUND');
+  return res.status(404).json({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+}
+
 function rejectInvalidPublicRuntimeTransport(req, res, next) {
   if (!isPublicWebinarRuntimeRequest(req)) return next();
   const contentLength = Number(req.get('content-length'));
@@ -430,6 +434,7 @@ function handlePublicRuntimeParserError(error, req, res, next) {
 }
 
 // This parser is deliberately mounted before the Dashboard-wide 10 MiB parser.
+app.use(rejectInvalidPublicWebinarPathCasing);
 app.use(rejectInvalidPublicRuntimeTransport);
 app.post('/api/public/webinars/:slug/runtime-events', publicRuntimeEventParser, handlePublicRuntimeParserError);
 app.use('/api/public/webinars', publicWebinarsRoutes);

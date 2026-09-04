@@ -11,7 +11,8 @@ const SAFE_RESPONSE_HEADERS = Object.freeze([
   'content-length',
   'content-type',
 ]);
-const PUBLIC_WEBINAR_PATH_PREFIX = '/api/public/webinars/';
+const PUBLIC_WEBINAR_PATH_ROOT = '/api/public/webinars';
+const PUBLIC_WEBINAR_PATH_PREFIX = `${PUBLIC_WEBINAR_PATH_ROOT}/`;
 
 function serializeHeaders(headers, allowlist) {
   const safe = {};
@@ -36,14 +37,28 @@ function requestPathname(requestOrUrl) {
   }
 }
 
+function isPublicWebinarRequest(req) {
+  const pathname = requestPathname(req);
+  if (typeof pathname !== 'string') return false;
+  const normalized = pathname.toLowerCase();
+  return normalized === PUBLIC_WEBINAR_PATH_ROOT
+    || normalized.startsWith(PUBLIC_WEBINAR_PATH_PREFIX);
+}
+
+function hasInvalidPublicWebinarPathCasing(req) {
+  const pathname = requestPathname(req);
+  return isPublicWebinarRequest(req) && pathname !== pathname.toLowerCase();
+}
+
 function isPublicWebinarRuntimeRequest(req) {
   return req?.method === 'POST'
-    && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/.test(requestPathname(req) || '');
+    && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/i.test(requestPathname(req) || '');
 }
 
 function requestLogPathname(req) {
   const pathname = requestPathname(req);
-  return pathname?.startsWith(PUBLIC_WEBINAR_PATH_PREFIX)
+  return isPublicWebinarRequest(req)
+    && (hasInvalidPublicWebinarPathCasing(req) || pathname?.toLowerCase() !== PUBLIC_WEBINAR_PATH_ROOT)
     ? `${PUBLIC_WEBINAR_PATH_PREFIX}[redacted]`
     : pathname;
 }
@@ -90,6 +105,8 @@ module.exports = {
   SAFE_REQUEST_HEADERS,
   SAFE_RESPONSE_HEADERS,
   createSafeHttpLogger,
+  hasInvalidPublicWebinarPathCasing,
+  isPublicWebinarRequest,
   isPublicWebinarRuntimeRequest,
   requestPathname,
   serializeRequest,

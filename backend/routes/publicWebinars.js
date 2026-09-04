@@ -50,7 +50,7 @@ function createPublicWebinarsRouter({
   getLiveBundleBySlug = defaultPublicBundle.getLiveBundleBySlug,
   recordOperationalEvent = defaultRecordOperationalEvent,
 } = {}) {
-  const router = express.Router();
+  const router = express.Router({ caseSensitive: true });
 
   function recordOnce(req, name, fields) {
     if (req.publicWebinarOperationalEventRecorded) return;

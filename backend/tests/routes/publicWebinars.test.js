@@ -212,6 +212,30 @@ describe('public live webinar reads', () => {
     expect(vary).toMatch(/Access-Control-Request-Headers/i);
   });
 
+  it('rejects a mixed-case public preflight after applying only public CORS policy', async () => {
+    const { response, text } = await request(`/API/PUBLIC/WEBINARS/${slug}/RUNTIME-EVENTS`, {
+      method: 'OPTIONS',
+      origin: publicOrigin,
+      headers: {
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    });
+
+    expect(response.status).toBe(404);
+    expect(JSON.parse(text)).toEqual({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+    expect(response.headers.get('access-control-allow-origin')).toBe(publicOrigin);
+    expect(response.headers.get('access-control-allow-credentials')).toBeNull();
+    const vary = response.headers.get('vary');
+    expect(vary).toMatch(/(?:^|,\s*)Origin(?:,|$)/i);
+    expect(vary).toMatch(/Access-Control-Request-Headers/i);
+    expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 404, reasonCode: 'WEBINAR_NOT_FOUND',
+    }, 'webinar operational event');
+    expect(errorLogger.error).not.toHaveBeenCalled();
+  });
+
   it('does not broaden private Dashboard CORS or bypass private authentication', async () => {
     const rejected = await request('/api/webinars', { origin: publicOrigin });
     expect(rejected.response.status).toBe(403);
@@ -231,6 +255,69 @@ describe('public live webinar reads', () => {
     expect(response.status).toBe(404);
     expect(JSON.parse(text)).toEqual({ error: 'Webinar not found' });
     expect(operationalLogger.info).not.toHaveBeenCalled();
+  });
+
+  it('rejects canonical, trailing, query, and malformed mixed-case public aliases at one safe boundary', async () => {
+    await new Promise(resolve => server.close(resolve));
+    const chunks = [];
+    const stream = new Writable({
+      write(chunk, _encoding, callback) {
+        chunks.push(chunk.toString());
+        callback();
+      },
+    });
+    const accessLogger = pino({ base: null, timestamp: false }, stream);
+    server = await listen({ accessLogger });
+
+    const samples = [
+      ['GET', `/API/PUBLIC/WEBINARS/${slug}/live`, undefined, {}],
+      ['GET', `/api/Public/webinars/${slug}/LIVE/`, undefined, {}],
+      ['GET', `/Api/Public/Webinars/${slug}/LiVe?source=MIXED_QUERY_CANARY`, undefined, {}],
+      ['POST', `/API/PUBLIC/WEBINARS/${slug}/runtime-events`, runtimePayload(), {}],
+      ['POST', `/api/Public/webinars/${slug}/RUNTIME-EVENTS/`, runtimePayload(), {}],
+      ['POST', `/Api/Public/Webinars/${slug}/Runtime-Events?source=MIXED_QUERY_CANARY`, runtimePayload(), {}],
+      ['GET', '/API/PUBLIC/WEBINARS/MIXED_URI_CANARY_%ZZ/live', undefined, {}],
+      ['GET', '/api/Public/webinars/MIXED_URI_CANARY_%/LIVE/', undefined, {}],
+      ['GET', '/Api/Public/Webinars/MIXED_URI_CANARY_%C3%28/LiVe?source=MIXED_QUERY_CANARY', undefined, {}],
+      ['POST', '/API/PUBLIC/WEBINARS/MIXED_URI_CANARY_%ZZ/runtime-events', runtimePayload(), {}],
+      ['POST', '/api/Public/webinars/MIXED_URI_CANARY_%/RUNTIME-EVENTS/', runtimePayload(), {}],
+      [
+        'POST',
+        `/api/public/webinars/${slug}/Runtime-Events?source=MIXED_QUERY_CANARY`,
+        '{"MIXED_BODY_CANARY":',
+        { 'Content-Type': 'text/MIXED_TRANSPORT_CANARY' },
+      ],
+    ];
+
+    for (const [method, path, body, headers] of samples) {
+      operationalLogger.info.mockClear();
+      const { response, text } = await request(path, {
+        method, origin: publicOrigin, headers, body,
+      });
+
+      expect(response.status, `${method} ${path}`).toBe(404);
+      expect(JSON.parse(text)).toEqual({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
+      expect(response.headers.get('access-control-allow-origin')).toBe(publicOrigin);
+      expect(response.headers.get('access-control-allow-credentials')).toBeNull();
+      expect(response.headers.get('vary')).toMatch(/(?:^|,\s*)Origin(?:,|$)/i);
+      expect(text).not.toMatch(/MIXED_|%ZZ|%C3|URIError|decode|stack/i);
+      expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+      expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+      expect(operationalLogger.info).toHaveBeenCalledWith({
+        event: 'webinar.validation_rejected', statusCode: 404, reasonCode: 'WEBINAR_NOT_FOUND',
+      }, 'webinar operational event');
+      expect(JSON.stringify(operationalLogger.info.mock.calls))
+        .not.toMatch(/MIXED_|%ZZ|%C3|URIError|decode|stack/i);
+    }
+    await new Promise(resolve => setImmediate(resolve));
+
+    expect(errorLogger.error).not.toHaveBeenCalled();
+    const serializedAccess = chunks.join('');
+    expect(serializedAccess).not.toMatch(/MIXED_|%ZZ|%C3|URIError|decode|stack/i);
+    const records = serializedAccess.trim().split('\n').map(line => JSON.parse(line));
+    expect(records).toHaveLength(samples.length);
+    expect(records.every(record => record.req.url === '/api/public/webinars/[redacted]')).toBe(true);
+    expect(records.every(record => record.req.headers['content-type'] === undefined)).toBe(true);
   });
 
   it.each([
@@ -666,6 +753,40 @@ describe('public runtime telemetry', () => {
     const path = `/api/public/webinars/${slug}/runtime-events-nearby`;
     expect((await request(path, { method: 'POST', origin: publicOrigin, body: '{}' })).response.status).toBe(404);
     expect((await request(path, { method: 'POST', origin: publicOrigin, body: '{}' })).response.status).toBe(429);
+  });
+
+  it('does not let rejected mixed-case runtime aliases consume the general write quota', async () => {
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 10, generalWriteLimit: 1 });
+    const mixedPath = `/api/public/webinars/${slug}/RUNTIME-EVENTS`;
+
+    for (let index = 0; index < 2; index += 1) {
+      expect((await request(mixedPath, {
+        method: 'POST', origin: publicOrigin, body: runtimePayload(),
+      })).response.status).toBe(404);
+    }
+    expect((await request('/api/announcements', {
+      method: 'POST', origin: dashboardOrigin, body: '{}',
+    })).response.status).toBe(401);
+    expect((await request('/api/announcements', {
+      method: 'POST', origin: dashboardOrigin, body: '{}',
+    })).response.status).toBe(429);
+  });
+
+  it('counts rejected mixed-case runtime aliases only against the dedicated telemetry quota', async () => {
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 1, generalWriteLimit: 10 });
+    const mixedPath = `/API/PUBLIC/WEBINARS/${slug}/runtime-events`;
+
+    expect((await request(mixedPath, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    })).response.status).toBe(404);
+    expect((await request(mixedPath, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    })).response.status).toBe(429);
+    expect((await request(`/api/public/webinars/${slug}/runtime-events`, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    })).response.status).toBe(429);
   });
 
   it('shares one dedicated quota between canonical and trailing-slash runtime paths', async () => {
