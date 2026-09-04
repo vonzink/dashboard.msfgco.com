@@ -127,8 +127,9 @@ curl -I \
   -H 'Origin: https://<REVIEWED_ALLOWED_RENDERER_ORIGIN>' \
   'https://<REVIEWED_ASSET_CDN_HOST>/approved/sha256/<REVIEWED_64_LOWERCASE_HEX_SHA256>/asset'
 
-curl -I \
-  -H 'Range: bytes=0-1023' \
+curl --range 0-1023 \
+  --output /dev/null \
+  --dump-header - \
   'https://<REVIEWED_ASSET_CDN_HOST>/approved/sha256/<REVIEWED_64_LOWERCASE_HEX_SHA256>/asset'
 ```
 
@@ -177,7 +178,11 @@ AWS profile, a shared bucket, a public object URL, or an unscanned direct upload
 ## Disposable lifecycle integration
 
 The integration test never discovers credentials or resources from the AWS
-default chain. It remains skipped unless all of these values are explicitly set:
+default chain. Asset services and the AWS SDK are dynamically loaded only after
+the complete disposable configuration and acknowledgement pass validation; an
+unset gate does not load the asset catalog or construct an S3 client. The
+resource lifecycle remains skipped unless all of these values are explicitly
+set:
 
 - `WEBINAR_ASSET_TEST_ACK_DISPOSABLE=I_UNDERSTAND_THIS_IS_DISPOSABLE`
 - `WEBINAR_ASSET_TEST_BUCKET` matching `webinar-studio-it-...`
@@ -192,7 +197,9 @@ acknowledged disposable bucket. It uploads two fixtures, proves a missing tag
 remains `processing`, manually applies the test-only clean and malicious tags,
 releases only exact `NO_THREATS_FOUND`, verifies the canonical opaque approved
 path and safe catalog response, proves the malicious result has no approved
-object, and deletes only its enumerated keys during cleanup.
+object, and deletes only its enumerated keys during cleanup. Cleanup treats any
+per-object S3 deletion error as a test failure and performs a HEAD absence check
+for every enumerated quarantine and approved key before it can pass.
 
 From `backend/`, the inert check is:
 
@@ -208,8 +215,9 @@ env -u WEBINAR_ASSET_TEST_ACK_DISPOSABLE \
   tests/integration/webinarAssets.integration.test.js
 ```
 
-Expected without configuration: one file and two tests deliberately skipped,
-exit zero, with no S3 client or request created.
+Expected without configuration: one file, three inert safety tests passed, and
+two resource lifecycle tests deliberately skipped, exit zero, with no asset/AWS
+dependency load, S3 client construction, or request.
 
 Running the mutation lifecycle requires an independently reviewed disposable
 configuration supplied directly to the process. Do not save its credentials in
@@ -261,9 +269,12 @@ npx vitest run --config vitest.webinar-integration.config.js \
   tests/integration/webinarAssets.integration.test.js
 ```
 
-Result: 1 integration file and 2 tests deliberately skipped, exit 0. No S3
-request or resource mutation occurred. A configured disposable integration pass
-is still **UNPERFORMED**.
+Result: 1 integration file, 3 inert safety tests passed and 2 resource lifecycle
+tests deliberately skipped, exit 0. No asset/AWS dependency was loaded and no S3
+client, request, or resource mutation occurred. The passing guards also prove a
+mocked mixed-success deletion response fails cleanup after every enumerated key
+is checked for absence. A configured disposable integration pass is still
+**UNPERFORMED**.
 
 Executed from `backend/`:
 

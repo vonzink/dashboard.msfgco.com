@@ -1,21 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import {
-  DeleteObjectsCommand,
-  GetObjectCommand,
-  GetObjectTaggingCommand,
-  HeadObjectCommand,
-  PutObjectCommand,
-  PutObjectTaggingCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
+import { readFileSync } from 'node:fs';
 
 const require = createRequire(import.meta.url);
-const sharp = require('sharp');
-const { createCatalogService } = require('../../services/webinarAssets/catalog');
-const { inspectAsset } = require('../../services/webinarAssets/inspection');
-const { makeApprovedKey } = require('../../services/webinarAssets/config');
 
 const REQUIRED_ENVIRONMENT = Object.freeze([
   'WEBINAR_ASSET_TEST_ACK_DISPOSABLE',
@@ -33,6 +21,108 @@ const describeAssetIntegration = hasExactDisposableConfiguration ? describe : de
 const skippedReason = missingEnvironment.length
   ? `missing exact disposable configuration: ${missingEnvironment.join(', ')}`
   : 'configured';
+let gatedDependenciesLoaded = false;
+let configuredS3ClientConstructed = false;
+
+function isMissingObject(error) {
+  return error?.name === 'NotFound'
+    || error?.name === 'NoSuchKey'
+    || error?.$metadata?.httpStatusCode === 404;
+}
+
+async function cleanupDisposableObjects({
+  send,
+  bucket,
+  keys,
+  DeleteObjectsCommand,
+  HeadObjectCommand,
+}) {
+  const failures = [];
+  let deletion;
+  try {
+    deletion = await send(new DeleteObjectsCommand({
+      Bucket: bucket,
+      Delete: { Objects: keys.map(Key => ({ Key })), Quiet: true },
+    }));
+  } catch (error) {
+    failures.push(new Error('Disposable object deletion request failed', { cause: error }));
+  }
+
+  for (const error of deletion?.Errors || []) {
+    failures.push(new Error(`Disposable object deletion failed with ${error.Code || 'unknown status'}`));
+  }
+  for (const key of keys) {
+    try {
+      await send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+      failures.push(new Error('A disposable object remained after cleanup'));
+    } catch (error) {
+      if (!isMissingObject(error)) {
+        failures.push(new Error('Disposable object absence could not be verified', { cause: error }));
+      }
+    }
+  }
+  if (failures.length) throw new AggregateError(failures, 'Disposable asset cleanup failed');
+}
+
+describe('webinar asset disposable integration guards', () => {
+  it('does not statically load S3 or the catalog before disposable configuration is accepted', () => {
+    const source = readFileSync(import.meta.filename, 'utf8');
+    expect(source).not.toMatch(/from ['"]@aws-sdk\/client-s3['"]/);
+    expect(source).not.toMatch(/from ['"][^'"]*services\/webinarAssets\/catalog(?:\.js)?['"]/);
+    expect(source).not.toMatch(/require\(['"]\.\.\/\.\.\/services\/webinarAssets\/catalog['"]\)/);
+  });
+
+  it.skipIf(hasExactDisposableConfiguration)(
+    'does not load gated dependencies or construct an S3 client when configuration is absent',
+    () => {
+      const catalogPath = require.resolve('../../services/webinarAssets/catalog');
+      expect(require.cache[catalogPath]).toBeUndefined();
+      expect(gatedDependenciesLoaded).toBe(false);
+      expect(configuredS3ClientConstructed).toBe(false);
+    },
+  );
+
+  it('fails cleanup after checking every key when S3 reports mixed deletion results', async () => {
+    const keys = ['quarantine/integration/test/one', `approved/sha256/${'a'.repeat(64)}/asset`];
+    const commands = [];
+    class TestDeleteCommand {
+      constructor(input) {
+        this.kind = 'delete';
+        this.input = input;
+      }
+    }
+    class TestHeadCommand {
+      constructor(input) {
+        this.kind = 'head';
+        this.input = input;
+      }
+    }
+    const send = async command => {
+      commands.push(command);
+      if (command.kind === 'delete') {
+        return {
+          Deleted: [{ Key: keys[0] }],
+          Errors: [{ Key: keys[1], Code: 'AccessDenied', Message: 'denied' }],
+        };
+      }
+      if (command.input.Key === keys[0]) {
+        const error = new Error('missing');
+        error.name = 'NotFound';
+        throw error;
+      }
+      return { ContentLength: 1 };
+    };
+
+    await expect(cleanupDisposableObjects({
+      send,
+      bucket: 'webinar-studio-it-regression',
+      keys,
+      DeleteObjectsCommand: TestDeleteCommand,
+      HeadObjectCommand: TestHeadCommand,
+    })).rejects.toThrow(/Disposable asset cleanup failed/);
+    expect(commands.filter(command => command.kind === 'head').map(command => command.input.Key)).toEqual(keys);
+  });
+});
 
 function parseDisposableConfig(env) {
   if (env.WEBINAR_ASSET_TEST_ACK_DISPOSABLE !== EXPECTED_ACKNOWLEDGEMENT) {
@@ -74,12 +164,6 @@ function parseDisposableConfig(env) {
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
-}
-
-function isMissingObject(error) {
-  return error?.name === 'NotFound'
-    || error?.name === 'NoSuchKey'
-    || error?.$metadata?.httpStatusCode === 404;
 }
 
 function createDatabase({ actorUserId, family, versions }) {
@@ -187,15 +271,41 @@ describeAssetIntegration(`webinar asset release (${skippedReason})`, () => {
   let safeApprovedKey;
   let rejectedApprovedKey;
   let catalog;
+  let DeleteObjectsCommand;
+  let GetObjectCommand;
+  let GetObjectTaggingCommand;
+  let HeadObjectCommand;
+  let PutObjectCommand;
+  let PutObjectTaggingCommand;
 
   beforeAll(async () => {
     config = parseDisposableConfig(process.env);
+    const aws = await import('@aws-sdk/client-s3');
+    const catalogModule = await import('../../services/webinarAssets/catalog.js');
+    const inspectionModule = await import('../../services/webinarAssets/inspection.js');
+    const configModule = await import('../../services/webinarAssets/config.js');
+    const sharp = require('sharp');
+    ({
+      DeleteObjectsCommand,
+      GetObjectCommand,
+      GetObjectTaggingCommand,
+      HeadObjectCommand,
+      PutObjectCommand,
+      PutObjectTaggingCommand,
+    } = aws);
+    const { S3Client } = aws;
+    const createCatalogService = catalogModule.createCatalogService
+      || catalogModule.default?.createCatalogService;
+    const inspectAsset = inspectionModule.inspectAsset || inspectionModule.default?.inspectAsset;
+    const makeApprovedKey = configModule.makeApprovedKey || configModule.default?.makeApprovedKey;
+    gatedDependenciesLoaded = true;
     s3 = new S3Client({
       endpoint: config.endpoint,
       region: config.region,
       credentials: config.credentials,
       forcePathStyle: true,
     });
+    configuredS3ClientConstructed = true;
     const pixels = randomBytes(32 * 32 * 3);
     safeBytes = await sharp(pixels, {
       raw: { width: 32, height: 32, channels: 3 },
@@ -304,10 +414,13 @@ describeAssetIntegration(`webinar asset release (${skippedReason})`, () => {
   afterAll(async () => {
     if (!s3 || !config || cleanupKeys.size === 0) return;
     try {
-      await s3.send(new DeleteObjectsCommand({
-        Bucket: config.bucket,
-        Delete: { Objects: [...cleanupKeys].map(Key => ({ Key })), Quiet: true },
-      }));
+      await cleanupDisposableObjects({
+        send: command => s3.send(command),
+        bucket: config.bucket,
+        keys: [...cleanupKeys],
+        DeleteObjectsCommand,
+        HeadObjectCommand,
+      });
     } finally {
       s3.destroy();
     }
