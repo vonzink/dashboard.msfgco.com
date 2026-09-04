@@ -140,6 +140,7 @@ function createApp({
   webinarAssetWriteLimit = 300,
   publicWebinarOrigins,
   publicWebinarRuntimeLimit = 60,
+  generalWriteLimit = 200,
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
@@ -231,7 +232,7 @@ app.use('/api/', limiter);
 // Stricter rate limit for write operations (POST/PUT/DELETE)
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: generalWriteLimit,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many write requests, please slow down' },
@@ -239,6 +240,7 @@ const writeLimiter = rateLimit({
   // separately — see myFilesWriteLimiter below.
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || req.originalUrl.startsWith('/api/my-files')
+    || isPublicWebinarRuntimeEvent(req)
     || isWebinarStudioMutation(req),
 });
 app.use('/api/', writeLimiter);
@@ -364,11 +366,37 @@ function parseWebinarRawJson(req, res, next) {
 // Closed header allowlists keep credentials and cookies out of request logs.
 app.use(createSafeHttpLogger(logger));
 
-function rejectOversizedPublicRuntimeEvent(req, res, next) {
+function recordPublicRuntimeRejection(req, statusCode, reasonCode) {
+  if (req.publicWebinarOperationalEventRecorded) return;
+  req.publicWebinarOperationalEventRecorded = true;
+  try {
+    webinarRecordOperationalEvent('webinar.validation_rejected', { statusCode, reasonCode });
+  } catch {
+    // A failed log sink must not expose or change a transport response.
+  }
+}
+
+function rejectPublicRuntimeEvent(req, res, statusCode, reasonCode, message) {
+  recordPublicRuntimeRejection(req, statusCode, reasonCode);
+  return res.status(statusCode).json({ error: message, code: reasonCode });
+}
+
+function rejectInvalidPublicRuntimeTransport(req, res, next) {
   if (!isPublicWebinarRuntimeEvent(req)) return next();
   const contentLength = Number(req.get('content-length'));
   if (Number.isFinite(contentLength) && contentLength > PUBLIC_RUNTIME_EVENT_BYTES) {
-    return res.status(413).json({ error: 'Runtime event exceeds 2 KiB limit' });
+    return rejectPublicRuntimeEvent(
+      req, res, 413, 'CONTENT_LIMIT_EXCEEDED', 'Runtime event exceeds 2 KiB limit',
+    );
+  }
+
+  const contentEncoding = (req.get('content-encoding') || 'identity').trim().toLowerCase();
+  const contentType = (req.get('content-type') || '').trim();
+  const supportedContentType = /^application\/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$/i;
+  if (contentEncoding !== 'identity' || !supportedContentType.test(contentType)) {
+    return rejectPublicRuntimeEvent(
+      req, res, 400, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported runtime event transport',
+    );
   }
   return next();
 }
@@ -377,11 +405,29 @@ const publicRuntimeEventParser = express.json({
   type: 'application/json',
   limit: PUBLIC_RUNTIME_EVENT_BYTES,
   strict: true,
+  inflate: false,
 });
 
+function handlePublicRuntimeParserError(error, req, res, next) {
+  if (!isPublicWebinarRuntimeEvent(req)) return next(error);
+  if (error.type === 'entity.too.large' || error.status === 413) {
+    return rejectPublicRuntimeEvent(
+      req, res, 413, 'CONTENT_LIMIT_EXCEEDED', 'Runtime event exceeds 2 KiB limit',
+    );
+  }
+  if (error.type === 'entity.parse.failed') {
+    return rejectPublicRuntimeEvent(
+      req, res, 400, 'MALFORMED_JSON', 'Invalid runtime event JSON',
+    );
+  }
+  return rejectPublicRuntimeEvent(
+    req, res, 400, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported runtime event transport',
+  );
+}
+
 // This parser is deliberately mounted before the Dashboard-wide 10 MiB parser.
-app.use(rejectOversizedPublicRuntimeEvent);
-app.post('/api/public/webinars/:slug/runtime-events', publicRuntimeEventParser);
+app.use(rejectInvalidPublicRuntimeTransport);
+app.post('/api/public/webinars/:slug/runtime-events', publicRuntimeEventParser, handlePublicRuntimeParserError);
 app.use('/api/public/webinars', publicWebinarsRoutes);
 
 // Body parsing
@@ -488,14 +534,6 @@ app.use((err, req, res, next) => {
   if (err.code === 'CORS_ORIGIN_DENIED' && err.status === 403) {
     return res.status(403).json({ error: 'Origin not allowed' });
   }
-  if (isPublicWebinarRuntimeEvent(req)) {
-    if (err.type === 'entity.too.large' || err.status === 413) {
-      return res.status(413).json({ error: 'Runtime event exceeds 2 KiB limit' });
-    }
-    if (err.type === 'entity.parse.failed') {
-      return res.status(400).json({ error: 'Invalid runtime event' });
-    }
-  }
   logger.error({ err }, 'Unhandled error');
 
   if (isWebinarStudioMutation(req) && (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413)) {
@@ -534,8 +572,9 @@ app.locals.webinarStudio = {
   webinarWriteLimiter,
   webinarAssetWriteLimiter,
   publicWebinarRuntimeLimiter,
-  rejectOversizedPublicRuntimeEvent,
+  rejectInvalidPublicRuntimeTransport,
   publicRuntimeEventParser,
+  handlePublicRuntimeParserError,
 };
 return app;
 }

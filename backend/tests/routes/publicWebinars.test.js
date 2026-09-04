@@ -41,6 +41,7 @@ async function listen(overrides = {}) {
     webinarOperationalLogger: operationalLogger,
     publicWebinarOrigins: overrides.publicWebinarOrigins || [publicOrigin, 'http://localhost:4200'],
     publicWebinarRuntimeLimit: overrides.publicWebinarRuntimeLimit || 1000,
+    generalWriteLimit: overrides.generalWriteLimit || 200,
   });
   return new Promise(resolve => {
     const listener = app.listen(0, () => resolve(listener));
@@ -227,16 +228,30 @@ describe('public live webinar reads', () => {
 
   it.each([
     ['malformed JSON', '{"liveVersion":'],
-    ['an array', '[]'],
     ['a JSON primitive', 'true'],
-  ])('returns one fixed 400 for %s without logging payload details', async (_label, body) => {
+  ])('returns one fixed parser 400 for %s without logging payload details', async (_label, body) => {
     const { response, text } = await request(`/api/public/webinars/${slug}/runtime-events`, {
       method: 'POST', origin: publicOrigin, body,
     });
     expect(response.status).toBe(400);
-    expect(JSON.parse(text)).toEqual({ error: 'Invalid runtime event' });
+    expect(JSON.parse(text)).toEqual({ error: 'Invalid runtime event JSON', code: 'MALFORMED_JSON' });
     expect(getLiveBundleBySlug).not.toHaveBeenCalled();
-    expect(operationalLogger.info).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 400, reasonCode: 'MALFORMED_JSON',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/liveVersion|private|source|stack/i);
+  });
+
+  it('treats a JSON array as a schema violation rather than a parser failure', async () => {
+    const { response, text } = await request(`/api/public/webinars/${slug}/runtime-events`, {
+      method: 'POST', origin: publicOrigin, body: '[]',
+    });
+    expect(response.status).toBe(400);
+    expect(JSON.parse(text)).toEqual({ error: 'Invalid runtime event', code: 'VALIDATION_FAILED' });
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 400, reasonCode: 'VALIDATION_FAILED',
+    }, 'webinar operational event');
   });
 
   it('does not parse a non-JSON content type through the later global parser', async () => {
@@ -247,8 +262,29 @@ describe('public live webinar reads', () => {
       body: runtimePayload(),
     });
     expect(response.status).toBe(400);
-    expect(JSON.parse(text)).toEqual({ error: 'Invalid runtime event' });
+    expect(JSON.parse(text)).toEqual({ error: 'Unsupported runtime event transport', code: 'UNSUPPORTED_MEDIA_TYPE' });
     expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 400, reasonCode: 'UNSUPPORTED_MEDIA_TYPE',
+    }, 'webinar operational event');
+  });
+
+  it.each([
+    ['Content-Encoding', { 'Content-Encoding': 'private-encoding' }],
+    ['charset', { 'Content-Type': 'application/json; charset=secret-charset' }],
+  ])('normalizes unsupported %s without logging or reflecting its value', async (_label, transportHeaders) => {
+    const { response, text } = await request(`/api/public/webinars/${slug}/runtime-events`, {
+      method: 'POST', origin: publicOrigin, headers: transportHeaders, body: runtimePayload(),
+    });
+    expect(response.status).toBe(400);
+    expect(JSON.parse(text)).toEqual({ error: 'Unsupported runtime event transport', code: 'UNSUPPORTED_MEDIA_TYPE' });
+    expect(text).not.toMatch(/private-encoding|secret-charset/i);
+    expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 400, reasonCode: 'UNSUPPORTED_MEDIA_TYPE',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/private-encoding|secret-charset/i);
   });
 
   it('allows a direct same-origin-style telemetry request without reflecting CORS', async () => {
@@ -303,9 +339,9 @@ describe('public webinar origin configuration', () => {
 });
 
 describe('public runtime telemetry', () => {
-  it('records one allow-listed event for an audience-enabled webinar and returns 204', async () => {
+  it.each(['SLIDE_RUNTIME_ERROR', 'SLIDE_STARTUP_TIMEOUT'])('records the closed %s reason for an audience-enabled webinar', async (code) => {
     const { response, text } = await request(`/api/public/webinars/${slug}/runtime-events`, {
-      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+      method: 'POST', origin: publicOrigin, body: runtimePayload({ code }),
     });
 
     expect(response.status).toBe(204);
@@ -318,9 +354,9 @@ describe('public runtime telemetry', () => {
       slideId,
       liveVersion: 4,
       statusCode: 204,
-      reasonCode: 'PUBLIC_RUNTIME_ERROR',
+      reasonCode: code,
     }, 'webinar operational event');
-    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/first-home|SLIDE_RUNTIME_ERROR|source|stack|message/i);
+    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/first-home|source|stack|message/i);
   });
 
   it.each([
@@ -336,9 +372,13 @@ describe('public runtime telemetry', () => {
       method: 'POST', origin: publicOrigin, body: runtimePayload(override),
     });
     expect(response.status).toBe(400);
-    expect(JSON.parse(text)).toEqual({ error: 'Invalid runtime event' });
+    expect(JSON.parse(text)).toEqual({ error: 'Invalid runtime event', code: 'VALIDATION_FAILED' });
     expect(getLiveBundleBySlug).not.toHaveBeenCalled();
-    expect(operationalLogger.info).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 400, reasonCode: 'VALIDATION_FAILED',
+    }, 'webinar operational event');
+    expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toMatch(/script|private|filename|stack/i);
   });
 
   it('accepts exactly 2 KiB and rejects 2 KiB plus one before global JSON parsing', async () => {
@@ -353,15 +393,25 @@ describe('public runtime telemetry', () => {
       method: 'POST', origin: publicOrigin, body: `${exact} `,
     });
     expect(oversized.response.status).toBe(413);
-    expect(JSON.parse(oversized.text)).toEqual({ error: 'Runtime event exceeds 2 KiB limit' });
+    expect(JSON.parse(oversized.text)).toEqual({
+      error: 'Runtime event exceeds 2 KiB limit', code: 'CONTENT_LIMIT_EXCEEDED',
+    });
     expect(getLiveBundleBySlug).toHaveBeenCalledTimes(1);
+    expect(operationalLogger.info).toHaveBeenLastCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 413, reasonCode: 'CONTENT_LIMIT_EXCEEDED',
+    }, 'webinar operational event');
   });
 
   it('rejects an oversized declared body before waiting for or parsing it', async () => {
     const response = await requestWithDeclaredLength(`/api/public/webinars/${slug}/runtime-events`, 2049);
     expect(response.status).toBe(413);
-    expect(JSON.parse(response.body)).toEqual({ error: 'Runtime event exceeds 2 KiB limit' });
+    expect(JSON.parse(response.body)).toEqual({
+      error: 'Runtime event exceeds 2 KiB limit', code: 'CONTENT_LIMIT_EXCEEDED',
+    });
     expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.validation_rejected', statusCode: 413, reasonCode: 'CONTENT_LIMIT_EXCEEDED',
+    }, 'webinar operational event');
   });
 
   it('returns 404 and writes no runtime event when the slug is not audience-enabled', async () => {
@@ -389,9 +439,9 @@ describe('public runtime telemetry', () => {
     expect(failedLogger.info).toHaveBeenCalledTimes(2);
   });
 
-  it('limits writes per resolved client IP while skipping GET, HEAD, and OPTIONS', async () => {
+  it('applies exactly 60 writes per resolved client IP while skipping GET, HEAD, and OPTIONS', async () => {
     await new Promise(resolve => server.close(resolve));
-    server = await listen({ publicWebinarRuntimeLimit: 2 });
+    server = await listen({ publicWebinarRuntimeLimit: 60 });
     const post = ip => request(`/api/public/webinars/${slug}/runtime-events`, {
       method: 'POST',
       origin: publicOrigin,
@@ -408,9 +458,52 @@ describe('public runtime telemetry', () => {
     expect((await request(`/api/public/webinars/${slug}/runtime-events`, {
       method: 'OPTIONS', origin: publicOrigin, headers: { 'X-Forwarded-For': '198.51.100.10' },
     })).response.status).toBe(204);
-    expect((await post('198.51.100.10')).response.status).toBe(204);
-    expect((await post('198.51.100.10')).response.status).toBe(204);
+    for (let index = 0; index < 60; index += 1) {
+      expect((await post('198.51.100.10')).response.status).toBe(204);
+    }
     expect((await post('198.51.100.10')).response.status).toBe(429);
     expect((await post('198.51.100.11')).response.status).toBe(204);
+  });
+
+  it('allows a raised dedicated limit to cross the general 200-write boundary', async () => {
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 205 });
+    for (let index = 0; index < 201; index += 1) {
+      const result = await request(`/api/public/webinars/${slug}/runtime-events`, {
+        method: 'POST', origin: publicOrigin, body: runtimePayload(),
+      });
+      expect(result.response.status).toBe(204);
+    }
+  });
+
+  it('isolates the public telemetry quota from the Dashboard write quota in both directions', async () => {
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 1, generalWriteLimit: 1 });
+
+    const dashboardWrite = await request('/api/webinars', {
+      method: 'POST', origin: dashboardOrigin, body: '{}',
+    });
+    expect(dashboardWrite.response.status).toBe(401);
+    const firstPublic = await request(`/api/public/webinars/${slug}/runtime-events`, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    });
+    expect(firstPublic.response.status).toBe(204);
+    const publicExcess = await request(`/api/public/webinars/${slug}/runtime-events`, {
+      method: 'POST', origin: publicOrigin, body: runtimePayload(),
+    });
+    expect(publicExcess.response.status).toBe(429);
+
+    await new Promise(resolve => server.close(resolve));
+    server = await listen({ publicWebinarRuntimeLimit: 3, generalWriteLimit: 1 });
+    for (let index = 0; index < 2; index += 1) {
+      const publicWrite = await request(`/api/public/webinars/${slug}/runtime-events`, {
+        method: 'POST', origin: publicOrigin, body: runtimePayload(),
+      });
+      expect(publicWrite.response.status).toBe(204);
+    }
+    const firstDashboardWrite = await request('/api/webinars', {
+      method: 'POST', origin: dashboardOrigin, body: '{}',
+    });
+    expect(firstDashboardWrite.response.status).toBe(401);
   });
 });

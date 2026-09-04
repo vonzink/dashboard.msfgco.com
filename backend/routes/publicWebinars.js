@@ -12,6 +12,10 @@ const runtimeEvent = z.object({
   slideId: z.string().regex(UUID),
   code: z.enum(['SLIDE_STARTUP_TIMEOUT', 'SLIDE_RUNTIME_ERROR']),
 }).strict();
+const RUNTIME_REASON_BY_CODE = Object.freeze({
+  SLIDE_RUNTIME_ERROR: 'SLIDE_RUNTIME_ERROR',
+  SLIDE_STARTUP_TIMEOUT: 'SLIDE_STARTUP_TIMEOUT',
+});
 
 function ifNoneMatchMatches(header, etag) {
   if (typeof header !== 'string') return false;
@@ -119,7 +123,11 @@ function createPublicWebinarsRouter({
   router.post('/:slug/runtime-events', async (req, res) => {
     const parsed = runtimeEvent.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid runtime event' });
+      recordOnce(req, 'webinar.validation_rejected', {
+        statusCode: 400,
+        reasonCode: 'VALIDATION_FAILED',
+      });
+      res.status(400).json({ error: 'Invalid runtime event', code: 'VALIDATION_FAILED' });
       return;
     }
 
@@ -136,7 +144,7 @@ function createPublicWebinarsRouter({
       slideId: parsed.data.slideId,
       liveVersion: parsed.data.liveVersion,
       statusCode: 204,
-      reasonCode: 'PUBLIC_RUNTIME_ERROR',
+      reasonCode: RUNTIME_REASON_BY_CODE[parsed.data.code],
     });
     res.removeHeader('Set-Cookie');
     res.status(204).end();
@@ -149,5 +157,6 @@ module.exports = {
   CACHE_CONTROL,
   createPublicWebinarsRouter,
   ifNoneMatchMatches,
+  RUNTIME_REASON_BY_CODE,
   runtimeEvent,
 };

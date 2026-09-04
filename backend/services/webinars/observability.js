@@ -72,6 +72,8 @@ const CONTROLLED_REASON_CODE_DEFINITIONS = Object.freeze({
   SHORTCUT_BINDING_DUPLICATE: reasonCodeDefinition(400, 'webinar.validation_rejected'),
   SHORTCUT_BINDING_INVALID: reasonCodeDefinition(400, 'webinar.validation_rejected'),
   SHORTCUT_BINDING_RESERVED: reasonCodeDefinition(400, 'webinar.validation_rejected'),
+  SLIDE_RUNTIME_ERROR: reasonCodeDefinition(),
+  SLIDE_STARTUP_TIMEOUT: reasonCodeDefinition(),
   SLIDE_NOT_FOUND: reasonCodeDefinition(404, 'webinar.validation_rejected'),
   SLIDE_SET_MISMATCH: reasonCodeDefinition(400, 'webinar.validation_rejected'),
   TARGET_SECONDS_RANGE: reasonCodeDefinition(),
