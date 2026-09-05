@@ -60,7 +60,8 @@
   /* The first candidate is posted only once the host frame has loaded. A host
      that never loads must not hang the editor and presenter forever, so the
      wait is bounded and the preview controller then reports its own startup
-     failure through the normal error state. */
+     failure through the normal error state. Worst case for a dead host is
+     this gate plus the controller's own startup timeout, in sequence. */
   const PREVIEW_FRAME_LOAD_TIMEOUT_MS = 10_000;
   const LOADING_COPY = 'Loading the selected webinar…';
   const CREATING_COPY = 'Creating a webinar. Select it afterwards to manage presenter settings.';
@@ -92,7 +93,9 @@
   let previewFrame = null;
   let previewConfigState = 'unset';
   let previewReadyFor = null;
+  let previewSelectionGeneration = 0;
   let previewFrameLoaded = null;
+  let cancelPreviewFrameGate = null;
   let injectedPreviewDestroyed = false;
   let controllersBuilt = false;
   let editorContextGeneration = 0;
@@ -153,16 +156,21 @@
      only inside the unique-origin slide frame that page creates, so this outer
      frame is deliberately not sandboxed and exact-origin messaging works.
      An explicit controller dependency wins (fake-DOM harnesses). */
-  /* Wraps a preview controller so every boot is bound to the deck selected
-     when it started. A ready result only shows the host if that same deck is
-     still selected, and the first boot waits for the host frame to load. */
+  /* Wraps a preview controller so every boot is bound to the selection that
+     was current when it started: the deck id and the selection generation,
+     which advances on every select, refresh, and new-webinar flow. A ready
+     result only shows the host if that same selection is still current, so a
+     candidate from edits discarded on the way to another deck and back cannot
+     surface. The first boot waits for the host frame to load. */
   function bindPreview(controller, { waitForFrame = null } = {}) {
     return Object.freeze({
       async boot(candidate) {
         const forWebinar = Number(model.selectedWebinarId) || null;
+        const forSelection = previewSelectionGeneration;
         if (waitForFrame) await waitForFrame;
         const state = await controller.boot(candidate);
-        if (state?.type === 'ready' && forWebinar !== null && forWebinar === (Number(model.selectedWebinarId) || null)) {
+        if (state?.type === 'ready' && forWebinar !== null && forWebinar === (Number(model.selectedWebinarId) || null)
+          && forSelection === previewSelectionGeneration) {
           previewReadyFor = forWebinar;
         }
         updatePreviewHostVisibility();
@@ -175,19 +183,31 @@
   }
 
   function frameLoadGate(iframe) {
-    if (typeof iframe.addEventListener !== 'function') return Promise.resolve();
+    if (typeof iframe.addEventListener !== 'function') return { promise: Promise.resolve(), cancel() {} };
     const setTimeoutImpl = dependencies.setTimeoutImpl || globalThis.setTimeout;
     const clearTimeoutImpl = dependencies.clearTimeoutImpl || globalThis.clearTimeout;
-    return new Promise(resolve => {
-      let timer = null;
-      const open = () => {
-        if (timer !== null) clearTimeoutImpl(timer);
-        timer = null;
-        resolve();
-      };
-      iframe.addEventListener('load', open, { once: true });
-      timer = setTimeoutImpl(open, PREVIEW_FRAME_LOAD_TIMEOUT_MS);
-    });
+    let timer = null;
+    let onLoad = null;
+    let resolve = null;
+    const promise = new Promise(resolvePromise => { resolve = resolvePromise; });
+    const settle = () => {
+      if (timer !== null) clearTimeoutImpl(timer);
+      timer = null;
+      if (onLoad) iframe.removeEventListener?.('load', onLoad);
+      onLoad = null;
+    };
+    onLoad = () => {
+      // A load for the initial about:blank document (readable only while it
+      // is same-origin) is not the configured host arriving; keep waiting.
+      let blank = false;
+      try { blank = iframe.contentDocument?.URL === 'about:blank'; } catch { blank = false; }
+      if (blank) return;
+      settle();
+      resolve();
+    };
+    iframe.addEventListener('load', onLoad);
+    timer = setTimeoutImpl(() => { settle(); resolve(); }, PREVIEW_FRAME_LOAD_TIMEOUT_MS);
+    return { promise, cancel: settle };
   }
 
   function ensurePreviewController() {
@@ -215,7 +235,9 @@
     iframe.setAttribute('title', 'Slide preview');
     iframe.setAttribute('data-ws-preview-frame', '');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
-    previewFrameLoaded = frameLoadGate(iframe);
+    const gate = frameLoadGate(iframe);
+    previewFrameLoaded = gate.promise;
+    cancelPreviewFrameGate = gate.cancel;
     iframe.setAttribute('src', url);
     elements.previewHost.append(iframe);
     try {
@@ -232,6 +254,8 @@
     } catch {
       iframe.remove?.();
       previewController = null;
+      cancelPreviewFrameGate?.();
+      cancelPreviewFrameGate = null;
       previewFrameLoaded = null;
       previewConfigState = 'invalid';
     }
@@ -247,6 +271,7 @@
   }
 
   function resetPreviewVisibility() {
+    previewSelectionGeneration += 1;
     previewReadyFor = null;
     updatePreviewHostVisibility();
   }
@@ -957,6 +982,8 @@
     previewController = null;
     previewFrame?.remove?.();
     previewFrame = null;
+    cancelPreviewFrameGate?.();
+    cancelPreviewFrameGate = null;
     previewFrameLoaded = null;
     previewReadyFor = null;
     controllersBuilt = false;

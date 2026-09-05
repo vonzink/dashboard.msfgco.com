@@ -16,6 +16,9 @@
      presenter runs as a local rehearsal.
      ======================================================================== */
 
+  /* Preview error codes that describe the candidate itself rather than the
+     host's availability; see preview.js ERROR_CODES. */
+  const CONTENT_FAILURE_CODES = new Set(['PREVIEW_CANDIDATE_INVALID', 'PREVIEW_COMPOSITION_FAILED', 'SLIDE_RUNTIME_ERROR', 'SLIDE_STARTUP_TIMEOUT']);
   const SHORTCUT_ACTIONS = Object.freeze([
     Object.freeze({ id: 'previousSlide', label: 'Previous slide' }),
     Object.freeze({ id: 'nextSlide', label: 'Next slide' }),
@@ -610,8 +613,11 @@
         previewStatus = 'Up-next preview is ready.';
       } else {
         previewStatus = 'The up-next preview could not start.';
-        // Do not pin the failure: the next render tries this slide again.
-        previewedSlideId = null;
+        // A transient failure (host not ready, superseded, thrown boot) is
+        // retried on the next render. A failure in the slide's own content
+        // stays pinned until the up-next slide changes, so a broken slide is
+        // not re-executed on every keystroke or navigation.
+        if (!CONTENT_FAILURE_CODES.has(result?.code)) previewedSlideId = null;
       }
       renderUpNext();
     }

@@ -600,6 +600,36 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(text(recovering.q('[data-up-next-status]'))).toMatch(/ready/i);
   });
 
+  it('keeps a slide-content failure pinned until the slide changes, but retries transient failures', async () => {
+    const test = harness();
+    test.preview.boot.mockResolvedValue({ type: 'error', code: 'SLIDE_RUNTIME_ERROR' });
+    await test.open();
+    expect(text(test.q('[data-up-next-status]'))).toMatch(/could not start/i);
+    const attempts = test.preview.boot.mock.calls.length;
+    await test.controller.renderPresenterPanel(test.context);
+    await test.settle();
+    expect(test.preview.boot.mock.calls.length).toBe(attempts);
+    test.controller.goNext();
+    await test.settle();
+    expect(test.preview.boot.mock.calls.length).toBeGreaterThan(attempts);
+
+    const invalid = harness();
+    invalid.preview.boot.mockResolvedValue({ type: 'error', code: 'PREVIEW_CANDIDATE_INVALID' });
+    await invalid.open();
+    const invalidAttempts = invalid.preview.boot.mock.calls.length;
+    await invalid.controller.renderPresenterPanel(invalid.context);
+    await invalid.settle();
+    expect(invalid.preview.boot.mock.calls.length).toBe(invalidAttempts);
+
+    const thrown = harness();
+    thrown.preview.boot.mockRejectedValue(new Error('Preview controller is destroyed'));
+    await thrown.open();
+    const thrownAttempts = thrown.preview.boot.mock.calls.length;
+    await thrown.controller.renderPresenterPanel(thrown.context);
+    await thrown.settle();
+    expect(thrown.preview.boot.mock.calls.length).toBeGreaterThan(thrownAttempts);
+  });
+
   it('runs slide, pace, and elapsed clocks from injected time', async () => {
     const test = harness();
     await test.open();

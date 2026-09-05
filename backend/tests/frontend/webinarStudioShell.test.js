@@ -409,8 +409,8 @@ describe('Webinar Studio preview wiring', () => {
       setAttribute(name, value) { this.attributes[name] = String(value); if (name === 'src') this.src = String(value); },
       getAttribute(name) { return this.attributes[name] ?? null; },
       addEventListener(type, listener) { if (type === 'load') this.loadListeners.push(listener); },
-      removeEventListener() {},
-      fireLoad() { for (const listener of this.loadListeners.splice(0)) listener({ type: 'load' }); },
+      removeEventListener(type, listener) { if (type === 'load') this.loadListeners = this.loadListeners.filter(entry => entry !== listener); },
+      fireLoad() { for (const listener of [...this.loadListeners]) listener({ type: 'load' }); },
       remove() { previewHost.children = previewHost.children.filter(node => node !== this); },
     };
     const settingsPanel = dom.elements.wsSettingsPanel;
@@ -667,6 +667,78 @@ describe('Webinar Studio preview wiring', () => {
     expect(test.previewHost.hidden).toBe(true);
     expect(test.dom.elements.wsLaunchPresenter.disabled).toBe(true);
     expect(test.settingsPanel.innerHTML).toMatch(/select a webinar|creating/i);
+  });
+
+  it('does not show a ready preview that was booted before the same deck was reselected', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
+    await test.studio.init();
+    await test.studio.open();
+    test.iframe.fireLoad();
+    let resolveBoot;
+    test.controller.boot.mockImplementation(() => new Promise(resolve => { resolveBoot = resolve; }));
+    const preview = test.editorPreviewFor();
+    const inFlight = preview.boot({});
+    test.api.listWebinars.mockResolvedValue([
+      { id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false },
+      { id: 13, slug: 'second', title: 'Second deck', liveVersion: 1, audienceEnabled: false },
+    ]);
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second', title: 'Second deck' }));
+    await test.studio.selectWebinar(13);
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument());
+    await test.studio.selectWebinar(12);
+    expect(test.previewHost.hidden).toBe(true);
+    resolveBoot({ type: 'ready' });
+    await inFlight;
+    /* Same deck id, but a different selection: the candidate belonged to the
+       edits discarded on the way out, so it must not surface. */
+    expect(test.previewHost.hidden).toBe(true);
+    test.controller.boot.mockResolvedValue({ type: 'ready' });
+    await preview.boot({});
+    expect(test.previewHost.hidden).toBe(false);
+  });
+
+  it('cancels the load-gate timer on destroy and when the factory throws', async () => {
+    const timers = { setTimeoutImpl: vi.fn(() => 77), clearTimeoutImpl: vi.fn() };
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, timers });
+    await test.studio.init();
+    await test.studio.open();
+    expect(timers.clearTimeoutImpl).not.toHaveBeenCalled();
+    test.studio.destroy();
+    expect(timers.clearTimeoutImpl).toHaveBeenCalledWith(77);
+
+    const throwing = previewWiring({
+      previewConfig: PRODUCTION_PREVIEW,
+      previewApi: { createPreviewController: vi.fn(() => { throw new Error('nope'); }) },
+      timers: { setTimeoutImpl: vi.fn(() => 78), clearTimeoutImpl: vi.fn() },
+    });
+    await throwing.studio.init();
+    await throwing.studio.open();
+    expect(throwing.previewHost.children).toHaveLength(0);
+  });
+
+  it('ignores a load reported while the frame still holds the initial about:blank document', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, useRealPreview: true });
+    await test.studio.init();
+    await test.studio.open();
+    const preview = test.editorPreviewFor();
+    const candidate = {
+      master: { html: '<main>{{SLIDE_CONTENT}}</main>', css: '' },
+      slide: { id: slideId, anchor: 'opening', title: 'Opening', html: '<section>Welcome</section>', css: '', javascript: '' },
+      assets: {},
+      resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] },
+    };
+    void preview.boot(candidate);
+    test.iframe.contentDocument = { URL: 'about:blank' };
+    test.iframe.fireLoad();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(test.iframe.contentWindow.postMessage).not.toHaveBeenCalled();
+    /* The configured-origin document is cross-origin, so contentDocument is null. */
+    test.iframe.contentDocument = null;
+    test.iframe.fireLoad();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(test.iframe.contentWindow.postMessage).toHaveBeenCalledTimes(1);
   });
 
   it('removes the preview frame on destroy so a later init does not stack frames', async () => {
