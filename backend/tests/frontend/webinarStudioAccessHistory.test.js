@@ -98,14 +98,26 @@ function privateState(overrides = {}) {
   };
 }
 
-function harness({ admin = true, dirty = false, api = {}, confirms = [] } = {}) {
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+function harness({ admin = true, dirty = false, api = {}, confirms = [], confirmImpl } = {}) {
   const document = new FakeDocument();
   const root = document.createElement('section');
   const reload = vi.fn().mockResolvedValue(undefined);
   const onArchived = vi.fn().mockResolvedValue(undefined);
-  const confirm = vi.fn();
-  confirms.forEach(result => confirm.mockResolvedValueOnce(result));
-  if (!confirms.length) confirm.mockResolvedValue(true);
+  const confirm = vi.fn(confirmImpl);
+  if (!confirmImpl) {
+    confirms.forEach(result => confirm.mockResolvedValueOnce(result));
+    if (!confirms.length) confirm.mockResolvedValue(true);
+  }
   const completeApi = {
     listUsers: vi.fn().mockResolvedValue([
       { id: 7, name: 'Seth Angell', email: 'seth@example.test', is_active: 1 },
@@ -133,6 +145,27 @@ function harness({ admin = true, dirty = false, api = {}, confirms = [] } = {}) 
   const accessHistoryApi = require('../../../js/webinar-studio/access-history.js');
   const controller = accessHistoryApi.createAccessHistory({ api: completeApi, confirm, document });
   return { api: completeApi, confirm, context, controller, onArchived, reload, root };
+}
+
+function retargetContext(test, id = 99) {
+  const state = privateState({
+    webinar: {
+      id,
+      slug: 'other-webinar',
+      title: 'Other webinar',
+      primaryOwnerUserId: 8,
+      audienceEnabled: false,
+    },
+    liveVersion: 3,
+  });
+  return {
+    ...test.context,
+    state,
+    getState: () => state,
+    webinarId: id,
+    reload: vi.fn().mockResolvedValue(undefined),
+    onArchived: vi.fn().mockResolvedValue(undefined),
+  };
 }
 
 describe('Webinar Studio access and revision history', () => {
@@ -270,6 +303,96 @@ describe('Webinar Studio access and revision history', () => {
     expect(test.reload).not.toHaveBeenCalled();
     expect(test.context.state.liveVersion).toBe(7);
     expect(text(test.root)).toMatch(/changed.*reload/i);
+  });
+
+  it.each([
+    ['owner replacement', 'access', test => test.controller.changeOwner(8), 'changeOwner'],
+    ['audience access', 'access', test => test.controller.setAudienceEnabled(true), 'changeAudienceAccess'],
+    ['archive', 'access', test => test.controller.archiveWebinar(), 'archiveWebinar'],
+    ['revision restore', 'history', test => test.controller.restoreRevision(21), 'restoreRevision'],
+  ])('cancels pending %s confirmation instead of retargeting its API call to a newly rendered webinar', async (_label, panel, start, apiMethod) => {
+    const confirmation = deferred();
+    const test = harness({ dirty: panel === 'access' && apiMethod !== 'archiveWebinar', confirmImpl: () => confirmation.promise });
+    if (panel === 'access') await test.controller.renderAccessPanel(test.context);
+    else {
+      test.api.getHistory.mockResolvedValueOnce([{ id: 21, version: 6, changeType: 'slide_saved', changeSummary: 'Updated slide', createdAt: '2026-09-05T12:34:00.000Z', createdBy: { name: 'Avery Admin' } }]);
+      await test.controller.renderHistoryPanel(test.context);
+    }
+
+    const operation = start(test);
+    const nextContext = retargetContext(test);
+    if (panel === 'access') await test.controller.renderAccessPanel(nextContext);
+    else await test.controller.renderHistoryPanel(nextContext);
+    confirmation.resolve(true);
+
+    await expect(operation).resolves.toMatchObject({ ok: false, cancelled: true });
+    expect(test.api[apiMethod]).not.toHaveBeenCalled();
+    expect(test.reload).not.toHaveBeenCalled();
+    expect(nextContext.reload).not.toHaveBeenCalled();
+  });
+
+  it('cancels confirmation when the controller is deactivated or destroyed', async () => {
+    const deactivatedConfirmation = deferred();
+    const deactivated = harness({ dirty: true, confirmImpl: () => deactivatedConfirmation.promise });
+    await deactivated.controller.renderAccessPanel(deactivated.context);
+    const audience = deactivated.controller.setAudienceEnabled(true);
+    deactivated.controller.deactivate();
+    deactivatedConfirmation.resolve(true);
+    await expect(audience).resolves.toMatchObject({ ok: false, cancelled: true });
+    expect(deactivated.api.changeAudienceAccess).not.toHaveBeenCalled();
+
+    const destroyedConfirmation = deferred();
+    const destroyed = harness({ dirty: true, confirmImpl: () => destroyedConfirmation.promise });
+    await destroyed.controller.renderAccessPanel(destroyed.context);
+    const owner = destroyed.controller.changeOwner(8);
+    destroyed.controller.destroy();
+    destroyedConfirmation.resolve(true);
+    await expect(owner).resolves.toMatchObject({ ok: false, cancelled: true });
+    expect(destroyed.api.changeOwner).not.toHaveBeenCalled();
+  });
+
+  it('does not reload or render an error into another webinar when the initiating API settles late', async () => {
+    const pendingApi = deferred();
+    const test = harness({ api: { changeAudienceAccess: vi.fn(() => pendingApi.promise) } });
+    await test.controller.renderAccessPanel(test.context);
+    const operation = test.controller.setAudienceEnabled(true);
+    await Promise.resolve();
+
+    const nextContext = retargetContext(test);
+    await test.controller.renderAccessPanel(nextContext);
+    pendingApi.resolve({ audienceEnabled: true });
+
+    await expect(operation).resolves.toMatchObject({ ok: false, cancelled: true });
+    expect(test.api.changeAudienceAccess).toHaveBeenCalledWith(12, { enabled: true });
+    expect(test.reload).not.toHaveBeenCalled();
+    expect(nextContext.reload).not.toHaveBeenCalled();
+    expect(text(test.root)).toContain('Primary owner: Avery Admin');
+    expect(text(test.root)).not.toMatch(/could not be completed|changed.*reload/i);
+  });
+
+  it('allows only the latest overlapping access operation to reload its initiating context', async () => {
+    const firstApi = deferred();
+    const test = harness({
+      api: {
+        changeAudienceAccess: vi.fn()
+          .mockImplementationOnce(() => firstApi.promise)
+          .mockResolvedValueOnce({ audienceEnabled: false }),
+      },
+    });
+    await test.controller.renderAccessPanel(test.context);
+
+    const first = test.controller.setAudienceEnabled(true);
+    await Promise.resolve();
+    const second = test.controller.setAudienceEnabled(false);
+    await expect(second).resolves.toEqual({ ok: true });
+    firstApi.resolve({ audienceEnabled: true });
+    await expect(first).resolves.toMatchObject({ ok: false, cancelled: true });
+
+    expect(test.api.changeAudienceAccess.mock.calls).toEqual([
+      [12, { enabled: true }],
+      [12, { enabled: false }],
+    ]);
+    expect(test.reload).toHaveBeenCalledOnce();
   });
 
   it('integrates access and history panels with the selected Studio lifecycle and tears the controller down', async () => {

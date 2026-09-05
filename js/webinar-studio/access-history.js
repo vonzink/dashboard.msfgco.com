@@ -89,6 +89,9 @@
     let errorMessage = '';
     let activePanel = null;
     let renderGeneration = 0;
+    let contextGeneration = 0;
+    let operationGeneration = 0;
+    let destroyed = false;
 
     function assertContext(next) {
       required(next?.root && typeof next.root.replaceChildren === 'function', 'Access and history root is required');
@@ -109,6 +112,44 @@
 
     function currentState() {
       return (typeof context?.getState === 'function' ? context.getState() : null) || context?.state;
+    }
+
+    function stateFor(targetContext) {
+      return (typeof targetContext?.getState === 'function' ? targetContext.getState() : null)
+        || targetContext?.state;
+    }
+
+    function webinarIdFor(targetContext) {
+      return positiveInteger(targetContext?.webinarId || stateFor(targetContext)?.webinar?.id);
+    }
+
+    function beginOperation() {
+      if (destroyed || !context) return null;
+      const targetContext = context;
+      const targetWebinarId = webinarIdFor(targetContext);
+      if (!targetWebinarId) return null;
+      operationGeneration += 1;
+      return {
+        context: targetContext,
+        contextGeneration,
+        operationGeneration,
+        webinarId: targetWebinarId,
+      };
+    }
+
+    function operationIsCurrent(operation) {
+      return Boolean(
+        operation
+        && !destroyed
+        && context === operation.context
+        && contextGeneration === operation.contextGeneration
+        && operationGeneration === operation.operationGeneration
+        && webinarIdFor(operation.context) === operation.webinarId,
+      );
+    }
+
+    function cancelled() {
+      return { ok: false, cancelled: true };
     }
 
     function ownerDisplay() {
@@ -266,17 +307,21 @@
       if (activePanel === 'history') renderHistory();
     }
 
-    async function confirmReloadDiscard(action) {
-      if (!context.hasUnsavedChanges()) return true;
-      return confirm(`Discard unsaved changes and ${action}?`, {
+    async function confirmReloadDiscard(operation, action) {
+      if (!operation.context.hasUnsavedChanges()) return operationIsCurrent(operation);
+      const approved = await confirm(`Discard unsaved changes and ${action}?`, {
         title: 'Discard unsaved changes?',
         confirmText: 'Discard and continue',
         cancelText: 'Keep editing',
         variant: 'warning',
       });
+      return operationIsCurrent(operation) && approved;
     }
 
     async function renderAccessPanel(nextContext) {
+      if (destroyed) return;
+      contextGeneration += 1;
+      operationGeneration += 1;
       context = assertContext(nextContext);
       activePanel = 'access';
       errorMessage = '';
@@ -297,6 +342,9 @@
     }
 
     async function renderHistoryPanel(nextContext) {
+      if (destroyed) return;
+      contextGeneration += 1;
+      operationGeneration += 1;
       context = assertContext(nextContext);
       activePanel = 'history';
       errorMessage = '';
@@ -321,13 +369,18 @@
         rerender();
         return { ok: false, error: errorMessage };
       }
-      if (!await confirmReloadDiscard('replace the primary owner')) return { ok: false, cancelled: true };
+      const operation = beginOperation();
+      if (!operation || !await confirmReloadDiscard(operation, 'replace the primary owner')) return cancelled();
+      if (!operationIsCurrent(operation)) return cancelled();
       errorMessage = '';
       try {
-        await api.changeOwner(webinarId(), { primaryOwnerUserId: targetId });
-        await context.reload();
+        await api.changeOwner(operation.webinarId, { primaryOwnerUserId: targetId });
+        if (!operationIsCurrent(operation)) return cancelled();
+        await operation.context.reload();
+        if (!operationIsCurrent(operation)) return cancelled();
         return { ok: true };
       } catch (error) {
+        if (!operationIsCurrent(operation)) return cancelled();
         errorMessage = operationError(error, 'The owner change');
         rerender();
         return { ok: false, error: errorMessage };
@@ -340,13 +393,19 @@
         rerender();
         return { ok: false, error: errorMessage };
       }
-      if (!await confirmReloadDiscard('change audience access')) return { ok: false, cancelled: true };
+      const operation = beginOperation();
+      if (!operation || !await confirmReloadDiscard(operation, 'change audience access')) return cancelled();
+      if (!operationIsCurrent(operation)) return cancelled();
+      const nextEnabled = Boolean(enabled);
       errorMessage = '';
       try {
-        await api.changeAudienceAccess(webinarId(), { enabled: Boolean(enabled) });
-        await context.reload();
+        await api.changeAudienceAccess(operation.webinarId, { enabled: nextEnabled });
+        if (!operationIsCurrent(operation)) return cancelled();
+        await operation.context.reload();
+        if (!operationIsCurrent(operation)) return cancelled();
         return { ok: true };
       } catch (error) {
+        if (!operationIsCurrent(operation)) return cancelled();
         errorMessage = operationError(error, 'The audience access change');
         rerender();
         return { ok: false, error: errorMessage };
@@ -359,22 +418,27 @@
         rerender();
         return { ok: false, error: errorMessage };
       }
-      if (!await confirmReloadDiscard('archive this webinar')) return { ok: false, cancelled: true };
-      const title = boundedLabel(currentState().webinar.title, 'this webinar');
+      const operation = beginOperation();
+      if (!operation || !await confirmReloadDiscard(operation, 'archive this webinar')) return cancelled();
+      if (!operationIsCurrent(operation)) return cancelled();
+      const title = boundedLabel(stateFor(operation.context).webinar.title, 'this webinar');
       const approved = await confirm(`Archive “${title}”?`, {
         title: 'Archive webinar',
         confirmText: 'Archive webinar',
         cancelText: 'Keep webinar',
         variant: 'danger',
       });
-      if (!approved) return { ok: false, cancelled: true };
+      if (!operationIsCurrent(operation) || !approved) return cancelled();
       errorMessage = '';
       try {
-        await api.archiveWebinar(webinarId());
-        if (typeof context.onArchived === 'function') await context.onArchived();
-        else await context.reload();
+        await api.archiveWebinar(operation.webinarId);
+        if (!operationIsCurrent(operation)) return cancelled();
+        if (typeof operation.context.onArchived === 'function') await operation.context.onArchived();
+        else await operation.context.reload();
+        if (!operationIsCurrent(operation)) return cancelled();
         return { ok: true };
       } catch (error) {
+        if (!operationIsCurrent(operation)) return cancelled();
         errorMessage = operationError(error, 'The archive');
         rerender();
         return { ok: false, error: errorMessage };
@@ -390,14 +454,16 @@
         rerender();
         return { ok: false, error: errorMessage };
       }
-      if (context.hasUnsavedChanges()) {
+      const operation = beginOperation();
+      if (!operation) return cancelled();
+      if (operation.context.hasUnsavedChanges()) {
         const discard = await confirm(`Discard unsaved changes and continue restoring version ${revision.version}?`, {
           title: 'Discard unsaved changes?',
           confirmText: 'Discard and continue',
           cancelText: 'Keep editing',
           variant: 'warning',
         });
-        if (!discard) return { ok: false, cancelled: true };
+        if (!operationIsCurrent(operation) || !discard) return cancelled();
       }
       const approved = await confirm(`Restore version ${revision.version}?`, {
         title: `Restore version ${revision.version}`,
@@ -405,9 +471,11 @@
         cancelText: 'Keep current version',
         variant: 'warning',
       });
-      if (!approved) return { ok: false, cancelled: true };
+      if (!operationIsCurrent(operation) || !approved) return cancelled();
 
-      const expectedVersion = positiveInteger(currentState().liveVersion);
+      const initiatingState = stateFor(operation.context);
+      if (positiveInteger(initiatingState?.webinar?.id) !== operation.webinarId) return cancelled();
+      const expectedVersion = positiveInteger(initiatingState.liveVersion);
       if (!expectedVersion) {
         errorMessage = 'Reload this webinar before restoring a version.';
         rerender();
@@ -415,10 +483,13 @@
       }
       errorMessage = '';
       try {
-        await api.restoreRevision(webinarId(), targetId, { expectedVersion });
-        await context.reload();
+        await api.restoreRevision(operation.webinarId, targetId, { expectedVersion });
+        if (!operationIsCurrent(operation)) return cancelled();
+        await operation.context.reload();
+        if (!operationIsCurrent(operation)) return cancelled();
         return { ok: true };
       } catch (error) {
+        if (!operationIsCurrent(operation)) return cancelled();
         errorMessage = operationError(error, 'The restore');
         rerender();
         return { ok: false, error: errorMessage };
@@ -427,11 +498,14 @@
 
     function deactivate() {
       renderGeneration += 1;
+      contextGeneration += 1;
+      operationGeneration += 1;
       activePanel = null;
     }
 
     function destroy() {
       deactivate();
+      destroyed = true;
       context = null;
       directory = [];
       history = [];
