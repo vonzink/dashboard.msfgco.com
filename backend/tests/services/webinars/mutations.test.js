@@ -630,6 +630,54 @@ describe('Webinar Studio live mutations', () => {
     await expect(api.reorderSlides({ webinarId: 2, actorUserId: 7, expectedVersion: 5, slideIds: [stableId] })).rejects.toMatchObject({ code: 'SLIDE_SET_MISMATCH' });
   });
 
+  it('returns the exact committed server-created slide for add and duplicate without a follow-up lookup', async () => {
+    const added = service();
+    const addResult = await added.api.addSlide({
+      webinarId: 2,
+      actorUserId: 7,
+      expectedVersion: 4,
+      anchor: 'agenda',
+      title: 'Agenda',
+      targetSeconds: 45,
+      speakerNotes: 'Shared note',
+      html: '<section>Agenda</section>',
+      css: '.agenda{display:grid}',
+      javascript: 'window.ready = true;',
+    });
+    const addInsert = added.connection.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO webinar_slides'));
+    expect(addResult.slide).toEqual({
+      id: addInsert[1][0],
+      anchor: 'agenda',
+      title: 'Agenda',
+      targetSeconds: 45,
+      speakerNotes: 'Shared note',
+      html: '<section>Agenda</section>',
+      css: '.agenda{display:grid}',
+      javascript: 'window.ready = true;',
+    });
+    expect(added.calls.at(-1)).toBe('release');
+    expect(added.calls).toContain('commit');
+
+    const duplicated = service();
+    const duplicateResult = await duplicated.api.duplicateSlide({
+      webinarId: 2,
+      actorUserId: 7,
+      expectedVersion: 4,
+      sourceSlideId: stableId,
+    });
+    const duplicateInsert = duplicated.connection.query.mock.calls.find(([sql]) => sql.includes('INSERT INTO webinar_slides'));
+    expect(duplicateResult.slide).toEqual({
+      id: duplicateInsert[1][0],
+      anchor: 'opening-copy',
+      title: 'Opening',
+      targetSeconds: 0,
+      speakerNotes: '',
+      html: '',
+      css: '',
+      javascript: '',
+    });
+  });
+
   it('duplicates only the active server-loaded source and ignores client overrides', async () => {
     const { api, connection } = service({ slides: [{ ...activeSlides()[0], title: 'Server title', html: '<section>server</section>', javascript: 'window.server = true;' }] });
     await api.duplicateSlide({ webinarId: 2, actorUserId: 7, expectedVersion: 4, sourceSlideId: stableId, title: 'Client override', html: '<section>client</section>' });

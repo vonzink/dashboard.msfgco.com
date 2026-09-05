@@ -175,6 +175,19 @@ function resultFor(webinar) {
   };
 }
 
+function resultSlideFor(slide) {
+  return {
+    id: slide.id,
+    anchor: slide.anchor,
+    title: slide.title,
+    targetSeconds: slide.targetSeconds,
+    speakerNotes: slide.speakerNotes,
+    html: slide.html,
+    css: slide.css,
+    javascript: slide.javascript,
+  };
+}
+
 function assertExactAssetDependencies(validatedAssetVersionIds, snapshotAssetVersionIds) {
   if (validatedAssetVersionIds.length === snapshotAssetVersionIds.length
     && validatedAssetVersionIds.every((assetVersionId, index) => (
@@ -240,7 +253,9 @@ function createMutationService({
         metadata: { liveVersion, changeType },
       });
       const current = await readCurrentMetadata(connection, webinarId);
-      return resultFor(current);
+      const result = resultFor(current);
+      if (transformed?.createdSlide) result.slide = transformed.createdSlide;
+      return result;
     });
   }
 
@@ -296,6 +311,7 @@ function createMutationService({
           };
         if (!source && anchors.has(created.anchor)) throw new WebinarMutationError('ANCHOR_CONFLICT', 'Slide anchor already exists', { status: 409 });
         candidate.slides.push(created);
+        return { createdSlide: resultSlideFor(created) };
       },
       apply: connection => connection.query(
         `INSERT INTO webinar_slides

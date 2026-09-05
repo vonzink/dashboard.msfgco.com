@@ -57,8 +57,16 @@ function makeServices() {
     createWebinar: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 1 }),
     archiveWebinar: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 3 }),
     saveMaster: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
-    addSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
-    duplicateSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
+    addSlide: vi.fn().mockResolvedValue({
+      webinarId: 2,
+      liveVersion: 4,
+      slide: { id: secondSlideId, anchor: 'agenda', title: 'Agenda', targetSeconds: 90, speakerNotes: '', html: '', css: '', javascript: '' },
+    }),
+    duplicateSlide: vi.fn().mockResolvedValue({
+      webinarId: 2,
+      liveVersion: 4,
+      slide: { id: secondSlideId, anchor: 'opening-copy', title: 'Opening', targetSeconds: 90, speakerNotes: '', html: '', css: '', javascript: '' },
+    }),
     saveSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
     reorderSlides: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
     archiveSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
@@ -370,6 +378,23 @@ async function useRealAssetReferenceMutation(versionRows, { collectTokens } = {}
 }
 
 describe('private webinar API through the production application factory', () => {
+  it('returns the exact stable slide object produced by the committed add and duplicate mutations', async () => {
+    const added = await request('POST', '/api/webinars/2/slides', validSlide, identity(7));
+    expect(added).toMatchObject({
+      status: 201,
+      body: { liveVersion: 4, slide: { id: secondSlideId, anchor: 'agenda' } },
+    });
+
+    const duplicated = await request('POST', '/api/webinars/2/slides', {
+      expectedVersion: 3,
+      sourceSlideId: slideId,
+    }, identity(7));
+    expect(duplicated).toMatchObject({
+      status: 201,
+      body: { liveVersion: 4, slide: { id: secondSlideId, anchor: 'opening-copy' } },
+    });
+  });
+
   it('enumerates every approved verb/path and its required boundary categories', () => {
     const contracts = approvedRouteContracts();
     expect(contracts.map(contract => contract.route)).toEqual([

@@ -35,6 +35,62 @@ function loadStudioApi(serverApi) {
 }
 
 describe('ServerAPI Webinar Studio transports', () => {
+  it('preserves only bounded conflict metadata on a normal 409 response', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 409,
+      ok: false,
+      statusText: 'Conflict',
+      json: vi.fn().mockResolvedValue({
+        error: 'Webinar has changed',
+        code: 'VERSION_CONFLICT',
+        currentVersion: 8,
+        updatedAt: '2026-09-05T12:00:00.000Z',
+        updatedBy: { id: 9, name: 'Another Editor' },
+        source: '<script>private source</script>',
+        token: 'private-token',
+      }),
+    });
+    const api = loadServerApi(fetchImpl);
+
+    const error = await api.request('/webinars/12/master', { method: 'PUT' }).catch(value => value);
+
+    expect(error.message).toBe('Webinar has changed');
+    expect(error).toMatchObject({
+      status: 409,
+      code: 'VERSION_CONFLICT',
+      currentVersion: 8,
+      updatedAt: '2026-09-05T12:00:00.000Z',
+      updatedBy: { id: 9, name: 'Another Editor' },
+    });
+    expect(Object.keys(error).sort()).toEqual(['code', 'currentVersion', 'status', 'updatedAt', 'updatedBy']);
+    expect(JSON.stringify(error)).not.toMatch(/private source|private-token|script|token|source/);
+  });
+
+  it('drops malformed, oversized, secret, and arbitrary error metadata while preserving the message and status', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({
+      status: 409,
+      ok: false,
+      statusText: 'Conflict',
+      json: vi.fn().mockResolvedValue({
+        error: 'Still changed',
+        code: 'VERSION_CONFLICT<script>',
+        currentVersion: '8',
+        updatedAt: 'x'.repeat(1000),
+        updatedBy: { id: 9, name: 'x'.repeat(1000), email: 'private@example.test' },
+        headers: { authorization: 'Bearer secret' },
+        body: '<script>source</script>',
+      }),
+    });
+    const api = loadServerApi(fetchImpl);
+
+    const error = await api.request('/webinars/12/master', { method: 'PUT' }).catch(value => value);
+
+    expect(error.message).toBe('Still changed');
+    expect(error.status).toBe(409);
+    expect(Object.keys(error)).toEqual(['status']);
+    expect(JSON.stringify(error)).not.toMatch(/Bearer|secret|private@example|script|authorization|headers|body|source/);
+  });
+
   it('treats a successful 204 response as an empty result', async () => {
     const fetchImpl = vi.fn().mockResolvedValue({ status: 204, ok: true });
     const api = loadServerApi(fetchImpl);
