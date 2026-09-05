@@ -7,6 +7,7 @@ const ASSET_TOKEN = /^\{\{ASSET:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab]
 const ASSET_TOKEN_MARKER = /\{\{ASSET:/ig;
 const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
 const FORBIDDEN_ELEMENTS = new Set(['script', 'iframe', 'object', 'embed', 'form', 'base']);
+const RESERVED_ATTRIBUTES = new Set(['data-slide-mount']);
 const URL_ATTRIBUTE = /(?:^|:)(?:href|src|action|formaction|poster|background|data|cite|longdesc|profile|codebase|manifest|ping)$/;
 const URL_CAPABLE_CSS_FUNCTION = /\b(url|image-set|-webkit-image-set|cross-fade|image|element)\s*\(/ig;
 
@@ -99,6 +100,10 @@ function validateHtml(source, surface, resourcePolicy = loadResourcePolicy()) {
     for (const [attribute, rawValue] of Object.entries(attributes)) {
       const attributeName = attribute.toLowerCase();
       const value = String(rawValue || '');
+      if (RESERVED_ATTRIBUTES.has(attributeName)) {
+        issues.push(issue('RESERVED_ATTRIBUTE', surface, { attribute: attributeName }));
+        continue;
+      }
       if (attributeName.startsWith('on') || attributeName === 'srcdoc') {
         issues.push(issue('FORBIDDEN_ATTRIBUTE', surface, { attribute: attributeName }));
         continue;

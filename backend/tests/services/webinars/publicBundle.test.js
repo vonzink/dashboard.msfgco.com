@@ -309,6 +309,18 @@ describe('public Webinar Studio live bundle compiler', () => {
   });
 
   it.each([
+    ['Master', { master_html: '<main data-slide-mount>{{SLIDE_CONTENT}}</main>' }],
+    ['slide', { slide_html: '<section DATA-SLIDE-MOUNT="owned"></section>' }],
+  ])('fails closed when %s HTML claims the renderer mount attribute', async (_surface, override) => {
+    const { api } = service({ rows: liveRows(override) });
+    await expect(api.getLiveBundleBySlug('first-home-without-mystery')).rejects.toMatchObject({
+      status: 503,
+      code: 'PUBLIC_BUNDLE_INVALID',
+      message: 'Public webinar is temporarily unavailable',
+    });
+  });
+
+  it.each([
     ['duplicate', [
       ...liveRows({ slide_position: 3 }),
       ...liveRows({ slide_id: SECOND_SLIDE, slide_position: '3', slide_anchor: 'duplicate-position' }),

@@ -35,6 +35,36 @@ describe('webinar executable-content policy', () => {
     expect(validateSlideHtml('<script>go()</script>', policy).issues[0].code).toBe('FORBIDDEN_HTML');
   });
 
+  it('reserves the renderer mount attribute on Master and slide elements only', () => {
+    for (const html of [
+      '<main data-slide-mount>{{SLIDE_CONTENT}}</main>',
+      '<main DATA-SLIDE-MOUNT="owned">{{SLIDE_CONTENT}}</main>',
+    ]) {
+      expect(validateMasterHtml(html, policy).issues).toContainEqual(expect.objectContaining({
+        code: 'RESERVED_ATTRIBUTE',
+        surface: 'master_html',
+        attribute: 'data-slide-mount',
+      }));
+    }
+    for (const html of [
+      '<section data-slide-mount=owned></section>',
+      "<svg><g DaTa-SlIdE-MoUnT='owned'></g></svg>",
+    ]) {
+      expect(validateSlideHtml(html, policy).issues).toContainEqual(expect.objectContaining({
+        code: 'RESERVED_ATTRIBUTE',
+        surface: 'slide_html',
+        attribute: 'data-slide-mount',
+      }));
+    }
+
+    expect(validateSlideHtml([
+      '<p>data-slide-mount is documentation.</p>',
+      '<p title="data-slide-mount" data-slide-mountish>Safe values</p>',
+      '<!-- <div data-slide-mount>commented example</div> -->',
+      '<textarea><div data-slide-mount>raw text</div></textarea>',
+    ].join(''), policy).issues).toEqual([]);
+  });
+
   it('parses CSS and JavaScript without executing them', () => {
     expect(validateCss('.slide { color: red;', 'slide_css').issues[0].surface).toBe('slide_css');
     expect(validateJavascript('const = 1').issues[0].code).toBe('JAVASCRIPT_SYNTAX');
