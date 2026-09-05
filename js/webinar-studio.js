@@ -397,7 +397,10 @@
     }
     model.notice = '';
     renderStatusLine();
-    return reconnect ? bridge.reconnect() === true : bridge.connect() === true;
+    // A disconnected link is re-established through reconnect so a foreign
+    // page in the audience window is replaced promptly rather than waited on.
+    const useReconnect = reconnect || bridge.status() === 'disconnected';
+    return useReconnect ? bridge.reconnect() === true : bridge.connect() === true;
   }
 
   const audienceLink = Object.freeze({
@@ -703,9 +706,13 @@
     if (!elements.modal || elements.modal.hidden) return true;
     if (closing) return false;
     closing = true;
+    // Observe, without invalidating, the request generation: a selection
+    // started while a prompt was open wins and this close is stale.
+    const seenGeneration = requestGeneration;
     try {
       if (!await mayDiscardChanges()) return false;
       if (audienceLinkActive() && !await mayDisconnectAudience()) return false;
+      if (requestGeneration !== seenGeneration) return false;
     } finally {
       closing = false;
     }

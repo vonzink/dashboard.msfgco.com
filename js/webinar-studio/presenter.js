@@ -263,7 +263,7 @@
     let overlays = new Map();
     let calculators = new Map();
     let explicitConnection = null;
-    let audienceEverReady = false;
+    let audienceReadyFor = null;
     let notes = [];
     let notesLoaded = false;
     let draftNoteText = '';
@@ -482,15 +482,17 @@
           const total = slides().length;
           const nextIndex = Number(payload.index);
           const valid = Number.isSafeInteger(nextIndex) && nextIndex >= 0 && nextIndex < total;
-          if (audienceEverReady) {
-            // A reconnected or relaunched audience follows the presenter, so a
-            // window that came back at slide 1 is sent to the current slide
-            // instead of dragging the presenter back with it.
-            if (valid && nextIndex !== clampIndex(index)) sendControl('goto', { index: clampIndex(index) });
+          // Adoption is keyed to the webinar the audience belongs to, not to
+          // the panel: a deck switched while another tab was open still adopts
+          // its first ready, while a later ready for the same webinar is a
+          // reconnect or relaunch and follows the presenter.
+          const readyWebinar = Number(state()?.webinar?.id) || null;
+          if (audienceReadyFor !== null && audienceReadyFor === readyWebinar) {
+            if (Number.isSafeInteger(nextIndex) && nextIndex !== clampIndex(index)) sendControl('goto', { index: clampIndex(index) });
             renderAudience();
             return true;
           }
-          audienceEverReady = true;
+          audienceReadyFor = readyWebinar;
           if (valid && nextIndex !== clampIndex(index)) {
             timer.slideAt = now();
             index = nextIndex;
@@ -1205,7 +1207,6 @@
       }
       if (!sameWebinar) {
         index = 0;
-        audienceEverReady = false;
         notes = [];
         notesLoaded = false;
         editingNoteId = null;

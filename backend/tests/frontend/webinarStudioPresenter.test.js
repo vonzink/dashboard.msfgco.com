@@ -590,6 +590,39 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(text(test.q('[data-position]'))).toBe('3 / 3');
   });
 
+  it('adopts the first ready of a newly selected webinar even when the panel was deactivated during the switch', async () => {
+    const test = harness();
+    test.bridge.status.mockReturnValue('connected');
+    await test.open();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 2, total: 3 } });
+    expect(text(test.q('[data-position]'))).toBe('3 / 3');
+    // Off the presenter tab, the coordinator switches decks and relaunches.
+    test.controller.deactivate();
+    test.setState(studioState({ webinar: { id: 13, slug: 'second', title: 'Second', primaryOwnerUserId: 7, audienceEnabled: true } }));
+    test.bridge.sendControl.mockClear();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } });
+    expect(test.bridge.sendControl).not.toHaveBeenCalledWith('goto', expect.anything());
+    await test.controller.renderPresenterPanel({ ...test.context, webinarId: 13 });
+    await test.settle();
+    expect(text(test.q('[data-position]'))).toBe('1 / 3');
+    // A later ready for that same webinar is a reconnect and pushes the presenter's slide.
+    test.controller.goNext();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } });
+    expect(test.bridge.sendControl).toHaveBeenCalledWith('goto', { index: 1 });
+  });
+
+  it('pushes the presenter slide on reconnect even when the audience reports a position beyond the presenter\'s own range', async () => {
+    const test = harness();
+    test.bridge.status.mockReturnValue('connected');
+    await test.open();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } });
+    test.controller.goNext();
+    test.bridge.sendControl.mockClear();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 7, total: 9 } });
+    expect(test.bridge.sendControl).toHaveBeenCalledWith('goto', { index: 1 });
+    expect(text(test.q('[data-position]'))).toBe('2 / 3');
+  });
+
   it('updates animation buttons in place so focus survives frequent acknowledgements', async () => {
     const test = harness();
     await test.open();

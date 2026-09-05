@@ -984,6 +984,29 @@ describe('Webinar Studio audience bridge wiring', () => {
     expect(confirm).toHaveBeenCalledTimes(2);
   });
 
+  it('relaunches through reconnect when the link is disconnected so a foreign page is replaced promptly', async () => {
+    const test = await connected();
+    test.bridges[0].options.onStatus('disconnected');
+    test.bridges[0].status.mockReturnValue('disconnected');
+    test.elements.wsLaunchAudience.listeners.click({ target: test.elements.wsLaunchAudience });
+    expect(test.bridges[0].reconnect).toHaveBeenCalledTimes(1);
+    expect(test.bridges[0].connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('abandons a close whose prompt was overtaken by a newer selection', async () => {
+    let resolvePrompt;
+    const confirm = vi.fn(() => new Promise(resolve => { resolvePrompt = resolve; }));
+    const test = await connected({ confirm });
+    const closing = test.studio.close();
+    await Promise.resolve();
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second-deck', title: 'Second deck', audienceEnabled: true }));
+    const switching = test.studio.selectWebinar(13, { skipConfirmation: true });
+    resolvePrompt(true);
+    expect(await closing).toBe(false);
+    await switching;
+    expect(test.elements.webinarStudioModal.hidden).toBe(false);
+  });
+
   it('closes without asking when no audience is connected', async () => {
     const confirm = vi.fn().mockResolvedValue(false);
     const test = bridgeWiring({ confirm });
