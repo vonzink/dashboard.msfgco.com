@@ -287,4 +287,82 @@ describe('Webinar Studio normalized state', () => {
     expect(confirmedReplacement.slidesById[firstSlideId].html).toBe('<h1>Server restored</h1>');
     expect(dirty.slidesById[firstSlideId].html).toBe('<h1>Keep me until confirmed</h1>');
   });
+
+  it('rejects polluted normalized objects before any transition can preserve private or arbitrary fields', () => {
+    const clean = stateApi.updateSlide(
+      stateApi.createStudioState(privateDocument()),
+      firstSlideId,
+      'html',
+      '<h1>Unsaved and retained</h1>',
+    );
+    const cases = [
+      {
+        label: 'top-level notes',
+        state: { ...clean, notes: [{ body: 'private' }] },
+        run: state => stateApi.updateMaster(state, 'css', 'main { color: lime; }'),
+      },
+      {
+        label: 'webinar settings',
+        state: { ...clean, webinar: { ...clean.webinar, settings: { shortcut: 'x' } } },
+        run: state => stateApi.updateSlide(state, firstSlideId, 'title', 'Changed'),
+      },
+      {
+        label: 'Master presigned URL and arbitrary key',
+        state: {
+          ...clean,
+          master: {
+            ...clean.master,
+            presignedUploadUrl: 'https://private.example.test/upload',
+            arbitraryMasterField: 'leak',
+          },
+        },
+        run: state => stateApi.applyOrder(state, [secondSlideId, firstSlideId], success(8)),
+      },
+      {
+        label: 'slide storage key and arbitrary key',
+        state: {
+          ...clean,
+          slidesById: {
+            ...clean.slidesById,
+            [firstSlideId]: {
+              ...clean.slidesById[firstSlideId],
+              storageKey: 'quarantine/private-key',
+              arbitrarySlideField: 'leak',
+            },
+          },
+        },
+        run: state => stateApi.markSurfaceSaved(state, firstSlideId, success(8)),
+      },
+      {
+        label: 'conflict response body, token, and updater extras',
+        state: {
+          ...clean,
+          conflict: {
+            currentVersion: 8,
+            updatedAt: '2026-09-03T12:00:00Z',
+            responseBody: { token: 'secret-token' },
+            updatedBy: {
+              id: 8,
+              name: 'Another Editor',
+              email: 'private@example.test',
+              token: 'secret-token',
+            },
+          },
+        },
+        run: state => stateApi.applyConflict(state, {
+          currentVersion: 9,
+          updatedAt: '2026-09-03T12:01:00Z',
+          updatedBy: { id: 9, name: 'Third Editor' },
+        }),
+      },
+    ];
+
+    for (const item of cases) {
+      const before = JSON.stringify(item.state);
+      expect(() => item.run(item.state), item.label).toThrow(/unexpected state field/i);
+      expect(JSON.stringify(item.state), item.label).toBe(before);
+      expect(clean.slidesById[firstSlideId].html).toBe('<h1>Unsaved and retained</h1>');
+      expect(clean.slidesById[firstSlideId].dirtyFields).toEqual(['html']);
+    }
+  });
 });

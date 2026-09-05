@@ -20,6 +20,20 @@
   const SLIDE_FIELDS = new Set([...SLIDE_STRING_FIELDS, 'targetSeconds']);
   const MAX_CONFLICT_TIMESTAMP_LENGTH = 64;
   const MAX_CONFLICT_UPDATER_NAME_LENGTH = 255;
+  const STATE_KEYS = new Set([
+    'webinar',
+    'liveVersion',
+    'master',
+    'slideOrder',
+    'slidesById',
+    'selectedSlideId',
+    'conflict',
+  ]);
+  const WEBINAR_KEYS = new Set(['id', 'slug', 'title', 'primaryOwnerUserId', 'audienceEnabled']);
+  const MASTER_KEYS = new Set(['html', 'css', 'dirtyFields']);
+  const SLIDE_KEYS = new Set([...SLIDE_FIELDS, 'id', 'dirtyFields']);
+  const CONFLICT_KEYS = new Set(['currentVersion', 'updatedAt', 'updatedBy']);
+  const UPDATER_KEYS = new Set(['id', 'name']);
 
   function invariant(condition, message) {
     if (!condition) throw new TypeError(message);
@@ -29,6 +43,14 @@
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
     const prototype = Object.getPrototypeOf(value);
     return prototype === Object.prototype || prototype === null;
+  }
+
+  function assertExactKeys(value, allowlist, label) {
+    const keys = Object.keys(value);
+    invariant(
+      keys.length === allowlist.size && keys.every(key => allowlist.has(key)),
+      `${label} contains an unexpected state field`,
+    );
   }
 
   function assertString(value, label) {
@@ -71,7 +93,9 @@
 
   function assertStudioState(state) {
     invariant(isPlainObject(state), 'Studio state is required');
+    assertExactKeys(state, STATE_KEYS, 'Studio state');
     invariant(isPlainObject(state.webinar), 'Studio webinar state is required');
+    assertExactKeys(state.webinar, WEBINAR_KEYS, 'Studio webinar');
     assertPositiveInteger(state.webinar.id, 'Webinar id');
     assertString(state.webinar.slug, 'Webinar slug');
     assertString(state.webinar.title, 'Webinar title');
@@ -79,6 +103,7 @@
     invariant(typeof state.webinar.audienceEnabled === 'boolean', 'audienceEnabled must be boolean');
     assertLiveVersion(state.liveVersion);
     invariant(isPlainObject(state.master), 'Master state is required');
+    assertExactKeys(state.master, MASTER_KEYS, 'Master state');
     assertString(state.master.html, 'Master html');
     assertString(state.master.css, 'Master css');
     normalizeDirtyFields(state.master.dirtyFields, MASTER_FIELDS, 'Master');
@@ -92,6 +117,7 @@
       orderedIds.add(id);
       const slide = state.slidesById[id];
       invariant(slide !== undefined, 'Slide order must reference every active slide');
+      assertExactKeys(slide, SLIDE_KEYS, `Slide ${id}`);
       assertSlideFields(slide);
       invariant(slide.id === id, 'Slide map key must match its stable slide id');
       normalizeDirtyFields(slide.dirtyFields, SLIDE_FIELDS, `Slide ${id}`);
@@ -102,6 +128,26 @@
     invariant(mappedIds.every(id => orderedIds.has(id)), 'Slide map contains an unordered active slide');
     invariant(orderedIds.has(state.selectedSlideId), 'Selected slide must be active');
     invariant(state.conflict === null || isPlainObject(state.conflict), 'Conflict state must be null or normalized metadata');
+    if (state.conflict !== null) {
+      assertExactKeys(state.conflict, CONFLICT_KEYS, 'Conflict state');
+      assertLiveVersion(state.conflict.currentVersion, 'Conflict currentVersion');
+      invariant(state.conflict.currentVersion > state.liveVersion, 'Conflict currentVersion must be newer than local state');
+      assertString(state.conflict.updatedAt, 'Conflict updatedAt');
+      invariant(
+        state.conflict.updatedAt.length > 0
+          && state.conflict.updatedAt.length <= MAX_CONFLICT_TIMESTAMP_LENGTH,
+        'Conflict updatedAt is invalid',
+      );
+      invariant(isPlainObject(state.conflict.updatedBy), 'Conflict updater is required');
+      assertExactKeys(state.conflict.updatedBy, UPDATER_KEYS, 'Conflict updater');
+      assertPositiveInteger(state.conflict.updatedBy.id, 'Conflict updater id');
+      invariant(
+        state.conflict.updatedBy.name === null
+          || (typeof state.conflict.updatedBy.name === 'string'
+            && state.conflict.updatedBy.name.length <= MAX_CONFLICT_UPDATER_NAME_LENGTH),
+        'Conflict updater name must be a bounded string or null',
+      );
+    }
     return state;
   }
 
