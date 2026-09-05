@@ -48,6 +48,7 @@ const CONTROLLED_REASON_CODE_DEFINITIONS = Object.freeze({
   FORBIDDEN_ATTRIBUTE: reasonCodeDefinition(),
   FORBIDDEN_HTML: reasonCodeDefinition(),
   JAVASCRIPT_SYNTAX: reasonCodeDefinition(),
+  LAST_SLIDE_REQUIRED: reasonCodeDefinition(409, 'webinar.version_conflict'),
   MALFORMED_JSON: reasonCodeDefinition(400, 'webinar.validation_rejected'),
   MASTER_TOKEN_COUNT: reasonCodeDefinition(),
   NOTE_BODY_EMPTY: reasonCodeDefinition(400, 'webinar.validation_rejected'),

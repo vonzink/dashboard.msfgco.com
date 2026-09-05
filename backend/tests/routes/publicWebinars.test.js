@@ -539,6 +539,27 @@ describe('public live webinar reads', () => {
       expect(JSON.stringify(operationalLogger.info.mock.calls)).not.toContain(slideId);
     }
   });
+
+  it('refuses to emit an injected compiled bundle with no live slides', async () => {
+    const unusableBundle = { ...bundle, slides: [] };
+    getLiveBundleBySlug.mockResolvedValueOnce({
+      bundle: unusableBundle,
+      json: JSON.stringify(unusableBundle),
+      etag,
+    });
+
+    const { response, text } = await request(`/api/public/webinars/${slug}/live`, {
+      origin: publicOrigin,
+    });
+
+    expect(response.status).toBe(503);
+    expect(JSON.parse(text)).toEqual({ error: 'Public webinar is temporarily unavailable' });
+    expect(operationalLogger.info).toHaveBeenCalledWith({
+      event: 'webinar.public_delivery_failure',
+      statusCode: 503,
+      reasonCode: 'PUBLIC_DELIVERY_FAILURE',
+    }, 'webinar operational event');
+  });
 });
 
 describe('public webinar origin configuration', () => {

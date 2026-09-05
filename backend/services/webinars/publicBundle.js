@@ -167,6 +167,7 @@ function normalizeRows(rows, resourcePolicy) {
     });
   }
   slides.sort((left, right) => left.position - right.position || left.id.localeCompare(right.id));
+  if (slides.length === 0) fail();
   if (slides.some((slide, index) => slide.position !== index)) fail();
   const normalized = { webinar, master, slides };
   validatePersistedContent(normalized, resourcePolicy);

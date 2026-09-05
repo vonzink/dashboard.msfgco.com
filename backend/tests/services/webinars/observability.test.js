@@ -41,6 +41,7 @@ const EXPECTED_CONTROLLED_REASON_CODES = [
   'FORBIDDEN_ATTRIBUTE',
   'FORBIDDEN_HTML',
   'JAVASCRIPT_SYNTAX',
+  'LAST_SLIDE_REQUIRED',
   'MALFORMED_JSON',
   'MASTER_TOKEN_COUNT',
   'NOTE_BODY_EMPTY',
@@ -109,6 +110,10 @@ describe('Webinar Studio operational events', () => {
     expect(getControlledReasonCodeDefinition('ADMIN_ACCESS_REQUIRED')).toEqual({
       httpStatus: 403,
       eventName: 'webinar.authorization_denied',
+    });
+    expect(getControlledReasonCodeDefinition('LAST_SLIDE_REQUIRED')).toEqual({
+      httpStatus: 409,
+      eventName: 'webinar.version_conflict',
     });
     expect(getControlledReasonCodeDefinition('ANCHOR_CONFLICT')).toEqual({
       httpStatus: 409,

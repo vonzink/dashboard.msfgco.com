@@ -258,8 +258,10 @@ describe('Webinar Studio live mutations', () => {
     ['add slide', fixture => fixture.api.addSlide({ webinarId: 2, actorUserId: 7, expectedVersion: 4, anchor: 'agenda', title: 'Agenda', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' })],
     ['duplicate slide', fixture => fixture.api.duplicateSlide({ webinarId: 2, actorUserId: 7, expectedVersion: 4, sourceSlideId: stableId })],
     ['reorder slides', fixture => fixture.api.reorderSlides({ webinarId: 2, actorUserId: 7, expectedVersion: 4, slideIds: [stableId] })],
-    ['archive slide', fixture => fixture.api.archiveSlide({ webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4 })],
-  ])('binds the complete post-transform candidate for %s before revision insertion', async (_label, run) => {
+    ['archive slide', fixture => fixture.api.archiveSlide({ webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4 }), {
+      slides: [...activeSlides(), { ...activeSlides()[0], id: secondId, position: 1, anchor: 'agenda' }],
+    }],
+  ])('binds the complete post-transform candidate for %s before revision insertion', async (_label, run, serviceOptions = {}) => {
     const stages = [];
     const syncAssetReferences = vi.fn(async (_connection, candidate) => {
       stages.push('references');
@@ -269,7 +271,7 @@ describe('Webinar Studio live mutations', () => {
       return { assetVersionIds: [] };
     });
     const recordRevisionAssetReferences = vi.fn(async () => stages.push('revision-references'));
-    const fixture = service({ syncAssetReferences, recordRevisionAssetReferences });
+    const fixture = service({ ...serviceOptions, syncAssetReferences, recordRevisionAssetReferences });
     const originalQuery = fixture.connection.query.getMockImplementation();
     fixture.connection.query.mockImplementation(async (sql, params) => {
       if (sql.includes('INSERT INTO webinar_revisions')) stages.push('revision');
@@ -590,8 +592,31 @@ describe('Webinar Studio live mutations', () => {
     expect(calls).not.toContain('commit');
   });
 
-  it('archives a slide without deleting its stable identity', async () => {
-    const { api, connection } = service();
+  it('rejects archiving the final live slide after taking the webinar row lock', async () => {
+    const { api, calls, connection } = service();
+
+    await expect(api.archiveSlide({
+      webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4,
+    })).rejects.toMatchObject({ code: 'LAST_SLIDE_REQUIRED', status: 409 });
+
+    expect(calls).toContain('lock:2');
+    expect(calls).toContain('rollback');
+    expect(calls).not.toContain('write');
+    expect(calls).not.toContain('commit');
+    expect(connection.query.mock.calls.some(([sql]) => sql.includes('archived_at = CURRENT_TIMESTAMP(3)'))).toBe(false);
+    const statements = connection.query.mock.calls.map(([sql]) => sql);
+    const lockIndex = statements.findIndex(sql => sql.includes('webinar_presentations') && sql.includes('FOR UPDATE'));
+    const activeSlideReadIndex = statements.findIndex(sql => sql.includes('FROM webinar_slides') && sql.includes('ORDER BY position'));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(activeSlideReadIndex).toBeGreaterThan(lockIndex);
+  });
+
+  it('archives one of two live slides without deleting its stable identity', async () => {
+    const slides = [
+      ...activeSlides(),
+      { ...activeSlides()[0], id: secondId, position: 1, anchor: 'agenda' },
+    ];
+    const { api, connection } = service({ slides });
     await api.archiveSlide({ webinarId: 2, slideId: stableId, actorUserId: 7, expectedVersion: 4 });
     expect(connection.query.mock.calls).toContainEqual([expect.stringContaining('position = NULL, archived_at = CURRENT_TIMESTAMP(3)'), [7, stableId, 2]]);
   });

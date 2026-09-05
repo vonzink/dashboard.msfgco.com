@@ -208,6 +208,44 @@ describe('public Webinar Studio live bundle compiler', () => {
     expect(result.bundle.webinar.slug).toBe('2026-home');
   });
 
+  it.each([129, 190])(
+    'accepts the shared %i-character webinar slug and slide anchor boundary',
+    async length => {
+      const identifier = 'a'.repeat(length);
+      const result = await service({
+        rows: liveRows({ webinar_slug: identifier, slide_anchor: identifier }),
+      }).api.getLiveBundleBySlug(identifier);
+
+      expect(result.bundle.webinar.slug).toHaveLength(length);
+      expect(result.bundle.slides[0].anchor).toHaveLength(length);
+    },
+  );
+
+  it('rejects identifiers beyond the shared 190-character boundary', async () => {
+    const overlongSlug = service();
+    await expect(overlongSlug.api.getLiveBundleBySlug('a'.repeat(191))).resolves.toBeNull();
+    expect(overlongSlug.db.query).not.toHaveBeenCalled();
+
+    const overlongAnchor = service({ rows: liveRows({ slide_anchor: 'a'.repeat(191) }) });
+    await expect(overlongAnchor.api.getLiveBundleBySlug('first-home-without-mystery'))
+      .rejects.toMatchObject({ status: 503, code: 'PUBLIC_BUNDLE_INVALID' });
+  });
+
+  it('fails closed when a legacy audience-enabled webinar has no live slides', async () => {
+    const rows = liveRows({
+      slide_id: null,
+      slide_position: null,
+      slide_anchor: null,
+      slide_title: null,
+      slide_html: null,
+      slide_css: null,
+      slide_javascript: null,
+    });
+
+    await expect(service({ rows }).api.getLiveBundleBySlug('first-home-without-mystery'))
+      .rejects.toMatchObject({ status: 503, code: 'PUBLIC_BUNDLE_INVALID' });
+  });
+
   it.each(['first--home', 'first-home-'])(
     'rejects the noncanonical webinar slug %s without weakening slide-anchor rules',
     async webinarSlug => {

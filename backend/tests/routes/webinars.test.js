@@ -664,6 +664,22 @@ describe('exact post-filter operational reason codes', () => {
       ));
       return request('PUT', `/api/webinars/2/slides/${slideId}`, validSlide);
     }],
+    ['final slide archive conflict', 'LAST_SLIDE_REQUIRED', () => {
+      services.mutations.archiveSlide.mockRejectedValueOnce(new WebinarMutationError(
+        'LAST_SLIDE_REQUIRED', 'A webinar must retain at least one live slide', { status: 409 },
+      ));
+      return request('DELETE', `/api/webinars/2/slides/${slideId}`, { expectedVersion: 3 })
+        .then(response => {
+          expect(response).toEqual({
+            status: 409,
+            body: {
+              error: 'A webinar must retain at least one live slide',
+              code: 'LAST_SLIDE_REQUIRED',
+            },
+          });
+          return response;
+        });
+    }],
     ['restore ownership conflict', 'RESTORE_SLIDE_OWNERSHIP_CONFLICT', () => {
       services.mutations.restoreRevision.mockRejectedValueOnce(new WebinarMutationError(
         'RESTORE_SLIDE_OWNERSHIP_CONFLICT',

@@ -338,6 +338,13 @@ function createMutationService({
       ...input, changeType: 'slide_archived', changeSummary: 'Archived slide',
       transform: async candidate => {
         if (!candidate.slides.some(slide => slide.id === input.slideId)) throw new WebinarMutationError('SLIDE_NOT_FOUND', 'Slide not found', { status: 404 });
+        if (candidate.slides.length === 1) {
+          throw new WebinarMutationError(
+            'LAST_SLIDE_REQUIRED',
+            'A webinar must retain at least one live slide',
+            { status: 409 },
+          );
+        }
         candidate.slides = candidate.slides.filter(slide => slide.id !== input.slideId).map((slide, position) => ({ ...slide, position }));
       },
       apply: async (connection, candidate) => {

@@ -71,12 +71,20 @@ function createPublicWebinarsRouter({
   }
 
   function validCompiledBundle(compiled) {
-    return compiled
+    if (!(compiled
       && typeof compiled === 'object'
       && compiled.bundle
       && typeof compiled.bundle === 'object'
       && typeof compiled.json === 'string'
-      && STRONG_SHA256_ETAG.test(compiled.etag);
+      && STRONG_SHA256_ETAG.test(compiled.etag)
+      && Array.isArray(compiled.bundle.slides)
+      && compiled.bundle.slides.length > 0)) return false;
+    try {
+      const serialized = JSON.parse(compiled.json);
+      return Array.isArray(serialized?.slides) && serialized.slides.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   async function load(req, res) {
