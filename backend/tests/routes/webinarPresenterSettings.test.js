@@ -26,6 +26,7 @@ beforeEach(async () => {
   };
   operationalLogger = { info: vi.fn() };
   const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: { settings },
     webinarOperationalLogger: operationalLogger,
@@ -155,6 +156,7 @@ describe('presenter settings API through the production application factory', ()
       upsertSettings: vi.fn(),
     };
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: { settings: constructorlessSettings },
       webinarOperationalLogger: operationalLogger,
@@ -189,6 +191,7 @@ describe('presenter settings API through the production application factory', ()
       upsertSettings: vi.fn(),
     };
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: { settings: constructorlessSettings },
       webinarOperationalLogger: operationalLogger,

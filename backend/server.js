@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
 const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
+const { requireWebinarStudioAccess: defaultWebinarStudioAccess } = require('./middleware/webinarStudioAccess');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
 const {
@@ -132,6 +133,7 @@ function createApp({
   publicWebinarOrigins,
   publicWebinarRuntimeLimit = 60,
   generalWriteLimit = 200,
+  webinarStudioAccessMiddleware = defaultWebinarStudioAccess,
   accessLogger = logger,
   errorLogger = logger,
 } = {}) {
@@ -492,9 +494,9 @@ app.get('/api/me', authenticate, (req, res) => {
 
 // Webinar Studio remains private to active internal employees. The active-user
 // check is intentionally scoped here and does not change existing route access.
-app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarsRoutes);
-app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarPresenterSettingsRoutes);
-app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarAssetWriteLimiter, webinarAssetsRoutes);
+app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarsRoutes);
+app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarPresenterSettingsRoutes);
+app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarAssetWriteLimiter, webinarAssetsRoutes);
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);

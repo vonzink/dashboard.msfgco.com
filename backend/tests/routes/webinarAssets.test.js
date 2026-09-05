@@ -133,6 +133,7 @@ let server;
 
 async function start(overrides = {}) {
   const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: { assets: catalog },
     webinarWriteLimit: 1000,

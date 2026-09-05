@@ -214,6 +214,7 @@ beforeEach(async () => {
   services = makeServices();
   operationalLogger = { info: vi.fn() };
   const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: services,
     webinarOperationalLogger: operationalLogger,
@@ -348,6 +349,7 @@ async function useRealAssetReferenceMutation(versionRows, { collectTokens } = {}
     syncAssetReferences: references.validateAndReplaceReferences,
   });
   const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: {
       repository: {
@@ -901,6 +903,7 @@ describe('production transport and limiter contract', () => {
   ])('rate limits repeated %s by IP before authentication and body parsing', async (_label, user, rejectedStatus) => {
     await new Promise(resolve => server.close(resolve));
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: services,
       webinarOperationalLogger: operationalLogger,
@@ -1052,6 +1055,7 @@ describe('production transport and limiter contract', () => {
   it('uses the real identity limiter, skips safe methods, and resets its store with each app', async () => {
     await new Promise(resolve => server.close(resolve));
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: services,
       webinarOperationalLogger: operationalLogger,

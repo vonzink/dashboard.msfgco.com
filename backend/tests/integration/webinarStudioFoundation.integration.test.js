@@ -511,6 +511,7 @@ describeWithMysql('webinar studio foundation', () => {
       revisions = require('../../services/webinars/revisions');
       const { createApp } = require('../../server');
       const app = createApp({
+        webinarStudioAccessMiddleware: (_req, _res, next) => next(),
         webinarAuthenticate(req, _res, next) {
           req.user = JSON.parse(req.get('x-test-user') || '{}');
           next();

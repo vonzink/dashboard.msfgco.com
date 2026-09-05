@@ -215,6 +215,7 @@ const ServerAPI = {
                     });
                     clearTimeout(retryTimeoutId);
                     if (retryResponse.ok) {
+                        if (retryResponse.status === 204) return null;
                         return retryResponse.json();
                     }
                     // Retry also got non-200 — but it might be 403 (forbidden, not auth).
@@ -239,6 +240,7 @@ const ServerAPI = {
                 throw new Error(err.error || response.statusText);
             }
 
+            if (response.status === 204) return null;
             return response.json();
         } catch (err) {
             console.error(`API Error (${endpoint})`, err);
@@ -270,7 +272,22 @@ const ServerAPI = {
         });
     },
 
-    delete(endpoint) {
+    patch(endpoint, data) {
+        return this.request(endpoint, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+    },
+
+    delete(endpoint, data) {
+        if (data !== undefined) {
+            return this.request(endpoint, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+        }
         return this.request(endpoint, { method: "DELETE" });
     },
 
