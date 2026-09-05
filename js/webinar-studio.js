@@ -10,6 +10,7 @@
       document: root.document,
       api: root.WebinarStudioAPI,
       accessHistoryApi: root.WebinarStudioAccessHistory,
+      assetsApi: root.WebinarStudioAssets,
       stateApi: root.WebinarStudioState,
       confirm: (message, options) => root.Utils?.confirm
         ? root.Utils.confirm(message, options)
@@ -32,6 +33,7 @@
   const document = dependencies.document;
   const api = dependencies.api;
   const accessHistoryApi = dependencies.accessHistoryApi;
+  const assetsApi = dependencies.assetsApi;
   const stateApi = dependencies.stateApi;
   const confirmAction = dependencies.confirm;
   const currentUser = dependencies.currentUser;
@@ -64,6 +66,7 @@
 
   let elements = {};
   let accessHistoryController = null;
+  let assetController = null;
   let initializationPromise = null;
   let accessPromise = null;
   let lifecycleGeneration = 0;
@@ -220,6 +223,9 @@
           document,
         });
       }
+      if (assetsApi?.createAssetLibrary) {
+        assetController = assetsApi.createAssetLibrary({ api, document });
+      }
       setLauncherAvailable(false);
       listen(elements.close, 'click', () => close());
       listen(elements.newWebinar, 'click', () => openNewWebinar());
@@ -313,6 +319,7 @@
     invalidateRequests();
     accessPromise = null;
     accessHistoryController?.deactivate?.();
+    assetController?.deactivate?.();
     elements.modal.classList.remove('active');
     elements.modal.hidden = true;
     elements.modal.setAttribute('aria-hidden', 'true');
@@ -602,6 +609,7 @@
     if (!elements.settingsPanel) return;
     elements.settingsPanel.setAttribute('data-ws-panel', model.settingsTab);
     if (accessHistoryController && (model.settingsTab === 'access' || model.settingsTab === 'history')) {
+      assetController?.deactivate?.();
       const webinarId = Number(model.studioState.webinar.id);
       const context = {
         root: elements.settingsPanel,
@@ -622,6 +630,21 @@
       return;
     }
     accessHistoryController?.deactivate?.();
+    if (assetController && model.settingsTab === 'assets') {
+      const targetEditor = () => {
+        const target = document.activeElement;
+        if (!target || typeof target.setRangeText !== 'function') return null;
+        return target.dataset?.masterField || target.dataset?.codeField ? target : null;
+      };
+      void assetController.renderAssetCatalog({
+        root: elements.settingsPanel,
+        isAdmin: isAdmin(),
+        currentUser: currentUser() || {},
+        getEditorTarget: targetEditor,
+      });
+      return;
+    }
+    assetController?.deactivate?.();
     elements.settingsPanel.innerHTML = `<p>${SETTINGS_COPY[model.settingsTab]}</p>`;
   }
 
@@ -648,6 +671,8 @@
     accessPromise = null;
     accessHistoryController?.destroy?.();
     accessHistoryController = null;
+    assetController?.destroy?.();
+    assetController = null;
     for (const [target, type, handler] of bindings) {
       target?.removeEventListener?.(type, handler);
     }
