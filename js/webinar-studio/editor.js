@@ -102,6 +102,12 @@
     let previewGeneration = 0;
     let editorError = '';
     let destroyed = false;
+    let insertionContext = {
+      webinarId: Number(getState()?.webinar?.id) || null,
+      generation: 0,
+    };
+    let insertionBookmark = null;
+    let restoreInsertionOnRender = false;
 
     function surfaceKey(surface) {
       return surface === 'master' ? 'master' : `slide:${surface}`;
@@ -109,6 +115,129 @@
 
     function state() {
       return getState();
+    }
+
+    function invalidateInsertionTarget() {
+      insertionBookmark = null;
+      restoreInsertionOnRender = false;
+    }
+
+    function setContext(nextContext = {}) {
+      const webinarId = Number(nextContext.webinarId);
+      const generation = Number(nextContext.generation);
+      const normalized = {
+        webinarId: Number.isSafeInteger(webinarId) && webinarId > 0 ? webinarId : null,
+        generation: Number.isSafeInteger(generation) && generation >= 0 ? generation : 0,
+      };
+      if (normalized.webinarId !== insertionContext.webinarId
+        || normalized.generation !== insertionContext.generation) invalidateInsertionTarget();
+      insertionContext = normalized;
+      return Object.freeze({ ...insertionContext });
+    }
+
+    function insertionDescriptor(target) {
+      if (!target || String(target.tagName).toUpperCase() !== 'TEXTAREA') return null;
+      const masterField = target.dataset?.masterField;
+      if (MASTER_EDIT_FIELDS.includes(masterField)) {
+        return { surface: 'master', slideId: null, field: masterField };
+      }
+      const slideId = target.dataset?.slideId;
+      const codeField = target.dataset?.codeField;
+      if (slideId && ['html', 'css', 'javascript'].includes(codeField)) {
+        return { surface: slideId, slideId, field: codeField };
+      }
+      return null;
+    }
+
+    function insertionValue(bookmark, current = state()) {
+      if (!current || Number(current.webinar?.id) !== bookmark.webinarId) return null;
+      if (bookmark.surface === 'master') return current.master?.[bookmark.field];
+      if (!current.slideOrder.includes(bookmark.slideId)) return null;
+      return current.slidesById[bookmark.slideId]?.[bookmark.field];
+    }
+
+    function bookmarkIsCurrent(bookmark, expectedContext = insertionContext) {
+      if (!bookmark || destroyed) return false;
+      const expectedWebinarId = Number(expectedContext?.webinarId);
+      const expectedGeneration = Number(expectedContext?.generation);
+      return bookmark.webinarId === insertionContext.webinarId
+        && bookmark.generation === insertionContext.generation
+        && bookmark.webinarId === expectedWebinarId
+        && bookmark.generation === expectedGeneration
+        && typeof insertionValue(bookmark) === 'string';
+    }
+
+    function captureInsertionTarget(target) {
+      const descriptor = insertionDescriptor(target);
+      const current = state();
+      if (!descriptor || !current || Number(current.webinar?.id) !== insertionContext.webinarId) return false;
+      const value = String(target.value ?? '');
+      const start = Math.max(0, Math.min(value.length, Number(target.selectionStart) || 0));
+      const end = Math.max(start, Math.min(value.length, Number(target.selectionEnd) || start));
+      insertionBookmark = Object.freeze({
+        webinarId: insertionContext.webinarId,
+        generation: insertionContext.generation,
+        ...descriptor,
+        selectionStart: start,
+        selectionEnd: end,
+      });
+      restoreInsertionOnRender = false;
+      return true;
+    }
+
+    function insertAtBookmark(bookmark, text) {
+      if (bookmark !== insertionBookmark || !bookmarkIsCurrent(bookmark) || typeof text !== 'string') return false;
+      const value = insertionValue(bookmark);
+      const start = Math.max(0, Math.min(value.length, bookmark.selectionStart));
+      const end = Math.max(start, Math.min(value.length, bookmark.selectionEnd));
+      const nextValue = `${value.slice(0, start)}${text}${value.slice(end)}`;
+      const target = bookmark.surface === 'master'
+        ? { value: nextValue, dataset: { masterField: bookmark.field } }
+        : { value: nextValue, dataset: { slideId: bookmark.slideId, codeField: bookmark.field } };
+      if (!updateInput(target)) return false;
+      insertionBookmark = Object.freeze({
+        ...bookmark,
+        selectionStart: start + text.length,
+        selectionEnd: start + text.length,
+      });
+      restoreInsertionOnRender = true;
+      if (bookmark.slideId) activeTabs.set(bookmark.slideId, bookmark.field);
+      return true;
+    }
+
+    function getAssetInsertionTarget(expectedContext = insertionContext) {
+      const bookmark = insertionBookmark;
+      if (!bookmarkIsCurrent(bookmark, expectedContext)) return null;
+      return Object.freeze({
+        webinarId: bookmark.webinarId,
+        generation: bookmark.generation,
+        surface: bookmark.surface,
+        slideId: bookmark.slideId,
+        field: bookmark.field,
+        insertText: text => insertAtBookmark(bookmark, text),
+      });
+    }
+
+    function restoreInsertionTarget() {
+      if (!restoreInsertionOnRender || !bookmarkIsCurrent(insertionBookmark)) return false;
+      const bookmark = insertionBookmark;
+      const candidates = bookmark.surface === 'master'
+        ? nodesFor('data-master-field')
+        : nodesFor('data-code-field');
+      const target = candidates.find(node => insertionDescriptor(node)?.field === bookmark.field
+        && (bookmark.surface === 'master' || node.dataset?.slideId === bookmark.slideId));
+      if (!target) return false;
+      const length = String(target.value ?? '').length;
+      const start = Math.min(length, bookmark.selectionStart);
+      const end = Math.min(length, bookmark.selectionEnd);
+      if (typeof target.setSelectionRange === 'function') target.setSelectionRange(start, end);
+      else {
+        target.selectionStart = start;
+        target.selectionEnd = end;
+      }
+      target.focus?.();
+      restoreInsertionOnRender = false;
+      return true;
     }
 
     function validationFor(surface) {
@@ -236,7 +365,7 @@
           next = stateApi.updateSlide(current, slideId, field, value);
           surface = slideId;
         } else {
-          return;
+          return false;
         }
         setState(next);
         editorError = '';
@@ -244,11 +373,13 @@
         updateDirtyBadge(surface);
         updateSaveAvailability(surface);
         schedulePreview(surface);
+        return true;
       } catch {
         editorError = 'This value is not valid. Your changes are still in the editor.';
         const errorNode = nodesFor('data-editor-error')[0];
         if (errorNode) errorNode.textContent = editorError;
         updateSaveAvailability(surface);
+        return false;
       }
     }
 
@@ -429,6 +560,7 @@
       root.replaceChildren(fragment);
       updateSaveAvailability('master');
       nextState.slideOrder.forEach(updateSaveAvailability);
+      restoreInsertionTarget();
       return true;
     }
 
@@ -613,6 +745,7 @@
           expectedVersion: current.liveVersion,
         });
         setState(stateApi.removeServerSlide(state(), id, response));
+        if (insertionBookmark?.slideId === id) invalidateInsertionTarget();
         editorError = '';
         render(state());
         return true;
@@ -691,15 +824,25 @@
       const target = event.target;
       target.setRangeText('  ', target.selectionStart, target.selectionEnd, 'end');
       updateInput(target);
+      captureInsertionTarget(target);
     }
 
     function handleInput(event) {
       updateInput(event.target);
+      captureInsertionTarget(event.target);
+    }
+
+    function handleInsertionSelection(event) {
+      captureInsertionTarget(event.target);
     }
 
     root.addEventListener('input', handleInput);
     root.addEventListener('keydown', handleKeydown);
     root.addEventListener('click', handleClick);
+    root.addEventListener('focusin', handleInsertionSelection);
+    root.addEventListener('select', handleInsertionSelection);
+    root.addEventListener('keyup', handleInsertionSelection);
+    root.addEventListener('mouseup', handleInsertionSelection);
 
     return Object.freeze({
       render,
@@ -712,13 +855,22 @@
       reorderSlides,
       deleteSlide,
       copyConflictChanges,
+      setContext,
+      captureInsertionTarget,
+      getAssetInsertionTarget,
+      invalidateInsertionTarget,
       destroy() {
         if (destroyed) return;
         destroyed = true;
+        invalidateInsertionTarget();
         if (debounceTimer !== null) clearTimeoutImpl(debounceTimer);
         root.removeEventListener('input', handleInput);
         root.removeEventListener('keydown', handleKeydown);
         root.removeEventListener('click', handleClick);
+        root.removeEventListener('focusin', handleInsertionSelection);
+        root.removeEventListener('select', handleInsertionSelection);
+        root.removeEventListener('keyup', handleInsertionSelection);
+        root.removeEventListener('mouseup', handleInsertionSelection);
         preview.destroy?.();
       },
     });

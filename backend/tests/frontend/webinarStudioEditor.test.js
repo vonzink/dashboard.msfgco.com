@@ -213,6 +213,68 @@ describe('Webinar Studio one-box editor', () => {
     expect(test.api.saveSlide).not.toHaveBeenCalled();
   });
 
+  it('keeps an explicitly focused code selection as a logical asset insertion target across panel replacement', async () => {
+    const test = makeHarness();
+    test.editor.setContext({ webinarId: 12, generation: 4 });
+    test.editor.render(test.state);
+    const html = test.root.querySelectorAll('[data-code-field="html"]')[0];
+    const token = '{{ASSET:44444444-4444-4444-8444-444444444444}}';
+    html.selectionStart = 9;
+    html.selectionEnd = 16;
+    test.root.emit('focusin', { target: html });
+    test.root.emit('select', { target: html });
+
+    test.root.replaceChildren(new FakeElement('section', test.root.ownerDocument));
+    test.root.ownerDocument.activeElement = null;
+    const target = test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 4 });
+
+    expect(target).toMatchObject({ webinarId: 12, generation: 4, surface: FIRST, field: 'html' });
+    expect(target.insertText(token)).toBe(true);
+    expect(test.state.slidesById[FIRST].html).toBe(`<section>${token}</section>`);
+    expect(test.state.slidesById[FIRST].dirtyFields).toContain('html');
+    expect(test.timers.at(-1).delay).toBe(300);
+    expect(test.api.saveSlide).not.toHaveBeenCalled();
+
+    test.editor.render(test.state);
+    const restored = test.root.querySelectorAll('[data-code-field="html"]')[0];
+    expect(restored.value).toBe(`<section>${token}</section>`);
+    expect(restored.selectionStart).toBe(9 + token.length);
+    expect(restored.selectionEnd).toBe(9 + token.length);
+    expect(test.root.ownerDocument.activeElement).toBe(restored);
+
+    test.timers.at(-1).callback();
+    await Promise.resolve();
+    expect(test.preview.boot).toHaveBeenCalledWith(expect.objectContaining({
+      slide: expect.objectContaining({ id: FIRST, html: `<section>${token}</section>` }),
+    }));
+  });
+
+  it('invalidates logical asset targets on context change, slide removal, explicit close, and destroy', async () => {
+    const test = makeHarness();
+    test.editor.setContext({ webinarId: 12, generation: 1 });
+    test.editor.render(test.state);
+    const secondHtml = test.root.querySelectorAll('[data-code-field="html"]')[1];
+    secondHtml.selectionStart = 0;
+    secondHtml.selectionEnd = 0;
+    test.root.emit('focusin', { target: secondHtml });
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 1 })).not.toBeNull();
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 13, generation: 1 })).toBeNull();
+
+    await test.editor.deleteSlide(SECOND);
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 1 })).toBeNull();
+
+    const firstHtml = test.root.querySelectorAll('[data-code-field="html"]')[0];
+    test.root.emit('focusin', { target: firstHtml });
+    test.editor.invalidateInsertionTarget();
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 1 })).toBeNull();
+
+    test.root.emit('focusin', { target: firstHtml });
+    test.editor.setContext({ webinarId: 12, generation: 2 });
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 2 })).toBeNull();
+    test.editor.destroy();
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 2 })).toBeNull();
+  });
+
   it('moves focus and activation through each slide code tab with wrapping keyboard controls', () => {
     const test = makeHarness();
     test.editor.render(test.state);

@@ -421,6 +421,31 @@ describe('Webinar Studio reusable asset library', () => {
     expect(test.document.activeElement).toBe(editor);
   });
 
+  it('uses a logical editor target after focus is gone and clearly disables insertion without one', async () => {
+    const test = harness();
+    test.context.getEditorTarget = () => null;
+    await test.library.renderAssetCatalog(test.context);
+    const unavailable = test.root.querySelector('[data-insert-asset-reference]');
+    expect(unavailable.disabled).toBe(true);
+    expect(unavailable.textContent).toMatch(/choose.*code field/i);
+
+    const insertText = vi.fn().mockReturnValue(true);
+    test.context.getEditorTarget = () => ({
+      webinarId: 12,
+      generation: 3,
+      surface: FAMILY,
+      field: 'html',
+      insertText,
+    });
+    await test.library.renderAssetCatalog(test.context);
+    const available = test.root.querySelector('[data-insert-asset-reference]');
+    expect(available.disabled).toBe(false);
+    expect(available.textContent).toBe('Insert at cursor');
+
+    expect(test.library.insertReference(family().versions[0])).toBe(true);
+    expect(insertText).toHaveBeenCalledWith(`{{ASSET:${VERSION}}}`);
+  });
+
   it('cancels timers and upload requests on close and ignores stale polling after replacement', async () => {
     const firstConfirm = deferred();
     const fetchImpl = vi.fn().mockResolvedValue({ ok: true, status: 200 });
@@ -553,5 +578,102 @@ describe('Webinar Studio reusable asset library', () => {
     expect(assetController.deactivate).toHaveBeenCalled();
     studio.destroy();
     expect(assetController.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('coordinates focus in Code through Assets insertion and back with exact caret and dirty state', async () => {
+    const document = new FakeDocument();
+    const ids = [
+      'webinarStudioLauncher', 'webinarStudioModal', 'wsClose', 'wsDeckList',
+      'wsDeckSelect', 'wsWorkspace', 'wsStatus', 'wsNewWebinar', 'wsSettings',
+      'wsSettingsPanel', 'wsLaunchAudience', 'wsLaunchPresenter',
+    ];
+    const elements = Object.fromEntries(ids.map(id => [id, new FakeElement('div', document)]));
+    document.getElementById = id => elements[id] || null;
+    document.addEventListener = vi.fn();
+    document.removeEventListener = vi.fn();
+    document.body = new FakeElement('body', document);
+    document.activeElement = elements.webinarStudioLauncher;
+    elements.webinarStudioModal.hidden = true;
+    const tabs = ['presenter', 'access', 'code', 'assets', 'history'].map(name => {
+      const tab = new FakeElement('button', document);
+      tab.dataset.wsTab = name;
+      return tab;
+    });
+    elements.wsSettings.querySelectorAll = selector => selector === '[data-ws-tab]' ? tabs : [];
+    const api = {
+      listWebinars: vi.fn().mockResolvedValue([{ id: 12, slug: 'first-home', title: 'First Home', liveVersion: 7, audienceEnabled: false }]),
+      getWebinar: vi.fn().mockResolvedValue({
+        id: 12,
+        slug: 'first-home',
+        title: 'First Home',
+        primaryOwnerUserId: 7,
+        audienceEnabled: false,
+        liveVersion: 7,
+        masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
+        masterCss: '',
+        resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] },
+        assets: {},
+        slides: [{
+          id: FAMILY,
+          title: 'Opening',
+          anchor: 'opening',
+          targetSeconds: 60,
+          speakerNotes: '',
+          html: '<section>before after</section>',
+          css: '',
+          javascript: '',
+        }],
+      }),
+      listAssets: vi.fn().mockResolvedValue([family()]),
+    };
+    const createStudio = require('../../../js/webinar-studio.js');
+    const editorApi = require('../../../js/webinar-studio/editor.js');
+    const assetsApi = require('../../../js/webinar-studio/assets.js');
+    const studioStateApi = require('../../../js/webinar-studio/state.js');
+    const preview = { boot: vi.fn().mockResolvedValue({ type: 'ready' }), destroy: vi.fn() };
+    const timers = [];
+    const studio = createStudio({
+      accessHistoryApi: { createAccessHistory: () => ({ deactivate: vi.fn(), destroy: vi.fn() }) },
+      api,
+      assetsApi,
+      confirm: vi.fn().mockResolvedValue(true),
+      currentUser: () => ({ id: 1, name: 'Admin', activeRole: 'admin' }),
+      document,
+      editorApi,
+      editorPreview: preview,
+      navigationTarget: new FakeElement('window', document),
+      openWindow: vi.fn(),
+      setTimeoutImpl(callback, delay) { timers.push({ callback, delay }); return timers.length; },
+      clearTimeoutImpl: vi.fn(),
+      stateApi: studioStateApi,
+    });
+
+    await studio.init();
+    await studio.open();
+    elements.wsSettings.emit('click', { target: tabs[2] });
+    const code = elements.wsSettingsPanel.querySelector('[data-code-field="html"]');
+    code.selectionStart = 16;
+    code.selectionEnd = 21;
+    elements.wsSettingsPanel.emit('focusin', { target: code });
+
+    tabs[3].focus();
+    elements.wsSettings.emit('click', { target: tabs[3] });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(tabs[3]);
+    const insert = elements.wsSettingsPanel.querySelector('[data-insert-asset-reference]');
+    expect(insert.disabled).toBe(false);
+    insert.emit('click');
+
+    elements.wsSettings.emit('click', { target: tabs[2] });
+    const restored = elements.wsSettingsPanel.querySelector('[data-code-field="html"]');
+    const token = `{{ASSET:${VERSION}}}`;
+    expect(restored.value).toBe(`<section>before ${token}</section>`);
+    expect(restored.selectionStart).toBe(16 + token.length);
+    expect(restored.selectionEnd).toBe(16 + token.length);
+    expect(document.activeElement).toBe(restored);
+    expect(elements.wsSettingsPanel.querySelector(`[data-dirty-surface="${FAMILY}"]`).textContent).toBe('Unsaved');
+    expect(timers.at(-1).delay).toBe(300);
+    expect(preview.boot).not.toHaveBeenCalled();
   });
 });

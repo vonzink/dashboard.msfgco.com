@@ -11,6 +11,8 @@
       api: root.WebinarStudioAPI,
       accessHistoryApi: root.WebinarStudioAccessHistory,
       assetsApi: root.WebinarStudioAssets,
+      editorApi: root.WebinarStudioEditor,
+      editorPreview: root.WebinarStudioEditorPreview,
       stateApi: root.WebinarStudioState,
       confirm: (message, options) => root.Utils?.confirm
         ? root.Utils.confirm(message, options)
@@ -34,6 +36,8 @@
   const api = dependencies.api;
   const accessHistoryApi = dependencies.accessHistoryApi;
   const assetsApi = dependencies.assetsApi;
+  const editorApi = dependencies.editorApi;
+  const editorPreview = dependencies.editorPreview;
   const stateApi = dependencies.stateApi;
   const confirmAction = dependencies.confirm;
   const currentUser = dependencies.currentUser;
@@ -62,11 +66,15 @@
     launchButton: null,
     bodyOverflow: '',
     settingsTab: 'presenter',
+    resourcePolicy: {},
+    resolvedAssets: {},
   };
 
   let elements = {};
   let accessHistoryController = null;
   let assetController = null;
+  let editorController = null;
+  let editorContextGeneration = 0;
   let initializationPromise = null;
   let accessPromise = null;
   let lifecycleGeneration = 0;
@@ -91,6 +99,11 @@
   function invalidateRequests() {
     lifecycleGeneration += 1;
     requestGeneration += 1;
+  }
+
+  function invalidateEditorContext() {
+    editorContextGeneration += 1;
+    editorController?.invalidateInsertionTarget?.();
   }
 
   function listen(target, type, handler) {
@@ -194,6 +207,9 @@
         model.accessMessage = accessMessageFor(error);
         model.webinars = [];
         model.studioState = null;
+        model.resourcePolicy = {};
+        model.resolvedAssets = {};
+        invalidateEditorContext();
         setLauncherAvailable(false);
         render();
         return false;
@@ -225,6 +241,24 @@
       }
       if (assetsApi?.createAssetLibrary) {
         assetController = assetsApi.createAssetLibrary({ api, document });
+      }
+      if (editorApi?.createEditor && editorPreview?.boot) {
+        editorController = editorApi.createEditor({
+          root: elements.settingsPanel,
+          document,
+          api,
+          stateApi,
+          getState: () => model.studioState,
+          setState: nextState => { model.studioState = nextState; },
+          preview: editorPreview,
+          getAssets: () => model.resolvedAssets,
+          getResourcePolicy: () => model.resourcePolicy,
+          confirm: confirmAction,
+          copyText: dependencies.copyText,
+          onReload: () => reloadSelectedWebinar(model.selectedWebinarId),
+          setTimeoutImpl: dependencies.setTimeoutImpl,
+          clearTimeoutImpl: dependencies.clearTimeoutImpl,
+        });
       }
       setLauncherAvailable(false);
       listen(elements.close, 'click', () => close());
@@ -317,6 +351,7 @@
     if (!elements.modal || elements.modal.hidden) return true;
     if (!await mayDiscardChanges()) return false;
     invalidateRequests();
+    invalidateEditorContext();
     accessPromise = null;
     accessHistoryController?.deactivate?.();
     assetController?.deactivate?.();
@@ -340,6 +375,7 @@
       if (!requestIsCurrent(request) || !mayDiscard) return false;
     }
 
+    invalidateEditorContext();
     model.selectedWebinarId = webinarId;
     model.loadingWebinar = true;
     model.mode = 'deck';
@@ -350,6 +386,8 @@
       if (!requestIsCurrent(request, { requireSelected: true })) return false;
       if (Number(documentResponse?.id) !== webinarId) throw new TypeError('Webinar response id did not match the request');
       model.studioState = stateApi.createStudioState(documentResponse);
+      model.resourcePolicy = documentResponse.resourcePolicy || {};
+      model.resolvedAssets = documentResponse.assets || {};
       model.selectedWebinarId = webinarId;
       model.loadingWebinar = false;
       render();
@@ -358,6 +396,8 @@
       if (!requestIsCurrent(request, { requireSelected: true })) return false;
       model.loadingWebinar = false;
       model.studioState = null;
+      model.resourcePolicy = {};
+      model.resolvedAssets = {};
       model.selectedWebinarId = null;
       model.accessMessage = 'This webinar could not load. Choose another webinar or try again.';
       model.mode = 'deck-error';
@@ -370,6 +410,7 @@
     const webinarId = Number(initiatingWebinarId);
     if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
     if (Number(model.selectedWebinarId) !== webinarId) return false;
+    invalidateEditorContext();
     const request = beginRequest(webinarId);
     try {
       const documentResponse = await api.getWebinar(webinarId);
@@ -379,6 +420,8 @@
       }
       const nextState = stateApi.createStudioState(documentResponse);
       model.studioState = nextState;
+      model.resourcePolicy = documentResponse.resourcePolicy || {};
+      model.resolvedAssets = documentResponse.assets || {};
       model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
         id: webinarId,
         slug: nextState.webinar.slug,
@@ -399,6 +442,7 @@
     const webinarId = Number(initiatingWebinarId);
     if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
     if (Number(model.selectedWebinarId) !== webinarId) return false;
+    invalidateEditorContext();
     const request = beginRequest(webinarId);
     try {
       const response = await api.listWebinars();
@@ -406,6 +450,8 @@
       model.webinars = normalizeSummaries(response);
       model.selectedWebinarId = null;
       model.studioState = null;
+      model.resourcePolicy = {};
+      model.resolvedAssets = {};
       model.mode = 'empty';
       render();
       if (model.webinars.length) {
@@ -519,6 +565,7 @@
     const request = beginRequest();
     const mayDiscard = await mayDiscardChanges();
     if (!requestIsCurrent(request) || !mayDiscard) return false;
+    invalidateEditorContext();
     model.mode = 'new';
     model.formError = '';
     try {
@@ -574,6 +621,8 @@
         audienceEnabled: nextState.webinar.audienceEnabled,
       }, ...model.webinars];
       model.studioState = nextState;
+      model.resourcePolicy = documentResponse.resourcePolicy || {};
+      model.resolvedAssets = documentResponse.assets || {};
       model.selectedWebinarId = webinarId;
       model.mode = 'deck';
       model.formError = '';
@@ -630,17 +679,25 @@
       return;
     }
     accessHistoryController?.deactivate?.();
+    if (editorController && model.settingsTab === 'code') {
+      assetController?.deactivate?.();
+      editorController.setContext?.({
+        webinarId: Number(model.studioState.webinar.id),
+        generation: editorContextGeneration,
+      });
+      editorController.render(model.studioState);
+      return;
+    }
     if (assetController && model.settingsTab === 'assets') {
-      const targetEditor = () => {
-        const target = document.activeElement;
-        if (!target || typeof target.setRangeText !== 'function') return null;
-        return target.dataset?.masterField || target.dataset?.codeField ? target : null;
-      };
+      const webinarId = Number(model.studioState.webinar.id);
       void assetController.renderAssetCatalog({
         root: elements.settingsPanel,
         isAdmin: isAdmin(),
         currentUser: currentUser() || {},
-        getEditorTarget: targetEditor,
+        getEditorTarget: () => editorController?.getAssetInsertionTarget?.({
+          webinarId,
+          generation: editorContextGeneration,
+        }) || null,
       });
       return;
     }
@@ -668,11 +725,14 @@
 
   function destroy() {
     invalidateRequests();
+    invalidateEditorContext();
     accessPromise = null;
     accessHistoryController?.destroy?.();
     accessHistoryController = null;
     assetController?.destroy?.();
     assetController = null;
+    editorController?.destroy?.();
+    editorController = null;
     for (const [target, type, handler] of bindings) {
       target?.removeEventListener?.(type, handler);
     }

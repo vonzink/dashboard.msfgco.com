@@ -224,6 +224,17 @@
       return isAdmin() || (currentUserId() && currentUserId() === version.uploadedByUserId);
     }
 
+    function editorTarget() {
+      try {
+        const target = context?.getEditorTarget?.();
+        return target && (typeof target.insertText === 'function' || typeof target.setRangeText === 'function')
+          ? target
+          : null;
+      } catch {
+        return null;
+      }
+    }
+
     function operationIsCurrent(operation) {
       return Boolean(active
         && !destroyed
@@ -502,7 +513,13 @@
         html.addEventListener('click', () => { void copySnippet(version, 'html'); });
         const css = createNode(document, 'button', { type: 'button', 'data-copy-asset-css': version.id }, 'Copy CSS');
         css.addEventListener('click', () => { void copySnippet(version, 'css'); });
-        const insert = createNode(document, 'button', { type: 'button', 'data-insert-asset-reference': version.id }, 'Insert at cursor');
+        const canInsert = Boolean(editorTarget());
+        const insert = createNode(document, 'button', {
+          type: 'button',
+          'data-insert-asset-reference': version.id,
+          disabled: !canInsert,
+          title: canInsert ? 'Insert into the last selected code field' : 'Choose a Code field before opening Assets',
+        }, canInsert ? 'Insert at cursor' : 'Choose a Code field');
         insert.addEventListener('click', () => { insertReference(version); });
         append(actions, copy, html, css, insert);
       }
@@ -753,13 +770,29 @@
     }
 
     function insertReference(version, targetEditor = null) {
-      const target = targetEditor || context?.getEditorTarget?.();
-      if (!target || typeof target.setRangeText !== 'function') {
-        errorMessage = 'Place the cursor in an HTML or CSS editor before inserting an asset.';
+      const target = targetEditor || editorTarget();
+      if (!target) {
+        errorMessage = 'Choose an HTML, CSS, or JavaScript Code field before inserting an asset.';
         render();
         return false;
       }
       const reference = assetToken(version);
+      if (typeof target.insertText === 'function') {
+        if (target.insertText(reference) !== true) {
+          errorMessage = 'That Code field is no longer available. Choose it again before inserting.';
+          render();
+          return false;
+        }
+        activityMessage = 'Asset reference inserted. Save Live when the slide is ready.';
+        errorMessage = '';
+        render();
+        return true;
+      }
+      if (typeof target.setRangeText !== 'function') {
+        errorMessage = 'Choose an HTML, CSS, or JavaScript Code field before inserting an asset.';
+        render();
+        return false;
+      }
       const start = Number.isSafeInteger(target.selectionStart) ? target.selectionStart : String(target.value || '').length;
       const end = Number.isSafeInteger(target.selectionEnd) ? target.selectionEnd : start;
       target.setRangeText(reference, start, end, 'end');
@@ -771,6 +804,7 @@
       }
       target.focus?.();
       activityMessage = 'Asset reference inserted. Save Live when the slide is ready.';
+      errorMessage = '';
       render();
       return true;
     }
