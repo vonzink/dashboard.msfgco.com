@@ -933,6 +933,20 @@ describe('Webinar Studio audience bridge wiring', () => {
     expect(test.presenter.options.bridge.status()).toBe('connected');
   });
 
+  it('asks before a deck switch or New webinar disconnects a connected audience, even with a clean editor', async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    const test = await connected({ confirm });
+    expect(await test.studio.selectWebinar(13)).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/audience window is connected/i), expect.anything());
+    expect(test.bridges[0].destroy).not.toHaveBeenCalled();
+    expect(test.presenter.options.bridge.status()).toBe('connected');
+    expect(await test.studio.openNewWebinar()).toBe(false);
+    expect(test.bridges[0].destroy).not.toHaveBeenCalled();
+    confirm.mockResolvedValue(true);
+    expect(await test.studio.selectWebinar(13)).toBe(true);
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+  });
+
   it('drops the audience only once New webinar is confirmed', async () => {
     const test = await connected({ dirty: true, confirm: vi.fn().mockResolvedValue(true) });
     await test.studio.openNewWebinar();
@@ -950,6 +964,24 @@ describe('Webinar Studio audience bridge wiring', () => {
     confirm.mockResolvedValue(true);
     expect(await test.studio.close()).toBe(true);
     expect(test.bridges[0].destroy).toHaveBeenCalled();
+  });
+
+  it('does not re-enter close() while its prompt is open, so a second Escape reaches the prompt instead of spawning another', async () => {
+    let resolvePrompt;
+    const confirm = vi.fn(() => new Promise(resolve => { resolvePrompt = resolve; }));
+    const test = await connected({ confirm });
+    const first = test.studio.close();
+    await Promise.resolve();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(await test.studio.close()).toBe(false);
+    expect(confirm).toHaveBeenCalledTimes(1);
+    resolvePrompt(false);
+    expect(await first).toBe(false);
+    expect(test.elements.webinarStudioModal.hidden).toBe(false);
+    /* Once the prompt has settled, close() may run again. */
+    confirm.mockResolvedValue(true);
+    expect(await test.studio.close()).toBe(true);
+    expect(confirm).toHaveBeenCalledTimes(2);
   });
 
   it('closes without asking when no audience is connected', async () => {
@@ -987,6 +1019,10 @@ describe('Webinar Studio audience bridge wiring', () => {
     const first = test.bridges[0];
     test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second-deck', title: 'Second deck', audienceEnabled: true }));
     await test.studio.selectWebinar(13);
+    /* Webinar 13 is selected: status from webinar 12's bridge must not reach the presenter. */
+    test.presenter.setConnection.mockClear();
+    first.options.onStatus('connected');
+    expect(test.presenter.setConnection).not.toHaveBeenCalled();
     test.api.getWebinar.mockResolvedValueOnce(privateDocument({ audienceEnabled: true }));
     await test.studio.selectWebinar(12);
     test.presenter.options.bridge.connect();

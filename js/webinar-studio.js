@@ -678,21 +678,37 @@
     });
   }
 
-  async function mayDisconnectAudience() {
+  function audienceLinkActive() {
     const status = audienceLink.status();
-    if (status !== 'connected' && status !== 'connecting') return true;
-    return confirmAction('The audience window is connected. Closing the Studio disconnects it; the audience keeps its current slide until you reconnect.', {
+    return status === 'connected' || status === 'connecting';
+  }
+
+  /* Only awaited while a link is active, so selection timing is unchanged
+     for the common case of no audience. */
+  function mayDisconnectAudience() {
+    if (!audienceLinkActive()) return true;
+    return confirmAction('The audience window is connected. Continuing disconnects it; the audience keeps its current slide until you reconnect.', {
       title: 'Audience connected',
-      confirmText: 'Close and disconnect',
-      cancelText: 'Stay in the Studio',
+      confirmText: 'Disconnect and continue',
+      cancelText: 'Stay connected',
       variant: 'warning',
     });
   }
 
+  /* Escape reaches this while a close prompt is open; re-entering would
+     replace that prompt with a fresh one on every press. */
+  let closing = false;
+
   async function close() {
     if (!elements.modal || elements.modal.hidden) return true;
-    if (!await mayDiscardChanges()) return false;
-    if (!await mayDisconnectAudience()) return false;
+    if (closing) return false;
+    closing = true;
+    try {
+      if (!await mayDiscardChanges()) return false;
+      if (audienceLinkActive() && !await mayDisconnectAudience()) return false;
+    } finally {
+      closing = false;
+    }
     invalidateRequests();
     invalidateEditorContext();
     accessPromise = null;
@@ -717,6 +733,10 @@
     if (!options.skipConfirmation) {
       const mayDiscard = await mayDiscardChanges();
       if (!requestIsCurrent(request) || !mayDiscard) return false;
+      if (audienceLinkActive()) {
+        const mayDisconnect = await mayDisconnectAudience();
+        if (!requestIsCurrent(request) || !mayDisconnect) return false;
+      }
     }
 
     invalidateEditorContext({ switching: true });
@@ -938,6 +958,10 @@
     const request = beginRequest();
     const mayDiscard = await mayDiscardChanges();
     if (!requestIsCurrent(request) || !mayDiscard) return false;
+    if (audienceLinkActive()) {
+      const mayDisconnect = await mayDisconnectAudience();
+      if (!requestIsCurrent(request) || !mayDisconnect) return false;
+    }
     dropAudienceBridge();
     model.notice = '';
     invalidateEditorContext();

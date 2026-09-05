@@ -263,6 +263,7 @@
     let overlays = new Map();
     let calculators = new Map();
     let explicitConnection = null;
+    let audienceEverReady = false;
     let notes = [];
     let notesLoaded = false;
     let draftNoteText = '';
@@ -480,7 +481,17 @@
           explicitConnection = null;
           const total = slides().length;
           const nextIndex = Number(payload.index);
-          if (Number.isSafeInteger(nextIndex) && nextIndex >= 0 && nextIndex < total && nextIndex !== clampIndex(index)) {
+          const valid = Number.isSafeInteger(nextIndex) && nextIndex >= 0 && nextIndex < total;
+          if (audienceEverReady) {
+            // A reconnected or relaunched audience follows the presenter, so a
+            // window that came back at slide 1 is sent to the current slide
+            // instead of dragging the presenter back with it.
+            if (valid && nextIndex !== clampIndex(index)) sendControl('goto', { index: clampIndex(index) });
+            renderAudience();
+            return true;
+          }
+          audienceEverReady = true;
+          if (valid && nextIndex !== clampIndex(index)) {
             timer.slideAt = now();
             index = nextIndex;
             render();
@@ -1194,6 +1205,7 @@
       }
       if (!sameWebinar) {
         index = 0;
+        audienceEverReady = false;
         notes = [];
         notesLoaded = false;
         editingNoteId = null;

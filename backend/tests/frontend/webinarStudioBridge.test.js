@@ -210,17 +210,39 @@ describe('Webinar Studio audience bridge', () => {
     expect(test.onStatus).toHaveBeenLastCalledWith('idle');
   });
 
-  it('always re-navigates the named window on reconnect so a foreign or reloaded audience page is recovered', () => {
+  it('reconnects in place first, so a reloaded audience page that still answers is not re-navigated', () => {
     const test = harness();
     test.bridge.connect();
     test.ready();
-    // The window is open but no longer the studio page: pongs stop.
+    // The audience page was reloaded: pongs stop, the window stays open.
     for (let tick = 0; tick < 4; tick += 1) test.intervals.at(-1).callback();
     expect(test.bridge.status()).toBe('disconnected');
     expect(test.bridge.reconnect()).toBe(true);
+    expect(test.openWindow).toHaveBeenCalledTimes(1);
+    expect(test.bridge.status()).toBe('connecting');
+    const init = test.audience.postMessage.mock.calls.at(-1)[0];
+    expect(init.type).toBe('presenter-init');
+    test.ready();
+    expect(test.bridge.status()).toBe('connected');
+    expect(test.openWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-navigates the open window once the in-place attempts lapse, so a foreign page is replaced without spending the whole budget', () => {
+    const test = harness({ inPlaceInitAttempts: 3, maxInitAttempts: 10 });
+    test.bridge.connect();
+    test.ready();
+    for (let tick = 0; tick < 4; tick += 1) test.intervals.at(-1).callback();
+    expect(test.bridge.reconnect()).toBe(true);
+    test.timeouts.at(-1).callback();
+    test.timeouts.at(-1).callback();
+    expect(test.openWindow).toHaveBeenCalledTimes(1);
+    test.timeouts.at(-1).callback();
     expect(test.openWindow).toHaveBeenCalledTimes(2);
     expect(test.openWindow).toHaveBeenLastCalledWith(AUDIENCE_URL, 'MSFGWebinarAudience');
     expect(test.bridge.status()).toBe('connecting');
+    // Only one re-navigation per reconnect; the remaining budget is spent in place.
+    for (let attempt = 0; attempt < 6; attempt += 1) test.timeouts.at(-1).callback();
+    expect(test.openWindow).toHaveBeenCalledTimes(2);
     test.ready();
     expect(test.bridge.status()).toBe('connected');
   });

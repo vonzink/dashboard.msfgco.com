@@ -568,6 +568,28 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(text(test.q('[data-audience-status]'))).toMatch(/disconnected/i);
   });
 
+  it('adopts the audience position on the first launch but pushes its own position on a reconnect', async () => {
+    const test = harness();
+    test.bridge.status.mockReturnValue('connected');
+    await test.open();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 2, total: 3 } });
+    expect(text(test.q('[data-position]'))).toBe('3 / 3');
+    expect(test.bridge.sendControl).not.toHaveBeenCalledWith('goto', expect.anything());
+
+    // The audience window was closed or reloaded and comes back at slide 1.
+    test.controller.setConnection('disconnected');
+    test.controller.setConnection('connected');
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } });
+    expect(test.bridge.sendControl).toHaveBeenCalledWith('goto', { index: 2 });
+    expect(text(test.q('[data-position]'))).toBe('3 / 3');
+
+    // An in-place reconnect where the audience is already in step sends nothing.
+    test.bridge.sendControl.mockClear();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 2, total: 3 } });
+    expect(test.bridge.sendControl).not.toHaveBeenCalledWith('goto', expect.anything());
+    expect(text(test.q('[data-position]'))).toBe('3 / 3');
+  });
+
   it('updates animation buttons in place so focus survives frequent acknowledgements', async () => {
     const test = harness();
     await test.open();

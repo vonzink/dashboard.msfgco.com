@@ -182,6 +182,7 @@
     pingIntervalMs = 5000,
     initRetryMs = 500,
     maxInitAttempts = 40,
+    inPlaceInitAttempts = 4,
     maxMissedPongs = 3,
   } = {}) {
     const origin = exactOrigin(allowedOrigin);
@@ -201,6 +202,7 @@
     let status = 'idle';
     let missedPongs = 0;
     let initAttempts = 0;
+    let renavigateAfterInPlace = false;
     let initTimer = null;
     let pingTimer = null;
     let destroyed = false;
@@ -249,6 +251,13 @@
       if (initAttempts >= maxInitAttempts) {
         setStatus('disconnected');
         return;
+      }
+      // A reconnect first tries the page already in the window (a reloaded
+      // audience answers in place). Only when those attempts lapse is the
+      // window re-navigated, once, to replace a foreign or dead page.
+      if (renavigateAfterInPlace && initAttempts >= inPlaceInitAttempts) {
+        renavigateAfterInPlace = false;
+        if (!openAudienceWindow()) return;
       }
       initAttempts += 1;
       post(INIT_TYPE, {});
@@ -308,6 +317,7 @@
     function connect() {
       if (destroyed) return false;
       if (status === 'connected' || status === 'connecting') return true;
+      renavigateAfterInPlace = false;
       if (windowIsClosed() && !openAudienceWindow()) return false;
       return beginHandshake();
     }
@@ -316,7 +326,12 @@
       if (destroyed) return false;
       clearTimers();
       status = 'idle';
-      if (!openAudienceWindow()) return false;
+      renavigateAfterInPlace = false;
+      if (windowIsClosed()) {
+        if (!openAudienceWindow()) return false;
+      } else {
+        renavigateAfterInPlace = true;
+      }
       return beginHandshake();
     }
 
