@@ -33,6 +33,16 @@ function success(liveVersion) {
   return { liveVersion, updatedAt: `2026-09-05T12:0${liveVersion}:00.000Z` };
 }
 
+function deferred() {
+  let resolvePromise;
+  let rejectPromise;
+  const promise = new Promise((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  return { promise, resolve: resolvePromise, reject: rejectPromise };
+}
+
 function matches(element, selector) {
   if (selector.startsWith('.')) return element.className.split(/\s+/).includes(selector.slice(1));
   if (/^[a-z]+$/i.test(selector)) return element.tagName.toLowerCase() === selector.toLowerCase();
@@ -97,6 +107,7 @@ class FakeElement {
   closest(selector) {
     return matches(this, selector) ? this : null;
   }
+  focus() { this.ownerDocument.activeElement = this; }
   setRangeText(text, start, end) {
     this.value = this.value.slice(0, start) + text + this.value.slice(end);
     this.selectionStart = this.selectionEnd = start + text.length;
@@ -104,6 +115,7 @@ class FakeElement {
 }
 
 class FakeDocument {
+  constructor() { this.activeElement = null; }
   createElement(tagName) { return new FakeElement(tagName, this); }
   createDocumentFragment() { return new FakeElement('fragment', this); }
 }
@@ -201,6 +213,31 @@ describe('Webinar Studio one-box editor', () => {
     expect(test.api.saveSlide).not.toHaveBeenCalled();
   });
 
+  it('moves focus and activation through each slide code tab with wrapping keyboard controls', () => {
+    const test = makeHarness();
+    test.editor.render(test.state);
+    const tabs = test.root.querySelectorAll('[data-code-tab]').filter(node => node.dataset.slideId === FIRST);
+    const panels = test.root.querySelectorAll('[data-code-panel]').filter(node => node.dataset.slideId === FIRST);
+    const preventDefault = vi.fn();
+
+    test.root.emit('keydown', { target: tabs[0], key: 'ArrowRight', preventDefault });
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(test.root.ownerDocument.activeElement).toBe(tabs[1]);
+    expect(tabs.map(tab => tab.getAttribute('aria-selected'))).toEqual(['false', 'true', 'false']);
+    expect(tabs.map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '0', '-1']);
+    expect(panels.map(panel => panel.hidden)).toEqual([true, false, true]);
+
+    test.root.emit('keydown', { target: tabs[1], key: 'End', preventDefault });
+    expect(test.root.ownerDocument.activeElement).toBe(tabs[2]);
+    test.root.emit('keydown', { target: tabs[2], key: 'ArrowRight', preventDefault });
+    expect(test.root.ownerDocument.activeElement).toBe(tabs[0]);
+    test.root.emit('keydown', { target: tabs[0], key: 'ArrowLeft', preventDefault });
+    expect(test.root.ownerDocument.activeElement).toBe(tabs[2]);
+    test.root.emit('keydown', { target: tabs[2], key: 'Home', preventDefault });
+    expect(test.root.ownerDocument.activeElement).toBe(tabs[0]);
+    expect(panels.map(panel => panel.hidden)).toEqual([false, true, true]);
+  });
+
   it('keeps Save Live disabled until local validation and the current preview startup both succeed', async () => {
     let resolvePreview;
     const test = makeHarness({ previewResult: new Promise(resolve => { resolvePreview = resolve; }) });
@@ -247,6 +284,160 @@ describe('Webinar Studio one-box editor', () => {
       javascript: '',
     });
     expect(slideTest.state.liveVersion).toBe(8);
+  });
+
+  it('reconciles pending Master and slide saves against newer typing without clearing changed fields', async () => {
+    const masterPending = deferred();
+    const master = makeHarness({ api: { saveMaster: vi.fn(() => masterPending.promise) } });
+    master.editor.render(master.state);
+    const masterHtml = master.root.querySelector('[data-master-field="html"]');
+    masterHtml.value = '<main class="submitted">{{SLIDE_CONTENT}}</main>';
+    master.root.emit('input', { target: masterHtml });
+    await master.editor.previewMaster();
+    const masterSave = master.editor.saveMaster();
+
+    const masterCss = master.root.querySelector('[data-master-field="css"]');
+    masterCss.value = 'main{display:flex}';
+    master.root.emit('input', { target: masterCss });
+    masterPending.resolve(success(8));
+    await masterSave;
+
+    expect(master.state.liveVersion).toBe(8);
+    expect(master.state.master).toMatchObject({
+      html: '<main class="submitted">{{SLIDE_CONTENT}}</main>',
+      css: 'main{display:flex}',
+      dirtyFields: ['css'],
+    });
+
+    const slidePending = deferred();
+    const slide = makeHarness({ api: { saveSlide: vi.fn(() => slidePending.promise) } });
+    slide.editor.render(slide.state);
+    const title = slide.root.querySelectorAll('[data-slide-field="title"]')[0];
+    title.value = 'Submitted title';
+    slide.root.emit('input', { target: title });
+    await slide.editor.previewSlide(FIRST);
+    const slideSave = slide.editor.saveSlide(FIRST);
+
+    const firstHtml = slide.root.querySelectorAll('[data-code-field="html"]')[0];
+    firstHtml.value = '<section>Typed after Save Live</section>';
+    slide.root.emit('input', { target: firstHtml });
+    const secondNotes = slide.root.querySelectorAll('[data-slide-field="speakerNotes"]')[1];
+    secondNotes.value = 'Other slide typing';
+    slide.root.emit('input', { target: secondNotes });
+    slidePending.resolve(success(8));
+    await slideSave;
+
+    expect(slide.state.liveVersion).toBe(8);
+    expect(slide.state.slidesById[FIRST]).toMatchObject({
+      title: 'Submitted title',
+      html: '<section>Typed after Save Live</section>',
+      dirtyFields: ['html'],
+    });
+    expect(slide.state.slidesById[SECOND]).toMatchObject({
+      speakerNotes: 'Other slide typing',
+      dirtyFields: ['speakerNotes'],
+    });
+  });
+
+  it('applies pending structural results to the latest edited state', async () => {
+    const cases = [
+      {
+        name: 'add',
+        start(test) { return test.editor.addSlide(); },
+        api: 'addSlide',
+        response: {
+          ...success(8),
+          slide: { id: THIRD, title: 'New slide', anchor: 'new-slide', targetSeconds: 0, speakerNotes: '', html: '', css: '', javascript: '' },
+        },
+        expectedOrder: [FIRST, SECOND, THIRD],
+      },
+      {
+        name: 'duplicate',
+        start(test) { return test.editor.duplicateSlide(FIRST); },
+        api: 'addSlide',
+        response: {
+          ...success(8),
+          slide: { id: THIRD, title: 'Opening', anchor: 'opening-copy', targetSeconds: 90, speakerNotes: 'Welcome', html: '<section>Opening</section>', css: '.slide{color:#123}', javascript: '' },
+        },
+        expectedOrder: [FIRST, SECOND, THIRD],
+      },
+      {
+        name: 'reorder',
+        start(test) { return test.editor.reorderSlides([SECOND, FIRST]); },
+        api: 'reorderSlides',
+        response: success(8),
+        expectedOrder: [SECOND, FIRST],
+      },
+      {
+        name: 'archive',
+        start(test) { return test.editor.deleteSlide(FIRST); },
+        api: 'archiveSlide',
+        response: success(8),
+        expectedOrder: [SECOND],
+      },
+    ];
+
+    for (const item of cases) {
+      const pending = deferred();
+      const test = makeHarness({ api: { [item.api]: vi.fn(() => pending.promise) } });
+      test.editor.render(test.state);
+      const mutation = item.start(test);
+      await Promise.resolve();
+
+      const notes = test.root.querySelectorAll('[data-slide-field="speakerNotes"]')[1];
+      notes.value = `Typed during ${item.name}`;
+      test.root.emit('input', { target: notes });
+      pending.resolve(item.response);
+      await mutation;
+
+      expect(test.state.liveVersion, item.name).toBe(8);
+      expect(test.state.slideOrder, item.name).toEqual(item.expectedOrder);
+      expect(test.state.slidesById[SECOND], item.name).toMatchObject({
+        speakerNotes: `Typed during ${item.name}`,
+        dirtyFields: ['speakerNotes'],
+      });
+    }
+  });
+
+  it('retains edits made while pending mutations fail with conflict or network errors', async () => {
+    const conflictPending = deferred();
+    const conflict = makeHarness({ api: { saveSlide: vi.fn(() => conflictPending.promise) } });
+    conflict.editor.render(conflict.state);
+    await conflict.editor.previewSlide(FIRST);
+    const save = conflict.editor.saveSlide(FIRST);
+    const firstHtml = conflict.root.querySelectorAll('[data-code-field="html"]')[0];
+    firstHtml.value = '<section>Conflict-safe typing</section>';
+    conflict.root.emit('input', { target: firstHtml });
+    conflictPending.reject(Object.assign(new Error('stale private response'), {
+      status: 409,
+      code: 'VERSION_CONFLICT',
+      currentVersion: 8,
+      updatedAt: '2026-09-05T12:00:00.000Z',
+      updatedBy: { id: 9, name: 'Another Editor' },
+    }));
+    await expect(save).rejects.toThrow('stale');
+    expect(conflict.state.liveVersion).toBe(7);
+    expect(conflict.state.slidesById[FIRST]).toMatchObject({
+      html: '<section>Conflict-safe typing</section>',
+      dirtyFields: ['html'],
+    });
+    expect(conflict.state.conflict).toMatchObject({ currentVersion: 8 });
+
+    const networkPending = deferred();
+    const network = makeHarness({ api: { reorderSlides: vi.fn(() => networkPending.promise) } });
+    network.editor.render(network.state);
+    const reorder = network.editor.reorderSlides([SECOND, FIRST]);
+    const secondNotes = network.root.querySelectorAll('[data-slide-field="speakerNotes"]')[1];
+    secondNotes.value = 'Network-safe typing';
+    network.root.emit('input', { target: secondNotes });
+    networkPending.reject(new Error('database password=secret'));
+    await expect(reorder).rejects.toThrow();
+    expect(network.state.liveVersion).toBe(7);
+    expect(network.state.slideOrder).toEqual([FIRST, SECOND]);
+    expect(network.state.slidesById[SECOND]).toMatchObject({
+      speakerNotes: 'Network-safe typing',
+      dirtyFields: ['speakerNotes'],
+    });
   });
 
   it('uses exact expectedVersion mutations and only appends the server-committed stable slide', async () => {

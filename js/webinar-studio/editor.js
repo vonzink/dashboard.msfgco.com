@@ -12,6 +12,16 @@
   const FORBIDDEN_CSS = /@\s*import\b|(?:^|[^-\w])expression\s*\(|javascript\s*:/i;
   const MASTER_TOKEN = '{{SLIDE_CONTENT}}';
   const PREVIEW_DELAY_MS = 300;
+  const MASTER_EDIT_FIELDS = Object.freeze(['html', 'css']);
+  const SLIDE_EDIT_FIELDS = Object.freeze([
+    'title',
+    'anchor',
+    'targetSeconds',
+    'speakerNotes',
+    'html',
+    'css',
+    'javascript',
+  ]);
 
   function required(value, message) {
     if (!value) throw new TypeError(message);
@@ -440,6 +450,35 @@
       return error;
     }
 
+    function reconcileSavedSurface(surface, submitted, response) {
+      const latest = state();
+      const advanced = stateApi.markSurfaceSaved(latest, surface, response);
+      if (surface === 'master') {
+        return {
+          ...advanced,
+          master: {
+            ...advanced.master,
+            dirtyFields: latest.master.dirtyFields.filter(
+              field => MASTER_EDIT_FIELDS.includes(field) && latest.master[field] !== submitted[field],
+            ),
+          },
+        };
+      }
+      const latestSlide = latest.slidesById[surface];
+      return {
+        ...advanced,
+        slidesById: {
+          ...advanced.slidesById,
+          [surface]: {
+            ...advanced.slidesById[surface],
+            dirtyFields: latestSlide.dirtyFields.filter(
+              field => SLIDE_EDIT_FIELDS.includes(field) && latestSlide[field] !== submitted[field],
+            ),
+          },
+        },
+      };
+    }
+
     async function saveMaster() {
       const current = state();
       if (validationFor('master') || previewStates.get('master') !== 'ready') return false;
@@ -449,7 +488,7 @@
           masterHtml: current.master.html,
           masterCss: current.master.css,
         });
-        setState(stateApi.markSurfaceSaved(current, 'master', response));
+        setState(reconcileSavedSurface('master', current.master, response));
         editorError = '';
         render(state());
         return true;
@@ -474,7 +513,7 @@
           css: slide.css,
           javascript: slide.javascript,
         });
-        setState(stateApi.markSurfaceSaved(current, id, response));
+        setState(reconcileSavedSurface(id, slide, response));
         editorError = '';
         render(state());
         return true;
@@ -505,7 +544,7 @@
           css: '',
           javascript: '',
         });
-        setState(stateApi.appendServerSlide(current, response.slide, response));
+        setState(stateApi.appendServerSlide(state(), response.slide, response));
         editorError = '';
         render(state());
         return response.slide;
@@ -523,7 +562,7 @@
           expectedVersion: current.liveVersion,
           sourceSlideId: id,
         });
-        setState(stateApi.appendServerSlide(current, response.slide, response));
+        setState(stateApi.appendServerSlide(state(), response.slide, response));
         editorError = '';
         render(state());
         return response.slide;
@@ -540,7 +579,7 @@
           expectedVersion: current.liveVersion,
           slideIds: [...ids],
         });
-        setState(stateApi.applyOrder(current, ids, response));
+        setState(stateApi.applyOrder(state(), ids, response));
         editorError = '';
         render(state());
         return true;
@@ -573,7 +612,7 @@
         const response = await api.archiveSlide(current.webinar.id, id, {
           expectedVersion: current.liveVersion,
         });
-        setState(stateApi.removeServerSlide(current, id, response));
+        setState(stateApi.removeServerSlide(state(), id, response));
         editorError = '';
         render(state());
         return true;
@@ -623,7 +662,29 @@
       }
     }
 
+    function handleCodeTabKeydown(event) {
+      const target = event.target;
+      const slideId = target?.dataset?.slideId;
+      if (!target?.dataset?.codeTab || !slideId || event.altKey || event.ctrlKey || event.metaKey) return false;
+      const tabs = nodesFor('data-code-tab').filter(node => node.dataset?.slideId === slideId);
+      const index = tabs.indexOf(target);
+      if (index < 0) return false;
+      const destinations = {
+        ArrowLeft: (index - 1 + tabs.length) % tabs.length,
+        ArrowRight: (index + 1) % tabs.length,
+        Home: 0,
+        End: tabs.length - 1,
+      };
+      if (!Object.prototype.hasOwnProperty.call(destinations, event.key)) return false;
+      event.preventDefault();
+      const next = tabs[destinations[event.key]];
+      activateTab(next);
+      next.focus?.();
+      return true;
+    }
+
     function handleKeydown(event) {
+      if (handleCodeTabKeydown(event)) return;
       if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || !event.target
         || String(event.target.tagName).toUpperCase() !== 'TEXTAREA') return;
       event.preventDefault();
