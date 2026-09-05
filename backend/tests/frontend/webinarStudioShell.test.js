@@ -389,20 +389,28 @@ describe('Webinar Studio preview wiring', () => {
     origin: 'https://msfgmortgage.com',
   };
 
-  function previewWiring({ previewConfig, previewApi, useRealPreview = false } = {}) {
+  function previewWiring({ previewConfig, previewApi, useRealPreview = false, presenterApi, timers } = {}) {
     vi.resetModules();
     const createWebinarStudio = require(studioPath);
-    const editorApi = require(resolve(root, 'js/webinar-studio/editor.js'));
+    const realEditorApi = require(resolve(root, 'js/webinar-studio/editor.js'));
+    let editorPreview = null;
+    const editorApi = {
+      ...realEditorApi,
+      createEditor(options) { editorPreview = options.preview; return realEditorApi.createEditor(options); },
+    };
     const realPreviewApi = require(resolve(root, 'js/webinar-studio/preview.js'));
     const dom = makeDocument();
     const previewHost = new FakeElement('wsPreviewHost');
     previewHost.children = [];
     previewHost.append = (...nodes) => previewHost.children.push(...nodes);
     const iframe = {
-      src: '', title: '', attributes: {}, isConnected: true,
+      src: '', title: '', attributes: {}, isConnected: true, loadListeners: [],
       contentWindow: { postMessage: vi.fn() },
       setAttribute(name, value) { this.attributes[name] = String(value); if (name === 'src') this.src = String(value); },
       getAttribute(name) { return this.attributes[name] ?? null; },
+      addEventListener(type, listener) { if (type === 'load') this.loadListeners.push(listener); },
+      removeEventListener() {},
+      fireLoad() { for (const listener of this.loadListeners.splice(0)) listener({ type: 'load' }); },
       remove() { previewHost.children = previewHost.children.filter(node => node !== this); },
     };
     const settingsPanel = dom.elements.wsSettingsPanel;
@@ -431,12 +439,14 @@ describe('Webinar Studio preview wiring', () => {
       editorApi,
       previewApi: completePreviewApi,
       previewConfig,
+      presenterApi,
       confirm: vi.fn().mockResolvedValue(true),
       currentUser: () => ({ id: 7, activeRole: 'admin', role: 'admin' }),
       openWindow: vi.fn(),
       navigationTarget: new FakeEventTarget(),
+      ...(timers || {}),
     });
-    return { studio, previewApi: completePreviewApi, controller, iframe, previewHost, dom, settingsPanel, api };
+    return { studio, previewApi: completePreviewApi, controller, iframe, previewHost, dom, settingsPanel, api, editorPreviewFor: () => editorPreview };
   }
 
   function clickCode(test) {
@@ -501,14 +511,146 @@ describe('Webinar Studio preview wiring', () => {
     expect(test.settingsPanel.innerHTML).not.toMatch(/Master HTML and CSS tools will appear here/);
   });
 
+  it('waits for the host frame to load before the first boot posts a candidate', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, useRealPreview: true });
+    await test.studio.init();
+    await test.studio.open();
+    const wrapper = test.previewApi.createPreviewController.mock.results[0].value;
+    const editorPreview = test.editorPreviewFor();
+    const pending = editorPreview.boot({
+      master: { html: '<main>{{SLIDE_CONTENT}}</main>', css: '' },
+      slide: { id: slideId, anchor: 'opening', title: 'Opening', html: '<section>Welcome</section>', css: '', javascript: '' },
+      assets: {},
+      resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] },
+    });
+    await Promise.resolve();
+    expect(test.iframe.contentWindow.postMessage).not.toHaveBeenCalled();
+    test.iframe.fireLoad();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(test.iframe.contentWindow.postMessage).toHaveBeenCalledTimes(1);
+    expect(test.iframe.contentWindow.postMessage.mock.calls[0][1]).toBe(PRODUCTION_PREVIEW.origin);
+    expect(typeof wrapper.boot).toBe('function');
+    void pending;
+  });
+
+  it('stops waiting on a host frame that never loads after the load timeout so the controller can report the failure', async () => {
+    const timeouts = [];
+    const timers = {
+      setTimeoutImpl: vi.fn((callback, delay) => { timeouts.push({ callback, delay }); return timeouts.length; }),
+      clearTimeoutImpl: vi.fn(),
+    };
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, timers });
+    await test.studio.init();
+    await test.studio.open();
+    const preview = test.editorPreviewFor();
+    let settled = null;
+    preview.boot({}).then(state => { settled = state; });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(test.controller.boot).not.toHaveBeenCalled();
+    const loadGate = timeouts.find(entry => entry.delay === 10_000);
+    expect(loadGate).toBeDefined();
+    loadGate.callback();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(test.controller.boot).toHaveBeenCalledTimes(1);
+    expect(settled).toEqual({ type: 'ready' });
+    /* A late load after the gate opened is harmless and must not boot twice. */
+    test.iframe.fireLoad();
+    await Promise.resolve();
+    expect(test.controller.boot).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the load-gate timer once the host frame loads', async () => {
+    const timers = { setTimeoutImpl: vi.fn(() => 41), clearTimeoutImpl: vi.fn() };
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, timers });
+    await test.studio.init();
+    await test.studio.open();
+    test.iframe.fireLoad();
+    expect(timers.clearTimeoutImpl).toHaveBeenCalledWith(41);
+  });
+
+  it('attributes a ready preview to the deck it was booted for, never to a deck selected while it was in flight', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
+    await test.studio.init();
+    await test.studio.open();
+    test.iframe.fireLoad();
+    let resolveBoot;
+    test.controller.boot.mockImplementation(() => new Promise(resolve => { resolveBoot = resolve; }));
+    const preview = test.editorPreviewFor();
+    const inFlight = preview.boot({});
+    test.api.listWebinars.mockResolvedValue([
+      { id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false },
+      { id: 13, slug: 'second', title: 'Second deck', liveVersion: 1, audienceEnabled: false },
+    ]);
+    let resolveWebinar;
+    test.api.getWebinar.mockImplementationOnce(() => new Promise(resolve => { resolveWebinar = resolve; }));
+    const switching = test.studio.selectWebinar(13);
+    await Promise.resolve();
+    resolveBoot({ type: 'ready' });
+    await inFlight;
+    resolveWebinar(privateDocument({ id: 13, slug: 'second', title: 'Second deck' }));
+    await switching;
+    expect(test.previewHost.hidden).toBe(true);
+    test.controller.boot.mockResolvedValue({ type: 'ready' });
+    await preview.boot({});
+    expect(test.previewHost.hidden).toBe(false);
+  });
+
+  it('keeps tab clicks behind the loading, creating, and no-selection guards', async () => {
+    const presenterController = { renderPresenterPanel: vi.fn().mockResolvedValue(undefined), deactivate: vi.fn(), destroy: vi.fn() };
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, presenterApi: { createPresenterController: () => presenterController } });
+    await test.studio.init();
+    await test.studio.open();
+    presenterController.renderPresenterPanel.mockClear();
+    test.settingsPanel.replaceChildren.mockClear();
+    let resolveWebinar;
+    test.api.listWebinars.mockResolvedValue([
+      { id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false },
+      { id: 13, slug: 'second', title: 'Second deck', liveVersion: 1, audienceEnabled: false },
+    ]);
+    test.api.getWebinar.mockImplementationOnce(() => new Promise(resolve => { resolveWebinar = resolve; }));
+    const switching = test.studio.selectWebinar(13);
+    await Promise.resolve();
+    for (const name of ['presenter', 'code', 'assets', 'access', 'history']) {
+      const tab = test.dom.tabs.find(item => item.dataset.wsTab === name);
+      test.dom.elements.wsSettings.listeners.click({ target: tab });
+      expect(test.settingsPanel.innerHTML).toMatch(/loading the selected webinar/i);
+    }
+    expect(presenterController.renderPresenterPanel).not.toHaveBeenCalled();
+    resolveWebinar(privateDocument({ id: 13, slug: 'second', title: 'Second deck' }));
+    await switching;
+
+    await test.studio.openNewWebinar();
+    presenterController.renderPresenterPanel.mockClear();
+    test.dom.elements.wsSettings.listeners.click({ target: test.dom.tabs[2] });
+    expect(test.settingsPanel.innerHTML).toMatch(/creating a webinar/i);
+    test.dom.elements.wsSettings.listeners.click({ target: test.dom.tabs[0] });
+    expect(presenterController.renderPresenterPanel).not.toHaveBeenCalled();
+  });
+
+  it('never throws from a tab click when no webinar is selected', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, presenterApi: { createPresenterController: () => ({ renderPresenterPanel: vi.fn(), deactivate: vi.fn(), destroy: vi.fn() }) } });
+    test.api.listWebinars.mockResolvedValue([]);
+    await test.studio.init();
+    await test.studio.open();
+    for (const tab of test.dom.tabs) {
+      expect(() => test.dom.elements.wsSettings.listeners.click({ target: tab })).not.toThrow();
+      expect(test.settingsPanel.innerHTML).toMatch(/select a webinar/i);
+    }
+  });
+
   it('hides the preview host until the current webinar reports a ready preview, and while loading, creating, or switching', async () => {
     const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
     await test.studio.init();
     expect(test.previewHost.hidden).toBe(true);
     await test.studio.open();
     expect(test.previewHost.hidden).toBe(true);
-    const onState = test.previewApi.createPreviewController.mock.calls[0][0].onState;
-    onState({ type: 'ready' });
+    test.iframe.fireLoad();
+    const preview = test.editorPreviewFor();
+    await preview.boot({});
     expect(test.previewHost.hidden).toBe(false);
 
     test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second', title: 'Second deck' }));
@@ -518,7 +660,7 @@ describe('Webinar Studio preview wiring', () => {
     ]);
     await test.studio.selectWebinar(13);
     expect(test.previewHost.hidden).toBe(true);
-    onState({ type: 'ready' });
+    await preview.boot({});
     expect(test.previewHost.hidden).toBe(false);
 
     await test.studio.openNewWebinar();

@@ -57,6 +57,11 @@
   });
   const PREVIEW_UNAVAILABLE_COPY = 'The slide preview host is not configured for this environment, so code editing is unavailable here.';
   const PREVIEW_INVALID_COPY = 'The slide preview configuration is invalid: the preview URL must sit on the configured HTTPS origin. Code editing is unavailable until it is corrected.';
+  /* The first candidate is posted only once the host frame has loaded. A host
+     that never loads must not hang the editor and presenter forever, so the
+     wait is bounded and the preview controller then reports its own startup
+     failure through the normal error state. */
+  const PREVIEW_FRAME_LOAD_TIMEOUT_MS = 10_000;
   const LOADING_COPY = 'Loading the selected webinar…';
   const CREATING_COPY = 'Creating a webinar. Select it afterwards to manage presenter settings.';
 
@@ -87,6 +92,8 @@
   let previewFrame = null;
   let previewConfigState = 'unset';
   let previewReadyFor = null;
+  let previewFrameLoaded = null;
+  let injectedPreviewDestroyed = false;
   let controllersBuilt = false;
   let editorContextGeneration = 0;
   let initializationPromise = null;
@@ -115,11 +122,11 @@
     requestGeneration += 1;
   }
 
-  function invalidateEditorContext() {
+  function invalidateEditorContext({ switching = false } = {}) {
     editorContextGeneration += 1;
     editorController?.invalidateInsertionTarget?.();
     editorController?.setContext?.({
-      webinarId: Number(model.studioState?.webinar?.id) || null,
+      webinarId: switching ? null : Number(model.studioState?.webinar?.id) || null,
       generation: editorContextGeneration,
     });
   }
@@ -146,10 +153,48 @@
      only inside the unique-origin slide frame that page creates, so this outer
      frame is deliberately not sandboxed and exact-origin messaging works.
      An explicit controller dependency wins (fake-DOM harnesses). */
+  /* Wraps a preview controller so every boot is bound to the deck selected
+     when it started. A ready result only shows the host if that same deck is
+     still selected, and the first boot waits for the host frame to load. */
+  function bindPreview(controller, { waitForFrame = null } = {}) {
+    return Object.freeze({
+      async boot(candidate) {
+        const forWebinar = Number(model.selectedWebinarId) || null;
+        if (waitForFrame) await waitForFrame;
+        const state = await controller.boot(candidate);
+        if (state?.type === 'ready' && forWebinar !== null && forWebinar === (Number(model.selectedWebinarId) || null)) {
+          previewReadyFor = forWebinar;
+        }
+        updatePreviewHostVisibility();
+        return state;
+      },
+      destroy() {
+        controller.destroy?.();
+      },
+    });
+  }
+
+  function frameLoadGate(iframe) {
+    if (typeof iframe.addEventListener !== 'function') return Promise.resolve();
+    const setTimeoutImpl = dependencies.setTimeoutImpl || globalThis.setTimeout;
+    const clearTimeoutImpl = dependencies.clearTimeoutImpl || globalThis.clearTimeout;
+    return new Promise(resolve => {
+      let timer = null;
+      const open = () => {
+        if (timer !== null) clearTimeoutImpl(timer);
+        timer = null;
+        resolve();
+      };
+      iframe.addEventListener('load', open, { once: true });
+      timer = setTimeoutImpl(open, PREVIEW_FRAME_LOAD_TIMEOUT_MS);
+    });
+  }
+
   function ensurePreviewController() {
     if (previewController) return previewController;
     if (dependencies.editorPreview?.boot) {
-      previewController = dependencies.editorPreview;
+      if (injectedPreviewDestroyed) return null;
+      previewController = bindPreview(dependencies.editorPreview);
       previewConfigState = 'ready';
       return previewController;
     }
@@ -170,24 +215,24 @@
     iframe.setAttribute('title', 'Slide preview');
     iframe.setAttribute('data-ws-preview-frame', '');
     iframe.setAttribute('referrerpolicy', 'no-referrer');
+    previewFrameLoaded = frameLoadGate(iframe);
     iframe.setAttribute('src', url);
     elements.previewHost.append(iframe);
     try {
-      previewController = previewApi.createPreviewController({
+      const controller = previewApi.createPreviewController({
         iframe,
         allowedOrigin: origin,
-        onState: state => {
-          if (state?.type === 'ready') previewReadyFor = Number(model.selectedWebinarId) || null;
-          updatePreviewHostVisibility();
-        },
+        onState: () => {},
         windowObject: navigationTarget,
         cryptoImpl: dependencies.cryptoImpl || globalThis.crypto,
       });
+      previewController = bindPreview(controller, { waitForFrame: previewFrameLoaded });
       previewFrame = iframe;
       previewConfigState = 'ready';
     } catch {
       iframe.remove?.();
       previewController = null;
+      previewFrameLoaded = null;
       previewConfigState = 'invalid';
     }
     return previewController;
@@ -498,7 +543,7 @@
       if (!requestIsCurrent(request) || !mayDiscard) return false;
     }
 
-    invalidateEditorContext();
+    invalidateEditorContext({ switching: true });
     resetPreviewVisibility();
     model.selectedWebinarId = webinarId;
     model.loadingWebinar = true;
@@ -792,12 +837,22 @@
       tab.setAttribute('aria-selected', String(selected));
       tab.setAttribute('tabindex', selected ? '0' : '-1');
     });
-    renderSettingsTab();
+    renderSettings();
+  }
+
+  function settingsSelectionWithdrawn() {
+    return !model.studioState || model.loadingWebinar || model.mode === 'new';
   }
 
   function renderSettingsTab() {
     if (!elements.settingsPanel) return;
     elements.settingsPanel.setAttribute('data-ws-panel', model.settingsTab);
+    if (settingsSelectionWithdrawn()) {
+      deactivateSettingsControllers();
+      const copy = model.loadingWebinar ? LOADING_COPY : model.mode === 'new' ? CREATING_COPY : 'Select a webinar to manage presenter settings.';
+      setPanelCopy(`<p>${copy}</p>`);
+      return;
+    }
     if (model.settingsTab !== 'presenter') presenterController?.deactivate?.();
     if (presenterController && model.settingsTab === 'presenter') {
       accessHistoryController?.deactivate?.();
@@ -897,10 +952,12 @@
     // only when no editor was ever built on top of it.
     if (editorController) editorController.destroy?.();
     else previewController?.destroy?.();
+    if (dependencies.editorPreview?.boot && previewController) injectedPreviewDestroyed = true;
     editorController = null;
     previewController = null;
     previewFrame?.remove?.();
     previewFrame = null;
+    previewFrameLoaded = null;
     previewReadyFor = null;
     controllersBuilt = false;
     for (const [target, type, handler] of bindings) {

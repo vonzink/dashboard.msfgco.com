@@ -606,7 +606,13 @@
       let result;
       try { result = await preview.boot(candidateFor(slide)); } catch { result = { type: 'error' }; }
       if (!operationIsCurrent(started) || generation !== previewGeneration) return;
-      previewStatus = result?.type === 'ready' ? 'Up-next preview is ready.' : 'The up-next preview could not start.';
+      if (result?.type === 'ready') {
+        previewStatus = 'Up-next preview is ready.';
+      } else {
+        previewStatus = 'The up-next preview could not start.';
+        // Do not pin the failure: the next render tries this slide again.
+        previewedSlideId = null;
+      }
       renderUpNext();
     }
 

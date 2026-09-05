@@ -581,6 +581,25 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(test.q('[data-animation="pause"]').disabled).toBe(false);
   });
 
+  it('retries the up-next preview after a failed boot instead of pinning the failure', async () => {
+    const failing = harness();
+    failing.preview.boot.mockResolvedValue({ type: 'error', code: 'PREVIEW_STARTUP_TIMEOUT' });
+    await failing.open();
+    expect(text(failing.q('[data-up-next-status]'))).toMatch(/could not start/i);
+    const attempts = failing.preview.boot.mock.calls.length;
+    await failing.controller.renderPresenterPanel(failing.context);
+    await failing.settle();
+    expect(failing.preview.boot.mock.calls.length).toBeGreaterThan(attempts);
+
+    const recovering = harness();
+    recovering.preview.boot.mockResolvedValueOnce({ type: 'error', code: 'PREVIEW_STARTUP_TIMEOUT' });
+    await recovering.open();
+    await recovering.controller.renderPresenterPanel(recovering.context);
+    await recovering.settle();
+    expect(recovering.preview.boot.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(text(recovering.q('[data-up-next-status]'))).toMatch(/ready/i);
+  });
+
   it('runs slide, pace, and elapsed clocks from injected time', async () => {
     const test = harness();
     await test.open();
@@ -785,8 +804,10 @@ describe('Webinar Studio presenter tab lifecycle', () => {
     expect(presenterApi.createPresenterController).not.toHaveBeenCalled();
     await studio.open();
     expect(presenterApi.createPresenterController).toHaveBeenCalledWith(expect.objectContaining({
-      api, document, preview, keyTarget: document,
+      api, document, keyTarget: document, preview: expect.objectContaining({ boot: expect.any(Function) }),
     }));
+    await presenterApi.createPresenterController.mock.calls[0][0].preview.boot({});
+    expect(preview.boot).toHaveBeenCalledTimes(1);
     expect(presenterController.renderPresenterPanel).toHaveBeenCalledWith(expect.objectContaining({
       root: elements.wsSettingsPanel,
       webinarId: 12,
