@@ -472,7 +472,10 @@
         class: 'ws-slide-box',
         'data-slide-id': slide.id,
         'data-anchor': slide.anchor,
-        open: slide.id === current.selectedSlideId,
+        // A box stays open for the selected slide, and reopens when an asset
+        // insertion needs to restore focus into it after a re-render.
+        open: slide.id === current.selectedSlideId
+          || (restoreInsertionOnRender && insertionBookmark?.slideId === slide.id),
       });
       const summary = createNode(document, 'summary');
       append(summary,
@@ -818,8 +821,10 @@
 
     function handleKeydown(event) {
       if (handleCodeTabKeydown(event)) return;
-      if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || !event.target
-        || String(event.target.tagName).toUpperCase() !== 'TEXTAREA') return;
+      // Two-space Tab insertion belongs to Code textareas only. Every other
+      // textarea sharing this root (speaker notes, asset forms) keeps native Tab.
+      if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
+        || !insertionDescriptor(event.target)) return;
       event.preventDefault();
       const target = event.target;
       target.setRangeText('  ', target.selectionStart, target.selectionEnd, 'end');

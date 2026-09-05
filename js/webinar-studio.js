@@ -12,7 +12,8 @@
       accessHistoryApi: root.WebinarStudioAccessHistory,
       assetsApi: root.WebinarStudioAssets,
       editorApi: root.WebinarStudioEditor,
-      editorPreview: root.WebinarStudioEditorPreview,
+      previewApi: root.WebinarStudioPreview,
+      previewConfig: root.CONFIG?.webinarStudio?.preview,
       stateApi: root.WebinarStudioState,
       confirm: (message, options) => root.Utils?.confirm
         ? root.Utils.confirm(message, options)
@@ -37,7 +38,8 @@
   const accessHistoryApi = dependencies.accessHistoryApi;
   const assetsApi = dependencies.assetsApi;
   const editorApi = dependencies.editorApi;
-  const editorPreview = dependencies.editorPreview;
+  const previewApi = dependencies.previewApi;
+  const previewConfig = dependencies.previewConfig;
   const stateApi = dependencies.stateApi;
   const confirmAction = dependencies.confirm;
   const currentUser = dependencies.currentUser;
@@ -51,6 +53,8 @@
     assets: 'Shared webinar assets will appear here.',
     history: 'Saved versions and restore controls will appear here.',
   });
+  const PREVIEW_UNAVAILABLE_COPY = 'The slide preview host is not configured for this environment, so code editing is unavailable here.';
+  const LOADING_COPY = 'Loading the selected webinar…';
 
   const model = {
     initialized: false,
@@ -74,6 +78,7 @@
   let accessHistoryController = null;
   let assetController = null;
   let editorController = null;
+  let previewController = null;
   let editorContextGeneration = 0;
   let initializationPromise = null;
   let accessPromise = null;
@@ -104,6 +109,49 @@
   function invalidateEditorContext() {
     editorContextGeneration += 1;
     editorController?.invalidateInsertionTarget?.();
+    editorController?.setContext?.({
+      webinarId: Number(model.studioState?.webinar?.id) || null,
+      generation: editorContextGeneration,
+    });
+  }
+
+  function setPanelCopy(html) {
+    if (!elements.settingsPanel) return;
+    elements.settingsPanel.replaceChildren?.();
+    elements.settingsPanel.innerHTML = html;
+  }
+
+  /* The canonical preview controller is built once from the published preview
+     module, bound to a sandboxed iframe whose URL origin must equal the
+     configured origin exactly. An explicit controller dependency wins (tests). */
+  function ensurePreviewController() {
+    if (previewController) return previewController;
+    if (dependencies.editorPreview?.boot) {
+      previewController = dependencies.editorPreview;
+      return previewController;
+    }
+    if (!previewApi?.createPreviewController || !elements.previewHost) return null;
+    const url = String(previewConfig?.url || '');
+    const origin = String(previewConfig?.origin || '');
+    let parsedOrigin;
+    try { parsedOrigin = new URL(url).origin; } catch { return null; }
+    if (!origin || parsedOrigin !== origin || !/^https:\/\//.test(origin)) return null;
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.setAttribute('title', 'Slide preview');
+    iframe.setAttribute('data-ws-preview-frame', '');
+    iframe.setAttribute('src', url);
+    elements.previewHost.append(iframe);
+    try {
+      previewController = previewApi.createPreviewController({
+        iframe,
+        allowedOrigin: origin,
+        onState: () => {},
+      });
+    } catch {
+      previewController = null;
+    }
+    return previewController;
   }
 
   function listen(target, type, handler) {
@@ -174,6 +222,8 @@
       deckList: element('wsDeckList'),
       deckSelect: element('wsDeckSelect'),
       workspace: element('wsWorkspace'),
+      workspaceContent: element('wsWorkspaceContent'),
+      previewHost: element('wsPreviewHost'),
       status: element('wsStatus'),
       newWebinar: element('wsNewWebinar'),
       settings: element('wsSettings'),
@@ -242,7 +292,8 @@
       if (assetsApi?.createAssetLibrary) {
         assetController = assetsApi.createAssetLibrary({ api, document });
       }
-      if (editorApi?.createEditor && editorPreview?.boot) {
+      const preview = ensurePreviewController();
+      if (editorApi?.createEditor && preview) {
         editorController = editorApi.createEditor({
           root: elements.settingsPanel,
           document,
@@ -250,7 +301,7 @@
           stateApi,
           getState: () => model.studioState,
           setState: nextState => { model.studioState = nextState; },
-          preview: editorPreview,
+          preview,
           getAssets: () => model.resolvedAssets,
           getResourcePolicy: () => model.resourcePolicy,
           confirm: confirmAction,
@@ -476,13 +527,17 @@
       : '<option value="">No webinars available</option>';
   }
 
+  function workspaceContent() {
+    return elements.workspaceContent || elements.workspace;
+  }
+
   function renderState(title, message, icon = 'fa-circle-info') {
-    elements.workspace.innerHTML = `<div class="ws-state"><i class="fas ${icon}" aria-hidden="true"></i><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p></div>`;
+    workspaceContent().innerHTML = `<div class="ws-state"><i class="fas ${icon}" aria-hidden="true"></i><h3>${escapeHtml(title)}</h3><p>${escapeHtml(message)}</p></div>`;
   }
 
   function renderNewForm() {
     const owners = model.owners.map(owner => `<option value="${Number(owner.id)}">${escapeHtml(owner.name || owner.email || `User ${owner.id}`)}</option>`).join('');
-    elements.workspace.innerHTML = `
+    workspaceContent().innerHTML = `
       <form id="wsNewWebinarForm" class="ws-new-form" novalidate>
         <h3>Create webinar</h3>
         <p>Start with one private opening slide. Audience access stays off until you turn it on.</p>
@@ -517,7 +572,7 @@
     }
     if (model.studioState) {
       const webinar = model.studioState.webinar;
-      elements.workspace.innerHTML = `
+      workspaceContent().innerHTML = `
         <section class="ws-workspace-intro">
           <h3>${escapeHtml(webinar.title)}</h3>
           <p>The editing workspace is ready. Slide controls and live preview load here as Studio tools come online.</p>
@@ -536,13 +591,21 @@
     renderState('Choose a webinar', 'Select a webinar to begin.', 'fa-chalkboard');
   }
 
+  function deactivateSettingsControllers() {
+    accessHistoryController?.deactivate?.();
+    assetController?.deactivate?.();
+  }
+
   function renderSettings() {
     if (elements.newWebinar) elements.newWebinar.hidden = model.access !== 'ready' || !isAdmin();
-    const selected = model.studioState?.webinar;
+    // While a different webinar loads, the previous deck's state is still in
+    // memory but must not be presented as editable or launchable.
+    const selected = model.loadingWebinar ? null : model.studioState?.webinar;
     if (elements.launchPresenter) elements.launchPresenter.disabled = !selected;
     if (elements.launchAudience) elements.launchAudience.disabled = !selected || !selected.audienceEnabled;
     if (elements.settingsPanel && !selected) {
-      elements.settingsPanel.innerHTML = '<p>Select a webinar to manage presenter settings.</p>';
+      deactivateSettingsControllers();
+      setPanelCopy(`<p>${model.loadingWebinar ? LOADING_COPY : 'Select a webinar to manage presenter settings.'}</p>`);
     } else if (elements.settingsPanel) {
       renderSettingsTab();
     }
@@ -702,7 +765,11 @@
       return;
     }
     assetController?.deactivate?.();
-    elements.settingsPanel.innerHTML = `<p>${SETTINGS_COPY[model.settingsTab]}</p>`;
+    if (model.settingsTab === 'code' && editorApi?.createEditor && !editorController) {
+      setPanelCopy(`<p>${PREVIEW_UNAVAILABLE_COPY}</p>`);
+      return;
+    }
+    setPanelCopy(`<p>${SETTINGS_COPY[model.settingsTab]}</p>`);
   }
 
   function handleSettingsKeydown(event) {
@@ -731,8 +798,12 @@
     accessHistoryController = null;
     assetController?.destroy?.();
     assetController = null;
-    editorController?.destroy?.();
+    // The editor owns the preview controller's teardown; destroy it directly
+    // only when no editor was ever built on top of it.
+    if (editorController) editorController.destroy?.();
+    else previewController?.destroy?.();
     editorController = null;
+    previewController = null;
     for (const [target, type, handler] of bindings) {
       target?.removeEventListener?.(type, handler);
     }

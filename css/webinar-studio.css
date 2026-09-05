@@ -48,6 +48,24 @@
 #webinarStudioModal .ws-heading,
 #webinarStudioModal .ws-decks-heading,
 #webinarStudioModal .ws-launch-actions,
+#webinarStudioModal .ws-preview-host {
+  max-width: 720px;
+  margin: 1rem auto 0;
+}
+
+#webinarStudioModal .ws-preview-host:empty {
+  display: none;
+}
+
+#webinarStudioModal .ws-preview-host iframe {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+  background: #000;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
 #webinarStudioModal .ws-version-line {
   display: flex;
   align-items: center;

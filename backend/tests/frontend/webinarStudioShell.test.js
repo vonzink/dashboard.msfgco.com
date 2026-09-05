@@ -367,3 +367,96 @@ describe('Webinar Studio shell contracts', () => {
     expect(elements.wsSettingsPanel.innerHTML).toContain('Presenter controls');
   });
 });
+
+describe('Webinar Studio preview wiring', () => {
+  function previewWiring({ previewConfig, previewApi } = {}) {
+    vi.resetModules();
+    const createWebinarStudio = require(studioPath);
+    const editorApi = require(resolve(root, 'js/webinar-studio/editor.js'));
+    const dom = makeDocument();
+    const previewHost = new FakeElement('wsPreviewHost');
+    previewHost.children = [];
+    previewHost.append = (...nodes) => previewHost.children.push(...nodes);
+    const iframe = { src: '', title: '', contentWindow: { postMessage: vi.fn() }, setAttribute: vi.fn(), attributes: {} };
+    iframe.setAttribute = (name, value) => { iframe.attributes[name] = String(value); if (name === 'src') iframe.src = String(value); };
+    const settingsPanel = dom.elements.wsSettingsPanel;
+    settingsPanel.replaceChildren = vi.fn();
+    settingsPanel.querySelectorAll = () => [];
+    const documentWithHost = {
+      ...dom.document,
+      getElementById: id => (id === 'wsPreviewHost' ? previewHost : dom.elements[id] || null),
+      createElement: tag => (tag === 'iframe' ? iframe : { tagName: tag.toUpperCase(), append() {}, setAttribute() {}, dataset: {}, children: [] }),
+      createDocumentFragment: () => ({ append() {}, children: [] }),
+    };
+    const controller = { boot: vi.fn().mockResolvedValue({ type: 'ready' }), destroy: vi.fn() };
+    const api = {
+      listWebinars: vi.fn().mockResolvedValue([{ id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false }]),
+      getWebinar: vi.fn().mockResolvedValue(privateDocument()),
+    };
+    const completePreviewApi = previewApi === undefined
+      ? { createPreviewController: vi.fn().mockReturnValue(controller) }
+      : previewApi;
+    const studio = createWebinarStudio({
+      document: documentWithHost,
+      api,
+      stateApi,
+      editorApi,
+      previewApi: completePreviewApi,
+      previewConfig,
+      confirm: vi.fn().mockResolvedValue(true),
+      currentUser: () => ({ id: 7, activeRole: 'admin', role: 'admin' }),
+      openWindow: vi.fn(),
+      navigationTarget: new FakeEventTarget(),
+    });
+    return { studio, previewApi: completePreviewApi, controller, iframe, previewHost, dom, settingsPanel };
+  }
+
+  it('builds the canonical preview controller from the published preview module with an exact-origin sandboxed iframe', async () => {
+    const test = previewWiring({ previewConfig: { url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview', origin: 'https://msfgmortgage.com' } });
+    await test.studio.init();
+    expect(test.previewHost.children).toContain(test.iframe);
+    expect(test.iframe.attributes.sandbox).toBe('allow-scripts');
+    expect(test.iframe.src).toBe('https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview');
+    expect(test.previewApi.createPreviewController).toHaveBeenCalledWith(expect.objectContaining({
+      iframe: test.iframe,
+      allowedOrigin: 'https://msfgmortgage.com',
+      onState: expect.any(Function),
+    }));
+    await test.studio.open();
+    test.dom.tabs[2].dataset.wsTab = 'code';
+    test.dom.elements.wsSettings.listeners.click({ target: test.dom.tabs[2] });
+    expect(test.settingsPanel.replaceChildren).toHaveBeenCalled();
+  });
+
+  it('refuses a preview whose URL origin does not match the configured origin', async () => {
+    const test = previewWiring({ previewConfig: { url: 'https://evil.example/studio-viewer.html?mode=preview', origin: 'https://msfgmortgage.com' } });
+    await test.studio.init();
+    expect(test.previewApi.createPreviewController).not.toHaveBeenCalled();
+    expect(test.previewHost.children).toHaveLength(0);
+  });
+
+  it('explains a missing preview configuration on the Code tab instead of silently doing nothing', async () => {
+    const test = previewWiring({ previewConfig: undefined });
+    await test.studio.init();
+    await test.studio.open();
+    expect(test.previewApi.createPreviewController).not.toHaveBeenCalled();
+    test.dom.tabs[2].dataset.wsTab = 'code';
+    test.dom.elements.wsSettings.listeners.click({ target: test.dom.tabs[2] });
+    expect(test.settingsPanel.innerHTML).toMatch(/preview host is not configured/i);
+    expect(test.settingsPanel.innerHTML).not.toMatch(/Master HTML and CSS tools will appear here/);
+  });
+
+  it('ships every Studio module before the coordinator and hosts the preview frame in the shell', () => {
+    const html = readFileSync(resolve(root, 'index.html'), 'utf8');
+    const order = ['js/api-server.js', 'js/webinar-studio/api.js', 'js/webinar-studio/state.js', 'js/webinar-studio/access-history.js',
+      'js/webinar-studio/assets.js', 'js/webinar-studio/preview.js', 'js/webinar-studio/editor.js', 'js/webinar-studio.js'];
+    const positions = order.map(file => html.indexOf(`src="${file}`));
+    positions.forEach((position, index) => {
+      expect(position, order[index]).toBeGreaterThan(-1);
+      if (index) expect(position).toBeGreaterThan(positions[index - 1]);
+    });
+    expect(html).toContain('id="wsPreviewHost"');
+    expect(html).toContain('id="wsWorkspaceContent"');
+    expect(html).not.toContain('WebinarStudioEditorPreview');
+  });
+});

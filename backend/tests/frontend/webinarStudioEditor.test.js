@@ -275,6 +275,55 @@ describe('Webinar Studio one-box editor', () => {
     expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 2 })).toBeNull();
   });
 
+  it('inserts two spaces on Tab only inside Code textareas so other fields keep native focus movement', () => {
+    const test = makeHarness();
+    test.editor.render(test.state);
+    const code = test.root.querySelectorAll('[data-code-field="html"]')[0];
+    code.value = '<section>';
+    code.selectionStart = code.selectionEnd = 9;
+    const codeEvent = { target: code, key: 'Tab', preventDefault: vi.fn() };
+    test.root.emit('keydown', codeEvent);
+    expect(codeEvent.preventDefault).toHaveBeenCalled();
+    expect(test.state.slidesById[FIRST].html).toBe('<section>  ');
+
+    const notes = test.root.querySelectorAll('[data-slide-field="speakerNotes"]')[0];
+    notes.value = 'Welcome';
+    notes.selectionStart = notes.selectionEnd = 7;
+    const notesEvent = { target: notes, key: 'Tab', preventDefault: vi.fn() };
+    test.root.emit('keydown', notesEvent);
+    expect(notesEvent.preventDefault).not.toHaveBeenCalled();
+    expect(notes.value).toBe('Welcome');
+    expect(test.state.slidesById[FIRST].speakerNotes).toBe('Welcome');
+
+    const foreign = new FakeElement('textarea', test.root.ownerDocument);
+    foreign.value = 'asset description';
+    const foreignEvent = { target: foreign, key: 'Tab', preventDefault: vi.fn() };
+    test.root.emit('keydown', foreignEvent);
+    expect(foreignEvent.preventDefault).not.toHaveBeenCalled();
+    expect(foreign.value).toBe('asset description');
+  });
+
+  it('opens a collapsed slide box when restoring an insertion target so focus can land', async () => {
+    const test = makeHarness();
+    test.editor.setContext({ webinarId: 12, generation: 1 });
+    test.editor.render(test.state);
+    const secondBox = test.root.querySelectorAll('.ws-slide-box').find(box => box.dataset.slideId === SECOND);
+    expect(secondBox.open).toBe(false);
+    const secondHtml = test.root.querySelectorAll('[data-code-field="html"]')[1];
+    secondHtml.selectionStart = secondHtml.selectionEnd = 9;
+    test.root.emit('focusin', { target: secondHtml });
+    const target = test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 1 });
+    const token = '{{ASSET:44444444-4444-4444-8444-444444444444}}';
+    expect(target.insertText(token)).toBe(true);
+
+    test.editor.render(test.state);
+    const restoredBox = test.root.querySelectorAll('.ws-slide-box').find(box => box.dataset.slideId === SECOND);
+    expect(restoredBox.open).toBe(true);
+    const restored = test.root.querySelectorAll('[data-code-field="html"]')[1];
+    expect(test.root.ownerDocument.activeElement).toBe(restored);
+    expect(restored.selectionStart).toBe(9 + token.length);
+  });
+
   it('moves focus and activation through each slide code tab with wrapping keyboard controls', () => {
     const test = makeHarness();
     test.editor.render(test.state);

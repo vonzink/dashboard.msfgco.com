@@ -1544,7 +1544,10 @@
         </aside>
 
         <main id="wsWorkspace" class="ws-workspace" tabindex="-1">
-          <div class="ws-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Checking your Studio access...</p></div>
+          <div id="wsWorkspaceContent">
+            <div class="ws-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Checking your Studio access...</p></div>
+          </div>
+          <section id="wsPreviewHost" class="ws-preview-host" aria-label="Slide preview"></section>
         </main>
 
         <aside id="wsSettings" class="ws-settings" aria-label="Webinar settings">
@@ -1593,7 +1596,11 @@
   <script src="js/api-server.js?v=20260410"></script>
   <script src="js/webinar-studio/api.js?v=20260904"></script>
   <script src="js/webinar-studio/state.js?v=20260904"></script>
-  <script src="js/webinar-studio.js?v=20260904"></script>
+  <script src="js/webinar-studio/access-history.js?v=20260905"></script>
+  <script src="js/webinar-studio/assets.js?v=20260905"></script>
+  <script src="js/webinar-studio/preview.js?v=20260905"></script>
+  <script src="js/webinar-studio/editor.js?v=20260905"></script>
+  <script src="js/webinar-studio.js?v=20260905"></script>
   <script src="js/utils.js?v=20260410"></script>
   <script src="js/theme.js?v=20260410"></script>
   <script src="js/tables.js?v=20260410"></script>

@@ -390,7 +390,7 @@ describe('Webinar Studio reusable asset library', () => {
     expect(viewer.root.querySelector('[data-archive-version]')).toBeNull();
   });
 
-  it('copies or inserts only canonical asset tokens and predefined snippets while preserving editor selection', async () => {
+  it('copies only canonical asset tokens and predefined snippets and inserts only through a logical editor target', async () => {
     const copyText = vi.fn().mockResolvedValue(undefined);
     const test = harness({ copyText });
     await test.library.renderAssetCatalog(test.context);
@@ -407,19 +407,15 @@ describe('Webinar Studio reusable asset library', () => {
     ]);
     expect(copyText.mock.calls.flat().join(' ')).not.toMatch(/assets\.example|signed\.example|approved\//);
 
-    const editor = test.document.createElement('textarea');
-    editor.value = '<section>before after</section>';
-    editor.selectionStart = 16;
-    editor.selectionEnd = 21;
-    const input = vi.fn();
-    editor.addEventListener('input', input);
-    test.document.activeElement = editor;
-
-    expect(test.library.insertReference(version, editor)).toBe(true);
-    expect(editor.value).toBe(`<section>before ${token}</section>`);
-    expect(editor.selectionStart).toBe(16 + token.length);
-    expect(input).toHaveBeenCalledOnce();
-    expect(test.document.activeElement).toBe(editor);
+    /* Insertion only ever goes through an editor-owned logical target; a bare
+       textarea is not an accepted target even when passed explicitly. */
+    const detached = test.document.createElement('textarea');
+    detached.value = '<section>before after</section>';
+    expect(test.library.insertReference(version, detached)).toBe(false);
+    expect(detached.value).toBe('<section>before after</section>');
+    const logical = { insertText: vi.fn().mockReturnValue(true) };
+    expect(test.library.insertReference(version, logical)).toBe(true);
+    expect(logical.insertText).toHaveBeenCalledWith(token);
   });
 
   it('uses a logical editor target after focus is gone and clearly disables insertion without one', async () => {
@@ -788,6 +784,29 @@ describe('Webinar Studio reusable asset library', () => {
     expect(test.masterField('css').value).toBe(`main{${TOKEN}:8px}`);
     expect(test.dirtyBadge('master').textContent).toBe('Unsaved');
     expect(test.codeField('html', FAMILY).value).toBe('<section>before after</section>');
+  });
+
+  it('shows no editable surface for the previous webinar while the next one loads', async () => {
+    const pending = deferred();
+    const test = coordinatorHarness({ documents: { 12: studioDocument(12), 13: studioDocument(13) } });
+    test.api.getWebinar.mockImplementation(id => id === 13 ? pending.promise : Promise.resolve(structuredClone(studioDocument(12))));
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    expect(test.codeField('html', FAMILY)).not.toBeNull();
+
+    const switching = test.studio.selectWebinar(13);
+    await Promise.resolve();
+    expect(test.codeField('html', FAMILY)).toBeNull();
+    expect(test.panel.querySelectorAll('[data-save-slide]')).toHaveLength(0);
+    expect(test.panel.querySelectorAll('[data-save-master]')).toHaveLength(0);
+    expect(test.panel.innerHTML).toMatch(/loading/i);
+    expect(test.elements.wsLaunchPresenter.disabled).toBe(true);
+
+    pending.resolve(structuredClone(studioDocument(13)));
+    await switching;
+    await test.settle();
+    expect(test.codeField('html', FAMILY)).not.toBeNull();
   });
 
   it('never lets a target from one webinar insert into a newly selected webinar', async () => {

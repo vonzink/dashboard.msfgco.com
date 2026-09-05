@@ -227,9 +227,7 @@
     function editorTarget() {
       try {
         const target = context?.getEditorTarget?.();
-        return target && (typeof target.insertText === 'function' || typeof target.setRangeText === 'function')
-          ? target
-          : null;
+        return target && typeof target.insertText === 'function' ? target : null;
       } catch {
         return null;
       }
@@ -770,39 +768,22 @@
     }
 
     function insertReference(version, targetEditor = null) {
-      const target = targetEditor || editorTarget();
+      /* Insertion only goes through an editor-owned logical target. The editor
+         re-reads its own state at insert time, marks the surface dirty, and
+         schedules the preview; this module never touches a textarea directly. */
+      const target = targetEditor && typeof targetEditor.insertText === 'function'
+        ? targetEditor
+        : (targetEditor ? null : editorTarget());
       if (!target) {
         errorMessage = 'Choose an HTML, CSS, or JavaScript Code field before inserting an asset.';
         render();
         return false;
       }
-      const reference = assetToken(version);
-      if (typeof target.insertText === 'function') {
-        if (target.insertText(reference) !== true) {
-          errorMessage = 'That Code field is no longer available. Choose it again before inserting.';
-          render();
-          return false;
-        }
-        activityMessage = 'Asset reference inserted. Save Live when the slide is ready.';
-        errorMessage = '';
-        render();
-        return true;
-      }
-      if (typeof target.setRangeText !== 'function') {
-        errorMessage = 'Choose an HTML, CSS, or JavaScript Code field before inserting an asset.';
+      if (target.insertText(assetToken(version)) !== true) {
+        errorMessage = 'That Code field is no longer available. Choose it again before inserting.';
         render();
         return false;
       }
-      const start = Number.isSafeInteger(target.selectionStart) ? target.selectionStart : String(target.value || '').length;
-      const end = Number.isSafeInteger(target.selectionEnd) ? target.selectionEnd : start;
-      target.setRangeText(reference, start, end, 'end');
-      const EventType = document.defaultView?.Event || globalThis.Event;
-      if (typeof target.dispatchEvent === 'function' && typeof EventType === 'function') {
-        target.dispatchEvent(new EventType('input', { bubbles: true }));
-      } else if (typeof target.emit === 'function') {
-        target.emit('input');
-      }
-      target.focus?.();
       activityMessage = 'Asset reference inserted. Save Live when the slide is ready.';
       errorMessage = '';
       render();
