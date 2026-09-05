@@ -1007,6 +1007,32 @@ describe('Webinar Studio audience bridge wiring', () => {
     expect(test.elements.webinarStudioModal.hidden).toBe(false);
   });
 
+  it('resolves a superseded prompt as declined so a newer prompt cannot strand the close guard', async () => {
+    const pending = [];
+    const confirm = vi.fn(() => new Promise(resolve => { pending.push(resolve); }));
+    const test = await connected({ confirm });
+    const closing = test.studio.close();
+    await Promise.resolve();
+    expect(confirm).toHaveBeenCalledTimes(1);
+    /* A deck switch prompt replaces the close prompt while it is still open. */
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second-deck', title: 'Second deck', audienceEnabled: true }));
+    const switching = test.studio.selectWebinar(13);
+    await Promise.resolve();
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(await closing).toBe(false);
+    pending[1](true);
+    expect(await switching).toBe(true);
+    expect(test.elements.webinarStudioModal.hidden).toBe(false);
+    /* The guard is free again. */
+    confirm.mockResolvedValue(true);
+    expect(await test.studio.close()).toBe(true);
+  });
+
+  it('forwards audience readies with the webinar they belong to', async () => {
+    const test = await connected();
+    expect(test.presenter.applyAudienceState).toHaveBeenLastCalledWith({ type: 'audience-ready', payload: { index: 0, total: 1 } }, { webinarId: 12 });
+  });
+
   it('closes without asking when no audience is connected', async () => {
     const confirm = vi.fn().mockResolvedValue(false);
     const test = bridgeWiring({ confirm });
@@ -1098,7 +1124,7 @@ describe('Webinar Studio audience bridge wiring', () => {
 
     test.bridges[0].answer();
     expect(test.presenter.setConnection).toHaveBeenCalledWith('connected');
-    expect(test.presenter.applyAudienceState).toHaveBeenCalledWith({ type: 'audience-ready', payload: { index: 0, total: 1 } });
+    expect(test.presenter.applyAudienceState).toHaveBeenCalledWith({ type: 'audience-ready', payload: { index: 0, total: 1 } }, { webinarId: 12 });
     expect(facade.sendControl('next', {})).toBe(true);
     expect(test.bridges[0].sendControl).toHaveBeenCalledWith('next', {});
     /* The bridge opens the window itself through the coordinator's opener. */

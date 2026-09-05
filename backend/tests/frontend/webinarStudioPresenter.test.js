@@ -611,6 +611,20 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(test.bridge.sendControl).toHaveBeenCalledWith('goto', { index: 1 });
   });
 
+  it('adopts once when the first ready arrives before the panel has ever rendered, using the webinar the coordinator names', async () => {
+    const test = harness();
+    test.bridge.status.mockReturnValue('connected');
+    // No panel yet: the coordinator forwards the ready with its webinar id.
+    expect(test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } }, { webinarId: 12 })).toBe(true);
+    await test.open();
+    test.controller.goNext();
+    test.controller.goNext();
+    test.bridge.sendControl.mockClear();
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } }, { webinarId: 12 });
+    expect(test.bridge.sendControl).toHaveBeenCalledWith('goto', { index: 2 });
+    expect(text(test.q('[data-position]'))).toBe('3 / 3');
+  });
+
   it('pushes the presenter slide on reconnect even when the audience reports a position beyond the presenter\'s own range', async () => {
     const test = harness();
     test.bridge.status.mockReturnValue('connected');

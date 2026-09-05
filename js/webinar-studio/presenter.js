@@ -427,7 +427,7 @@
 
     /* Audience acknowledgements are already validated by the bridge, but every
        value is re-checked here so a malformed payload can only be ignored. */
-    function applyAudienceState(message) {
+    function applyAudienceState(message, options = {}) {
       if (!isPlainObject(message) || typeof message.type !== 'string') return false;
       const payload = isPlainObject(message.payload) ? message.payload : {};
       switch (message.type) {
@@ -486,7 +486,7 @@
           // the panel: a deck switched while another tab was open still adopts
           // its first ready, while a later ready for the same webinar is a
           // reconnect or relaunch and follows the presenter.
-          const readyWebinar = Number(state()?.webinar?.id) || null;
+          const readyWebinar = positiveInteger(options?.webinarId) || Number(state()?.webinar?.id) || null;
           if (audienceReadyFor !== null && audienceReadyFor === readyWebinar) {
             if (Number.isSafeInteger(nextIndex) && nextIndex !== clampIndex(index)) sendControl('goto', { index: clampIndex(index) });
             renderAudience();

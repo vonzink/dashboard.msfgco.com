@@ -47,7 +47,27 @@
   const bridgeApi = dependencies.bridgeApi;
   const audienceConfig = dependencies.audienceConfig;
   const stateApi = dependencies.stateApi;
-  const confirmAction = dependencies.confirm;
+  /* Prompts are serialized on the Studio side: a newer prompt resolves the
+     one still open as declined, so an awaited prompt that the shared dialog
+     replaced without answering cannot strand its caller. */
+  let pendingPrompt = null;
+  function confirmAction(message, options) {
+    if (pendingPrompt) {
+      const superseded = pendingPrompt;
+      pendingPrompt = null;
+      superseded(false);
+    }
+    let settle;
+    const gate = new Promise(resolve => { settle = resolve; });
+    pendingPrompt = settle;
+    let outcome;
+    try { outcome = Promise.resolve(dependencies.confirm(message, options)); } catch { outcome = Promise.resolve(false); }
+    outcome.then(result => settle(result === true), () => settle(false));
+    return gate.then(result => {
+      if (pendingPrompt === settle) pendingPrompt = null;
+      return result;
+    });
+  }
   const currentUser = dependencies.currentUser;
   const openWindow = dependencies.openWindow;
   const navigationTarget = dependencies.navigationTarget;
@@ -331,7 +351,7 @@
         allowedOrigin: origin,
         onState: message => {
           if (!current()) return;
-          presenterController?.applyAudienceState?.(message);
+          presenterController?.applyAudienceState?.(message, { webinarId: forWebinar });
         },
         onStatus: status => {
           if (!current()) return;
