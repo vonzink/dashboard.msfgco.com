@@ -449,7 +449,7 @@ describe('Webinar Studio preview wiring', () => {
   it('ships every Studio module before the coordinator and hosts the preview frame in the shell', () => {
     const html = readFileSync(resolve(root, 'index.html'), 'utf8');
     const order = ['js/api-server.js', 'js/webinar-studio/api.js', 'js/webinar-studio/state.js', 'js/webinar-studio/access-history.js',
-      'js/webinar-studio/assets.js', 'js/webinar-studio/preview.js', 'js/webinar-studio/editor.js', 'js/webinar-studio.js'];
+      'js/webinar-studio/assets.js', 'js/webinar-studio/preview.js', 'js/webinar-studio/editor.js', 'js/webinar-studio/presenter.js', 'js/webinar-studio.js'];
     const positions = order.map(file => html.indexOf(`src="${file}`));
     positions.forEach((position, index) => {
       expect(position, order[index]).toBeGreaterThan(-1);

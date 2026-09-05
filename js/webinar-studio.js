@@ -12,6 +12,7 @@
       accessHistoryApi: root.WebinarStudioAccessHistory,
       assetsApi: root.WebinarStudioAssets,
       editorApi: root.WebinarStudioEditor,
+      presenterApi: root.WebinarStudioPresenter,
       previewApi: root.WebinarStudioPreview,
       previewConfig: root.CONFIG?.webinarStudio?.preview,
       stateApi: root.WebinarStudioState,
@@ -38,6 +39,7 @@
   const accessHistoryApi = dependencies.accessHistoryApi;
   const assetsApi = dependencies.assetsApi;
   const editorApi = dependencies.editorApi;
+  const presenterApi = dependencies.presenterApi;
   const previewApi = dependencies.previewApi;
   const previewConfig = dependencies.previewConfig;
   const stateApi = dependencies.stateApi;
@@ -78,6 +80,7 @@
   let accessHistoryController = null;
   let assetController = null;
   let editorController = null;
+  let presenterController = null;
   let previewController = null;
   let editorContextGeneration = 0;
   let initializationPromise = null;
@@ -293,6 +296,18 @@
         assetController = assetsApi.createAssetLibrary({ api, document });
       }
       const preview = ensurePreviewController();
+      if (presenterApi?.createPresenterController) {
+        presenterController = presenterApi.createPresenterController({
+          document,
+          api,
+          confirm: confirmAction,
+          preview,
+          bridge: dependencies.bridge || null,
+          keyTarget: document,
+          setIntervalImpl: dependencies.setIntervalImpl,
+          clearIntervalImpl: dependencies.clearIntervalImpl,
+        });
+      }
       if (editorApi?.createEditor && preview) {
         editorController = editorApi.createEditor({
           root: elements.settingsPanel,
@@ -404,8 +419,7 @@
     invalidateRequests();
     invalidateEditorContext();
     accessPromise = null;
-    accessHistoryController?.deactivate?.();
-    assetController?.deactivate?.();
+    deactivateSettingsControllers();
     elements.modal.classList.remove('active');
     elements.modal.hidden = true;
     elements.modal.setAttribute('aria-hidden', 'true');
@@ -594,6 +608,7 @@
   function deactivateSettingsControllers() {
     accessHistoryController?.deactivate?.();
     assetController?.deactivate?.();
+    presenterController?.deactivate?.();
   }
 
   function renderSettings() {
@@ -720,6 +735,21 @@
   function renderSettingsTab() {
     if (!elements.settingsPanel) return;
     elements.settingsPanel.setAttribute('data-ws-panel', model.settingsTab);
+    if (model.settingsTab !== 'presenter') presenterController?.deactivate?.();
+    if (presenterController && model.settingsTab === 'presenter') {
+      accessHistoryController?.deactivate?.();
+      assetController?.deactivate?.();
+      const webinarId = Number(model.studioState.webinar.id);
+      void presenterController.renderPresenterPanel({
+        root: elements.settingsPanel,
+        webinarId,
+        getState: () => model.studioState,
+        getAssets: () => model.resolvedAssets,
+        getResourcePolicy: () => model.resourcePolicy,
+        currentUser: currentUser() || {},
+      });
+      return;
+    }
     if (accessHistoryController && (model.settingsTab === 'access' || model.settingsTab === 'history')) {
       assetController?.deactivate?.();
       const webinarId = Number(model.studioState.webinar.id);
@@ -798,6 +828,8 @@
     accessHistoryController = null;
     assetController?.destroy?.();
     assetController = null;
+    presenterController?.destroy?.();
+    presenterController = null;
     // The editor owns the preview controller's teardown; destroy it directly
     // only when no editor was ever built on top of it.
     if (editorController) editorController.destroy?.();

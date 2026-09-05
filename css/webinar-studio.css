@@ -417,6 +417,259 @@
   font-size: var(--font-sm);
 }
 
+/* ---- Presenter tab ---- */
+#webinarStudioModal .ws-presenter {
+  display: grid;
+  gap: 0.9rem;
+}
+
+#webinarStudioModal .ws-settings-section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+#webinarStudioModal .ws-settings-section h4,
+#webinarStudioModal .ws-presenter-title {
+  margin: 0;
+  font-size: var(--font-sm);
+  font-weight: 700;
+}
+
+#webinarStudioModal .ws-presenter-clocks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.4rem;
+}
+
+#webinarStudioModal .ws-presenter-clock {
+  padding: 0.45rem 0.5rem;
+  background: var(--ws-canvas);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+#webinarStudioModal .ws-presenter-clock-label {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#webinarStudioModal .ws-presenter-clock-value {
+  font-family: Poppins, Inter, sans-serif;
+  font-size: var(--font-md);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+#webinarStudioModal .ws-presenter-clock-value[data-state="behind"] {
+  color: var(--status-danger);
+}
+
+#webinarStudioModal .ws-presenter-clock-value[data-state="ahead"] {
+  color: var(--green-medium);
+}
+
+#webinarStudioModal .ws-presenter-clock-total {
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+#webinarStudioModal .ws-presenter-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+
+#webinarStudioModal .ws-presenter-position {
+  font-family: Poppins, Inter, sans-serif;
+  font-size: var(--font-lg);
+  font-weight: 800;
+}
+
+#webinarStudioModal .ws-presenter-status:empty,
+#webinarStudioModal .ws-presenter [data-presenter-error]:empty {
+  display: none;
+}
+
+#webinarStudioModal .ws-presenter-status {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
+#webinarStudioModal .ws-presenter-shared-notes,
+#webinarStudioModal .ws-presenter-up-next-title {
+  margin: 0;
+  white-space: pre-line;
+}
+
+#webinarStudioModal .ws-presenter-up-next-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+#webinarStudioModal .ws-icon-action {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  color: var(--ws-deep);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  cursor: pointer;
+}
+
+#webinarStudioModal .ws-icon-action:hover:not(:disabled) {
+  background: rgb(140 198 62 / 13%);
+}
+
+#webinarStudioModal .ws-icon-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+#webinarStudioModal .ws-icon-action.is-delete {
+  color: var(--status-danger);
+}
+
+#webinarStudioModal .ws-note-add,
+#webinarStudioModal .ws-note {
+  position: relative;
+  display: grid;
+  gap: 0.35rem;
+}
+
+#webinarStudioModal .ws-note-add textarea,
+#webinarStudioModal .ws-note textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 0.5rem 2.6rem 0.5rem 0.6rem;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  resize: vertical;
+}
+
+#webinarStudioModal .ws-note-actions {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  display: flex;
+  gap: 0.25rem;
+}
+
+#webinarStudioModal .ws-note {
+  padding: 0.6rem 0.7rem;
+  background: var(--ws-canvas);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+#webinarStudioModal .ws-note-body {
+  margin: 0;
+  padding-right: 4.6rem;
+  white-space: pre-line;
+}
+
+#webinarStudioModal .ws-note-none {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+}
+
+#webinarStudioModal .ws-presenter-toggles,
+#webinarStudioModal .ws-presenter-animation,
+#webinarStudioModal .ws-presenter-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+#webinarStudioModal .ws-presenter-toggles button,
+#webinarStudioModal .ws-presenter-nav button,
+#webinarStudioModal .ws-key-capture {
+  min-height: 34px;
+  padding: 0.4rem 0.6rem;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--font-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+#webinarStudioModal .ws-presenter-toggles button.on,
+#webinarStudioModal .ws-key-capture.is-listening {
+  color: #102d2f;
+  background: var(--ws-lime);
+  border-color: var(--ws-lime);
+}
+
+#webinarStudioModal .ws-presenter-nav {
+  padding-top: 0.2rem;
+}
+
+#webinarStudioModal .ws-presenter-nav [data-nav],
+#webinarStudioModal .ws-presenter-nav [data-timer-start] {
+  flex: 1 1 auto;
+}
+
+#webinarStudioModal .ws-presenter-animation-status {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: var(--font-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+#webinarStudioModal .ws-presenter-shortcuts summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+#webinarStudioModal .ws-shortcut-list {
+  display: grid;
+  gap: 0.3rem;
+}
+
+#webinarStudioModal .ws-shortcut-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+#webinarStudioModal .ws-key-capture {
+  min-width: 64px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#webinarStudioModal .ws-shortcut-status {
+  min-height: 1.2rem;
+  margin: 0;
+  font-size: var(--font-xs);
+}
+
+#webinarStudioModal .ws-shortcut-status[data-state="error"] {
+  color: var(--status-danger);
+}
+
+#webinarStudioModal .ws-shortcut-status[data-state="saved"] {
+  color: var(--green-medium);
+}
+
 #webinarStudioModal button:focus-visible,
 #webinarStudioModal select:focus-visible,
 #webinarStudioModal input:focus-visible,
