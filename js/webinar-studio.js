@@ -9,6 +9,7 @@
     root.WebinarStudio = factory({
       document: root.document,
       api: root.WebinarStudioAPI,
+      accessHistoryApi: root.WebinarStudioAccessHistory,
       stateApi: root.WebinarStudioState,
       confirm: (message, options) => root.Utils?.confirm
         ? root.Utils.confirm(message, options)
@@ -30,6 +31,7 @@
 
   const document = dependencies.document;
   const api = dependencies.api;
+  const accessHistoryApi = dependencies.accessHistoryApi;
   const stateApi = dependencies.stateApi;
   const confirmAction = dependencies.confirm;
   const currentUser = dependencies.currentUser;
@@ -61,6 +63,7 @@
   };
 
   let elements = {};
+  let accessHistoryController = null;
   let initializationPromise = null;
   let bindings = [];
 
@@ -174,6 +177,13 @@
     }
     if (!model.initialized) {
       model.initialized = true;
+      if (accessHistoryApi?.createAccessHistory) {
+        accessHistoryController = accessHistoryApi.createAccessHistory({
+          api,
+          confirm: confirmAction,
+          document,
+        });
+      }
       setLauncherAvailable(false);
       listen(elements.close, 'click', () => close());
       listen(elements.newWebinar, 'click', () => openNewWebinar());
@@ -293,6 +303,38 @@
       model.mode = 'deck-error';
       render();
       return false;
+    }
+  }
+
+  async function reloadSelectedWebinar() {
+    const webinarId = Number(model.selectedWebinarId);
+    if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
+    const documentResponse = await api.getWebinar(webinarId);
+    if (Number(documentResponse?.id) !== webinarId) {
+      throw new TypeError('Webinar response id did not match the request');
+    }
+    const nextState = stateApi.createStudioState(documentResponse);
+    model.studioState = nextState;
+    model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
+      id: webinarId,
+      slug: nextState.webinar.slug,
+      title: nextState.webinar.title,
+      liveVersion: nextState.liveVersion,
+      audienceEnabled: nextState.webinar.audienceEnabled,
+    } : webinar);
+    model.mode = 'deck';
+    render();
+    return true;
+  }
+
+  async function refreshAfterArchive() {
+    model.webinars = normalizeSummaries(await api.listWebinars());
+    model.selectedWebinarId = null;
+    model.studioState = null;
+    model.mode = 'empty';
+    render();
+    if (model.webinars.length) {
+      await selectWebinar(model.webinars[0].id, { skipConfirmation: true });
     }
   }
 
@@ -476,6 +518,26 @@
   function renderSettingsTab() {
     if (!elements.settingsPanel) return;
     elements.settingsPanel.setAttribute('data-ws-panel', model.settingsTab);
+    if (accessHistoryController && (model.settingsTab === 'access' || model.settingsTab === 'history')) {
+      const context = {
+        root: elements.settingsPanel,
+        webinarId: model.studioState.webinar.id,
+        state: model.studioState,
+        getState: () => model.studioState,
+        isAdmin: isAdmin(),
+        currentUser: currentUser() || {},
+        hasUnsavedChanges: () => Boolean(model.studioState && stateApi.hasUnsavedChanges(model.studioState)),
+        reload: reloadSelectedWebinar,
+        onArchived: refreshAfterArchive,
+      };
+      if (model.settingsTab === 'access') {
+        void accessHistoryController.renderAccessPanel(context);
+      } else {
+        void accessHistoryController.renderHistoryPanel(context);
+      }
+      return;
+    }
+    accessHistoryController?.deactivate?.();
     elements.settingsPanel.innerHTML = `<p>${SETTINGS_COPY[model.settingsTab]}</p>`;
   }
 
@@ -498,6 +560,8 @@
   }
 
   function destroy() {
+    accessHistoryController?.destroy?.();
+    accessHistoryController = null;
     for (const [target, type, handler] of bindings) {
       target?.removeEventListener?.(type, handler);
     }
