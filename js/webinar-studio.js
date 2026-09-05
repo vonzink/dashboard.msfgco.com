@@ -15,6 +15,7 @@
         : Promise.resolve(root.confirm(message)),
       currentUser: () => root.CONFIG?.currentUser || {},
       openWindow: (...args) => root.open(...args),
+      navigationTarget: root,
     });
     root.WebinarStudio.init();
   };
@@ -33,6 +34,15 @@
   const confirmAction = dependencies.confirm;
   const currentUser = dependencies.currentUser;
   const openWindow = dependencies.openWindow;
+  const navigationTarget = dependencies.navigationTarget;
+
+  const SETTINGS_COPY = Object.freeze({
+    presenter: 'Presenter controls and personal shortcuts will appear here.',
+    access: 'Ownership and audience access will appear here.',
+    code: 'Master HTML and CSS tools will appear here.',
+    assets: 'Shared webinar assets will appear here.',
+    history: 'Saved versions and restore controls will appear here.',
+  });
 
   const model = {
     initialized: false,
@@ -47,10 +57,17 @@
     formError: '',
     launchButton: null,
     bodyOverflow: '',
+    settingsTab: 'presenter',
   };
 
   let elements = {};
   let initializationPromise = null;
+  let bindings = [];
+
+  function listen(target, type, handler) {
+    target?.addEventListener?.(type, handler);
+    bindings.push([target, type, handler]);
+  }
 
   function element(id) {
     return document.getElementById(id);
@@ -158,18 +175,18 @@
     if (!model.initialized) {
       model.initialized = true;
       setLauncherAvailable(false);
-      elements.close?.addEventListener('click', () => close());
-      elements.newWebinar?.addEventListener('click', () => openNewWebinar());
-      elements.deckSelect?.addEventListener('change', event => {
+      listen(elements.close, 'click', () => close());
+      listen(elements.newWebinar, 'click', () => openNewWebinar());
+      listen(elements.deckSelect, 'change', event => {
         const id = Number(event.target.value);
         if (id) selectWebinar(id);
       });
-      elements.deckList?.addEventListener('click', event => {
+      listen(elements.deckList, 'click', event => {
         const button = event.target.closest?.('[data-ws-webinar-id]');
         const id = Number(button?.dataset?.wsWebinarId);
         if (id) selectWebinar(id);
       });
-      elements.workspace?.addEventListener('submit', event => {
+      listen(elements.workspace, 'submit', event => {
         if (event.target?.id !== 'wsNewWebinarForm') return;
         event.preventDefault();
         createWebinar({
@@ -178,22 +195,23 @@
           primaryOwnerUserId: Number(element('wsNewOwner')?.value),
         });
       });
-      elements.workspace?.addEventListener('click', event => {
+      listen(elements.workspace, 'click', event => {
         if (event.target.closest?.('[data-ws-cancel-new]')) cancelNewWebinar();
       });
-      elements.settings?.addEventListener('click', event => {
+      listen(elements.settings, 'click', event => {
         const tab = event.target.closest?.('[data-ws-tab]');
         if (tab) activateSettingsTab(tab.dataset.wsTab);
       });
-      elements.launchAudience?.addEventListener('click', () => launch('audience'));
-      elements.launchPresenter?.addEventListener('click', () => launch('presenter'));
-      elements.modal.addEventListener('click', event => {
+      listen(elements.settings, 'keydown', handleSettingsKeydown);
+      listen(elements.launchAudience, 'click', () => launch('audience'));
+      listen(elements.launchPresenter, 'click', () => launch('presenter'));
+      listen(elements.modal, 'click', event => {
         if (event.target === elements.modal) close();
       });
-      document.addEventListener('keydown', event => {
+      listen(document, 'keydown', event => {
         if (event.key === 'Escape' && !elements.modal.hidden) close();
       });
-      document.addEventListener('beforeunload', event => {
+      listen(navigationTarget, 'beforeunload', event => {
         if (!model.studioState || !stateApi.hasUnsavedChanges(model.studioState)) return;
         event.preventDefault();
         event.returnValue = '';
@@ -358,7 +376,7 @@
     if (elements.settingsPanel && !selected) {
       elements.settingsPanel.innerHTML = '<p>Select a webinar to manage presenter settings.</p>';
     } else if (elements.settingsPanel) {
-      elements.settingsPanel.innerHTML = '<p>Presenter controls and personal shortcuts will appear here.</p>';
+      renderSettingsTab();
     }
   }
 
@@ -445,20 +463,47 @@
   }
 
   function activateSettingsTab(name) {
-    const labels = {
-      presenter: 'Presenter controls and personal shortcuts will appear here.',
-      access: 'Ownership and audience access will appear here.',
-      code: 'Master HTML and CSS tools will appear here.',
-      assets: 'Shared webinar assets will appear here.',
-      history: 'Saved versions and restore controls will appear here.',
-    };
-    if (!Object.hasOwn(labels, name)) return;
+    if (!Object.hasOwn(SETTINGS_COPY, name)) return;
+    model.settingsTab = name;
     elements.settings?.querySelectorAll?.('[data-ws-tab]').forEach(tab => {
       const selected = tab.dataset.wsTab === name;
       tab.setAttribute('aria-selected', String(selected));
       tab.setAttribute('tabindex', selected ? '0' : '-1');
     });
-    if (elements.settingsPanel) elements.settingsPanel.innerHTML = `<p>${labels[name]}</p>`;
+    renderSettingsTab();
+  }
+
+  function renderSettingsTab() {
+    if (!elements.settingsPanel) return;
+    elements.settingsPanel.setAttribute('data-ws-panel', model.settingsTab);
+    elements.settingsPanel.innerHTML = `<p>${SETTINGS_COPY[model.settingsTab]}</p>`;
+  }
+
+  function handleSettingsKeydown(event) {
+    const tab = event.target.closest?.('[data-ws-tab]');
+    if (!tab) return;
+    const tabs = Array.from(elements.settings?.querySelectorAll?.('[data-ws-tab]') || []);
+    const currentIndex = tabs.indexOf(tab);
+    if (currentIndex < 0) return;
+    let nextIndex;
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = tabs.length - 1;
+    else return;
+    event.preventDefault();
+    const nextTab = tabs[nextIndex];
+    activateSettingsTab(nextTab.dataset.wsTab);
+    nextTab.focus();
+  }
+
+  function destroy() {
+    for (const [target, type, handler] of bindings) {
+      target?.removeEventListener?.(type, handler);
+    }
+    bindings = [];
+    model.initialized = false;
+    initializationPromise = null;
   }
 
   function launch(mode) {
@@ -477,5 +522,6 @@
     render,
     openNewWebinar,
     createWebinar,
+    destroy,
   });
 }));

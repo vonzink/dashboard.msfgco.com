@@ -56,32 +56,63 @@ class FakeElement {
     this.focus = vi.fn();
   }
   addEventListener(type, callback) { this.listeners[type] = callback; }
+  removeEventListener(type, callback) {
+    if (this.listeners[type] === callback) delete this.listeners[type];
+  }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   removeAttribute(name) { delete this.attributes[name]; }
   getAttribute(name) { return this.attributes[name] ?? null; }
   contains() { return false; }
   querySelector() { return null; }
   querySelectorAll() { return []; }
+  closest(selector) {
+    if (selector === '[data-ws-tab]' && this.dataset.wsTab) return this;
+    return null;
+  }
+}
+
+class FakeEventTarget {
+  constructor() { this.listeners = new Map(); }
+  addEventListener(type, callback) {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+    this.listeners.get(type).add(callback);
+  }
+  removeEventListener(type, callback) { this.listeners.get(type)?.delete(callback); }
+  dispatchEvent(event) {
+    for (const callback of this.listeners.get(event.type) || []) callback(event);
+    return !event.defaultPrevented;
+  }
 }
 
 function makeDocument() {
   const ids = [
     'webinarStudioLauncher', 'webinarStudioModal', 'wsClose', 'wsDeckList',
     'wsDeckSelect', 'wsWorkspace', 'wsStatus', 'wsNewWebinar', 'wsSettings',
-    'wsLaunchAudience', 'wsLaunchPresenter',
+    'wsSettingsPanel', 'wsLaunchAudience', 'wsLaunchPresenter',
   ];
   const elements = Object.fromEntries(ids.map(id => [id, new FakeElement(id)]));
   elements.webinarStudioLauncher.hidden = true;
   elements.webinarStudioLauncher.disabled = true;
   elements.webinarStudioModal.hidden = true;
+  const tabs = ['presenter', 'access', 'code', 'assets', 'history'].map(name => {
+    const tab = new FakeElement(`ws-tab-${name}`);
+    tab.dataset.wsTab = name;
+    tab.setAttribute('aria-selected', String(name === 'presenter'));
+    tab.setAttribute('tabindex', name === 'presenter' ? '0' : '-1');
+    return tab;
+  });
+  elements.wsSettings.querySelectorAll = selector => selector === '[data-ws-tab]' ? tabs : [];
   const document = {
     activeElement: elements.webinarStudioLauncher,
     body: { classList: new FakeClassList() },
     listeners: {},
     getElementById: id => elements[id] || null,
     addEventListener(type, callback) { this.listeners[type] = callback; },
+    removeEventListener(type, callback) {
+      if (this.listeners[type] === callback) delete this.listeners[type];
+    },
   };
-  return { document, elements };
+  return { document, elements, tabs };
 }
 
 function loadStudio({
@@ -89,6 +120,7 @@ function loadStudio({
   role = 'user',
   confirm = vi.fn().mockResolvedValue(true),
   state = stateApi,
+  navigationTarget = new FakeEventTarget(),
 } = {}) {
   vi.resetModules();
   const createWebinarStudio = require(studioPath);
@@ -107,8 +139,9 @@ function loadStudio({
     confirm,
     currentUser: () => ({ id: 7, activeRole: role, role }),
     openWindow: vi.fn(),
+    navigationTarget,
   });
-  return { studio, api: completeApi, confirm, ...dom };
+  return { studio, api: completeApi, confirm, navigationTarget, ...dom };
 }
 
 describe('Webinar Studio shell contracts', () => {
@@ -253,5 +286,84 @@ describe('Webinar Studio shell contracts', () => {
     expect(completeApi.getWebinar).toHaveBeenCalledWith(21);
     expect(elements.wsWorkspace.innerHTML).toContain('New class');
     expect(elements.wsStatus.textContent).toContain('Live version 1');
+  });
+
+  it('prevents real navigation-target beforeunload events only while dirty and removes the guard on teardown', async () => {
+    let dirty = true;
+    const state = { ...stateApi, hasUnsavedChanges: () => dirty };
+    const { studio, navigationTarget, document } = loadStudio({ state });
+    await studio.init();
+    await studio.open();
+
+    const dirtyEvent = {
+      type: 'beforeunload',
+      defaultPrevented: false,
+      returnValue: undefined,
+      preventDefault() { this.defaultPrevented = true; },
+    };
+    navigationTarget.dispatchEvent(dirtyEvent);
+    expect(dirtyEvent.defaultPrevented).toBe(true);
+    expect(dirtyEvent.returnValue).toBe('');
+    expect(document.listeners.beforeunload).toBeUndefined();
+
+    dirty = false;
+    const cleanEvent = {
+      type: 'beforeunload',
+      defaultPrevented: false,
+      returnValue: undefined,
+      preventDefault() { this.defaultPrevented = true; },
+    };
+    navigationTarget.dispatchEvent(cleanEvent);
+    expect(cleanEvent.defaultPrevented).toBe(false);
+    expect(cleanEvent.returnValue).toBeUndefined();
+
+    dirty = true;
+    studio.destroy();
+    const afterDestroy = {
+      type: 'beforeunload',
+      defaultPrevented: false,
+      returnValue: undefined,
+      preventDefault() { this.defaultPrevented = true; },
+    };
+    navigationTarget.dispatchEvent(afterDestroy);
+    expect(afterDestroy.defaultPrevented).toBe(false);
+  });
+
+  it('activates clicked settings tabs and supports wrapping arrow, Home, and End keyboard navigation', async () => {
+    const { studio, elements, tabs } = loadStudio();
+    await studio.init();
+    await studio.open();
+    const settingsClick = elements.wsSettings.listeners.click;
+    const settingsKeydown = elements.wsSettings.listeners.keydown;
+    const presenter = tabs[0];
+    const code = tabs[2];
+    const assets = tabs[3];
+    const history = tabs[4];
+
+    settingsClick({ target: code });
+    expect(code.getAttribute('aria-selected')).toBe('true');
+    expect(code.getAttribute('tabindex')).toBe('0');
+    expect(presenter.getAttribute('aria-selected')).toBe('false');
+    expect(elements.wsSettingsPanel.innerHTML).toContain('Master HTML and CSS');
+
+    const key = (target, value) => {
+      const event = { target, key: value, preventDefault: vi.fn() };
+      settingsKeydown(event);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+    };
+    key(code, 'ArrowRight');
+    expect(assets.focus).toHaveBeenCalledOnce();
+    expect(assets.getAttribute('aria-selected')).toBe('true');
+
+    key(assets, 'End');
+    expect(history.focus).toHaveBeenCalledOnce();
+    key(history, 'ArrowRight');
+    expect(presenter.focus).toHaveBeenCalledOnce();
+    key(presenter, 'ArrowLeft');
+    expect(history.focus).toHaveBeenCalledTimes(2);
+    key(history, 'Home');
+    expect(presenter.focus).toHaveBeenCalledTimes(2);
+    expect(presenter.getAttribute('aria-selected')).toBe('true');
+    expect(elements.wsSettingsPanel.innerHTML).toContain('Presenter controls');
   });
 });
