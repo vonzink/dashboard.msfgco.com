@@ -417,7 +417,7 @@
         if (event.target === elements.modal) close();
       });
       listen(document, 'keydown', event => {
-        if (event.key === 'Escape' && !elements.modal.hidden) close();
+        if (event.key === 'Escape' && !event.defaultPrevented && !elements.modal.hidden) close();
       });
       listen(navigationTarget, 'beforeunload', event => {
         if (!model.studioState || !stateApi.hasUnsavedChanges(model.studioState)) return;

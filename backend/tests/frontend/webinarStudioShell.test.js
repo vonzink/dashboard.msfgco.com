@@ -368,6 +368,21 @@ describe('Webinar Studio shell contracts', () => {
   });
 });
 
+describe('Webinar Studio keyboard ownership', () => {
+  it('does not close the Studio on an Escape that a presenter key capture already consumed', async () => {
+    const { studio, elements, document } = loadStudio();
+    await studio.open();
+    expect(elements.webinarStudioModal.hidden).toBe(false);
+    document.listeners.keydown({ key: 'Escape', defaultPrevented: true });
+    await Promise.resolve();
+    expect(elements.webinarStudioModal.hidden).toBe(false);
+    document.listeners.keydown({ key: 'Escape', defaultPrevented: false });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(elements.webinarStudioModal.hidden).toBe(true);
+  });
+});
+
 describe('Webinar Studio preview wiring', () => {
   const PRODUCTION_PREVIEW = {
     url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview',

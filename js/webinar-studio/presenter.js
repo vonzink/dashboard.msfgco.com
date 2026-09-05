@@ -176,20 +176,40 @@
       .join(' + ');
   }
 
-  /* Shortcut keys never fire from text entry, native activation keys on
-     buttons, or any dialog other than the Studio itself. Focus usually rests
-     on a Studio button, so only Space and Enter are reserved there. */
+  const ACTIVATION_KEYS = new Set(['Space', 'Enter']);
+  const NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'PageUp', 'PageDown']);
+  const ACTIVATABLE = 'button, a[href], summary, [role="button"], [role="tab"], [role="link"], [role="menuitem"], [role="option"], [role="switch"], [role="checkbox"]';
+  const ARROW_OWNERS = '[role="tab"], [role="tablist"], [role="listbox"], [role="option"], [role="menu"], [role="menubar"], [role="menuitem"], [role="radiogroup"], [role="radio"], [role="slider"], [role="tree"], [role="grid"]';
+
+  function keyCode(event) {
+    if (!event) return '';
+    if (event.code) return event.code;
+    if (event.key === ' ') return 'Space';
+    return String(event.key || '');
+  }
+
+  function closestMatch(target, selector) {
+    if (!target || typeof target !== 'object') return null;
+    if (typeof target.closest === 'function') return target.closest(selector);
+    return typeof target.matches === 'function' && target.matches(selector) ? target : null;
+  }
+
+  /* Shortcut keys never fire from text entry, from the activation keys of any
+     activatable control, from the arrow keys of a widget that owns arrows,
+     or from any dialog other than the Studio itself. Focus usually rests on
+     a Studio button, so letters and arrows there still reach the presenter. */
   function isTextEntryTarget(target, event = null) {
     if (!target || typeof target !== 'object') return false;
     const tag = String(target.tagName || '').toUpperCase();
     if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return true;
-    if (tag === 'BUTTON' && (!event || ['Space', 'Enter'].includes(event.code) || [' ', 'Enter'].includes(event.key))) return true;
     if (target.isContentEditable === true) return true;
     const editable = typeof target.getAttribute === 'function' ? target.getAttribute('contenteditable') : null;
     if (editable !== null && editable !== undefined && editable !== 'false') return true;
-    const dialog = typeof target.closest === 'function'
-      ? target.closest('dialog, [role="dialog"], [role="alertdialog"]')
-      : null;
+    const code = keyCode(event);
+    if (!event && tag === 'BUTTON') return true;
+    if (ACTIVATION_KEYS.has(code) && (tag === 'BUTTON' || closestMatch(target, ACTIVATABLE))) return true;
+    if (NAVIGATION_KEYS.has(code) && closestMatch(target, ARROW_OWNERS)) return true;
+    const dialog = closestMatch(target, 'dialog, [role="dialog"], [role="alertdialog"]');
     return Boolean(dialog && dialog.id !== 'webinarStudioModal');
   }
 
@@ -258,6 +278,7 @@
     let previewGeneration = 0;
     let keyListenerAttached = false;
     let shortcutsOpen = false;
+    let renderedAudienceStatus = null;
 
     /* ---- state helpers ---- */
 
@@ -294,11 +315,21 @@
       return targetBefore(slides().length);
     }
 
+    const CONNECTION_STATES = ['idle', 'connecting', 'connected', 'disconnected'];
+
     function connection() {
       if (!bridge) return 'offline';
-      if (explicitConnection) return explicitConnection;
-      const reported = typeof bridge.status === 'function' ? bridge.status() : null;
-      return ['idle', 'connecting', 'connected', 'disconnected'].includes(reported) ? reported : 'idle';
+      let reported = null;
+      try { reported = typeof bridge.status === 'function' ? bridge.status() : null; } catch { reported = null; }
+      if (CONNECTION_STATES.includes(reported)) return reported;
+      return CONNECTION_STATES.includes(explicitConnection) ? explicitConnection : 'idle';
+    }
+
+    /* Audience control is remote only once a launch has been attempted. Before
+       that the presenter navigates locally so the deck can be rehearsed. */
+    function audienceIsRemote() {
+      const status = connection();
+      return status === 'connected' || status === 'connecting' || status === 'disconnected';
     }
 
     function operation() {
@@ -331,7 +362,7 @@
 
     function goToIndex(nextIndex, { control = null, payload = {} } = {}) {
       const target = clampIndex(nextIndex);
-      if (control && !sendControl(control, payload)) return false;
+      if (control && audienceIsRemote() && !sendControl(control, payload)) return false;
       if (target !== clampIndex(index)) timer.slideAt = now();
       index = target;
       render();
@@ -349,12 +380,16 @@
     }
 
     function animationCommand(type) {
-      return sendControl(`animation-${type}`, {});
+      return deliver(`animation-${type}`, {});
+    }
+
+    function deliver(type, payload) {
+      return !audienceIsRemote() || sendControl(type, payload);
     }
 
     function toggleDrawing() {
       const next = !annotationOn;
-      if (!sendControl('annotation-command', { on: next })) return false;
+      if (!deliver('annotation-command', { on: next })) return false;
       annotationOn = next;
       renderControls();
       return true;
@@ -362,7 +397,7 @@
 
     function toggleFullscreen() {
       const next = !fullscreenOn;
-      if (!sendControl('fullscreen-request', { on: next })) return false;
+      if (!deliver('fullscreen-request', { on: next })) return false;
       fullscreenOn = next;
       renderControls();
       return true;
@@ -370,7 +405,7 @@
 
     function toggleNavigation() {
       const next = !navHidden;
-      if (!sendControl('nav-visibility', { hidden: next })) return false;
+      if (!deliver('nav-visibility', { hidden: next })) return false;
       navHidden = next;
       renderControls();
       return true;
@@ -380,7 +415,7 @@
       const map = kind === 'overlay' ? overlays : calculators;
       if (!map.has(id)) return false;
       const next = !map.get(id);
-      if (!sendControl(`supported-${kind}-state`, { id, visible: next })) return false;
+      if (!deliver(`supported-${kind}-state`, { id, visible: next })) return false;
       map.set(id, next);
       renderControls();
       return true;
@@ -406,7 +441,8 @@
           const current = Number(payload.current);
           if (!Number.isSafeInteger(total) || total < 0 || !Number.isSafeInteger(current) || current < 0 || current > total) return false;
           animation = { current, total, playing: payload.playing === true && current < total };
-          renderControls();
+          updateAnimationControls();
+          syncAudience();
           return true;
         }
         case 'annotation-state':
@@ -436,20 +472,34 @@
           statusMessage = `The audience window reported ${payload.code}.`;
           renderStatus();
           return true;
-        case 'audience-ready':
-          explicitConnection = 'connected';
-          renderAudience();
+        case 'audience-ready': {
+          // The bridge's own status is authoritative once the audience answers.
+          explicitConnection = null;
+          const total = slides().length;
+          const nextIndex = Number(payload.index);
+          if (Number.isSafeInteger(nextIndex) && nextIndex >= 0 && nextIndex < total && nextIndex !== clampIndex(index)) {
+            timer.slideAt = now();
+            index = nextIndex;
+            render();
+          } else {
+            renderAudience();
+          }
           return true;
+        }
         default:
           return false;
       }
     }
 
     function setConnection(status) {
-      if (!['idle', 'connecting', 'connected', 'disconnected'].includes(status)) return false;
+      if (!CONNECTION_STATES.includes(status)) return false;
       explicitConnection = status;
       renderAudience();
       return true;
+    }
+
+    function syncAudience() {
+      if (renderedAudienceStatus !== connection()) renderAudience();
     }
 
     /* ---- clocks ---- */
@@ -496,17 +546,23 @@
       timer.interval = null;
     }
 
-    function startTimer() {
+    function armInterval() {
       stopInterval();
+      timer.interval = setIntervalImpl(updateClocks, CLOCK_INTERVAL_MS);
+    }
+
+    function startTimer() {
+      if (!active || destroyed) return false;
       timer.startedAt = now();
       timer.slideAt = now();
-      timer.interval = setIntervalImpl(updateClocks, CLOCK_INTERVAL_MS);
+      armInterval();
       renderControls();
       updateClocks();
       return true;
     }
 
     function resetTimer() {
+      if (!active || destroyed) return false;
       stopInterval();
       timer = { startedAt: null, slideAt: null, interval: null };
       renderControls();
@@ -680,6 +736,7 @@
     }
 
     async function saveSettings(shortcuts, preferences = saved.preferences) {
+      if (!active || destroyed) return { ok: false, error: 'The presenter is not active.' };
       const validation = validateShortcuts(shortcuts);
       if (!validation.ok) {
         shortcutStatus = validation.error;
@@ -762,15 +819,23 @@
 
     /* ---- keyboard ---- */
 
+    function cancelCapture() {
+      capture = null;
+      shortcutStatus = 'Shortcut capture cancelled.';
+      shortcutStatusState = '';
+      renderShortcuts();
+    }
+
     function handleKeydown(event) {
       if (!active || destroyed || !event) return false;
       if (capture) {
         event.preventDefault?.();
         event.stopPropagation?.();
-        completeCapture(event);
+        if (event.key === 'Escape') cancelCapture();
+        else completeCapture(event);
         return true;
       }
-      if (event.repeat || isTextEntryTarget(event.target, event)) return false;
+      if (event.defaultPrevented || event.repeat || isTextEntryTarget(event.target, event)) return false;
       const action = actionForEvent(event, saved.shortcuts);
       if (!action) return false;
       event.preventDefault?.();
@@ -788,15 +853,17 @@
       return true;
     }
 
+    /* Capture phase, so a key capture in progress is settled before any other
+       document handler (the Studio's own Escape-to-close included) sees it. */
     function attachKeys() {
       if (keyListenerAttached || !keyTarget || typeof keyTarget.addEventListener !== 'function') return;
-      keyTarget.addEventListener('keydown', handleKeydown);
+      keyTarget.addEventListener('keydown', handleKeydown, true);
       keyListenerAttached = true;
     }
 
     function detachKeys() {
       if (!keyListenerAttached) return;
-      keyTarget.removeEventListener('keydown', handleKeydown);
+      keyTarget.removeEventListener('keydown', handleKeydown, true);
       keyListenerAttached = false;
     }
 
@@ -865,6 +932,7 @@
     function buildAudience() {
       const status = connection();
       const section = createNode(document, 'section', { class: 'ws-settings-section ws-presenter-audience', 'data-audience': '' });
+      renderedAudienceStatus = status;
       const copy = {
         offline: 'Audience window: not connected. Rehearsal mode controls only this view.',
         idle: 'Audience window: not connected.',
@@ -890,6 +958,22 @@
       const existing = nodesFor('data-audience')[0];
       if (!existing?.parentElement || typeof existing.parentElement.replaceChild !== 'function') { render(); return; }
       existing.parentElement.replaceChild(buildAudience(), existing);
+    }
+
+    /* Animation acknowledgements arrive often while a build plays; update the
+       existing buttons so keyboard focus on them survives. */
+    function updateAnimationControls() {
+      const buttons = nodesFor('data-animation');
+      const status = nodesFor('data-animation-status')[0];
+      if (buttons.length !== 4 || !status) { renderControls(); return; }
+      const disabled = {
+        back: animation.total === 0 || animation.current === 0,
+        forward: animation.total === 0 || animation.current >= animation.total,
+        play: animation.total === 0 || animation.playing,
+        pause: animation.total === 0 || !animation.playing,
+      };
+      for (const button of buttons) button.disabled = Boolean(disabled[button.dataset.animation]);
+      status.textContent = `${animation.current} / ${animation.total}`;
     }
 
     function buildNotes() {
@@ -1078,9 +1162,24 @@
       required(positiveInteger(nextContext.webinarId), 'A webinar id is required');
       required(typeof nextContext.getState === 'function', 'Presenter state access is required');
       const sameWebinar = context && Number(context.webinarId) === Number(nextContext.webinarId);
+      if (sameWebinar && active) {
+        // A re-render of the active webinar keeps in-flight work and drafts.
+        context = nextContext;
+        render();
+        return undefined;
+      }
       contextGeneration += 1;
       context = nextContext;
       active = true;
+      if (!sameWebinar) {
+        stopInterval();
+        timer = { startedAt: null, slideAt: null, interval: null };
+        capture = null;
+        saved = { shortcuts: { ...DEFAULT_SHORTCUTS }, preferences: {} };
+        draft = { ...DEFAULT_SHORTCUTS };
+        shortcutStatus = '';
+        shortcutStatusState = '';
+      }
       if (!sameWebinar) {
         index = 0;
         notes = [];
@@ -1098,7 +1197,9 @@
       index = clampIndex(index);
       attachKeys();
       render();
-      await Promise.all([loadNotes(), loadSettings()]);
+      if (timer.startedAt !== null) armInterval();
+      const draftIsClean = capture === null && SHORTCUT_ACTIONS.every(({ id }) => draft[id] === saved.shortcuts[id]);
+      await Promise.all([loadNotes(), !sameWebinar || draftIsClean ? loadSettings() : Promise.resolve(false)]);
       return undefined;
     }
 
@@ -1107,10 +1208,11 @@
       previewGeneration += 1;
       active = false;
       capture = null;
+      // The clocks keep their origin so a tab visit mid-talk does not reset them.
       stopInterval();
-      timer = { startedAt: null, slideAt: null, interval: null };
       detachKeys();
       previewedSlideId = null;
+      renderedAudienceStatus = null;
       context?.root?.replaceChildren?.();
     }
 
@@ -1118,6 +1220,7 @@
       if (destroyed) return;
       deactivate();
       destroyed = true;
+      timer = { startedAt: null, slideAt: null, interval: null };
       context = null;
       notes = [];
     }

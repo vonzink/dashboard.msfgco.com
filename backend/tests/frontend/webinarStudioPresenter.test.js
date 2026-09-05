@@ -112,8 +112,10 @@ class FakeDocument {
   }
   createElement(tagName) { return new FakeElement(tagName, this); }
   createDocumentFragment() { return new FakeElement('fragment', this); }
-  addEventListener(type, listener) {
+  addEventListener(type, listener, options) {
     this.listeners.set(type, [...(this.listeners.get(type) || []), listener]);
+    this.captureFlags = this.captureFlags || new Map();
+    this.captureFlags.set(listener, options === true || options?.capture === true);
   }
   removeEventListener(type, listener) {
     this.listeners.set(type, (this.listeners.get(type) || []).filter(value => value !== listener));
@@ -461,6 +463,124 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(text(test.q('[data-position]'))).toBe('2 / 3');
   });
 
+  it('cancels key capture on Escape in the capture phase without letting the Studio close', async () => {
+    const test = harness();
+    await test.open();
+    const listener = test.document.listeners.get('keydown')[0];
+    expect(test.document.captureFlags.get(listener)).toBe(true);
+    test.q('[data-shortcut-capture="toggleDrawing"]').emit('click');
+    const escape = test.keydown({ key: 'Escape', code: 'Escape' });
+    expect(escape.preventDefault).toHaveBeenCalled();
+    expect(escape.stopPropagation).toHaveBeenCalled();
+    expect(text(test.q('[data-shortcut-status]'))).toMatch(/cancel/i);
+    expect(text(test.q('[data-shortcut-capture="toggleDrawing"]'))).toBe('D');
+    const idle = test.keydown({ key: 'Escape', code: 'Escape' });
+    expect(idle.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('leaves arrow keys to tab strips and activation keys to any activatable control', async () => {
+    const test = harness();
+    await test.open();
+    const tablist = test.document.createElement('div');
+    tablist.setAttribute('role', 'tablist');
+    const tab = test.document.createElement('button');
+    tab.setAttribute('role', 'tab');
+    tablist.append(tab);
+    test.keydown({ key: 'ArrowRight', code: 'ArrowRight', target: tab });
+    test.keydown({ key: 'ArrowRight', code: 'ArrowRight', target: tab, defaultPrevented: true });
+    const summary = test.document.createElement('summary');
+    await test.controller.saveSettings({ ...test.presenterApi.DEFAULT_SHORTCUTS, nextSlide: 'Space' }, {});
+    test.keydown({ key: ' ', code: 'Space', target: summary });
+    const link = test.document.createElement('a');
+    link.setAttribute('href', '#');
+    test.keydown({ key: 'Enter', code: 'Enter', target: link });
+    const roleButton = test.document.createElement('div');
+    roleButton.setAttribute('role', 'button');
+    test.keydown({ key: ' ', code: 'Space', target: roleButton });
+    expect(test.bridge.sendControl).not.toHaveBeenCalled();
+    expect(text(test.q('[data-position]'))).toBe('1 / 3');
+    test.keydown({ key: ' ', code: 'Space', target: test.root });
+    expect(test.bridge.sendControl).toHaveBeenCalledWith('next', {});
+  });
+
+  it('keeps the running timer across deactivate and reactivate for the same webinar', async () => {
+    const test = harness();
+    await test.open();
+    test.q('[data-timer-start]').emit('click');
+    test.advance(30_000);
+    test.controller.deactivate();
+    expect(test.cleared).toContain(test.intervals.length);
+    test.advance(30_000);
+    await test.open();
+    expect(test.intervals.at(-1).delay).toBe(500);
+    expect(text(test.q('[data-clock="elapsed"]'))).toBe('01:00');
+    expect(text(test.q('[data-timer-start]'))).toBe('Restart timer');
+    expect(test.controller.startTimer()).toBe(true);
+    test.controller.deactivate();
+    expect(test.controller.startTimer()).toBe(false);
+    expect(test.controller.resetTimer()).toBe(false);
+  });
+
+  it('re-rendering the same webinar keeps in-flight notes, unsaved shortcut drafts, and loads settings once', async () => {
+    const pending = deferred();
+    const test = harness({ api: { addNote: vi.fn().mockReturnValue(pending.promise) } });
+    await test.open();
+    test.q('[data-shortcut-capture="toggleDrawing"]').emit('click');
+    test.keydown({ key: 'm', code: 'KeyM' });
+    test.q('[data-note-input]').value = 'In flight';
+    test.q('[data-note-save]').emit('click');
+
+    await test.controller.renderPresenterPanel(test.context);
+    await test.settle();
+    expect(test.api.getSettings).toHaveBeenCalledTimes(1);
+    expect(test.api.listNotes).toHaveBeenCalledTimes(1);
+    expect(text(test.q('[data-shortcut-capture="toggleDrawing"]'))).toBe('M');
+    pending.resolve({ id: 9, slideId: FIRST, body: 'In flight' });
+    await test.settle();
+    expect(test.qa('[data-note-id]').map(note => note.dataset.noteId)).toEqual(['5', '9']);
+    expect(test.q('[data-note-input]').value).toBe('');
+  });
+
+  it('navigates locally until the audience is launched, and blocks only while connecting or disconnected', async () => {
+    const test = harness();
+    test.bridge.status.mockReturnValue('idle');
+    await test.open();
+    test.q('[data-nav="next"]').emit('click');
+    expect(test.bridge.sendControl).not.toHaveBeenCalled();
+    expect(text(test.q('[data-position]'))).toBe('2 / 3');
+
+    test.bridge.status.mockReturnValue('disconnected');
+    test.bridge.sendControl.mockReturnValue(false);
+    test.controller.setConnection('disconnected');
+    test.q('[data-nav="next"]').emit('click');
+    expect(text(test.q('[data-position]'))).toBe('2 / 3');
+    expect(text(test.q('[data-presenter-status]'))).toMatch(/not connected/i);
+
+    test.bridge.status.mockReturnValue('connected');
+    test.bridge.sendControl.mockReturnValue(true);
+    test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 1, total: 3 } });
+    test.q('[data-nav="next"]').emit('click');
+    expect(test.bridge.sendControl).toHaveBeenCalledWith('next', {});
+    expect(text(test.q('[data-position]'))).toBe('3 / 3');
+    test.bridge.status.mockReturnValue('disconnected');
+    expect(text(test.q('[data-audience-status]'))).toMatch(/connected/i);
+    test.controller.applyAudienceState({ type: 'animation-state', payload: { current: 0, total: 0, playing: false } });
+    expect(text(test.q('[data-audience-status]'))).toMatch(/disconnected/i);
+  });
+
+  it('updates animation buttons in place so focus survives frequent acknowledgements', async () => {
+    const test = harness();
+    await test.open();
+    test.controller.applyAudienceState({ type: 'animation-state', payload: { current: 1, total: 3, playing: false } });
+    const forward = test.q('[data-animation="forward"]');
+    forward.focus();
+    test.controller.applyAudienceState({ type: 'animation-state', payload: { current: 2, total: 3, playing: true } });
+    expect(test.q('[data-animation="forward"]')).toBe(forward);
+    expect(test.document.activeElement).toBe(forward);
+    expect(text(test.q('[data-animation-status]'))).toBe('2 / 3');
+    expect(test.q('[data-animation="pause"]').disabled).toBe(false);
+  });
+
   it('runs slide, pace, and elapsed clocks from injected time', async () => {
     const test = harness();
     await test.open();
@@ -549,6 +669,7 @@ describe('Webinar Studio authenticated presenter', () => {
     test.controller.applyAudienceState({ type: 'audience-error', payload: { code: 'SLIDE_RUNTIME_ERROR' } });
     expect(text(test.q('[data-presenter-status]'))).toMatch(/SLIDE_RUNTIME_ERROR/);
 
+    test.bridge.status.mockReturnValue('disconnected');
     test.controller.setConnection('disconnected');
     expect(text(test.q('[data-audience-status]'))).toMatch(/disconnected/i);
     test.q('[data-audience-reconnect]').emit('click');

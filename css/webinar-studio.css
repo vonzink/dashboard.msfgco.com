@@ -581,6 +581,10 @@
   white-space: pre-line;
 }
 
+#webinarStudioModal .ws-note textarea[data-note-editor] {
+  padding-right: 4.6rem;
+}
+
 #webinarStudioModal .ws-note-none {
   margin: 0;
   color: var(--text-muted);
