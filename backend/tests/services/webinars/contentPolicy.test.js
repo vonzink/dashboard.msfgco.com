@@ -65,6 +65,56 @@ describe('webinar executable-content policy', () => {
     ].join(''), policy).issues).toEqual([]);
   });
 
+  it('matches browser CDATA handling across foreign-content integration boundaries', () => {
+    const hasReservedAttribute = result => result.issues.some(issue => (
+      issue.code === 'RESERVED_ATTRIBUTE' && issue.attribute === 'data-slide-mount'
+    ));
+    const safeForeignCdata = [
+      '<svg><![CDATA[marker > <g data-slide-mount>text</g>]]></svg>',
+      '<math><![CDATA[marker > <mrow data-slide-mount>text</mrow>]]></math>',
+      '<math><annotation-xml encoding="application/xml"><![CDATA[marker > <span data-slide-mount>text</span>]]></annotation-xml></math>',
+      '<title><![CDATA[marker > <span data-slide-mount>text</span>]]></title>',
+      '<!--[CDATA[marker > <span data-slide-mount>text</span>]]-->',
+      '<svg><title>prefix<!-- safe <![CDATA[marker > <div data-slide-mount></div>]]> --></title></svg>',
+    ];
+    const browserExposedMounts = [
+      '<div><![CDATA[marker > <span data-slide-mount></span>]]></div>',
+      '<svg><foreignObject><![CDATA[marker > <div data-slide-mount></div>]]></foreignObject></svg>',
+      '<svg><desc><![CDATA[marker > <div data-slide-mount></div>]]></desc></svg>',
+      '<svg><title><![CDATA[marker > <div data-slide-mount></div>]]></title></svg>',
+      '<svg><title>prefix<![CDATA[marker > <div data-slide-mount></div>]]></title></svg>',
+      ...['mi', 'mo', 'mn', 'ms', 'mtext'].map(tag => (
+        `<math><${tag}><![CDATA[marker > <span data-slide-mount></span>]]></${tag}></math>`
+      )),
+      '<math><annotation-xml encoding="text/html"><![CDATA[marker > <span data-slide-mount></span>]]></annotation-xml></math>',
+      '<math><annotation-xml encoding="APPLICATION/XHTML+XML"><![CDATA[marker > <span data-slide-mount></span>]]></annotation-xml></math>',
+      '<math><annotation-xml encoding="text/html">prefix<![CDATA[marker > <span data-slide-mount></span>]]></annotation-xml></math>',
+    ];
+
+    for (const fragment of safeForeignCdata) {
+      expect(hasReservedAttribute(validateMasterHtml(
+        `<main>${fragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ))).toBe(false);
+      expect(hasReservedAttribute(validateSlideHtml(fragment, policy))).toBe(false);
+    }
+    for (const fragment of browserExposedMounts) {
+      expect(hasReservedAttribute(validateMasterHtml(
+        `<main>${fragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ))).toBe(true);
+      expect(hasReservedAttribute(validateSlideHtml(fragment, policy))).toBe(true);
+    }
+
+    expect(validateSlideHtml(
+      '<svg><foreignObject><![CDATA[marker > <img src="#" onerror="go()">]]></foreignObject></svg>',
+      policy,
+    ).issues).toContainEqual(expect.objectContaining({
+      code: 'FORBIDDEN_ATTRIBUTE',
+      attribute: 'onerror',
+    }));
+  });
+
   it('parses CSS and JavaScript without executing them', () => {
     expect(validateCss('.slide { color: red;', 'slide_css').issues[0].surface).toBe('slide_css');
     expect(validateJavascript('const = 1').issues[0].code).toBe('JAVASCRIPT_SYNTAX');
