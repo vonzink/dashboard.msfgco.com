@@ -242,8 +242,17 @@ describe('public Webinar Studio live bundle compiler', () => {
 
   it.each([
     ['forbidden Master HTML', { master_html: '<script>alert(1)</script><main>{{SLIDE_CONTENT}}</main>' }],
+    ['an SVG-title Master refresh', {
+      master_html: '<main><svg><title><meta http-equiv="refresh" content="0;url=https://evil.example"></title></svg>{{SLIDE_CONTENT}}</main>',
+    }],
     ['a forbidden Master CSS import', { master_css: '@import "https://evil.example/master.css";' }],
     ['an evil slide HTML URL', { slide_html: '<img src="https://evil.example/private.png">' }],
+    ['an SVG-title slide event handler', {
+      slide_html: '<svg><title><img src="#" onerror="go()"></title></svg>',
+    }],
+    ['an SVG-title comment plus CDATA renderer mount', {
+      slide_html: '<svg><title><!--safe--><![CDATA[x > <span data-slide-mount></span>]]></title></svg>',
+    }],
     ['a forbidden CSS import', { slide_css: '@import "https://evil.example/theme.css";' }],
     ['malformed CSS', { slide_css: '.slide { color: red' }],
     ['invalid JavaScript', { slide_javascript: 'const broken = ;' }],

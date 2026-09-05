@@ -115,6 +115,78 @@ describe('webinar executable-content policy', () => {
     }));
   });
 
+  it('reprocesses SVG title source as HTML data before applying every HTML policy', () => {
+    const dangerousTitleMarkup = [
+      [
+        '<svg><title><!--safe--><![CDATA[x > <span data-slide-mount></span>]]></title></svg>',
+        { code: 'RESERVED_ATTRIBUTE', attribute: 'data-slide-mount' },
+      ],
+      [
+        '<svg><title><img src="#" onerror="go()"></title></svg>',
+        { code: 'FORBIDDEN_ATTRIBUTE', attribute: 'onerror' },
+      ],
+      [
+        '<svg><title><img src="https://network-canary.invalid/title.png"></title></svg>',
+        { code: 'RESOURCE_ORIGIN_FORBIDDEN' },
+      ],
+      [
+        '<svg><title><meta http-equiv="refresh" content="0;url=https://evil.example"></title></svg>',
+        { code: 'FORBIDDEN_HTML', element: 'meta' },
+      ],
+      [
+        '<svg><title><base href="https://evil.example/"></title></svg>',
+        { code: 'FORBIDDEN_HTML', element: 'base' },
+      ],
+      [
+        '<svg><title><script src="https://evil.example/runtime.js"></script></title></svg>',
+        { code: 'FORBIDDEN_HTML', element: 'script' },
+      ],
+      [
+        '<svg><title><style>@import "https://evil.example/title.css";</style></title></svg>',
+        { code: 'RESOURCE_ORIGIN_FORBIDDEN' },
+      ],
+      [
+        '<svg><title><link rel="stylesheet" href="https://evil.example/title.css"></title></svg>',
+        { code: 'RESOURCE_ORIGIN_FORBIDDEN' },
+      ],
+      [
+        '<svg><title><svg><title><img src="#" onerror="nested()"></title></svg></title></svg>',
+        { code: 'FORBIDDEN_ATTRIBUTE', attribute: 'onerror' },
+      ],
+      [
+        '<svg><title><math><mtext><img src="#" onerror="nested()"></mtext></math></title></svg>',
+        { code: 'FORBIDDEN_ATTRIBUTE', attribute: 'onerror' },
+      ],
+    ];
+
+    for (const [fragment, expectedIssue] of dangerousTitleMarkup) {
+      expect(validateMasterHtml(
+        `<main>${fragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ).issues).toContainEqual(expect.objectContaining({
+        surface: 'master_html',
+        ...expectedIssue,
+      }));
+      expect(validateSlideHtml(fragment, policy).issues).toContainEqual(expect.objectContaining({
+        surface: 'slide_html',
+        ...expectedIssue,
+      }));
+    }
+
+    for (const safeFragment of [
+      '<title><img src="#" onerror="text-only"></title>',
+      '<svg><g><![CDATA[<img src="https://evil.example/x" onerror="text-only">]]></g></svg>',
+      '<svg><title><!-- <img src="https://evil.example/x" onerror="text-only"> --><svg><g><![CDATA[<span data-slide-mount>text only</span>]]></g></svg></title></svg>',
+      '<p data-msfg-studio-parser-root>Author attribute is not reserved</p>',
+    ]) {
+      expect(validateMasterHtml(
+        `<main>${safeFragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ).issues).toEqual([]);
+      expect(validateSlideHtml(safeFragment, policy).issues).toEqual([]);
+    }
+  });
+
   it('parses CSS and JavaScript without executing them', () => {
     expect(validateCss('.slide { color: red;', 'slide_css').issues[0].surface).toBe('slide_css');
     expect(validateJavascript('const = 1').issues[0].code).toBe('JAVASCRIPT_SYNTAX');

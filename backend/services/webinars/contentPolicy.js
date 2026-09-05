@@ -133,6 +133,29 @@ function browserExposedCdataTail(node, source, context) {
   return { context, source: serialized.slice(bogusCommentEnd + 1) };
 }
 
+// htmlparser2 applies HTML RCDATA tokenization to every element named `title`,
+// regardless of namespace. Browsers instead treat an SVG `title` as an HTML
+// integration point, so its authored child source must be tokenized again in
+// HTML data state before the normal element/attribute/resource policy runs.
+function browserSvgTitleSource(node, source) {
+  const children = node.children;
+  if (!Array.isArray(children)) return { unavailable: true };
+  if (!children.length) return { source: '' };
+
+  let previousEnd = -1;
+  for (const child of children) {
+    if (!Number.isSafeInteger(child.startIndex) || !Number.isSafeInteger(child.endIndex)
+      || child.startIndex < 0 || child.endIndex < child.startIndex
+      || child.endIndex >= source.length || child.startIndex <= previousEnd) {
+      return { unavailable: true };
+    }
+    previousEnd = child.endIndex;
+  }
+  return {
+    source: source.slice(children[0].startIndex, children[children.length - 1].endIndex + 1),
+  };
+}
+
 function validateHtml(source, surface, resourcePolicy = loadResourcePolicy()) {
   const issues = [];
   const initialSource = String(source);
@@ -175,8 +198,17 @@ function validateHtml(source, surface, resourcePolicy = loadResourcePolicy()) {
       const namespace = elementNamespace(context, name);
       const childContext = childParserContext(namespace, name, attributes);
       const children = node.children || [];
-      for (let index = children.length - 1; index >= 0; index -= 1) {
-        stack.push({ context: childContext, node: children[index] });
+      if (namespace === 'svg' && name === 'title') {
+        const exposed = browserSvgTitleSource(node, fragment.source);
+        if (exposed.unavailable) {
+          issues.push(issue('FORBIDDEN_HTML', surface, { element: 'title' }));
+        } else if (exposed.source) {
+          pending.push({ context: 'html-data', source: exposed.source });
+        }
+      } else {
+        for (let index = children.length - 1; index >= 0; index -= 1) {
+          stack.push({ context: childContext, node: children[index] });
+        }
       }
       if (FORBIDDEN_ELEMENTS.has(name) || (name === 'meta' && Object.prototype.hasOwnProperty.call(attributes, 'http-equiv'))) {
         issues.push(issue('FORBIDDEN_HTML', surface, { element: name }));
