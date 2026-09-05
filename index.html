@@ -1547,7 +1547,9 @@
           <div id="wsWorkspaceContent">
             <div class="ws-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Checking your Studio access...</p></div>
           </div>
-          <section id="wsPreviewHost" class="ws-preview-host" aria-label="Slide preview" hidden></section>
+          <section id="wsPreviewHost" class="ws-preview-host" aria-label="Slide preview" hidden>
+            <p class="ws-preview-caption" data-ws-preview-caption>Live preview of the slide you are editing or presenting, rendered in the same sandbox the audience sees.</p>
+          </section>
         </main>
 
         <aside id="wsSettings" class="ws-settings" aria-label="Webinar settings">
@@ -1556,7 +1558,7 @@
               <i class="fas fa-display" aria-hidden="true"></i> Presenter
             </button>
             <button type="button" id="wsLaunchAudience" class="ws-action-button ws-action-button-secondary" disabled>
-              <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Audience view
+              <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Launch audience
             </button>
           </div>
           <div class="ws-settings-tabs" role="tablist" aria-label="Studio settings">
@@ -1601,6 +1603,7 @@
   <script src="js/webinar-studio/preview.js?v=20260905"></script>
   <script src="js/webinar-studio/editor.js?v=20260905"></script>
   <script src="js/webinar-studio/presenter.js?v=20260905"></script>
+  <script src="js/webinar-studio/bridge.js?v=20260905"></script>
   <script src="js/webinar-studio.js?v=20260905"></script>
   <script src="js/utils.js?v=20260410"></script>
   <script src="js/theme.js?v=20260410"></script>

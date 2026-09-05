@@ -389,7 +389,7 @@ describe('Webinar Studio preview wiring', () => {
     origin: 'https://msfgmortgage.com',
   };
 
-  function previewWiring({ previewConfig, previewApi, useRealPreview = false, presenterApi, timers } = {}) {
+  function previewWiring({ previewConfig, previewApi, useRealPreview = false, presenterApi, timers, bridgeApi, audienceConfig, openWindow = vi.fn() } = {}) {
     vi.resetModules();
     const createWebinarStudio = require(studioPath);
     const realEditorApi = require(resolve(root, 'js/webinar-studio/editor.js'));
@@ -440,9 +440,11 @@ describe('Webinar Studio preview wiring', () => {
       previewApi: completePreviewApi,
       previewConfig,
       presenterApi,
+      bridgeApi,
+      audienceConfig,
       confirm: vi.fn().mockResolvedValue(true),
       currentUser: () => ({ id: 7, activeRole: 'admin', role: 'admin' }),
-      openWindow: vi.fn(),
+      openWindow,
       navigationTarget: new FakeEventTarget(),
       ...(timers || {}),
     });
@@ -741,6 +743,40 @@ describe('Webinar Studio preview wiring', () => {
     expect(test.iframe.contentWindow.postMessage).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the status line and deck summary on the live version the editor saved', async () => {
+    let editorOptions = null;
+    const editorApi = { createEditor: options => { editorOptions = options; return { render: vi.fn(), setContext: vi.fn(), deactivate: vi.fn(), destroy: vi.fn() }; } };
+    vi.resetModules();
+    const createWebinarStudio = require(studioPath);
+    const dom = makeDocument();
+    const previewHost = new FakeElement('wsPreviewHost');
+    previewHost.children = [];
+    previewHost.append = (...nodes) => previewHost.children.push(...nodes);
+    const iframe = { attributes: {}, src: '', setAttribute(n, v) { this.attributes[n] = String(v); if (n === 'src') this.src = String(v); }, getAttribute(n) { return this.attributes[n] ?? null; }, addEventListener() {}, removeEventListener() {}, remove() {} };
+    const studio = createWebinarStudio({
+      document: { ...dom.document, getElementById: id => (id === 'wsPreviewHost' ? previewHost : dom.elements[id] || null), createElement: tag => (tag === 'iframe' ? iframe : { tagName: tag.toUpperCase(), append() {}, setAttribute() {}, dataset: {}, children: [] }) },
+      api: {
+        listWebinars: vi.fn().mockResolvedValue([{ id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false }]),
+        getWebinar: vi.fn().mockResolvedValue(privateDocument()),
+      },
+      stateApi,
+      editorApi,
+      previewApi: { createPreviewController: vi.fn().mockReturnValue({ boot: vi.fn().mockResolvedValue({ type: 'ready' }), destroy: vi.fn() }) },
+      previewConfig: PRODUCTION_PREVIEW,
+      confirm: vi.fn().mockResolvedValue(true),
+      currentUser: () => ({ id: 7, activeRole: 'admin', role: 'admin' }),
+      openWindow: vi.fn(),
+      navigationTarget: new FakeEventTarget(),
+    });
+    await studio.init();
+    await studio.open();
+    expect(dom.elements.wsStatus.textContent).toMatch(/Live version 3/);
+    const saved = stateApi.markSurfaceSaved(editorOptions.getState(), 'master', { liveVersion: 4, updatedAt: '2026-09-05T12:00:00.000Z' });
+    editorOptions.setState(saved);
+    expect(dom.elements.wsStatus.textContent).toMatch(/Live version 4/);
+    expect(dom.elements.wsDeckList.innerHTML).toMatch(/Live v4/);
+  });
+
   it('removes the preview frame on destroy so a later init does not stack frames', async () => {
     const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
     await test.studio.init();
@@ -754,7 +790,8 @@ describe('Webinar Studio preview wiring', () => {
   it('ships every Studio module before the coordinator, hosts the preview frame in the shell, and configures the production preview host', () => {
     const html = readFileSync(resolve(root, 'index.html'), 'utf8');
     const order = ['js/api-server.js', 'js/webinar-studio/api.js', 'js/webinar-studio/state.js', 'js/webinar-studio/access-history.js',
-      'js/webinar-studio/assets.js', 'js/webinar-studio/preview.js', 'js/webinar-studio/editor.js', 'js/webinar-studio/presenter.js', 'js/webinar-studio.js'];
+      'js/webinar-studio/assets.js', 'js/webinar-studio/preview.js', 'js/webinar-studio/editor.js', 'js/webinar-studio/presenter.js',
+      'js/webinar-studio/bridge.js', 'js/webinar-studio.js'];
     const positions = order.map(file => html.indexOf(`src="${file}`));
     positions.forEach((position, index) => {
       expect(position, order[index]).toBeGreaterThan(-1);
@@ -770,12 +807,213 @@ describe('Webinar Studio preview wiring', () => {
     expect(preview, 'CONFIG.webinarStudio.preview').not.toBeNull();
     expect(new URL(preview[1]).origin).toBe(preview[2]);
     expect(preview[2]).toBe('https://msfgmortgage.com');
-    expect(config).not.toMatch(/webinarStudio[\s\S]{0,200}localhost/);
+    const audience = /audience:\s*\{\s*origin:\s*'([^']+)'/.exec(config);
+    expect(audience, 'CONFIG.webinarStudio.audience').not.toBeNull();
+    expect(audience[1]).toBe('https://msfgmortgage.com');
+    expect(config).not.toMatch(/webinarStudio[\s\S]{0,400}localhost/);
+    expect(html).toContain('data-ws-preview-caption');
   });
 
   it('keeps the Studio header, deck heading, and launch actions as flex rows', () => {
     const css = readFileSync(resolve(root, 'css/webinar-studio.css'), 'utf8');
     expect(css).toMatch(/#webinarStudioModal \.ws-heading,\s*#webinarStudioModal \.ws-decks-heading,\s*#webinarStudioModal \.ws-launch-actions,\s*#webinarStudioModal \.ws-version-line \{\s*display: flex;\s*align-items: center;/);
     expect(css).toMatch(/#webinarStudioModal \.ws-preview-host \{/);
+  });
+
+  it('keeps the settings drawer reachable on phones: the workspace yields space and short landscape viewports get a compact header', () => {
+    const css = readFileSync(resolve(root, 'css/webinar-studio.css'), 'utf8');
+    const phone = css.slice(css.indexOf('@media (max-width: 899px)'));
+    expect(phone).toMatch(/\.ws-workspace \{[^}]*min-height: 1[0-6]0px;[^}]*flex: 1 1 auto;/);
+    expect(phone).toMatch(/\.ws-settings \{[^}]*flex: 1 1 auto;[^}]*max-height: 5[0-9]%;/);
+    /* A 100% width plus padding overflowed the viewport; the flex column stretches the drawer instead. */
+    expect(phone).not.toMatch(/\.ws-settings \{[^}]*width: 100%;/);
+    expect(phone).toMatch(/\.ws-settings-tabs \{[^}]*repeat\(auto-fit, minmax\(7rem, 1fr\)\);/);
+    expect(phone).not.toMatch(/\.ws-settings-tabs \{[^}]*overflow-x: auto;/);
+    const short = css.slice(css.indexOf('@media (max-width: 899px) and (max-height: 500px)'));
+    expect(short).toMatch(/\.ws-header \{[^}]*min-height: 5[0-9]px;/);
+    expect(short).toMatch(/\.ws-workspace \{[^}]*min-height: (9[0-9]|1[0-1][0-9])px;/);
+    expect(short).toMatch(/\.ws-settings \{[^}]*max-height: 6[0-9]%;/);
+  });
+});
+
+describe('Webinar Studio audience bridge wiring', () => {
+  const PRODUCTION_PREVIEW = {
+    url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview',
+    origin: 'https://msfgmortgage.com',
+  };
+  const AUDIENCE = { origin: 'https://msfgmortgage.com' };
+
+  function bridgeWiring({ audienceConfig = AUDIENCE, audienceEnabled = true, bridgeApi, accessHistoryApi } = {}) {
+    const bridges = [];
+    const completeBridgeApi = bridgeApi || {
+      createAudienceBridge: vi.fn(options => {
+        let status = 'idle';
+        const bridge = {
+          options,
+          connect: vi.fn(() => { status = 'connecting'; options.onStatus('connecting'); return true; }),
+          reconnect: vi.fn(() => { status = 'connecting'; options.onStatus('connecting'); return true; }),
+          sendControl: vi.fn(() => status === 'connected'),
+          status: vi.fn(() => status),
+          destroy: vi.fn(() => { status = 'idle'; }),
+          answer() { status = 'connected'; options.onStatus('connected'); options.onState({ type: 'audience-ready', payload: { index: 0, total: 1 } }); },
+        };
+        bridges.push(bridge);
+        return bridge;
+      }),
+    };
+    const presenter = {
+      renderPresenterPanel: vi.fn().mockResolvedValue(undefined),
+      applyAudienceState: vi.fn(), setConnection: vi.fn(), deactivate: vi.fn(), destroy: vi.fn(),
+      options: null,
+    };
+    const presenterApi = { createPresenterController: vi.fn(options => { presenter.options = options; return presenter; }) };
+    vi.resetModules();
+    const createWebinarStudio = require(studioPath);
+    const dom = makeDocument();
+    const api = {
+      listWebinars: vi.fn().mockResolvedValue([
+        { id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled },
+        { id: 13, slug: 'second-deck', title: 'Second deck', liveVersion: 1, audienceEnabled: true },
+      ]),
+      getWebinar: vi.fn(id => Promise.resolve(Number(id) === 13
+        ? privateDocument({ id: 13, slug: 'second-deck', title: 'Second deck', audienceEnabled: true })
+        : privateDocument({ audienceEnabled }))),
+      listUsers: vi.fn().mockResolvedValue([]),
+    };
+    const openWindow = vi.fn();
+    const studio = createWebinarStudio({
+      document: dom.document,
+      api,
+      stateApi,
+      presenterApi,
+      accessHistoryApi,
+      bridgeApi: completeBridgeApi,
+      audienceConfig,
+      previewConfig: PRODUCTION_PREVIEW,
+      confirm: vi.fn().mockResolvedValue(true),
+      currentUser: () => ({ id: 7, activeRole: 'admin', role: 'admin' }),
+      openWindow,
+      navigationTarget: new FakeEventTarget(),
+    });
+    return { studio, api, bridges, bridgeApi: completeBridgeApi, presenter, presenterApi, openWindow, ...dom };
+  }
+
+  it('hands the presenter a bridge facade and builds the real bridge lazily for the selected webinar on launch', async () => {
+    const test = bridgeWiring();
+    await test.studio.init();
+    await test.studio.open();
+    const facade = test.presenter.options.bridge;
+    expect(typeof facade.connect).toBe('function');
+    expect(facade.status()).toBe('idle');
+    expect(test.bridgeApi.createAudienceBridge).not.toHaveBeenCalled();
+
+    expect(facade.connect()).toBe(true);
+    expect(test.bridgeApi.createAudienceBridge).toHaveBeenCalledTimes(1);
+    const options = test.bridges[0].options;
+    expect(options.audienceUrl).toBe('https://msfgmortgage.com/webinars/first-home/studio-viewer.html');
+    expect(options.allowedOrigin).toBe('https://msfgmortgage.com');
+    expect(test.presenter.setConnection).toHaveBeenCalledWith('connecting');
+    expect(facade.status()).toBe('connecting');
+
+    test.bridges[0].answer();
+    expect(test.presenter.setConnection).toHaveBeenCalledWith('connected');
+    expect(test.presenter.applyAudienceState).toHaveBeenCalledWith({ type: 'audience-ready', payload: { index: 0, total: 1 } });
+    expect(facade.sendControl('next', {})).toBe(true);
+    expect(test.bridges[0].sendControl).toHaveBeenCalledWith('next', {});
+    /* The bridge opens the window itself through the coordinator's opener. */
+    expect(test.openWindow).not.toHaveBeenCalled();
+    /* connect() again reuses the same bridge for the same webinar. */
+    facade.connect();
+    expect(test.bridgeApi.createAudienceBridge).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to launch while audience access is off and says so in the status line', async () => {
+    const test = bridgeWiring({ audienceEnabled: false });
+    await test.studio.init();
+    await test.studio.open();
+    const facade = test.presenter.options.bridge;
+    expect(facade.connect()).toBe(false);
+    expect(test.bridgeApi.createAudienceBridge).not.toHaveBeenCalled();
+    expect(test.elements.wsStatus.textContent).toMatch(/audience access is off/i);
+    expect(test.elements.wsLaunchAudience.disabled).toBe(true);
+    expect(facade.sendControl('next', {})).toBe(false);
+    expect(facade.status()).toBe('idle');
+  });
+
+  it('clears the launch notice once the webinar reloads with audience access on', async () => {
+    let accessContext = null;
+    const accessHistoryApi = { createAccessHistory: () => ({
+      renderAccessPanel: vi.fn(context => { accessContext = context; }),
+      renderHistoryPanel: vi.fn(), deactivate: vi.fn(), destroy: vi.fn(),
+    }) };
+    const test = bridgeWiring({ audienceEnabled: false, accessHistoryApi });
+    await test.studio.init();
+    await test.studio.open();
+    test.presenter.options.bridge.connect();
+    expect(test.elements.wsStatus.textContent).toMatch(/audience access is off/i);
+    /* The Users & Access tab turns the audience on and reloads in place. */
+    test.elements.wsSettings.listeners.click({ target: test.tabs[1] });
+    test.api.getWebinar.mockResolvedValue(privateDocument({ audienceEnabled: true }));
+    await accessContext.reload();
+    expect(test.elements.wsStatus.textContent).toMatch(/Live version 3 · Audience enabled/);
+    expect(test.presenter.options.bridge.connect()).toBe(true);
+  });
+
+  it('refuses to launch without a valid audience host configuration', async () => {
+    for (const audienceConfig of [null, { origin: 'http://msfgmortgage.com' }, { origin: 'https://msfgmortgage.com/path' }]) {
+      const test = bridgeWiring({ audienceConfig });
+      await test.studio.init();
+      await test.studio.open();
+      expect(test.presenter.options.bridge.connect()).toBe(false);
+      expect(test.bridgeApi.createAudienceBridge).not.toHaveBeenCalled();
+      expect(test.elements.wsStatus.textContent).toMatch(/not configured/i);
+    }
+  });
+
+  it('drops the bridge when the webinar changes and builds a fresh one for the new slug, ignoring late state from the old one', async () => {
+    const test = bridgeWiring();
+    await test.studio.init();
+    await test.studio.open();
+    const facade = test.presenter.options.bridge;
+    facade.connect();
+    test.bridges[0].answer();
+    test.presenter.applyAudienceState.mockClear();
+    await test.studio.selectWebinar(13);
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+    expect(facade.status()).toBe('idle');
+    test.bridges[0].options.onState({ type: 'slide-state', payload: { index: 0, total: 1 } });
+    expect(test.presenter.applyAudienceState).not.toHaveBeenCalled();
+    facade.connect();
+    expect(test.bridgeApi.createAudienceBridge).toHaveBeenCalledTimes(2);
+    expect(test.bridges[1].options.audienceUrl).toBe('https://msfgmortgage.com/webinars/second-deck/studio-viewer.html');
+  });
+
+  it('wires the header launch buttons: Presenter activates the presenter tab and Audience launches through the bridge', async () => {
+    const test = bridgeWiring();
+    await test.studio.init();
+    await test.studio.open();
+    test.elements.wsSettings.listeners.click({ target: test.tabs[2] });
+    expect(test.tabs[2].getAttribute('aria-selected')).toBe('true');
+    test.elements.wsLaunchPresenter.listeners.click({ target: test.elements.wsLaunchPresenter });
+    expect(test.tabs[0].getAttribute('aria-selected')).toBe('true');
+    expect(test.elements.wsLaunchAudience.disabled).toBe(false);
+    test.elements.wsLaunchAudience.listeners.click({ target: test.elements.wsLaunchAudience });
+    expect(test.bridgeApi.createAudienceBridge).toHaveBeenCalledTimes(1);
+    expect(test.bridges[0].connect).toHaveBeenCalledTimes(1);
+    expect(test.openWindow).not.toHaveBeenCalled();
+  });
+
+  it('reconnects through the current bridge and destroys it with the Studio', async () => {
+    const test = bridgeWiring();
+    await test.studio.init();
+    await test.studio.open();
+    const facade = test.presenter.options.bridge;
+    facade.connect();
+    expect(facade.reconnect()).toBe(true);
+    expect(test.bridges[0].reconnect).toHaveBeenCalledTimes(1);
+    test.studio.destroy();
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+    expect(facade.status()).toBe('idle');
+    expect(facade.sendControl('next', {})).toBe(false);
   });
 });

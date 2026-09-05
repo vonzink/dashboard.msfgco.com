@@ -15,6 +15,8 @@
       presenterApi: root.WebinarStudioPresenter,
       previewApi: root.WebinarStudioPreview,
       previewConfig: root.CONFIG?.webinarStudio?.preview,
+      bridgeApi: root.WebinarStudioBridge,
+      audienceConfig: root.CONFIG?.webinarStudio?.audience,
       stateApi: root.WebinarStudioState,
       confirm: (message, options) => root.Utils?.confirm
         ? root.Utils.confirm(message, options)
@@ -42,6 +44,8 @@
   const presenterApi = dependencies.presenterApi;
   const previewApi = dependencies.previewApi;
   const previewConfig = dependencies.previewConfig;
+  const bridgeApi = dependencies.bridgeApi;
+  const audienceConfig = dependencies.audienceConfig;
   const stateApi = dependencies.stateApi;
   const confirmAction = dependencies.confirm;
   const currentUser = dependencies.currentUser;
@@ -63,6 +67,8 @@
      failure through the normal error state. Worst case for a dead host is
      this gate plus the controller's own startup timeout, in sequence. */
   const PREVIEW_FRAME_LOAD_TIMEOUT_MS = 10_000;
+  const AUDIENCE_OFF_COPY = 'Audience access is off for this webinar. Turn it on under Users & Access before launching the audience.';
+  const AUDIENCE_UNAVAILABLE_COPY = 'The audience host is not configured for this environment, so the audience window cannot be launched here.';
   const LOADING_COPY = 'Loading the selected webinar…';
   const CREATING_COPY = 'Creating a webinar. Select it afterwards to manage presenter settings.';
 
@@ -70,6 +76,7 @@
     initialized: false,
     access: 'idle',
     accessMessage: '',
+    notice: '',
     webinars: [],
     selectedWebinarId: null,
     studioState: null,
@@ -94,6 +101,8 @@
   let previewConfigState = 'unset';
   let previewReadyFor = null;
   let previewSelectionGeneration = 0;
+  let audienceBridge = null;
+  let audienceBridgeFor = null;
   let previewFrameLoaded = null;
   let cancelPreviewFrameGate = null;
   let injectedPreviewDestroyed = false;
@@ -276,6 +285,123 @@
     updatePreviewHostVisibility();
   }
 
+  /* ---- audience bridge ----
+     The presenter receives one facade for its lifetime. The real bridge is
+     built lazily, per webinar, on the first launch, and dropped whenever the
+     selection changes or the Studio is torn down, so acknowledgements can
+     only ever reach the presenter for the webinar they belong to. */
+  function audienceOrigin() {
+    if (!audienceConfig || typeof audienceConfig !== 'object') return null;
+    return previewOrigin(audienceConfig.origin);
+  }
+
+  function audienceUrlFor(webinar, origin) {
+    return `${origin}/webinars/${encodeURIComponent(String(webinar.slug))}/studio-viewer.html`;
+  }
+
+  function selectedWebinarId() {
+    return Number(model.studioState?.webinar?.id) || null;
+  }
+
+  function dropAudienceBridge() {
+    const bridge = audienceBridge;
+    audienceBridge = null;
+    audienceBridgeFor = null;
+    try { bridge?.destroy?.(); } catch { /* the bridge is already gone */ }
+  }
+
+  function ensureAudienceBridge() {
+    const webinar = model.studioState?.webinar;
+    const webinarId = selectedWebinarId();
+    if (!webinar || webinarId === null) return null;
+    if (audienceBridge && audienceBridgeFor === webinarId) return audienceBridge;
+    dropAudienceBridge();
+    const origin = audienceOrigin();
+    if (!origin || !bridgeApi?.createAudienceBridge) return null;
+    const forWebinar = webinarId;
+    try {
+      audienceBridge = bridgeApi.createAudienceBridge({
+        audienceUrl: audienceUrlFor(webinar, origin),
+        allowedOrigin: origin,
+        onState: message => {
+          if (audienceBridgeFor !== forWebinar || selectedWebinarId() !== forWebinar) return;
+          presenterController?.applyAudienceState?.(message);
+        },
+        onStatus: status => {
+          if (audienceBridgeFor !== forWebinar) return;
+          presenterController?.setConnection?.(status);
+        },
+        windowObject: navigationTarget,
+        openWindow: (url, name) => openWindow(url, name),
+        cryptoImpl: dependencies.cryptoImpl || globalThis.crypto,
+        setTimeoutImpl: dependencies.setTimeoutImpl,
+        clearTimeoutImpl: dependencies.clearTimeoutImpl,
+        setIntervalImpl: dependencies.setIntervalImpl,
+        clearIntervalImpl: dependencies.clearIntervalImpl,
+      });
+      audienceBridgeFor = forWebinar;
+    } catch {
+      audienceBridge = null;
+      audienceBridgeFor = null;
+    }
+    return audienceBridge;
+  }
+
+  /* The deck list and status line describe the selected webinar from its
+     summary, so a live version the editor just advanced must flow back into
+     that summary and the status line without a full re-render. */
+  function syncSelectedSummary() {
+    const current = model.studioState;
+    const webinarId = Number(current?.webinar?.id) || null;
+    if (webinarId === null) return;
+    model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
+      id: webinarId,
+      slug: current.webinar.slug,
+      title: current.webinar.title,
+      liveVersion: current.liveVersion,
+      audienceEnabled: current.webinar.audienceEnabled,
+    } : webinar);
+    renderDecks();
+    renderStatusLine();
+  }
+
+  function notify(copy) {
+    model.notice = copy;
+    renderStatusLine();
+  }
+
+  function launchAudience({ reconnect = false } = {}) {
+    const webinar = model.studioState?.webinar;
+    if (!webinar || model.loadingWebinar || model.mode === 'new') return false;
+    if (webinar.audienceEnabled !== true) {
+      dropAudienceBridge();
+      notify(AUDIENCE_OFF_COPY);
+      presenterController?.setConnection?.('idle');
+      return false;
+    }
+    const bridge = ensureAudienceBridge();
+    if (!bridge) {
+      notify(AUDIENCE_UNAVAILABLE_COPY);
+      return false;
+    }
+    model.notice = '';
+    renderStatusLine();
+    return reconnect ? bridge.reconnect() === true : bridge.connect() === true;
+  }
+
+  const audienceLink = Object.freeze({
+    connect: () => launchAudience(),
+    reconnect: () => launchAudience({ reconnect: true }),
+    sendControl(type, payload = {}) {
+      if (!audienceBridge || audienceBridgeFor !== selectedWebinarId()) return false;
+      try { return audienceBridge.sendControl(type, payload) === true; } catch { return false; }
+    },
+    status() {
+      if (!audienceBridge || audienceBridgeFor !== selectedWebinarId()) return 'idle';
+      try { return audienceBridge.status(); } catch { return 'idle'; }
+    },
+  });
+
   /* Studio controllers are built once, only after access is confirmed, so an
      unauthorized Dashboard session never loads the preview host. */
   function ensureStudioControllers() {
@@ -288,7 +414,7 @@
         api,
         confirm: confirmAction,
         preview,
-        bridge: dependencies.bridge || null,
+        bridge: dependencies.bridge || audienceLink,
         keyTarget: document,
         setIntervalImpl: dependencies.setIntervalImpl,
         clearIntervalImpl: dependencies.clearIntervalImpl,
@@ -301,7 +427,7 @@
         api,
         stateApi,
         getState: () => model.studioState,
-        setState: nextState => { model.studioState = nextState; },
+        setState: nextState => { model.studioState = nextState; syncSelectedSummary(); },
         preview,
         getAssets: () => model.resolvedAssets,
         getResourcePolicy: () => model.resourcePolicy,
@@ -481,8 +607,8 @@
         if (tab) activateSettingsTab(tab.dataset.wsTab);
       });
       listen(elements.settings, 'keydown', handleSettingsKeydown);
-      listen(elements.launchAudience, 'click', () => launch('audience'));
-      listen(elements.launchPresenter, 'click', () => launch('presenter'));
+      listen(elements.launchAudience, 'click', () => { launchAudience(); });
+      listen(elements.launchPresenter, 'click', () => { activateSettingsTab('presenter'); });
       listen(elements.modal, 'click', event => {
         if (event.target === elements.modal) close();
       });
@@ -548,6 +674,8 @@
     invalidateEditorContext();
     accessPromise = null;
     deactivateSettingsControllers();
+    dropAudienceBridge();
+    model.notice = '';
     elements.modal.classList.remove('active');
     elements.modal.hidden = true;
     elements.modal.setAttribute('aria-hidden', 'true');
@@ -570,6 +698,8 @@
 
     invalidateEditorContext({ switching: true });
     resetPreviewVisibility();
+    dropAudienceBridge();
+    model.notice = '';
     model.selectedWebinarId = webinarId;
     model.loadingWebinar = true;
     model.mode = 'deck';
@@ -614,6 +744,7 @@
       }
       const nextState = stateApi.createStudioState(documentResponse);
       model.studioState = nextState;
+      model.notice = '';
       model.resourcePolicy = documentResponse.resourcePolicy || {};
       model.resolvedAssets = documentResponse.assets || {};
       model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
@@ -763,16 +894,25 @@
     renderWorkspace();
     updatePreviewHostVisibility();
     renderSettings();
-    if (elements.status) {
-      elements.status.textContent = model.studioState
-        ? `Live version ${model.studioState.liveVersion} · ${model.studioState.webinar.audienceEnabled ? 'Audience enabled' : 'Audience off'}`
-        : model.access === 'loading' ? 'Checking access' : model.access === 'ready' ? 'Private workspace' : 'Unavailable';
+    renderStatusLine();
+  }
+
+  function renderStatusLine() {
+    if (!elements.status) return;
+    if (model.notice) {
+      elements.status.textContent = model.notice;
+      return;
     }
+    elements.status.textContent = model.studioState
+      ? `Live version ${model.studioState.liveVersion} · ${model.studioState.webinar.audienceEnabled ? 'Audience enabled' : 'Audience off'}`
+      : model.access === 'loading' ? 'Checking access' : model.access === 'ready' ? 'Private workspace' : 'Unavailable';
   }
 
   async function openNewWebinar() {
     if (!isAdmin() || model.access !== 'ready') return false;
     const request = beginRequest();
+    dropAudienceBridge();
+    model.notice = '';
     const mayDiscard = await mayDiscardChanges();
     if (!requestIsCurrent(request) || !mayDiscard) return false;
     invalidateEditorContext();
@@ -971,6 +1111,8 @@
     accessHistoryController = null;
     assetController?.destroy?.();
     assetController = null;
+    dropAudienceBridge();
+    model.notice = '';
     presenterController?.destroy?.();
     presenterController = null;
     // The editor owns the preview controller's teardown; destroy it directly
@@ -993,14 +1135,6 @@
     bindings = [];
     model.initialized = false;
     initializationPromise = null;
-  }
-
-  function launch(mode) {
-    const webinar = model.studioState?.webinar;
-    if (!webinar) return;
-    if (mode === 'audience' && !webinar.audienceEnabled) return;
-    const suffix = mode === 'presenter' ? '/studio-viewer.html?mode=presenter' : '/';
-    openWindow(`/webinars/${encodeURIComponent(webinar.slug)}${suffix}`, `MSFGWebinar${mode}`, 'noopener');
   }
 
   return Object.freeze({

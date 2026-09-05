@@ -39,6 +39,11 @@
         url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview',
         origin: 'https://msfgmortgage.com',
       },
+      // Audience windows open at <origin>/webinars/<slug>/studio-viewer.html and
+      // are driven only through the exact-origin presenter bridge.
+      audience: {
+        origin: 'https://msfgmortgage.com',
+      },
     },
 
     // ========================================

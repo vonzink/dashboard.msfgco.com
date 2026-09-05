@@ -271,6 +271,12 @@
   display: none;
 }
 
+#webinarStudioModal .ws-preview-caption {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
 #webinarStudioModal .ws-preview-host iframe {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -719,23 +725,26 @@
     display: none;
   }
 
+  /* The workspace and the settings drawer share the remaining height. Each
+     scrolls on its own, so the drawer's launch buttons and tabs stay on screen
+     and nothing needs the page to scroll. */
   #webinarStudioModal .ws-workspace {
-    min-height: 280px;
+    min-height: 160px;
     flex: 1 1 auto;
     padding: 1rem;
   }
 
   #webinarStudioModal .ws-settings {
-    width: 100%;
-    max-height: 42%;
-    flex: 0 0 auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    max-height: 55%;
     border-top: 1px solid var(--border-color);
     border-left: 0;
   }
 
+  /* Tabs wrap into rows on narrow screens instead of scrolling sideways. */
   #webinarStudioModal .ws-settings-tabs {
-    grid-template-columns: repeat(5, minmax(max-content, 1fr));
-    overflow-x: auto;
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   }
 
   #webinarStudioModal .ws-settings-tabs button {
@@ -757,12 +766,40 @@
   }
 
   #webinarStudioModal .ws-settings {
-    max-height: 48%;
+    max-height: 58%;
   }
 
   #webinarStudioModal .ws-launch-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+/* Short landscape phones: a compact header and picker so the drawer keeps
+   its launch buttons and tabs in view. */
+@media (max-width: 899px) and (max-height: 500px) {
+  #webinarStudioModal .ws-header {
+    min-height: 52px;
+    padding: 0.45rem 1rem;
+  }
+
+  #webinarStudioModal .ws-header h2 {
+    font-size: var(--font-md);
+  }
+
+  #webinarStudioModal .ws-mobile-picker {
+    gap: 0.15rem;
+    padding: 0.35rem 1rem;
+  }
+
+  #webinarStudioModal .ws-workspace {
+    min-height: 96px;
+    padding: 0.6rem 1rem;
+  }
+
+  #webinarStudioModal .ws-settings {
+    max-height: 66%;
+    padding: 0.6rem 1rem;
   }
 }
 
