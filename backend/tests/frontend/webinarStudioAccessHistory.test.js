@@ -168,6 +168,89 @@ function retargetContext(test, id = 99) {
   };
 }
 
+function privateDocumentFor(id, title, liveVersion = 7) {
+  return {
+    id,
+    slug: `webinar-${id}`,
+    title,
+    primaryOwnerUserId: 7,
+    audienceEnabled: false,
+    liveVersion,
+    masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
+    masterCss: '',
+    slides: [{
+      id: id === 99 ? '99999999-9999-4999-8999-999999999999' : '11111111-1111-4111-8111-111111111111',
+      title: 'Opening',
+      anchor: 'opening',
+      targetSeconds: 60,
+      speakerNotes: '',
+      html: '<section>Opening</section>',
+      css: '',
+      javascript: '',
+    }],
+  };
+}
+
+function coordinatorHarness({ api = {} } = {}) {
+  const document = new FakeDocument();
+  const ids = [
+    'webinarStudioLauncher', 'webinarStudioModal', 'wsClose', 'wsDeckList',
+    'wsDeckSelect', 'wsWorkspace', 'wsStatus', 'wsNewWebinar', 'wsSettings',
+    'wsSettingsPanel', 'wsLaunchAudience', 'wsLaunchPresenter',
+  ];
+  const elements = Object.fromEntries(ids.map(id => [id, new FakeElement('div', document)]));
+  document.getElementById = id => elements[id] || null;
+  document.addEventListener = vi.fn();
+  document.removeEventListener = vi.fn();
+  document.body = new FakeElement('body', document);
+  document.activeElement = elements.webinarStudioLauncher;
+  elements.webinarStudioModal.hidden = true;
+  const tabs = ['presenter', 'access', 'code', 'assets', 'history'].map(name => {
+    const tab = new FakeElement('button', document);
+    tab.dataset.wsTab = name;
+    return tab;
+  });
+  elements.wsSettings.querySelectorAll = selector => selector === '[data-ws-tab]' ? tabs : [];
+  const accessController = {
+    contexts: [],
+    renderAccessPanel: vi.fn(context => { accessController.contexts.push(context); }),
+    renderHistoryPanel: vi.fn(context => { accessController.contexts.push(context); }),
+    deactivate: vi.fn(),
+    destroy: vi.fn(),
+  };
+  const completeApi = {
+    listWebinars: vi.fn().mockResolvedValue([
+      { id: 12, slug: 'webinar-12', title: 'Webinar A', liveVersion: 7, audienceEnabled: false },
+      { id: 99, slug: 'webinar-99', title: 'Webinar B', liveVersion: 3, audienceEnabled: false },
+    ]),
+    getWebinar: vi.fn().mockImplementation(id => Promise.resolve(privateDocumentFor(id, id === 99 ? 'Webinar B' : 'Webinar A', id === 99 ? 3 : 7))),
+    ...api,
+  };
+  const createStudio = require('../../../js/webinar-studio.js');
+  const stateApi = require('../../../js/webinar-studio/state.js');
+  const studio = createStudio({
+    accessHistoryApi: { createAccessHistory: () => accessController },
+    api: completeApi,
+    confirm: vi.fn().mockResolvedValue(true),
+    currentUser: () => ({ id: 1, name: 'Admin', activeRole: 'admin' }),
+    document,
+    navigationTarget: new FakeElement('window', document),
+    openWindow: vi.fn(),
+    stateApi,
+  });
+  return {
+    accessController,
+    api: completeApi,
+    document,
+    elements,
+    studio,
+    tab(name) {
+      const target = tabs.find(candidate => candidate.dataset.wsTab === name);
+      elements.wsSettings.emit('click', { target });
+    },
+  };
+}
+
 describe('Webinar Studio access and revision history', () => {
   beforeEach(() => vi.restoreAllMocks());
 
@@ -471,5 +554,144 @@ describe('Webinar Studio access and revision history', () => {
     expect(accessController.deactivate).toHaveBeenCalledOnce();
     studio.destroy();
     expect(accessController.destroy).toHaveBeenCalledOnce();
+  });
+
+  it('keeps webinar B selected when overlapping selection A resolves after B', async () => {
+    const pendingA = deferred();
+    const pendingB = deferred();
+    const test = coordinatorHarness({
+      api: {
+        getWebinar: vi.fn(id => id === 12 ? pendingA.promise : pendingB.promise),
+      },
+    });
+    await test.studio.init();
+
+    const selectingA = test.studio.selectWebinar(12);
+    await Promise.resolve();
+    const selectingB = test.studio.selectWebinar(99);
+    pendingB.resolve(privateDocumentFor(99, 'Webinar B', 3));
+    await expect(selectingB).resolves.toBe(true);
+    pendingA.resolve(privateDocumentFor(12, 'Webinar A', 7));
+    await selectingA;
+
+    expect(test.elements.wsWorkspace.innerHTML).toContain('Webinar B');
+    expect(test.elements.wsWorkspace.innerHTML).not.toContain('Webinar A');
+    expect(test.elements.wsStatus.textContent).toContain('Live version 3');
+    expect(test.elements.wsDeckList.innerHTML).toContain('data-ws-webinar-id="99" aria-current="true"');
+    expect(test.api.getWebinar.mock.calls.map(([id]) => id)).toEqual([12, 99]);
+  });
+
+  it('does not let a late reload for webinar A overwrite a faster selection of webinar B', async () => {
+    const lateReloadA = deferred();
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.selectWebinar(12);
+    test.tab('access');
+    const contextA = test.accessController.contexts.at(-1);
+    test.api.getWebinar.mockImplementationOnce(() => lateReloadA.promise)
+      .mockResolvedValueOnce(privateDocumentFor(99, 'Webinar B', 3));
+
+    const reloadingA = contextA.reload();
+    const selectingB = test.studio.selectWebinar(99);
+    await selectingB;
+    lateReloadA.resolve(privateDocumentFor(12, 'Late Webinar A', 8));
+    await reloadingA;
+
+    expect(test.elements.wsWorkspace.innerHTML).toContain('Webinar B');
+    expect(test.elements.wsWorkspace.innerHTML).not.toContain('Late Webinar A');
+    expect(test.elements.wsStatus.textContent).toContain('Live version 3');
+    expect(test.accessController.contexts.at(-1)).toMatchObject({ webinarId: 99 });
+  });
+
+  it('ignores a stale rejected selection after webinar B has loaded', async () => {
+    const pendingA = deferred();
+    const test = coordinatorHarness({
+      api: {
+        getWebinar: vi.fn(id => id === 12 ? pendingA.promise : Promise.resolve(privateDocumentFor(99, 'Webinar B', 3))),
+      },
+    });
+    await test.studio.init();
+    const selectingA = test.studio.selectWebinar(12);
+    await Promise.resolve();
+    await test.studio.selectWebinar(99);
+    pendingA.reject(Object.assign(new Error('PRIVATE_STALE_ERROR'), { status: 500 }));
+    await selectingA;
+
+    expect(test.elements.wsWorkspace.innerHTML).toContain('Webinar B');
+    expect(test.elements.wsWorkspace.innerHTML).not.toMatch(/unavailable|PRIVATE_STALE_ERROR/);
+    expect(test.elements.wsStatus.textContent).toContain('Live version 3');
+  });
+
+  it('does not apply a pending selection after close or destroy', async () => {
+    const closePending = deferred();
+    const closed = coordinatorHarness({ api: { getWebinar: vi.fn(() => closePending.promise) } });
+    await closed.studio.init();
+    const opening = closed.studio.open();
+    await Promise.resolve();
+    await closed.studio.close();
+    closePending.resolve(privateDocumentFor(12, 'Closed Webinar A', 7));
+    await opening;
+    expect(closed.elements.webinarStudioModal.hidden).toBe(true);
+    expect(closed.elements.wsWorkspace.innerHTML).not.toContain('Closed Webinar A');
+
+    const destroyPending = deferred();
+    const destroyed = coordinatorHarness({ api: { getWebinar: vi.fn(() => destroyPending.promise) } });
+    await destroyed.studio.init();
+    const selecting = destroyed.studio.selectWebinar(12);
+    destroyed.studio.destroy();
+    destroyPending.resolve(privateDocumentFor(12, 'Destroyed Webinar A', 7));
+    await selecting;
+    expect(destroyed.elements.wsWorkspace.innerHTML).not.toContain('Destroyed Webinar A');
+    expect(destroyed.accessController.renderAccessPanel).not.toHaveBeenCalled();
+  });
+
+  it('discards a late archive list refresh after webinar B is selected', async () => {
+    const archiveList = deferred();
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.selectWebinar(12);
+    test.tab('access');
+    const contextA = test.accessController.contexts.at(-1);
+    test.api.listWebinars.mockImplementationOnce(() => archiveList.promise);
+
+    const refreshingArchive = contextA.onArchived();
+    await test.studio.selectWebinar(99);
+    archiveList.resolve([{ id: 12, slug: 'webinar-12', title: 'Stale A', liveVersion: 8, audienceEnabled: false }]);
+    await refreshingArchive;
+
+    expect(test.elements.wsWorkspace.innerHTML).toContain('Webinar B');
+    expect(test.elements.wsWorkspace.innerHTML).not.toContain('Stale A');
+    expect(test.elements.wsStatus.textContent).toContain('Live version 3');
+    expect(test.accessController.contexts.at(-1)).toMatchObject({ webinarId: 99 });
+  });
+
+  it('does not leak rejected stale reload or archive refresh errors into webinar B', async () => {
+    const lateReloadA = deferred();
+    const lateArchiveList = deferred();
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.selectWebinar(12);
+    test.tab('access');
+    const contextA = test.accessController.contexts.at(-1);
+    test.api.getWebinar.mockImplementationOnce(() => lateReloadA.promise)
+      .mockResolvedValueOnce(privateDocumentFor(99, 'Webinar B', 3));
+
+    const reloadingA = contextA.reload();
+    await test.studio.selectWebinar(99);
+    lateReloadA.reject(Object.assign(new Error('PRIVATE_RELOAD_ERROR'), { status: 500 }));
+    await expect(reloadingA).resolves.toBe(false);
+
+    await test.studio.selectWebinar(12);
+    test.tab('access');
+    const currentContextA = test.accessController.contexts.at(-1);
+    test.api.listWebinars.mockImplementationOnce(() => lateArchiveList.promise);
+    const staleArchive = currentContextA.onArchived();
+    await test.studio.selectWebinar(99);
+    lateArchiveList.reject(Object.assign(new Error('PRIVATE_ARCHIVE_ERROR'), { status: 500 }));
+    await expect(staleArchive).resolves.toBe(false);
+
+    expect(test.elements.wsWorkspace.innerHTML).toContain('Webinar B');
+    expect(test.elements.wsWorkspace.innerHTML).not.toMatch(/PRIVATE_|unavailable/);
+    expect(test.elements.wsStatus.textContent).toContain('Live version 3');
   });
 });

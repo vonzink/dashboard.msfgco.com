@@ -65,7 +65,30 @@
   let elements = {};
   let accessHistoryController = null;
   let initializationPromise = null;
+  let accessPromise = null;
+  let lifecycleGeneration = 0;
+  let requestGeneration = 0;
   let bindings = [];
+
+  function beginRequest(webinarId = null) {
+    return {
+      lifecycleGeneration,
+      requestGeneration: ++requestGeneration,
+      webinarId: webinarId === null ? null : Number(webinarId),
+    };
+  }
+
+  function requestIsCurrent(request, { requireSelected = false } = {}) {
+    if (!model.initialized
+      || request.lifecycleGeneration !== lifecycleGeneration
+      || request.requestGeneration !== requestGeneration) return false;
+    return !requireSelected || Number(model.selectedWebinarId) === request.webinarId;
+  }
+
+  function invalidateRequests() {
+    lifecycleGeneration += 1;
+    requestGeneration += 1;
+  }
 
   function listen(target, type, handler) {
     target?.addEventListener?.(type, handler);
@@ -146,26 +169,39 @@
 
   async function ensureAccess() {
     if (model.access === 'ready') return true;
+    if (accessPromise) return accessPromise;
+    const request = beginRequest();
     model.access = 'loading';
     model.accessMessage = '';
     setLauncherAvailable(false);
     render();
-    try {
-      model.webinars = normalizeSummaries(await api.listWebinars());
-      model.access = 'ready';
-      setLauncherAvailable(true);
-      render();
-      return true;
-    } catch (error) {
-      model.access = errorStatus(error) === 404 ? 'disabled'
-        : errorStatus(error) === 403 ? 'forbidden' : 'error';
-      model.accessMessage = accessMessageFor(error);
-      model.webinars = [];
-      model.studioState = null;
-      setLauncherAvailable(false);
-      render();
-      return false;
-    }
+    const pendingAccess = (async () => {
+      try {
+        const response = await api.listWebinars();
+        if (!requestIsCurrent(request)) return false;
+        model.webinars = normalizeSummaries(response);
+        model.access = 'ready';
+        setLauncherAvailable(true);
+        render();
+        return true;
+      } catch (error) {
+        if (!requestIsCurrent(request)) return false;
+        model.access = errorStatus(error) === 404 ? 'disabled'
+          : errorStatus(error) === 403 ? 'forbidden' : 'error';
+        model.accessMessage = accessMessageFor(error);
+        model.webinars = [];
+        model.studioState = null;
+        setLauncherAvailable(false);
+        render();
+        return false;
+      }
+    })();
+    accessPromise = pendingAccess;
+    void pendingAccess.then(
+      () => { if (accessPromise === pendingAccess) accessPromise = null; },
+      () => { if (accessPromise === pendingAccess) accessPromise = null; },
+    );
+    return accessPromise;
   }
 
   function init() {
@@ -232,8 +268,9 @@
   }
 
   async function open() {
-    if (!model.initialized) bindElements();
+    if (!model.initialized) init();
     if (!elements.modal || !elements.workspace) return false;
+    const openLifecycleGeneration = lifecycleGeneration;
     model.launchButton = document.activeElement || elements.launcher;
     elements.modal.hidden = false;
     elements.modal.classList.add('active');
@@ -246,10 +283,16 @@
     render();
 
     const allowed = await ensureAccess();
-    if (!allowed) return false;
+    if (!allowed
+      || !model.initialized
+      || openLifecycleGeneration !== lifecycleGeneration
+      || elements.modal.hidden) return false;
     if (!model.studioState && model.webinars.length && model.mode !== 'new') {
       await selectWebinar(model.webinars[0].id, { skipConfirmation: true });
     }
+    if (!model.initialized
+      || openLifecycleGeneration !== lifecycleGeneration
+      || elements.modal.hidden) return false;
     elements.close?.focus();
     return true;
   }
@@ -267,6 +310,9 @@
   async function close() {
     if (!elements.modal || elements.modal.hidden) return true;
     if (!await mayDiscardChanges()) return false;
+    invalidateRequests();
+    accessPromise = null;
+    accessHistoryController?.deactivate?.();
     elements.modal.classList.remove('active');
     elements.modal.hidden = true;
     elements.modal.setAttribute('aria-hidden', 'true');
@@ -281,14 +327,20 @@
     const webinarId = Number(id);
     if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
     if (model.selectedWebinarId === webinarId && model.studioState) return true;
-    if (!options.skipConfirmation && !await mayDiscardChanges()) return false;
+    const request = beginRequest(webinarId);
+    if (!options.skipConfirmation) {
+      const mayDiscard = await mayDiscardChanges();
+      if (!requestIsCurrent(request) || !mayDiscard) return false;
+    }
 
+    model.selectedWebinarId = webinarId;
     model.loadingWebinar = true;
     model.mode = 'deck';
     model.formError = '';
     render();
     try {
       const documentResponse = await api.getWebinar(webinarId);
+      if (!requestIsCurrent(request, { requireSelected: true })) return false;
       if (Number(documentResponse?.id) !== webinarId) throw new TypeError('Webinar response id did not match the request');
       model.studioState = stateApi.createStudioState(documentResponse);
       model.selectedWebinarId = webinarId;
@@ -296,6 +348,7 @@
       render();
       return true;
     } catch {
+      if (!requestIsCurrent(request, { requireSelected: true })) return false;
       model.loadingWebinar = false;
       model.studioState = null;
       model.selectedWebinarId = null;
@@ -306,35 +359,55 @@
     }
   }
 
-  async function reloadSelectedWebinar() {
-    const webinarId = Number(model.selectedWebinarId);
+  async function reloadSelectedWebinar(initiatingWebinarId = model.selectedWebinarId) {
+    const webinarId = Number(initiatingWebinarId);
     if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
-    const documentResponse = await api.getWebinar(webinarId);
-    if (Number(documentResponse?.id) !== webinarId) {
-      throw new TypeError('Webinar response id did not match the request');
+    if (Number(model.selectedWebinarId) !== webinarId) return false;
+    const request = beginRequest(webinarId);
+    try {
+      const documentResponse = await api.getWebinar(webinarId);
+      if (!requestIsCurrent(request, { requireSelected: true })) return false;
+      if (Number(documentResponse?.id) !== webinarId) {
+        throw new TypeError('Webinar response id did not match the request');
+      }
+      const nextState = stateApi.createStudioState(documentResponse);
+      model.studioState = nextState;
+      model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
+        id: webinarId,
+        slug: nextState.webinar.slug,
+        title: nextState.webinar.title,
+        liveVersion: nextState.liveVersion,
+        audienceEnabled: nextState.webinar.audienceEnabled,
+      } : webinar);
+      model.mode = 'deck';
+      render();
+      return true;
+    } catch (error) {
+      if (!requestIsCurrent(request, { requireSelected: true })) return false;
+      throw error;
     }
-    const nextState = stateApi.createStudioState(documentResponse);
-    model.studioState = nextState;
-    model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
-      id: webinarId,
-      slug: nextState.webinar.slug,
-      title: nextState.webinar.title,
-      liveVersion: nextState.liveVersion,
-      audienceEnabled: nextState.webinar.audienceEnabled,
-    } : webinar);
-    model.mode = 'deck';
-    render();
-    return true;
   }
 
-  async function refreshAfterArchive() {
-    model.webinars = normalizeSummaries(await api.listWebinars());
-    model.selectedWebinarId = null;
-    model.studioState = null;
-    model.mode = 'empty';
-    render();
-    if (model.webinars.length) {
-      await selectWebinar(model.webinars[0].id, { skipConfirmation: true });
+  async function refreshAfterArchive(initiatingWebinarId = model.selectedWebinarId) {
+    const webinarId = Number(initiatingWebinarId);
+    if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
+    if (Number(model.selectedWebinarId) !== webinarId) return false;
+    const request = beginRequest(webinarId);
+    try {
+      const response = await api.listWebinars();
+      if (!requestIsCurrent(request, { requireSelected: true })) return false;
+      model.webinars = normalizeSummaries(response);
+      model.selectedWebinarId = null;
+      model.studioState = null;
+      model.mode = 'empty';
+      render();
+      if (model.webinars.length) {
+        await selectWebinar(model.webinars[0].id, { skipConfirmation: true });
+      }
+      return true;
+    } catch (error) {
+      if (!requestIsCurrent(request, { requireSelected: true })) return false;
+      throw error;
     }
   }
 
@@ -436,15 +509,19 @@
 
   async function openNewWebinar() {
     if (!isAdmin() || model.access !== 'ready') return false;
-    if (!await mayDiscardChanges()) return false;
+    const request = beginRequest();
+    const mayDiscard = await mayDiscardChanges();
+    if (!requestIsCurrent(request) || !mayDiscard) return false;
     model.mode = 'new';
     model.formError = '';
     try {
       const users = await api.listUsers();
+      if (!requestIsCurrent(request) || model.mode !== 'new') return false;
       model.owners = Array.isArray(users)
         ? users.filter(user => Number.isSafeInteger(Number(user?.id)) && Number(user.id) > 0)
         : [];
     } catch {
+      if (!requestIsCurrent(request) || model.mode !== 'new') return false;
       model.owners = [];
       model.formError = 'Active users could not load. Try again before creating a webinar.';
     }
@@ -471,11 +548,15 @@
       render();
       return { ok: false, error: validation.error };
     }
+    const request = beginRequest();
     try {
       const result = await api.createWebinar(validation.value);
+      if (!requestIsCurrent(request) || model.mode !== 'new') return { ok: false, cancelled: true };
       const webinarId = Number(result?.webinarId);
       if (!Number.isSafeInteger(webinarId) || webinarId <= 0) throw new TypeError('The server did not return a webinar id');
+      request.webinarId = webinarId;
       const documentResponse = await api.getWebinar(webinarId);
+      if (!requestIsCurrent(request) || model.mode !== 'new') return { ok: false, cancelled: true };
       if (Number(documentResponse?.id) !== webinarId) throw new TypeError('The created webinar could not be verified');
       const nextState = stateApi.createStudioState(documentResponse);
       model.webinars = [{
@@ -492,6 +573,7 @@
       render();
       return { ok: true, webinarId };
     } catch {
+      if (!requestIsCurrent(request) || model.mode !== 'new') return { ok: false, cancelled: true };
       model.formError = 'The webinar could not be created. Check the details and try again.';
       render();
       return { ok: false, error: model.formError };
@@ -499,6 +581,7 @@
   }
 
   function cancelNewWebinar() {
+    requestGeneration += 1;
     model.mode = 'deck';
     model.formError = '';
     render();
@@ -519,16 +602,17 @@
     if (!elements.settingsPanel) return;
     elements.settingsPanel.setAttribute('data-ws-panel', model.settingsTab);
     if (accessHistoryController && (model.settingsTab === 'access' || model.settingsTab === 'history')) {
+      const webinarId = Number(model.studioState.webinar.id);
       const context = {
         root: elements.settingsPanel,
-        webinarId: model.studioState.webinar.id,
+        webinarId,
         state: model.studioState,
         getState: () => model.studioState,
         isAdmin: isAdmin(),
         currentUser: currentUser() || {},
         hasUnsavedChanges: () => Boolean(model.studioState && stateApi.hasUnsavedChanges(model.studioState)),
-        reload: reloadSelectedWebinar,
-        onArchived: refreshAfterArchive,
+        reload: () => reloadSelectedWebinar(webinarId),
+        onArchived: () => refreshAfterArchive(webinarId),
       };
       if (model.settingsTab === 'access') {
         void accessHistoryController.renderAccessPanel(context);
@@ -560,6 +644,8 @@
   }
 
   function destroy() {
+    invalidateRequests();
+    accessPromise = null;
     accessHistoryController?.destroy?.();
     accessHistoryController = null;
     for (const [target, type, handler] of bindings) {
