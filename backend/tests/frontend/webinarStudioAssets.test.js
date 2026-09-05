@@ -55,6 +55,7 @@ class FakeElement {
     }
   }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
+  hasAttribute(name) { return this.attributes.has(name); }
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) || [];
     listeners.push(listener);
@@ -580,7 +581,57 @@ describe('Webinar Studio reusable asset library', () => {
     expect(assetController.destroy).toHaveBeenCalledOnce();
   });
 
-  it('coordinates focus in Code through Assets insertion and back with exact caret and dirty state', async () => {
+  const SECOND_SLIDE = '55555555-5555-4555-8555-555555555555';
+  const TOKEN = `{{ASSET:${VERSION}}}`;
+
+  function studioDocument(id, overrides = {}) {
+    return {
+      id,
+      slug: id === 12 ? 'first-home' : `deck-${id}`,
+      title: id === 12 ? 'First Home' : `Deck ${id}`,
+      primaryOwnerUserId: 7,
+      audienceEnabled: false,
+      liveVersion: 7,
+      masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
+      masterCss: 'main{gap:8px}',
+      resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] },
+      assets: {},
+      slides: [{
+        id: FAMILY,
+        title: 'Opening',
+        anchor: 'opening',
+        targetSeconds: 60,
+        speakerNotes: '',
+        html: '<section>before after</section>',
+        css: '',
+        javascript: '',
+      }, {
+        id: SECOND_SLIDE,
+        title: 'Agenda',
+        anchor: 'agenda',
+        targetSeconds: 90,
+        speakerNotes: '',
+        html: '<article>agenda</article>',
+        css: '',
+        javascript: '',
+      }],
+      ...overrides,
+    };
+  }
+
+  function summaryOf(documentRecord) {
+    return {
+      id: documentRecord.id,
+      slug: documentRecord.slug,
+      title: documentRecord.title,
+      liveVersion: documentRecord.liveVersion,
+      audienceEnabled: documentRecord.audienceEnabled,
+    };
+  }
+
+  /* Drives the real coordinator, editor, and asset library together through the
+     fake DOM so insertion targets are proven across coordinator lifecycle paths. */
+  function coordinatorHarness({ documents = { 12: studioDocument(12) } } = {}) {
     const document = new FakeDocument();
     const ids = [
       'webinarStudioLauncher', 'webinarStudioModal', 'wsClose', 'wsDeckList',
@@ -594,46 +645,51 @@ describe('Webinar Studio reusable asset library', () => {
     document.body = new FakeElement('body', document);
     document.activeElement = elements.webinarStudioLauncher;
     elements.webinarStudioModal.hidden = true;
-    const tabs = ['presenter', 'access', 'code', 'assets', 'history'].map(name => {
+    const tabNames = ['presenter', 'access', 'code', 'assets', 'history'];
+    const tabs = tabNames.map(name => {
       const tab = new FakeElement('button', document);
       tab.dataset.wsTab = name;
       return tab;
     });
     elements.wsSettings.querySelectorAll = selector => selector === '[data-ws-tab]' ? tabs : [];
     const api = {
-      listWebinars: vi.fn().mockResolvedValue([{ id: 12, slug: 'first-home', title: 'First Home', liveVersion: 7, audienceEnabled: false }]),
-      getWebinar: vi.fn().mockResolvedValue({
-        id: 12,
-        slug: 'first-home',
-        title: 'First Home',
-        primaryOwnerUserId: 7,
-        audienceEnabled: false,
-        liveVersion: 7,
-        masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
-        masterCss: '',
-        resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] },
-        assets: {},
-        slides: [{
-          id: FAMILY,
-          title: 'Opening',
-          anchor: 'opening',
-          targetSeconds: 60,
-          speakerNotes: '',
-          html: '<section>before after</section>',
-          css: '',
-          javascript: '',
-        }],
-      }),
+      listWebinars: vi.fn().mockResolvedValue(Object.values(documents).map(summaryOf)),
+      getWebinar: vi.fn(id => documents[id]
+        ? Promise.resolve(structuredClone(documents[id]))
+        : Promise.reject(Object.assign(new Error('Not found'), { status: 404 }))),
       listAssets: vi.fn().mockResolvedValue([family()]),
+      listUsers: vi.fn().mockResolvedValue([{ id: 7, name: 'Active Owner', email: 'owner@example.test' }]),
+      archiveSlide: vi.fn().mockResolvedValue({ liveVersion: 8, updatedAt: '2026-09-05T12:08:00.000Z' }),
     };
     const createStudio = require('../../../js/webinar-studio.js');
     const editorApi = require('../../../js/webinar-studio/editor.js');
-    const assetsApi = require('../../../js/webinar-studio/assets.js');
+    const realAssetsApi = require('../../../js/webinar-studio/assets.js');
     const studioStateApi = require('../../../js/webinar-studio/state.js');
+    const captured = { getEditorTarget: null, accessContext: null };
+    const assetsApi = {
+      createAssetLibrary(deps) {
+        const library = realAssetsApi.createAssetLibrary(deps);
+        return {
+          ...library,
+          renderAssetCatalog(context) {
+            captured.getEditorTarget = context.getEditorTarget;
+            return library.renderAssetCatalog(context);
+          },
+        };
+      },
+    };
+    const accessHistoryApi = {
+      createAccessHistory: () => ({
+        renderAccessPanel: vi.fn(context => { captured.accessContext = context; }),
+        renderHistoryPanel: vi.fn(),
+        deactivate: vi.fn(),
+        destroy: vi.fn(),
+      }),
+    };
     const preview = { boot: vi.fn().mockResolvedValue({ type: 'ready' }), destroy: vi.fn() };
     const timers = [];
     const studio = createStudio({
-      accessHistoryApi: { createAccessHistory: () => ({ deactivate: vi.fn(), destroy: vi.fn() }) },
+      accessHistoryApi,
       api,
       assetsApi,
       confirm: vi.fn().mockResolvedValue(true),
@@ -647,33 +703,210 @@ describe('Webinar Studio reusable asset library', () => {
       clearTimeoutImpl: vi.fn(),
       stateApi: studioStateApi,
     });
+    const panel = elements.wsSettingsPanel;
+    const settle = async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); };
+    return {
+      studio,
+      document,
+      elements,
+      tabs,
+      api,
+      preview,
+      timers,
+      panel,
+      captured,
+      settle,
+      clickTab(name) {
+        const tab = tabs[tabNames.indexOf(name)];
+        tab.focus();
+        elements.wsSettings.emit('click', { target: tab });
+      },
+      codeField(field, slideId = FAMILY) {
+        return panel.querySelectorAll(`[data-code-field="${field}"]`).find(node => node.dataset.slideId === slideId) || null;
+      },
+      masterField(field) { return panel.querySelector(`[data-master-field="${field}"]`); },
+      dirtyBadge(surface) { return panel.querySelector(`[data-dirty-surface="${surface}"]`); },
+      insertButton() { return panel.querySelector('[data-insert-asset-reference]'); },
+      assetError() { return panel.querySelector('[data-asset-error]'); },
+      deleteButton(slideId) {
+        return panel.querySelectorAll('[data-delete-slide]').find(node => node.dataset.slideId === slideId) || null;
+      },
+      /* Focus a Code textarea with a real selection exactly as a user would. */
+      chooseCode(field, slideId, start, end) {
+        const node = this.codeField(field, slideId);
+        node.selectionStart = start;
+        node.selectionEnd = end;
+        panel.emit('focusin', { target: node });
+        return node;
+      },
+      async openAssets() {
+        this.clickTab('assets');
+        await settle();
+        return this.insertButton();
+      },
+    };
+  }
 
-    await studio.init();
-    await studio.open();
-    elements.wsSettings.emit('click', { target: tabs[2] });
-    const code = elements.wsSettingsPanel.querySelector('[data-code-field="html"]');
-    code.selectionStart = 16;
-    code.selectionEnd = 21;
-    elements.wsSettingsPanel.emit('focusin', { target: code });
+  it('coordinates focus in Code through Assets insertion and back with exact caret and dirty state', async () => {
+    const test = coordinatorHarness({ documents: { 12: studioDocument(12, { slides: [studioDocument(12).slides[0]] }) } });
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    test.chooseCode('html', FAMILY, 16, 21);
 
-    tabs[3].focus();
-    elements.wsSettings.emit('click', { target: tabs[3] });
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(document.activeElement).toBe(tabs[3]);
-    const insert = elements.wsSettingsPanel.querySelector('[data-insert-asset-reference]');
+    const insert = await test.openAssets();
+    expect(test.document.activeElement).toBe(test.tabs[3]);
     expect(insert.disabled).toBe(false);
     insert.emit('click');
 
-    elements.wsSettings.emit('click', { target: tabs[2] });
-    const restored = elements.wsSettingsPanel.querySelector('[data-code-field="html"]');
-    const token = `{{ASSET:${VERSION}}}`;
-    expect(restored.value).toBe(`<section>before ${token}</section>`);
-    expect(restored.selectionStart).toBe(16 + token.length);
-    expect(restored.selectionEnd).toBe(16 + token.length);
-    expect(document.activeElement).toBe(restored);
-    expect(elements.wsSettingsPanel.querySelector(`[data-dirty-surface="${FAMILY}"]`).textContent).toBe('Unsaved');
-    expect(timers.at(-1).delay).toBe(300);
-    expect(preview.boot).not.toHaveBeenCalled();
+    test.clickTab('code');
+    const restored = test.codeField('html', FAMILY);
+    expect(restored.value).toBe(`<section>before ${TOKEN}</section>`);
+    expect(restored.selectionStart).toBe(16 + TOKEN.length);
+    expect(restored.selectionEnd).toBe(16 + TOKEN.length);
+    expect(test.document.activeElement).toBe(restored);
+    expect(test.dirtyBadge(FAMILY).textContent).toBe('Unsaved');
+    expect(test.timers.at(-1).delay).toBe(300);
+    expect(test.preview.boot).not.toHaveBeenCalled();
+  });
+
+  it('inserts into a Master field through the same logical target path', async () => {
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    const css = test.masterField('css');
+    css.selectionStart = 5;
+    css.selectionEnd = 8;
+    test.panel.emit('select', { target: css });
+
+    const insert = await test.openAssets();
+    expect(insert.disabled).toBe(false);
+    insert.emit('click');
+
+    test.clickTab('code');
+    expect(test.masterField('css').value).toBe(`main{${TOKEN}:8px}`);
+    expect(test.dirtyBadge('master').textContent).toBe('Unsaved');
+    expect(test.codeField('html', FAMILY).value).toBe('<section>before after</section>');
+  });
+
+  it('never lets a target from one webinar insert into a newly selected webinar', async () => {
+    const test = coordinatorHarness({ documents: { 12: studioDocument(12), 13: studioDocument(13) } });
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    test.chooseCode('html', FAMILY, 9, 15);
+    await test.openAssets();
+    const stale = test.captured.getEditorTarget();
+    expect(stale).toMatchObject({ webinarId: 12, surface: FAMILY, field: 'html' });
+
+    await test.studio.selectWebinar(13);
+    await test.settle();
+    expect(stale.insertText(TOKEN)).toBe(false);
+    const insert = test.insertButton();
+    expect(insert.disabled).toBe(true);
+    expect(insert.textContent).toBe('Choose a Code field');
+    insert.emit('click');
+    expect(test.assetError().textContent).toMatch(/choose an html, css, or javascript code field/i);
+
+    test.clickTab('code');
+    expect(test.codeField('html', FAMILY).value).toBe('<section>before after</section>');
+    expect(test.dirtyBadge(FAMILY).textContent).toBe('Live');
+    expect(test.timers.some(timer => timer.delay === 300)).toBe(false);
+  });
+
+  it('invalidates the target when the live version reloads and accepts a freshly chosen field afterwards', async () => {
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    test.chooseCode('html', SECOND_SLIDE, 9, 15);
+
+    test.clickTab('access');
+    expect(test.captured.accessContext).not.toBeNull();
+    await test.captured.accessContext.reload();
+    await test.settle();
+
+    let insert = await test.openAssets();
+    expect(insert.disabled).toBe(true);
+    insert.emit('click');
+    expect(test.assetError().textContent).toMatch(/choose an html, css, or javascript code field/i);
+    test.clickTab('code');
+    expect(test.codeField('html', SECOND_SLIDE).value).toBe('<article>agenda</article>');
+
+    test.chooseCode('html', SECOND_SLIDE, 9, 15);
+    insert = await test.openAssets();
+    expect(insert.disabled).toBe(false);
+    insert.emit('click');
+    test.clickTab('code');
+    expect(test.codeField('html', SECOND_SLIDE).value).toBe(`<article>${TOKEN}</article>`);
+    expect(test.codeField('html', FAMILY).value).toBe('<section>before after</section>');
+  });
+
+  it('drops the target when its slide is deleted and keeps a different slide target exact', async () => {
+    const deletedTarget = coordinatorHarness();
+    await deletedTarget.studio.init();
+    await deletedTarget.studio.open();
+    deletedTarget.clickTab('code');
+    deletedTarget.chooseCode('html', SECOND_SLIDE, 0, 0);
+    deletedTarget.panel.emit('click', { target: deletedTarget.deleteButton(SECOND_SLIDE) });
+    await deletedTarget.settle();
+    expect(deletedTarget.api.archiveSlide).toHaveBeenCalledWith(12, SECOND_SLIDE, { expectedVersion: 7 });
+    expect(deletedTarget.codeField('html', SECOND_SLIDE)).toBeNull();
+    const insert = await deletedTarget.openAssets();
+    expect(insert.disabled).toBe(true);
+
+    const survivingTarget = coordinatorHarness();
+    await survivingTarget.studio.init();
+    await survivingTarget.studio.open();
+    survivingTarget.clickTab('code');
+    survivingTarget.chooseCode('html', FAMILY, 9, 15);
+    survivingTarget.panel.emit('click', { target: survivingTarget.deleteButton(SECOND_SLIDE) });
+    await survivingTarget.settle();
+    const survivingInsert = await survivingTarget.openAssets();
+    expect(survivingInsert.disabled).toBe(false);
+    survivingInsert.emit('click');
+    survivingTarget.clickTab('code');
+    expect(survivingTarget.codeField('html', FAMILY).value).toBe(`<section>${TOKEN} after</section>`);
+    expect(survivingTarget.codeField('html', SECOND_SLIDE)).toBeNull();
+  });
+
+  it('clears the target when the Studio closes and requires a new choice after reopening', async () => {
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    test.chooseCode('javascript', FAMILY, 0, 0);
+    await test.openAssets();
+    const stale = test.captured.getEditorTarget();
+    expect(stale).not.toBeNull();
+
+    expect(await test.studio.close()).toBe(true);
+    expect(stale.insertText(TOKEN)).toBe(false);
+    await test.studio.open();
+    await test.settle();
+    const insert = await test.openAssets();
+    expect(insert.disabled).toBe(true);
+    test.clickTab('code');
+    expect(test.codeField('javascript', FAMILY).value).toBe('');
+    expect(test.dirtyBadge(FAMILY).textContent).toBe('Live');
+  });
+
+  it('detaches every target when the Studio is destroyed', async () => {
+    const test = coordinatorHarness();
+    await test.studio.init();
+    await test.studio.open();
+    test.clickTab('code');
+    test.chooseCode('css', FAMILY, 0, 0);
+    await test.openAssets();
+    const target = test.captured.getEditorTarget();
+    expect(target).toMatchObject({ field: 'css' });
+    const timersBefore = test.timers.length;
+
+    test.studio.destroy();
+    expect(target.insertText(TOKEN)).toBe(false);
+    expect(test.captured.getEditorTarget()).toBeNull();
+    expect(test.timers.length).toBe(timersBefore);
+    expect(test.preview.destroy).toHaveBeenCalledOnce();
   });
 });
