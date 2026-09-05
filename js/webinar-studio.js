@@ -56,7 +56,9 @@
     history: 'Saved versions and restore controls will appear here.',
   });
   const PREVIEW_UNAVAILABLE_COPY = 'The slide preview host is not configured for this environment, so code editing is unavailable here.';
+  const PREVIEW_INVALID_COPY = 'The slide preview configuration is invalid: the preview URL must sit on the configured HTTPS origin. Code editing is unavailable until it is corrected.';
   const LOADING_COPY = 'Loading the selected webinar…';
+  const CREATING_COPY = 'Creating a webinar. Select it afterwards to manage presenter settings.';
 
   const model = {
     initialized: false,
@@ -82,6 +84,10 @@
   let editorController = null;
   let presenterController = null;
   let previewController = null;
+  let previewFrame = null;
+  let previewConfigState = 'unset';
+  let previewReadyFor = null;
+  let controllersBuilt = false;
   let editorContextGeneration = 0;
   let initializationPromise = null;
   let accessPromise = null;
@@ -124,37 +130,118 @@
     elements.settingsPanel.innerHTML = html;
   }
 
-  /* The canonical preview controller is built once from the published preview
-     module, bound to a sandboxed iframe whose URL origin must equal the
-     configured origin exactly. An explicit controller dependency wins (tests). */
+  function previewOrigin(value) {
+    if (typeof value !== 'string' || value !== value.trim() || value.includes('*')) return null;
+    let parsed;
+    try { parsed = new URL(value); } catch { return null; }
+    const localHttp = parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost');
+    if ((parsed.protocol !== 'https:' && !localHttp) || parsed.username || parsed.password
+      || parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.origin !== value) return null;
+    return parsed.origin;
+  }
+
+  /* The canonical preview controller is built once, after Studio access is
+     confirmed, from the published preview module. Its frame carries the
+     trusted renderer page on the mortgage-site origin; candidate code executes
+     only inside the unique-origin slide frame that page creates, so this outer
+     frame is deliberately not sandboxed and exact-origin messaging works.
+     An explicit controller dependency wins (fake-DOM harnesses). */
   function ensurePreviewController() {
     if (previewController) return previewController;
     if (dependencies.editorPreview?.boot) {
       previewController = dependencies.editorPreview;
+      previewConfigState = 'ready';
       return previewController;
     }
     if (!previewApi?.createPreviewController || !elements.previewHost) return null;
-    const url = String(previewConfig?.url || '');
-    const origin = String(previewConfig?.origin || '');
+    if (!previewConfig || typeof previewConfig !== 'object') {
+      previewConfigState = 'unset';
+      return null;
+    }
+    const url = String(previewConfig.url || '');
+    const origin = previewOrigin(previewConfig.origin);
     let parsedOrigin;
-    try { parsedOrigin = new URL(url).origin; } catch { return null; }
-    if (!origin || parsedOrigin !== origin || !/^https:\/\//.test(origin)) return null;
+    try { parsedOrigin = new URL(url).origin; } catch { parsedOrigin = null; }
+    if (!origin || parsedOrigin !== origin) {
+      previewConfigState = 'invalid';
+      return null;
+    }
     const iframe = document.createElement('iframe');
-    iframe.setAttribute('sandbox', 'allow-scripts');
     iframe.setAttribute('title', 'Slide preview');
     iframe.setAttribute('data-ws-preview-frame', '');
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
     iframe.setAttribute('src', url);
     elements.previewHost.append(iframe);
     try {
       previewController = previewApi.createPreviewController({
         iframe,
         allowedOrigin: origin,
-        onState: () => {},
+        onState: state => {
+          if (state?.type === 'ready') previewReadyFor = Number(model.selectedWebinarId) || null;
+          updatePreviewHostVisibility();
+        },
+        windowObject: navigationTarget,
+        cryptoImpl: dependencies.cryptoImpl || globalThis.crypto,
       });
+      previewFrame = iframe;
+      previewConfigState = 'ready';
     } catch {
+      iframe.remove?.();
       previewController = null;
+      previewConfigState = 'invalid';
     }
     return previewController;
+  }
+
+  function updatePreviewHostVisibility() {
+    if (!elements.previewHost) return;
+    const selected = Number(model.selectedWebinarId) || null;
+    const showable = model.access === 'ready' && Boolean(model.studioState) && !model.loadingWebinar
+      && model.mode !== 'new' && selected !== null && previewReadyFor === selected;
+    elements.previewHost.hidden = !showable;
+  }
+
+  function resetPreviewVisibility() {
+    previewReadyFor = null;
+    updatePreviewHostVisibility();
+  }
+
+  /* Studio controllers are built once, only after access is confirmed, so an
+     unauthorized Dashboard session never loads the preview host. */
+  function ensureStudioControllers() {
+    if (controllersBuilt || !model.initialized) return;
+    controllersBuilt = true;
+    const preview = ensurePreviewController();
+    if (presenterApi?.createPresenterController) {
+      presenterController = presenterApi.createPresenterController({
+        document,
+        api,
+        confirm: confirmAction,
+        preview,
+        bridge: dependencies.bridge || null,
+        keyTarget: document,
+        setIntervalImpl: dependencies.setIntervalImpl,
+        clearIntervalImpl: dependencies.clearIntervalImpl,
+      });
+    }
+    if (editorApi?.createEditor && preview) {
+      editorController = editorApi.createEditor({
+        root: elements.settingsPanel,
+        document,
+        api,
+        stateApi,
+        getState: () => model.studioState,
+        setState: nextState => { model.studioState = nextState; },
+        preview,
+        getAssets: () => model.resolvedAssets,
+        getResourcePolicy: () => model.resourcePolicy,
+        confirm: confirmAction,
+        copyText: dependencies.copyText,
+        onReload: () => reloadSelectedWebinar(model.selectedWebinarId),
+        setTimeoutImpl: dependencies.setTimeoutImpl,
+        clearTimeoutImpl: dependencies.clearTimeoutImpl,
+      });
+    }
   }
 
   function listen(target, type, handler) {
@@ -295,37 +382,6 @@
       if (assetsApi?.createAssetLibrary) {
         assetController = assetsApi.createAssetLibrary({ api, document });
       }
-      const preview = ensurePreviewController();
-      if (presenterApi?.createPresenterController) {
-        presenterController = presenterApi.createPresenterController({
-          document,
-          api,
-          confirm: confirmAction,
-          preview,
-          bridge: dependencies.bridge || null,
-          keyTarget: document,
-          setIntervalImpl: dependencies.setIntervalImpl,
-          clearIntervalImpl: dependencies.clearIntervalImpl,
-        });
-      }
-      if (editorApi?.createEditor && preview) {
-        editorController = editorApi.createEditor({
-          root: elements.settingsPanel,
-          document,
-          api,
-          stateApi,
-          getState: () => model.studioState,
-          setState: nextState => { model.studioState = nextState; },
-          preview,
-          getAssets: () => model.resolvedAssets,
-          getResourcePolicy: () => model.resourcePolicy,
-          confirm: confirmAction,
-          copyText: dependencies.copyText,
-          onReload: () => reloadSelectedWebinar(model.selectedWebinarId),
-          setTimeoutImpl: dependencies.setTimeoutImpl,
-          clearTimeoutImpl: dependencies.clearTimeoutImpl,
-        });
-      }
       setLauncherAvailable(false);
       listen(elements.close, 'click', () => close());
       listen(elements.newWebinar, 'click', () => openNewWebinar());
@@ -393,6 +449,8 @@
       || !model.initialized
       || openLifecycleGeneration !== lifecycleGeneration
       || elements.modal.hidden) return false;
+    ensureStudioControllers();
+    render();
     if (!model.studioState && model.webinars.length && model.mode !== 'new') {
       await selectWebinar(model.webinars[0].id, { skipConfirmation: true });
     }
@@ -441,6 +499,7 @@
     }
 
     invalidateEditorContext();
+    resetPreviewVisibility();
     model.selectedWebinarId = webinarId;
     model.loadingWebinar = true;
     model.mode = 'deck';
@@ -508,6 +567,7 @@
     if (!Number.isSafeInteger(webinarId) || webinarId <= 0) return false;
     if (Number(model.selectedWebinarId) !== webinarId) return false;
     invalidateEditorContext();
+    resetPreviewVisibility();
     const request = beginRequest(webinarId);
     try {
       const response = await api.listWebinars();
@@ -589,7 +649,7 @@
       workspaceContent().innerHTML = `
         <section class="ws-workspace-intro">
           <h3>${escapeHtml(webinar.title)}</h3>
-          <p>The editing workspace is ready. Slide controls and live preview load here as Studio tools come online.</p>
+          <p>Edit in the Code tab; the live preview renders below as you type and stays private until you Save Live.</p>
           <div class="ws-version-line"><span class="ws-live-dot" aria-hidden="true"></span><strong>Live version ${model.studioState.liveVersion}</strong><span>${webinar.audienceEnabled ? 'Audience enabled' : 'Audience off'}</span></div>
         </section>`;
       return;
@@ -615,12 +675,13 @@
     if (elements.newWebinar) elements.newWebinar.hidden = model.access !== 'ready' || !isAdmin();
     // While a different webinar loads, the previous deck's state is still in
     // memory but must not be presented as editable or launchable.
-    const selected = model.loadingWebinar ? null : model.studioState?.webinar;
+    const selected = model.loadingWebinar || model.mode === 'new' ? null : model.studioState?.webinar;
     if (elements.launchPresenter) elements.launchPresenter.disabled = !selected;
     if (elements.launchAudience) elements.launchAudience.disabled = !selected || !selected.audienceEnabled;
     if (elements.settingsPanel && !selected) {
       deactivateSettingsControllers();
-      setPanelCopy(`<p>${model.loadingWebinar ? LOADING_COPY : 'Select a webinar to manage presenter settings.'}</p>`);
+      const copy = model.loadingWebinar ? LOADING_COPY : model.mode === 'new' ? CREATING_COPY : 'Select a webinar to manage presenter settings.';
+      setPanelCopy(`<p>${copy}</p>`);
     } else if (elements.settingsPanel) {
       renderSettingsTab();
     }
@@ -630,6 +691,7 @@
     if (!elements.workspace) return;
     renderDecks();
     renderWorkspace();
+    updatePreviewHostVisibility();
     renderSettings();
     if (elements.status) {
       elements.status.textContent = model.studioState
@@ -644,6 +706,7 @@
     const mayDiscard = await mayDiscardChanges();
     if (!requestIsCurrent(request) || !mayDiscard) return false;
     invalidateEditorContext();
+    resetPreviewVisibility();
     model.mode = 'new';
     model.formError = '';
     try {
@@ -796,7 +859,7 @@
     }
     assetController?.deactivate?.();
     if (model.settingsTab === 'code' && editorApi?.createEditor && !editorController) {
-      setPanelCopy(`<p>${PREVIEW_UNAVAILABLE_COPY}</p>`);
+      setPanelCopy(`<p>${previewConfigState === 'invalid' ? PREVIEW_INVALID_COPY : PREVIEW_UNAVAILABLE_COPY}</p>`);
       return;
     }
     setPanelCopy(`<p>${SETTINGS_COPY[model.settingsTab]}</p>`);
@@ -836,6 +899,10 @@
     else previewController?.destroy?.();
     editorController = null;
     previewController = null;
+    previewFrame?.remove?.();
+    previewFrame = null;
+    previewReadyFor = null;
+    controllersBuilt = false;
     for (const [target, type, handler] of bindings) {
       target?.removeEventListener?.(type, handler);
     }

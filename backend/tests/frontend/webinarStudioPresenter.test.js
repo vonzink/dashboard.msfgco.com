@@ -661,10 +661,11 @@ describe('Webinar Studio presenter tab lifecycle', () => {
       navigationTarget: new FakeElement('window', document),
     });
     await studio.init();
+    expect(presenterApi.createPresenterController).not.toHaveBeenCalled();
+    await studio.open();
     expect(presenterApi.createPresenterController).toHaveBeenCalledWith(expect.objectContaining({
       api, document, preview, keyTarget: document,
     }));
-    await studio.open();
     expect(presenterController.renderPresenterPanel).toHaveBeenCalledWith(expect.objectContaining({
       root: elements.wsSettingsPanel,
       webinarId: 12,

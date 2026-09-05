@@ -369,16 +369,27 @@ describe('Webinar Studio shell contracts', () => {
 });
 
 describe('Webinar Studio preview wiring', () => {
-  function previewWiring({ previewConfig, previewApi } = {}) {
+  const PRODUCTION_PREVIEW = {
+    url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview',
+    origin: 'https://msfgmortgage.com',
+  };
+
+  function previewWiring({ previewConfig, previewApi, useRealPreview = false } = {}) {
     vi.resetModules();
     const createWebinarStudio = require(studioPath);
     const editorApi = require(resolve(root, 'js/webinar-studio/editor.js'));
+    const realPreviewApi = require(resolve(root, 'js/webinar-studio/preview.js'));
     const dom = makeDocument();
     const previewHost = new FakeElement('wsPreviewHost');
     previewHost.children = [];
     previewHost.append = (...nodes) => previewHost.children.push(...nodes);
-    const iframe = { src: '', title: '', contentWindow: { postMessage: vi.fn() }, setAttribute: vi.fn(), attributes: {} };
-    iframe.setAttribute = (name, value) => { iframe.attributes[name] = String(value); if (name === 'src') iframe.src = String(value); };
+    const iframe = {
+      src: '', title: '', attributes: {}, isConnected: true,
+      contentWindow: { postMessage: vi.fn() },
+      setAttribute(name, value) { this.attributes[name] = String(value); if (name === 'src') this.src = String(value); },
+      getAttribute(name) { return this.attributes[name] ?? null; },
+      remove() { previewHost.children = previewHost.children.filter(node => node !== this); },
+    };
     const settingsPanel = dom.elements.wsSettingsPanel;
     settingsPanel.replaceChildren = vi.fn();
     settingsPanel.querySelectorAll = () => [];
@@ -393,9 +404,11 @@ describe('Webinar Studio preview wiring', () => {
       listWebinars: vi.fn().mockResolvedValue([{ id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false }]),
       getWebinar: vi.fn().mockResolvedValue(privateDocument()),
     };
-    const completePreviewApi = previewApi === undefined
-      ? { createPreviewController: vi.fn().mockReturnValue(controller) }
-      : previewApi;
+    const completePreviewApi = useRealPreview
+      ? { createPreviewController: vi.fn(realPreviewApi.createPreviewController) }
+      : previewApi === undefined
+        ? { createPreviewController: vi.fn().mockReturnValue(controller) }
+        : previewApi;
     const studio = createWebinarStudio({
       document: documentWithHost,
       api,
@@ -408,31 +421,59 @@ describe('Webinar Studio preview wiring', () => {
       openWindow: vi.fn(),
       navigationTarget: new FakeEventTarget(),
     });
-    return { studio, previewApi: completePreviewApi, controller, iframe, previewHost, dom, settingsPanel };
+    return { studio, previewApi: completePreviewApi, controller, iframe, previewHost, dom, settingsPanel, api };
   }
 
-  it('builds the canonical preview controller from the published preview module with an exact-origin sandboxed iframe', async () => {
-    const test = previewWiring({ previewConfig: { url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview', origin: 'https://msfgmortgage.com' } });
-    await test.studio.init();
-    expect(test.previewHost.children).toContain(test.iframe);
-    expect(test.iframe.attributes.sandbox).toBe('allow-scripts');
-    expect(test.iframe.src).toBe('https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview');
-    expect(test.previewApi.createPreviewController).toHaveBeenCalledWith(expect.objectContaining({
-      iframe: test.iframe,
-      allowedOrigin: 'https://msfgmortgage.com',
-      onState: expect.any(Function),
-    }));
-    await test.studio.open();
+  function clickCode(test) {
     test.dom.tabs[2].dataset.wsTab = 'code';
     test.dom.elements.wsSettings.listeners.click({ target: test.dom.tabs[2] });
-    expect(test.settingsPanel.replaceChildren).toHaveBeenCalled();
+  }
+
+  it('builds the canonical preview controller only after access succeeds, from the published module, in an un-sandboxed exact-origin frame', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
+    await test.studio.init();
+    expect(test.previewHost.children).toHaveLength(0);
+    expect(test.previewApi.createPreviewController).not.toHaveBeenCalled();
+
+    await test.studio.open();
+    expect(test.previewHost.children).toContain(test.iframe);
+    /* The outer frame carries the trusted renderer page on the mortgage-site
+       origin. Candidate code executes only inside the inner unique-origin
+       slide frame that page creates. A sandbox here would give the host an
+       opaque origin and defeat exact-origin messaging. */
+    expect(test.iframe.getAttribute('sandbox')).toBeNull();
+    expect(test.iframe.src).toBe(PRODUCTION_PREVIEW.url);
+    expect(test.previewApi.createPreviewController).toHaveBeenCalledTimes(1);
+    expect(test.previewApi.createPreviewController).toHaveBeenCalledWith(expect.objectContaining({
+      iframe: test.iframe,
+      allowedOrigin: PRODUCTION_PREVIEW.origin,
+      onState: expect.any(Function),
+    }));
+    clickCode(test);
+    expect(test.settingsPanel.innerHTML).not.toMatch(/not configured/i);
+    const rendered = test.settingsPanel.replaceChildren.mock.calls.some(call => call.length === 1 && call[0] && typeof call[0] === 'object');
+    expect(rendered).toBe(true);
   });
 
-  it('refuses a preview whose URL origin does not match the configured origin', async () => {
+  it('accepts the coordinator arguments with the real preview module', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW, useRealPreview: true });
+    await test.studio.init();
+    await test.studio.open();
+    expect(test.previewApi.createPreviewController).toHaveBeenCalledTimes(1);
+    expect(test.previewApi.createPreviewController.mock.results[0].type).toBe('return');
+    expect(typeof test.previewApi.createPreviewController.mock.results[0].value.boot).toBe('function');
+    clickCode(test);
+    expect(test.settingsPanel.innerHTML).not.toMatch(/not configured|invalid/i);
+  });
+
+  it('refuses a preview whose URL origin does not match the configured origin and says the configuration is invalid', async () => {
     const test = previewWiring({ previewConfig: { url: 'https://evil.example/studio-viewer.html?mode=preview', origin: 'https://msfgmortgage.com' } });
     await test.studio.init();
+    await test.studio.open();
     expect(test.previewApi.createPreviewController).not.toHaveBeenCalled();
     expect(test.previewHost.children).toHaveLength(0);
+    clickCode(test);
+    expect(test.settingsPanel.innerHTML).toMatch(/preview configuration is invalid/i);
   });
 
   it('explains a missing preview configuration on the Code tab instead of silently doing nothing', async () => {
@@ -440,13 +481,48 @@ describe('Webinar Studio preview wiring', () => {
     await test.studio.init();
     await test.studio.open();
     expect(test.previewApi.createPreviewController).not.toHaveBeenCalled();
-    test.dom.tabs[2].dataset.wsTab = 'code';
-    test.dom.elements.wsSettings.listeners.click({ target: test.dom.tabs[2] });
+    clickCode(test);
     expect(test.settingsPanel.innerHTML).toMatch(/preview host is not configured/i);
     expect(test.settingsPanel.innerHTML).not.toMatch(/Master HTML and CSS tools will appear here/);
   });
 
-  it('ships every Studio module before the coordinator and hosts the preview frame in the shell', () => {
+  it('hides the preview host until the current webinar reports a ready preview, and while loading, creating, or switching', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
+    await test.studio.init();
+    expect(test.previewHost.hidden).toBe(true);
+    await test.studio.open();
+    expect(test.previewHost.hidden).toBe(true);
+    const onState = test.previewApi.createPreviewController.mock.calls[0][0].onState;
+    onState({ type: 'ready' });
+    expect(test.previewHost.hidden).toBe(false);
+
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second', title: 'Second deck' }));
+    test.api.listWebinars.mockResolvedValue([
+      { id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false },
+      { id: 13, slug: 'second', title: 'Second deck', liveVersion: 1, audienceEnabled: false },
+    ]);
+    await test.studio.selectWebinar(13);
+    expect(test.previewHost.hidden).toBe(true);
+    onState({ type: 'ready' });
+    expect(test.previewHost.hidden).toBe(false);
+
+    await test.studio.openNewWebinar();
+    expect(test.previewHost.hidden).toBe(true);
+    expect(test.dom.elements.wsLaunchPresenter.disabled).toBe(true);
+    expect(test.settingsPanel.innerHTML).toMatch(/select a webinar|creating/i);
+  });
+
+  it('removes the preview frame on destroy so a later init does not stack frames', async () => {
+    const test = previewWiring({ previewConfig: PRODUCTION_PREVIEW });
+    await test.studio.init();
+    await test.studio.open();
+    expect(test.previewHost.children).toHaveLength(1);
+    test.studio.destroy();
+    expect(test.previewHost.children).toHaveLength(0);
+    expect(test.controller.destroy).toHaveBeenCalled();
+  });
+
+  it('ships every Studio module before the coordinator, hosts the preview frame in the shell, and configures the production preview host', () => {
     const html = readFileSync(resolve(root, 'index.html'), 'utf8');
     const order = ['js/api-server.js', 'js/webinar-studio/api.js', 'js/webinar-studio/state.js', 'js/webinar-studio/access-history.js',
       'js/webinar-studio/assets.js', 'js/webinar-studio/preview.js', 'js/webinar-studio/editor.js', 'js/webinar-studio/presenter.js', 'js/webinar-studio.js'];
@@ -458,5 +534,19 @@ describe('Webinar Studio preview wiring', () => {
     expect(html).toContain('id="wsPreviewHost"');
     expect(html).toContain('id="wsWorkspaceContent"');
     expect(html).not.toContain('WebinarStudioEditorPreview');
+    expect(html).toMatch(/css\/webinar-studio\.css\?v=2026090[5-9]/);
+
+    const config = readFileSync(resolve(root, 'js/config.js'), 'utf8');
+    const preview = /webinarStudio:\s*\{\s*preview:\s*\{\s*url:\s*'([^']+)',\s*origin:\s*'([^']+)'/.exec(config);
+    expect(preview, 'CONFIG.webinarStudio.preview').not.toBeNull();
+    expect(new URL(preview[1]).origin).toBe(preview[2]);
+    expect(preview[2]).toBe('https://msfgmortgage.com');
+    expect(config).not.toMatch(/webinarStudio[\s\S]{0,200}localhost/);
+  });
+
+  it('keeps the Studio header, deck heading, and launch actions as flex rows', () => {
+    const css = readFileSync(resolve(root, 'css/webinar-studio.css'), 'utf8');
+    expect(css).toMatch(/#webinarStudioModal \.ws-heading,\s*#webinarStudioModal \.ws-decks-heading,\s*#webinarStudioModal \.ws-launch-actions,\s*#webinarStudioModal \.ws-version-line \{\s*display: flex;\s*align-items: center;/);
+    expect(css).toMatch(/#webinarStudioModal \.ws-preview-host \{/);
   });
 });

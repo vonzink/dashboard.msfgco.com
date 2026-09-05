@@ -131,6 +131,18 @@
       };
       if (normalized.webinarId !== insertionContext.webinarId
         || normalized.generation !== insertionContext.generation) invalidateInsertionTarget();
+      if (normalized.webinarId !== insertionContext.webinarId) {
+        // Preview readiness, tab choice, and errors belong to one webinar.
+        // Nothing may carry a ready Save Live state into another deck.
+        previewStates.clear();
+        activeTabs.clear();
+        editorError = '';
+        previewGeneration += 1;
+        if (debounceTimer !== null) {
+          clearTimeoutImpl(debounceTimer);
+          debounceTimer = null;
+        }
+      }
       insertionContext = normalized;
       return Object.freeze({ ...insertionContext });
     }

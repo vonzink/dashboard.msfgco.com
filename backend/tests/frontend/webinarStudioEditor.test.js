@@ -153,7 +153,7 @@ function makeHarness({ previewResult = Promise.resolve({ type: 'ready' }), api =
     setTimeoutImpl(callback, delay) { timers.push({ callback, delay }); return timers.length; },
     clearTimeoutImpl: vi.fn(),
   });
-  return { api: completeApi, confirm, editor, get state() { return state; }, preview, root, timers };
+  return { api: completeApi, confirm, editor, get state() { return state; }, setState(next) { state = next; }, preview, root, timers };
 }
 
 describe('Webinar Studio one-box editor', () => {
@@ -322,6 +322,26 @@ describe('Webinar Studio one-box editor', () => {
     const restored = test.root.querySelectorAll('[data-code-field="html"]')[1];
     expect(test.root.ownerDocument.activeElement).toBe(restored);
     expect(restored.selectionStart).toBe(9 + token.length);
+  });
+
+  it('forgets preview readiness, code tabs, and errors when the webinar changes so Save Live never carries over', async () => {
+    const test = makeHarness();
+    test.editor.setContext({ webinarId: 12, generation: 1 });
+    test.editor.render(test.state);
+    await test.editor.previewMaster();
+    expect(test.root.querySelector('[data-save-master]').disabled).toBe(false);
+    test.root.emit('click', { target: test.root.querySelectorAll('[data-code-tab="css"]')[0] });
+
+    const other = { ...test.state, webinar: { ...test.state.webinar, id: 13, slug: 'second' } };
+    test.editor.setContext({ webinarId: 13, generation: 1 });
+    test.setState(other);
+    test.editor.render(other);
+    expect(test.root.querySelector('[data-save-master]').disabled).toBe(true);
+    const masterStatus = test.root.querySelectorAll('[data-preview-status]').find(node => node.dataset.surface === 'master');
+    expect(masterStatus.textContent).toBe('Preview required before saving.');
+    const firstTabs = test.root.querySelectorAll('[data-code-tab]').filter(node => node.dataset.slideId === FIRST);
+    expect(firstTabs.find(node => node.dataset.codeTab === 'html').getAttribute('aria-selected')).toBe('true');
+    expect(test.root.querySelector('[data-editor-error]').textContent).toBe('');
   });
 
   it('moves focus and activation through each slide code tab with wrapping keyboard controls', () => {
