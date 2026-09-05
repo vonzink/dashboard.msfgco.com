@@ -245,6 +245,7 @@
 
     function scheduleInit() {
       if (initTimer !== null) { clearTimeoutImpl(initTimer); initTimer = null; }
+      if (windowIsClosed()) { disconnect(); return; }
       if (initAttempts >= maxInitAttempts) {
         setStatus('disconnected');
         return;
@@ -276,37 +277,47 @@
     }
 
     function beginHandshake() {
-      nonce = freshNonce();
+      let next;
+      try { next = freshNonce(); } catch { return false; }
+      nonce = next;
       initAttempts = 0;
       missedPongs = 0;
       clearTimers();
       setStatus('connecting');
       scheduleInit();
+      return true;
+    }
+
+    /* Opening the fixed window name re-navigates an existing audience window
+       to the audience URL, so a reloaded, navigated-away, or foreign page in
+       that window is replaced by a fresh audience under the new nonce. */
+    function openAudienceWindow() {
+      let opened = null;
+      try { opened = openWindow(url.href, WINDOW_NAME); } catch { opened = null; }
+      if (!opened || typeof opened.postMessage !== 'function') {
+        audienceWindow = null;
+        const wasIdle = status === 'idle';
+        setStatus('idle');
+        if (wasIdle) { try { onStatus(status); } catch { /* observers cannot break the boundary */ } }
+        return false;
+      }
+      audienceWindow = opened;
+      return true;
     }
 
     function connect() {
       if (destroyed) return false;
       if (status === 'connected' || status === 'connecting') return true;
-      if (windowIsClosed()) {
-        let opened = null;
-        try { opened = openWindow(url.href, WINDOW_NAME); } catch { opened = null; }
-        if (!opened || typeof opened.postMessage !== 'function') {
-          audienceWindow = null;
-          setStatus('idle');
-          try { onStatus(status); } catch { /* observers cannot break the boundary */ }
-          return false;
-        }
-        audienceWindow = opened;
-      }
-      beginHandshake();
-      return true;
+      if (windowIsClosed() && !openAudienceWindow()) return false;
+      return beginHandshake();
     }
 
     function reconnect() {
       if (destroyed) return false;
       clearTimers();
       status = 'idle';
-      return connect();
+      if (!openAudienceWindow()) return false;
+      return beginHandshake();
     }
 
     function receive(event) {
@@ -316,7 +327,9 @@
       if (!result.ok) { ignore(result.reason); return; }
       const message = result.message;
       if (message.type === 'audience-ready') {
-        if (status === 'connecting' || status === 'connected') {
+        // The nonce is bound to this launch, so a late answer after the init
+        // budget lapsed still belongs to the window we opened.
+        if ((status === 'connecting' || status === 'connected' || status === 'disconnected') && !windowIsClosed()) {
           if (initTimer !== null) { clearTimeoutImpl(initTimer); initTimer = null; }
           setStatus('connected');
           startHeartbeat();
@@ -331,6 +344,7 @@
 
     function sendControl(type, payload = {}) {
       if (destroyed || status !== 'connected' || missedPongs > maxMissedPongs) return false;
+      if (windowIsClosed()) { disconnect(); return false; }
       const message = validateControlMessage({ v: PROTOCOL_VERSION, nonce, type, payload }, nonce);
       if (!message) return false;
       try {

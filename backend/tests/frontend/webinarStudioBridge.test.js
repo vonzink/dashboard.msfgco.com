@@ -22,7 +22,8 @@ function harness({ openResult, ...options } = {}) {
   const { createAudienceBridge } = loadModule();
   const windowObject = new FakeWindow();
   const audience = { closed: false, postMessage: vi.fn() };
-  const openWindow = vi.fn().mockImplementation(() => (openResult === undefined ? audience : openResult));
+  // A (re)opened named window is open by definition, so the fake reopens it.
+  const openWindow = vi.fn().mockImplementation(() => { if (openResult === undefined) { audience.closed = false; return audience; } return openResult; });
   const onState = vi.fn();
   const onStatus = vi.fn();
   const onIgnored = vi.fn();
@@ -207,6 +208,139 @@ describe('Webinar Studio audience bridge', () => {
     expect(test.bridge.status()).toBe('idle');
     expect(test.audience.postMessage).not.toHaveBeenCalled();
     expect(test.onStatus).toHaveBeenLastCalledWith('idle');
+  });
+
+  it('always re-navigates the named window on reconnect so a foreign or reloaded audience page is recovered', () => {
+    const test = harness();
+    test.bridge.connect();
+    test.ready();
+    // The window is open but no longer the studio page: pongs stop.
+    for (let tick = 0; tick < 4; tick += 1) test.intervals.at(-1).callback();
+    expect(test.bridge.status()).toBe('disconnected');
+    expect(test.bridge.reconnect()).toBe(true);
+    expect(test.openWindow).toHaveBeenCalledTimes(2);
+    expect(test.openWindow).toHaveBeenLastCalledWith(AUDIENCE_URL, 'MSFGWebinarAudience');
+    expect(test.bridge.status()).toBe('connecting');
+    test.ready();
+    expect(test.bridge.status()).toBe('connected');
+  });
+
+  it('stops initializing as soon as the window closes instead of burning the retry budget', () => {
+    const test = harness();
+    test.bridge.connect();
+    test.audience.closed = true;
+    test.timeouts.at(-1).callback();
+    expect(test.bridge.status()).toBe('disconnected');
+    expect(test.audience.postMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('never reports delivery to a window that has already closed', () => {
+    const test = harness();
+    test.bridge.connect();
+    test.ready();
+    test.audience.closed = true;
+    expect(test.bridge.sendControl('next', {})).toBe(false);
+    expect(test.bridge.status()).toBe('disconnected');
+    expect(test.onStatus).toHaveBeenLastCalledWith('disconnected');
+    expect(test.audience.postMessage.mock.calls.filter(([message]) => message.type === 'next')).toHaveLength(0);
+  });
+
+  it('keeps the boolean contract when no nonce can be generated', () => {
+    const test = harness({ cryptoImpl: { randomUUID: () => { throw new Error('no crypto'); } } });
+    expect(() => test.bridge.connect()).not.toThrow();
+    expect(test.bridge.connect()).toBe(false);
+    expect(test.bridge.status()).toBe('idle');
+    expect(test.audience.postMessage).not.toHaveBeenCalled();
+  });
+
+  it('reports a blocked popup once per attempt, from any prior status', () => {
+    const test = harness();
+    test.bridge.connect();
+    test.ready();
+    test.audience.closed = true;
+    test.intervals.at(-1).callback();
+    expect(test.bridge.status()).toBe('disconnected');
+    test.openWindow.mockImplementation(() => null);
+    test.onStatus.mockClear();
+    expect(test.bridge.reconnect()).toBe(false);
+    expect(test.onStatus.mock.calls.map(([status]) => status)).toEqual(['idle']);
+  });
+
+  it('accepts a late audience-ready for the current launch after the init budget lapsed', () => {
+    const test = harness({ maxInitAttempts: 2 });
+    test.bridge.connect();
+    test.timeouts.at(-1).callback();
+    test.timeouts.at(-1).callback();
+    expect(test.bridge.status()).toBe('disconnected');
+    test.ready();
+    expect(test.bridge.status()).toBe('connected');
+    expect(test.onState).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'audience-ready' }));
+  });
+
+  it('reconnects cleanly while connected: the old heartbeat stops and a stale ready is rejected; a duplicate ready does not leak a heartbeat', () => {
+    const test = harness();
+    test.bridge.connect();
+    test.ready();
+    const first = test.currentNonce();
+    const heartbeatsBefore = test.intervals.length;
+    test.ready();
+    expect(test.intervals.length).toBe(heartbeatsBefore + 1);
+    expect(test.clearedIntervals).toContain(heartbeatsBefore);
+    test.bridge.reconnect();
+    expect(test.clearedIntervals).toContain(heartbeatsBefore + 1);
+    expect(test.currentNonce()).not.toBe(first);
+    test.fromAudience({ v: 1, nonce: first, type: 'audience-ready', payload: { index: 0, total: 15 } });
+    expect(test.onIgnored).toHaveBeenLastCalledWith('WRONG_NONCE');
+    expect(test.bridge.status()).toBe('connecting');
+  });
+
+  it('survives observers that throw', () => {
+    const test = harness({ onState: () => { throw new Error('boom'); }, onStatus: () => { throw new Error('boom'); }, onIgnored: () => { throw new Error('boom'); } });
+    expect(() => test.bridge.connect()).not.toThrow();
+    expect(() => test.ready()).not.toThrow();
+    expect(test.bridge.status()).toBe('connected');
+    expect(() => test.fromAudience('junk')).not.toThrow();
+    expect(test.bridge.sendControl('next', {})).toBe(true);
+  });
+
+  it('pins the protocol shape shared with the audience: enumerations, bounds, nonce pattern, and data-only records', () => {
+    const { validateControlMessage, validateAudienceMessage } = loadModule();
+    const nonce = 'n'.repeat(32);
+    const control = (type, payload) => validateControlMessage({ v: 1, nonce, type, payload }, nonce);
+    const audience = (type, payload) => validateAudienceMessage({ v: 1, nonce, type, payload }, nonce);
+    for (const tool of ['pen', 'highlight', 'box', 'text', 'laser']) expect(control('annotation-command', { tool })).not.toBeNull();
+    for (const color of ['green', 'yellow', 'blue', 'red', 'black', 'white']) expect(control('annotation-command', { color })).not.toBeNull();
+    expect(control('annotation-command', { tool: 'script' })).toBeNull();
+    expect(control('annotation-command', { color: 'url(x)' })).toBeNull();
+    expect(control('annotation-command', {})).toBeNull();
+    expect(control('goto', { index: 100_000 })).not.toBeNull();
+    expect(control('goto', { index: 100_001 })).toBeNull();
+    expect(control('goto', { index: -1 })).toBeNull();
+    expect(control('goto', { index: 1.5 })).toBeNull();
+    expect(audience('animation-state', { current: 10_000, total: 10_000, playing: false })).not.toBeNull();
+    expect(audience('animation-state', { current: 0, total: 10_001, playing: false })).toBeNull();
+    expect(audience('slide-state', { index: 0, total: 100_000 })).not.toBeNull();
+    expect(audience('slide-state', { index: 0, total: 100_001 })).toBeNull();
+    expect(audience('supported-overlay-state', { id: 'cash-to-close', visible: true })).not.toBeNull();
+    expect(audience('supported-overlay-state', { id: 'Cash', visible: true })).toBeNull();
+    expect(audience('audience-error', { code: 'SLIDE_RUNTIME_ERROR' })).not.toBeNull();
+    expect(audience('audience-error', { code: 'lower' })).toBeNull();
+    for (const bad of ['short', 'x'.repeat(129), 'has space'.padEnd(20, 'a'), 'bad$chars'.padEnd(20, 'a')]) {
+      expect(validateControlMessage({ v: 1, nonce: bad, type: 'ping', payload: {} }, bad)).toBeNull();
+    }
+    expect(validateControlMessage({ v: 1, nonce, type: 'ping', payload: {} }, nonce)).not.toBeNull();
+    // Data-only records: accessors, prototype keys, class instances, symbols, and extras are rejected.
+    const accessor = {}; Object.defineProperty(accessor, 'index', { enumerable: true, get: () => 1 });
+    expect(control('goto', accessor)).toBeNull();
+    const polluted = JSON.parse('{"index":1,"__proto__":{"x":1}}');
+    expect(control('goto', polluted)).toBeNull();
+    class Payload { constructor() { this.index = 1; } }
+    expect(control('goto', new Payload())).toBeNull();
+    expect(control('goto', { index: 1, [Symbol('s')]: 1 })).toBeNull();
+    expect(control('goto', { index: 1, extra: true })).toBeNull();
+    expect(control('goto', Object.assign(Object.create(null), { index: 1 }))).not.toBeNull();
+    expect(control('next', [])).toBeNull();
+    expect(control('next', null)).toBeNull();
   });
 
   it('destroy removes the listener, stops timers, and leaves the audience window open', () => {
