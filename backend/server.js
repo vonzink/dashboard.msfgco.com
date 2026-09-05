@@ -235,7 +235,6 @@ const writeLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || req.originalUrl.startsWith('/api/my-files')
     || isPublicWebinarRuntimeRequest(req)
-    || hasInvalidPublicWebinarPathCasing(req)
     || isWebinarStudioMutation(req),
 });
 app.use('/api/', writeLimiter);

@@ -32,6 +32,20 @@ const rawNonPublicRuntimeLookalikes = Object.freeze([
   ['absolute-form target', `http://msfgmortgage.com/api/public/webinars/${slug}/runtime-events`],
   ['fragment-bearing target', `/api/public/webinars/${slug}/runtime-events#fragment`],
 ]);
+const rawMixedCaseNonRuntimePublicPosts = Object.freeze([
+  ['near-miss suffix', `/API/PUBLIC/WEBINARS/${slug}/RUNTIME-EVENTS-NEARBY`],
+  ['singular action', `/API/PUBLIC/WEBINARS/${slug}/RUNTIME-EVENT`],
+  ['nested suffix', `/API/PUBLIC/WEBINARS/${slug}/RUNTIME-EVENTS/NESTED`],
+  ['nested prefix', `/API/PUBLIC/WEBINARS/${slug}/NESTED/RUNTIME-EVENTS`],
+  ['double trailing slash', `/API/PUBLIC/WEBINARS/${slug}/RUNTIME-EVENTS//`],
+  ['internal doubled slash', `/API/PUBLIC/WEBINARS/${slug}//RUNTIME-EVENTS`],
+]);
+const rawMixedCaseRuntimeAliases = Object.freeze([
+  ['uppercase namespace', `/API/PUBLIC/WEBINARS/${slug}/runtime-events`],
+  ['uppercase action', `/api/public/webinars/${slug}/RUNTIME-EVENTS`],
+  ['mixed trailing slash', `/Api/Public/Webinars/${slug}/Runtime-Events/`],
+  ['mixed query', `/Api/Public/Webinars/${slug}/Runtime-Events?trace=ignored`],
+]);
 
 let server;
 let getLiveBundleBySlug;
@@ -631,6 +645,48 @@ describe('public runtime telemetry', () => {
       const canonical = await rawRequest(`/api/public/webinars/${slug}/runtime-events`);
       expect(canonical.status).toBe(204);
       expect((await rawRequest(`/api/public/webinars/${slug}/runtime-events`)).status).toBe(429);
+    },
+  );
+
+  it.each(rawMixedCaseNonRuntimePublicPosts)(
+    'keeps the mixed-case %s on the general quota instead of the telemetry exemption',
+    async (_label, target) => {
+      await new Promise(resolve => server.close(resolve));
+      server = await listen({ publicWebinarRuntimeLimit: 1, generalWriteLimit: 1 });
+
+      const first = await rawRequest(target);
+      expect(first.status).toBe(404);
+      expect(JSON.parse(first.body)).toEqual({
+        error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND',
+      });
+      expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+      expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+      expect(operationalLogger.info).toHaveBeenCalledWith({
+        event: 'webinar.validation_rejected', statusCode: 404, reasonCode: 'WEBINAR_NOT_FOUND',
+      }, 'webinar operational event');
+
+      const generalExcess = await rawRequest(target);
+      expect(generalExcess.status).toBe(429);
+      expect(getLiveBundleBySlug).not.toHaveBeenCalled();
+      expect(operationalLogger.info).toHaveBeenCalledTimes(1);
+
+      const canonical = await rawRequest(`/api/public/webinars/${slug}/runtime-events`);
+      expect(canonical.status).toBe(204);
+      expect((await rawRequest(`/api/public/webinars/${slug}/runtime-events`)).status).toBe(429);
+    },
+  );
+
+  it.each(rawMixedCaseRuntimeAliases)(
+    'keeps the exact %s runtime alias on only the dedicated telemetry quota',
+    async (_label, target) => {
+      await new Promise(resolve => server.close(resolve));
+      server = await listen({ publicWebinarRuntimeLimit: 1, generalWriteLimit: 1 });
+
+      expect((await rawRequest(target)).status).toBe(404);
+      expect((await rawRequest(target)).status).toBe(429);
+
+      expect((await rawRequest('/api/announcements', { body: '{}' })).status).toBe(401);
+      expect((await rawRequest('/api/announcements', { body: '{}' })).status).toBe(429);
     },
   );
 

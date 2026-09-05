@@ -67,6 +67,8 @@ function hasInvalidPublicWebinarPathCasing(req) {
   return isPublicWebinarRequest(req) && pathname !== pathname.toLowerCase();
 }
 
+// One raw-target predicate covers the canonical runtime route plus its
+// intentionally supported casing, single-trailing-slash, and query aliases.
 function isPublicWebinarRuntimeRequest(req) {
   return req?.method === 'POST'
     && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/i.test(requestPathname(req) || '');
