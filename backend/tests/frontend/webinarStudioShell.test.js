@@ -843,7 +843,15 @@ describe('Webinar Studio audience bridge wiring', () => {
   };
   const AUDIENCE = { origin: 'https://msfgmortgage.com' };
 
-  function bridgeWiring({ audienceConfig = AUDIENCE, audienceEnabled = true, bridgeApi, accessHistoryApi } = {}) {
+  function bridgeWiring({ audienceConfig = AUDIENCE, audienceEnabled = true, bridgeApi, accessHistoryApi, confirm = vi.fn().mockResolvedValue(true), dirty = false } = {}) {
+    const state = { ...stateApi, hasUnsavedChanges: () => dirty };
+    let editorOptions = null;
+    const editorApi = { createEditor: options => { editorOptions = options; return { render: vi.fn(), setContext: vi.fn(), deactivate: vi.fn(), destroy: vi.fn() }; } };
+    const previewHost = new FakeElement('wsPreviewHost');
+    previewHost.children = [];
+    previewHost.append = (...nodes) => previewHost.children.push(...nodes);
+    const iframe = { attributes: {}, src: '', setAttribute(n, v) { this.attributes[n] = String(v); if (n === 'src') this.src = String(v); }, getAttribute(n) { return this.attributes[n] ?? null; }, addEventListener() {}, removeEventListener() {}, remove() {} };
+    const previewApi = { createPreviewController: vi.fn().mockReturnValue({ boot: vi.fn().mockResolvedValue({ type: 'ready' }), destroy: vi.fn() }) };
     const bridges = [];
     const completeBridgeApi = bridgeApi || {
       createAudienceBridge: vi.fn(options => {
@@ -882,21 +890,135 @@ describe('Webinar Studio audience bridge wiring', () => {
     };
     const openWindow = vi.fn();
     const studio = createWebinarStudio({
-      document: dom.document,
+      document: { ...dom.document, getElementById: id => (id === 'wsPreviewHost' ? previewHost : dom.elements[id] || null), createElement: tag => (tag === 'iframe' ? iframe : { tagName: tag.toUpperCase(), append() {}, setAttribute() {}, dataset: {}, children: [] }) },
       api,
-      stateApi,
+      stateApi: state,
       presenterApi,
+      editorApi,
+      previewApi,
       accessHistoryApi,
       bridgeApi: completeBridgeApi,
       audienceConfig,
       previewConfig: PRODUCTION_PREVIEW,
-      confirm: vi.fn().mockResolvedValue(true),
+      confirm,
       currentUser: () => ({ id: 7, activeRole: 'admin', role: 'admin' }),
       openWindow,
       navigationTarget: new FakeEventTarget(),
     });
-    return { studio, api, bridges, bridgeApi: completeBridgeApi, presenter, presenterApi, openWindow, ...dom };
+    return { studio, api, bridges, bridgeApi: completeBridgeApi, presenter, presenterApi, openWindow, confirm, editorOptions: () => editorOptions, ...dom };
   }
+
+  async function connected(options = {}) {
+    const test = bridgeWiring(options);
+    await test.studio.init();
+    await test.studio.open();
+    test.presenter.options.bridge.connect();
+    test.bridges[0].answer();
+    expect(test.presenter.options.bridge.status()).toBe('connected');
+    return test;
+  }
+
+  function accessCapture() {
+    const capture = { context: null };
+    capture.api = { createAccessHistory: () => ({
+      renderAccessPanel: vi.fn(context => { capture.context = context; }), renderHistoryPanel: vi.fn(), deactivate: vi.fn(), destroy: vi.fn(),
+    }) };
+    return capture;
+  }
+
+  it('keeps a live audience when New webinar is cancelled at the discard prompt', async () => {
+    const test = await connected({ dirty: true, confirm: vi.fn().mockResolvedValue(false) });
+    expect(await test.studio.openNewWebinar()).toBe(false);
+    expect(test.bridges[0].destroy).not.toHaveBeenCalled();
+    expect(test.presenter.options.bridge.status()).toBe('connected');
+  });
+
+  it('drops the audience only once New webinar is confirmed', async () => {
+    const test = await connected({ dirty: true, confirm: vi.fn().mockResolvedValue(true) });
+    await test.studio.openNewWebinar();
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+    expect(test.presenter.options.bridge.status()).toBe('idle');
+  });
+
+  it('asks before closing the Studio while the audience is connected, and keeps the link when the user declines', async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    const test = await connected({ confirm });
+    expect(await test.studio.close()).toBe(false);
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/audience window is connected/i), expect.objectContaining({ title: expect.any(String) }));
+    expect(test.bridges[0].destroy).not.toHaveBeenCalled();
+    expect(test.elements.webinarStudioModal.hidden).toBe(false);
+    confirm.mockResolvedValue(true);
+    expect(await test.studio.close()).toBe(true);
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+  });
+
+  it('closes without asking when no audience is connected', async () => {
+    const confirm = vi.fn().mockResolvedValue(false);
+    const test = bridgeWiring({ confirm });
+    await test.studio.init();
+    await test.studio.open();
+    expect(await test.studio.close()).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('drops a connected audience when a reload shows audience access was turned off', async () => {
+    const access = accessCapture();
+    const test = await connected({ accessHistoryApi: access.api });
+    test.elements.wsSettings.listeners.click({ target: test.tabs[1] });
+    test.api.getWebinar.mockResolvedValue(privateDocument({ audienceEnabled: false }));
+    await access.context.reload();
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+    expect(test.presenter.options.bridge.status()).toBe('idle');
+    expect(test.presenter.options.bridge.sendControl('next', {})).toBe(false);
+  });
+
+  it('drops the bridge when the selected webinar is archived and nothing remains', async () => {
+    const access = accessCapture();
+    const test = await connected({ accessHistoryApi: access.api });
+    test.elements.wsSettings.listeners.click({ target: test.tabs[1] });
+    test.api.listWebinars.mockResolvedValue([]);
+    await access.context.onArchived();
+    expect(test.bridges[0].destroy).toHaveBeenCalled();
+    expect(test.presenter.options.bridge.status()).toBe('idle');
+  });
+
+  it('ignores callbacks from a replaced bridge for the same webinar and status from a bridge whose webinar is no longer selected', async () => {
+    const test = await connected();
+    const first = test.bridges[0];
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument({ id: 13, slug: 'second-deck', title: 'Second deck', audienceEnabled: true }));
+    await test.studio.selectWebinar(13);
+    test.api.getWebinar.mockResolvedValueOnce(privateDocument({ audienceEnabled: true }));
+    await test.studio.selectWebinar(12);
+    test.presenter.options.bridge.connect();
+    const second = test.bridges[1];
+    expect(second).toBeDefined();
+    test.presenter.applyAudienceState.mockClear();
+    test.presenter.setConnection.mockClear();
+    first.options.onState({ type: 'slide-state', payload: { index: 0, total: 1 } });
+    first.options.onStatus('connected');
+    expect(test.presenter.applyAudienceState).not.toHaveBeenCalled();
+    expect(test.presenter.setConnection).not.toHaveBeenCalled();
+    second.answer();
+    expect(test.presenter.applyAudienceState).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds the deck list only when the saved summary actually changed', async () => {
+    const test = bridgeWiring();
+    await test.studio.init();
+    await test.studio.open();
+    const editor = test.editorOptions();
+    expect(editor).not.toBeNull();
+    /* The first sync aligns the list summary with the loaded document. */
+    editor.setState(editor.getState());
+    const before = test.elements.wsDeckList.innerHTML;
+    let rebuilds = 0;
+    Object.defineProperty(test.elements.wsDeckList, 'innerHTML', { get: () => before, set: () => { rebuilds += 1; }, configurable: true });
+    editor.setState(editor.getState());
+    expect(rebuilds).toBe(0);
+    editor.setState(stateApi.markSurfaceSaved(editor.getState(), 'master', { liveVersion: 4, updatedAt: '2026-09-05T12:00:00.000Z' }));
+    expect(rebuilds).toBe(1);
+    expect(test.elements.wsStatus.textContent).toMatch(/Live version 4/);
+  });
 
   it('hands the presenter a bridge facade and builds the real bridge lazily for the selected webinar on launch', async () => {
     const test = bridgeWiring();

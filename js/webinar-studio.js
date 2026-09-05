@@ -103,6 +103,7 @@
   let previewSelectionGeneration = 0;
   let audienceBridge = null;
   let audienceBridgeFor = null;
+  let audienceBridgeToken = null;
   let previewFrameLoaded = null;
   let cancelPreviewFrameGate = null;
   let injectedPreviewDestroyed = false;
@@ -307,6 +308,7 @@
     const bridge = audienceBridge;
     audienceBridge = null;
     audienceBridgeFor = null;
+    audienceBridgeToken = null;
     try { bridge?.destroy?.(); } catch { /* the bridge is already gone */ }
   }
 
@@ -319,16 +321,20 @@
     const origin = audienceOrigin();
     if (!origin || !bridgeApi?.createAudienceBridge) return null;
     const forWebinar = webinarId;
+    // Callbacks are accepted only from the bridge instance currently held for
+    // the selected webinar, never from a replaced instance for the same deck.
+    const token = {};
+    const current = () => audienceBridgeToken === token && audienceBridgeFor === forWebinar && selectedWebinarId() === forWebinar;
     try {
       audienceBridge = bridgeApi.createAudienceBridge({
         audienceUrl: audienceUrlFor(webinar, origin),
         allowedOrigin: origin,
         onState: message => {
-          if (audienceBridgeFor !== forWebinar || selectedWebinarId() !== forWebinar) return;
+          if (!current()) return;
           presenterController?.applyAudienceState?.(message);
         },
         onStatus: status => {
-          if (audienceBridgeFor !== forWebinar) return;
+          if (!current()) return;
           presenterController?.setConnection?.(status);
         },
         windowObject: navigationTarget,
@@ -340,9 +346,11 @@
         clearIntervalImpl: dependencies.clearIntervalImpl,
       });
       audienceBridgeFor = forWebinar;
+      audienceBridgeToken = token;
     } catch {
       audienceBridge = null;
       audienceBridgeFor = null;
+      audienceBridgeToken = null;
     }
     return audienceBridge;
   }
@@ -354,6 +362,9 @@
     const current = model.studioState;
     const webinarId = Number(current?.webinar?.id) || null;
     if (webinarId === null) return;
+    const summary = model.webinars.find(webinar => webinar.id === webinarId);
+    if (summary && summary.liveVersion === current.liveVersion && summary.title === current.webinar.title
+      && summary.audienceEnabled === current.webinar.audienceEnabled) return;
     model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
       id: webinarId,
       slug: current.webinar.slug,
@@ -667,9 +678,21 @@
     });
   }
 
+  async function mayDisconnectAudience() {
+    const status = audienceLink.status();
+    if (status !== 'connected' && status !== 'connecting') return true;
+    return confirmAction('The audience window is connected. Closing the Studio disconnects it; the audience keeps its current slide until you reconnect.', {
+      title: 'Audience connected',
+      confirmText: 'Close and disconnect',
+      cancelText: 'Stay in the Studio',
+      variant: 'warning',
+    });
+  }
+
   async function close() {
     if (!elements.modal || elements.modal.hidden) return true;
     if (!await mayDiscardChanges()) return false;
+    if (!await mayDisconnectAudience()) return false;
     invalidateRequests();
     invalidateEditorContext();
     accessPromise = null;
@@ -745,6 +768,7 @@
       const nextState = stateApi.createStudioState(documentResponse);
       model.studioState = nextState;
       model.notice = '';
+      if (nextState.webinar.audienceEnabled !== true) dropAudienceBridge();
       model.resourcePolicy = documentResponse.resourcePolicy || {};
       model.resolvedAssets = documentResponse.assets || {};
       model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
@@ -769,6 +793,7 @@
     if (Number(model.selectedWebinarId) !== webinarId) return false;
     invalidateEditorContext();
     resetPreviewVisibility();
+    dropAudienceBridge();
     const request = beginRequest(webinarId);
     try {
       const response = await api.listWebinars();
@@ -911,10 +936,10 @@
   async function openNewWebinar() {
     if (!isAdmin() || model.access !== 'ready') return false;
     const request = beginRequest();
-    dropAudienceBridge();
-    model.notice = '';
     const mayDiscard = await mayDiscardChanges();
     if (!requestIsCurrent(request) || !mayDiscard) return false;
+    dropAudienceBridge();
+    model.notice = '';
     invalidateEditorContext();
     resetPreviewVisibility();
     model.mode = 'new';
