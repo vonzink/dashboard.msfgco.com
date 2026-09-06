@@ -511,6 +511,7 @@ describeWithMysql('webinar studio foundation', () => {
       revisions = require('../../services/webinars/revisions');
       const { createApp } = require('../../server');
       const app = createApp({
+        webinarStudioAccessMiddleware: (_req, _res, next) => next(),
         webinarAuthenticate(req, _res, next) {
           req.user = JSON.parse(req.get('x-test-user') || '{}');
           next();
@@ -609,6 +610,11 @@ describeWithMysql('webinar studio foundation', () => {
       css: `.${sensitiveCanaries.slideCss} { display: grid; }`,
       javascript: `const ${sensitiveCanaries.slideJavascript} = true;`,
     })).toMatchObject({ liveVersion: 3 });
+    expect(await mutations.addSlide({
+      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 3,
+      anchor: 'agenda', title: 'Agenda', targetSeconds: 30, speakerNotes: '',
+      html: '<section>Agenda</section>', css: '', javascript: '',
+    })).toMatchObject({ liveVersion: 4 });
 
     const beforeConflict = await captureWebinarMutationState(webinar.webinarId);
     await expect(mutations.saveMaster({
@@ -623,15 +629,15 @@ describeWithMysql('webinar studio foundation', () => {
       recordAuditEvent: async () => { throw new Error('injected audit write failure'); },
     });
     await expect(rollbackMutations.saveMaster({
-      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 3,
+      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 4,
       masterHtml: master, masterCss: '.rollback { color: black; }',
     })).rejects.toThrow('injected audit write failure');
     const afterRollback = await captureWebinarMutationState(webinar.webinarId);
     expect(afterRollback).toEqual(beforeConflict);
 
     expect(await mutations.archiveSlide({
-      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 3, slideId: stableSlideId,
-    })).toMatchObject({ liveVersion: 4 });
+      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 4, slideId: stableSlideId,
+    })).toMatchObject({ liveVersion: 5 });
     const [archivedSlide] = await db.query(
       'SELECT id, archived_at, position FROM webinar_slides WHERE id = ?', [stableSlideId],
     );
@@ -643,7 +649,7 @@ describeWithMysql('webinar studio foundation', () => {
     expect(await mutations.addSlide({
       webinarId: webinar.webinarId,
       actorUserId: owner.id,
-      expectedVersion: 4,
+      expectedVersion: 5,
       anchor: 'opening',
       title: 'Replacement opening',
       targetSeconds: 30,
@@ -651,10 +657,10 @@ describeWithMysql('webinar studio foundation', () => {
       html: '<section>Replacement</section>',
       css: '',
       javascript: '',
-    })).toMatchObject({ liveVersion: 5 });
+    })).toMatchObject({ liveVersion: 6 });
     const [replacementSlides] = await db.query(
       `SELECT id, anchor FROM webinar_slides
-       WHERE webinar_id = ? AND archived_at IS NULL`,
+       WHERE webinar_id = ? AND archived_at IS NULL AND anchor = 'opening'`,
       [webinar.webinarId],
     );
     expect(replacementSlides).toHaveLength(1);
@@ -662,8 +668,8 @@ describeWithMysql('webinar studio foundation', () => {
     const replacementSlideId = replacementSlides[0].id;
     expect(replacementSlideId).not.toBe(stableSlideId);
     expect(await mutations.restoreRevision({
-      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 5, revisionId: revisionThree[0].id,
-    })).toMatchObject({ liveVersion: 6 });
+      webinarId: webinar.webinarId, actorUserId: owner.id, expectedVersion: 6, revisionId: revisionThree[0].id,
+    })).toMatchObject({ liveVersion: 7 });
     const [restoredSlides] = await db.query(
       'SELECT id, anchor, archived_at FROM webinar_slides WHERE id IN (?, ?) ORDER BY id',
       [stableSlideId, replacementSlideId],

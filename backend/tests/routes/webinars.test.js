@@ -4,8 +4,15 @@ import http from 'node:http';
 
 const require = createRequire(import.meta.url);
 const { createApp } = require('../../server');
-const { WebinarMutationError } = require('../../services/webinars/mutations');
+const {
+  WebinarMutationError,
+  createMutationService,
+} = require('../../services/webinars/mutations');
 const { WebinarNoteError } = require('../../services/webinars/notes');
+const {
+  AssetReferenceError,
+  createReferenceService,
+} = require('../../services/webinarAssets/references');
 
 const slideId = '11111111-1111-4111-8111-111111111111';
 const secondSlideId = '22222222-2222-4222-8222-222222222222';
@@ -50,8 +57,16 @@ function makeServices() {
     createWebinar: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 1 }),
     archiveWebinar: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 3 }),
     saveMaster: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
-    addSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
-    duplicateSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
+    addSlide: vi.fn().mockResolvedValue({
+      webinarId: 2,
+      liveVersion: 4,
+      slide: { id: secondSlideId, anchor: 'agenda', title: 'Agenda', targetSeconds: 90, speakerNotes: '', html: '', css: '', javascript: '' },
+    }),
+    duplicateSlide: vi.fn().mockResolvedValue({
+      webinarId: 2,
+      liveVersion: 4,
+      slide: { id: secondSlideId, anchor: 'opening-copy', title: 'Opening', targetSeconds: 90, speakerNotes: '', html: '', css: '', javascript: '' },
+    }),
     saveSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
     reorderSlides: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
     archiveSlide: vi.fn().mockResolvedValue({ webinarId: 2, liveVersion: 4 }),
@@ -207,6 +222,7 @@ beforeEach(async () => {
   services = makeServices();
   operationalLogger = { info: vi.fn() };
   const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: services,
     webinarOperationalLogger: operationalLogger,
@@ -266,7 +282,119 @@ function expectOneOperationalRecord(expected) {
   );
 }
 
+async function useRealAssetReferenceMutation(versionRows, { collectTokens } = {}) {
+  await new Promise(resolve => server.close(resolve));
+  const committed = {
+    masterHtml: validMaster.masterHtml,
+    masterCss: validMaster.masterCss,
+    references: [{ webinarId: 2, assetVersionId: secondSlideId, surface: 'master_css' }],
+    liveVersion: 3,
+  };
+  let transaction = null;
+  const state = () => transaction || committed;
+  const connection = {
+    beginTransaction: vi.fn(async () => {
+      transaction = structuredClone(committed);
+    }),
+    commit: vi.fn(async () => {
+      Object.assign(committed, transaction);
+      transaction = null;
+    }),
+    rollback: vi.fn(async () => {
+      transaction = null;
+    }),
+    release: vi.fn(),
+    query: vi.fn(async (sql, params = []) => {
+      const normalized = sql.replace(/\s+/g, ' ').trim();
+      if (normalized.includes('FROM webinar_presentations p') && normalized.includes('FOR UPDATE')) {
+        return [[{
+          id: 2,
+          slug: 'first-home',
+          title: 'First Home',
+          master_html: state().masterHtml,
+          master_css: state().masterCss,
+          live_version: state().liveVersion,
+          audience_enabled: 0,
+          primary_owner_user_id: 7,
+          updated_at: '2026-09-04T12:00:00.000Z',
+          updated_by_user_id: 7,
+          updater_name: 'Owner',
+        }]];
+      }
+      if (normalized.includes('FROM webinar_slides') && normalized.includes('ORDER BY position')) {
+        return [[]];
+      }
+      if (normalized.startsWith('UPDATE webinar_presentations SET master_html = ?')) {
+        state().masterHtml = params[0];
+        state().masterCss = params[1];
+        return [{ affectedRows: 1 }];
+      }
+      if (normalized.includes('FROM webinar_assets a') && normalized.includes('WHERE EXISTS')) {
+        return [versionRows.length ? [{ id: 'asset-family-for-route-test' }] : []];
+      }
+      if (normalized.includes('FROM webinar_asset_versions v') && normalized.includes('WHERE v.id IN')) {
+        return [structuredClone(versionRows)];
+      }
+      if (normalized.startsWith('DELETE FROM webinar_asset_references')) {
+        state().references = [];
+        return [{ affectedRows: 1 }];
+      }
+      throw new Error(`Unexpected asset-reference route query: ${normalized}`);
+    }),
+  };
+  const db = { getConnection: vi.fn().mockResolvedValue(connection) };
+  const references = createReferenceService({
+    config: {
+      bucket: 'test-assets',
+      cdnBaseUrl: 'https://assets.example',
+      quarantinePrefix: 'quarantine/',
+    },
+    ...(collectTokens ? { collectTokens } : {}),
+  });
+  const mutations = createMutationService({
+    db,
+    validateCandidate: vi.fn().mockResolvedValue(undefined),
+    syncAssetReferences: references.validateAndReplaceReferences,
+  });
+  const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
+    webinarAuthenticate: authenticateFromHeader,
+    webinarServices: {
+      repository: {
+        listForRequest: vi.fn(),
+        getPrivateDocument: vi.fn().mockResolvedValue(webinar),
+      },
+      revisions: { listHistory: vi.fn() },
+      mutations,
+      notes: makeServices().notes,
+    },
+    webinarOperationalLogger: operationalLogger,
+    webinarWriteLimit: 1000,
+  });
+  server = await new Promise(resolve => {
+    const listener = app.listen(0, () => resolve(listener));
+  });
+  return { committed, connection };
+}
+
 describe('private webinar API through the production application factory', () => {
+  it('returns the exact stable slide object produced by the committed add and duplicate mutations', async () => {
+    const added = await request('POST', '/api/webinars/2/slides', validSlide, identity(7));
+    expect(added).toMatchObject({
+      status: 201,
+      body: { liveVersion: 4, slide: { id: secondSlideId, anchor: 'agenda' } },
+    });
+
+    const duplicated = await request('POST', '/api/webinars/2/slides', {
+      expectedVersion: 3,
+      sourceSlideId: slideId,
+    }, identity(7));
+    expect(duplicated).toMatchObject({
+      status: 201,
+      body: { liveVersion: 4, slide: { id: secondSlideId, anchor: 'opening-copy' } },
+    });
+  });
+
   it('enumerates every approved verb/path and its required boundary categories', () => {
     const contracts = approvedRouteContracts();
     expect(contracts.map(contract => contract.route)).toEqual([
@@ -563,6 +691,22 @@ describe('exact post-filter operational reason codes', () => {
       ));
       return request('PUT', `/api/webinars/2/slides/${slideId}`, validSlide);
     }],
+    ['final slide archive conflict', 'LAST_SLIDE_REQUIRED', () => {
+      services.mutations.archiveSlide.mockRejectedValueOnce(new WebinarMutationError(
+        'LAST_SLIDE_REQUIRED', 'A webinar must retain at least one live slide', { status: 409 },
+      ));
+      return request('DELETE', `/api/webinars/2/slides/${slideId}`, { expectedVersion: 3 })
+        .then(response => {
+          expect(response).toEqual({
+            status: 409,
+            body: {
+              error: 'A webinar must retain at least one live slide',
+              code: 'LAST_SLIDE_REQUIRED',
+            },
+          });
+          return response;
+        });
+    }],
     ['restore ownership conflict', 'RESTORE_SLIDE_OWNERSHIP_CONFLICT', () => {
       services.mutations.restoreRevision.mockRejectedValueOnce(new WebinarMutationError(
         'RESTORE_SLIDE_OWNERSHIP_CONFLICT',
@@ -680,6 +824,101 @@ describe('exact post-filter operational reason codes', () => {
   });
 });
 
+describe('trusted asset-reference failures through the real mutation transaction', () => {
+  const tokenVersionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const availableVersion = {
+    id: tokenVersionId,
+    status: 'available',
+    archived_at: null,
+    sha256: 'a'.repeat(64),
+    s3_key: `approved/sha256/${'a'.repeat(64)}/asset`,
+    family_archived_at: null,
+  };
+
+  it.each([
+    {
+      label: 'missing version',
+      token: `{{ASSET:${tokenVersionId}}}`,
+      rows: [],
+      code: 'ASSET_NOT_FOUND',
+      message: 'Asset version not found',
+    },
+    {
+      label: 'processing version',
+      token: `{{ASSET:${tokenVersionId}}}`,
+      rows: [{
+        ...availableVersion,
+        status: 'processing',
+        sha256: null,
+        s3_key: 'quarantine/private-bucket/internal-source-name.png',
+      }],
+      code: 'ASSET_NOT_AVAILABLE',
+      message: 'Asset version is not available',
+    },
+    {
+      label: 'archived family',
+      token: `{{ASSET:${tokenVersionId}}}`,
+      rows: [{ ...availableVersion, family_archived_at: '2026-09-04T13:00:00.000Z' }],
+      code: 'ASSET_NOT_AVAILABLE',
+      message: 'Asset version is not available',
+    },
+    {
+      label: 'uppercase noncanonical token',
+      token: `{{ASSET:${tokenVersionId.toUpperCase()}}}`,
+      rows: [availableVersion],
+      code: 'ASSET_TOKEN_FORMAT',
+      message: 'Asset token is invalid',
+    },
+  ])('returns controlled 422 and rolls back for $label', async ({ token, rows, code, message }) => {
+    const { committed, connection } = await useRealAssetReferenceMutation(rows);
+    const before = structuredClone(committed);
+
+    const response = await request('PUT', '/api/webinars/2/master', {
+      expectedVersion: 3,
+      masterHtml: validMaster.masterHtml,
+      masterCss: `.hero { background-image: url("${token}"); } /* private request source */`,
+    });
+
+    expect(response).toEqual({ status: 422, body: { error: message, code } });
+    expect(committed).toEqual(before);
+    expect(connection.rollback).toHaveBeenCalledOnce();
+    expect(connection.commit).not.toHaveBeenCalled();
+    expectOneOperationalRecord({
+      event: 'webinar.validation_rejected',
+      webinarId: 2,
+      actorUserId: 7,
+      statusCode: 422,
+      reasonCode: code,
+    });
+    expect(JSON.stringify({ response, events: operationalLogger.info.mock.calls }))
+      .not.toMatch(/private request source|private-bucket|internal-source-name|quarantine|password/i);
+  });
+
+  it('uses the closed response message even when a trusted reference error carries private details', async () => {
+    const collectTokens = () => {
+      throw new AssetReferenceError(
+        'ASSET_NOT_FOUND',
+        'private bucket password and source body',
+        422,
+      );
+    };
+    const { connection } = await useRealAssetReferenceMutation([], { collectTokens });
+
+    const response = await request('PUT', '/api/webinars/2/master', {
+      ...validMaster,
+      masterCss: `body { background: url("{{ASSET:${tokenVersionId}}}"); }`,
+    });
+
+    expect(response).toEqual({
+      status: 422,
+      body: { error: 'Asset version not found', code: 'ASSET_NOT_FOUND' },
+    });
+    expect(connection.rollback).toHaveBeenCalledOnce();
+    expect(JSON.stringify({ response, events: operationalLogger.info.mock.calls }))
+      .not.toMatch(/private|bucket|password|source body/i);
+  });
+});
+
 describe('production transport and limiter contract', () => {
   it.each([
     ['anonymous callers', null, 401],
@@ -689,6 +928,7 @@ describe('production transport and limiter contract', () => {
   ])('rate limits repeated %s by IP before authentication and body parsing', async (_label, user, rejectedStatus) => {
     await new Promise(resolve => server.close(resolve));
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: services,
       webinarOperationalLogger: operationalLogger,
@@ -840,6 +1080,7 @@ describe('production transport and limiter contract', () => {
   it('uses the real identity limiter, skips safe methods, and resets its store with each app', async () => {
     await new Promise(resolve => server.close(resolve));
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: services,
       webinarOperationalLogger: operationalLogger,

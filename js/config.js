@@ -27,6 +27,26 @@
     },
 
     // ========================================
+    // WEBINAR STUDIO
+    // The preview host is the public renderer page on the mortgage site. The
+    // Studio embeds it in a plain cross-origin frame and posts candidate
+    // slides to exactly this origin; candidate code runs only inside the
+    // sandboxed slide frame that page creates. Production only; local
+    // origins are never listed here.
+    // ========================================
+    webinarStudio: {
+      preview: {
+        url: 'https://msfgmortgage.com/webinars/first-home-without-mystery/studio-viewer.html?mode=preview',
+        origin: 'https://msfgmortgage.com',
+      },
+      // Audience windows open at <origin>/webinars/<slug>/studio-viewer.html and
+      // are driven only through the exact-origin presenter bridge.
+      audience: {
+        origin: 'https://msfgmortgage.com',
+      },
+    },
+
+    // ========================================
     // AWS COGNITO (token refresh)
     // ========================================
     cognito: {
