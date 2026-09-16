@@ -45,8 +45,16 @@ test('borrower-only or group-less user is flagged', () => {
   assert.match(assessSuiteReadiness({ ...good, 'cognito:groups': undefined }, NOW).problems.join(), /no staff group/);
 });
 
-test('staff group match is case-insensitive', () => {
-  assert.equal(assessSuiteReadiness({ ...good, 'cognito:groups': ['admin'] }, NOW).ok, true);
+test('wrong-case group is flagged', () => {
+  assert.match(assessSuiteReadiness({ ...good, 'cognito:groups': ['admin'] }, NOW).problems.join(), /no staff group/);
+});
+
+test('uppercase enum group is accepted', () => {
+  assert.equal(assessSuiteReadiness({ ...good, 'cognito:groups': ['UNDERWRITER'] }, NOW).ok, true);
+});
+
+test('non-array cognito:groups is treated as no groups', () => {
+  assert.match(assessSuiteReadiness({ ...good, 'cognito:groups': 'LO' }, NOW).problems.join(), /no staff group/);
 });
 
 test('expired token is flagged', () => {
