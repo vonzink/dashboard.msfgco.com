@@ -3,7 +3,7 @@
 **Date:** 2026-09-16
 **Status:** Draft — awaiting user review
 **Repos:** dashboard.msfgco.com, msfg-suite (API), msfg-suite-web
-**Supersedes:** `2026-07-25-suite-integrations-preapprovals-design.md` (mirror-sync approach for pre-approvals)
+**Supersedes:** all earlier dashboard↔suite pipeline/pre-approval specs and plans (incl. `2026-07-25-suite-integrations-preapprovals-design.md` and its plans) — do not implement those.
 
 ## 1. Goal
 
@@ -23,14 +23,7 @@ Replace the four Monday.com-backed dashboard sections (Pre-Approvals, Applicatio
 
 ### Default slots (new users / no saved settings)
 
-| Slot | Name | Default filter |
-|------|------|----------------|
-| A | Pre-Approvals | `PRE_APPROVAL` tracked date set, `applicationDateEmpty=true` |
-| B | Applications | application date set, status not in funded/closed-out statuses |
-| C | Loan Pipeline | in-process statuses (application submitted through clear-to-close) |
-| D | Loans Funded | status `FUNDED` or `dateField=FUNDING` set |
-
-Exact status lists for B/C are fixed in the phase 3 plan against `loanStatus.ts` (29 statuses).
+All four slots default to **no filters** (`{}`), visible, named `Display A`–`Display D`. Every display has its own live filter controls, so defaults don't encode stages; users set names and saved filters in Settings.
 
 ## 3. Architecture
 
@@ -127,4 +120,3 @@ Exact status lists for B/C are fixed in the phase 3 plan against `loanStatus.ts`
 
 - Does suite expose note-create and task/checklist endpoints suitable for migration?
 - Is loan number reliably populated on both dashboard rows and suite loans?
-- Exact status sets for default slots B and C.
