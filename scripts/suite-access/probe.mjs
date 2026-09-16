@@ -43,5 +43,5 @@ const preflight = await call('OPTIONS', '/api/board');
 const me = await call('GET', '/api/me');
 await call('GET', '/api/board?size=1');
 
-if (preflight !== 200) console.log(`CORS: ${origin} not allowed yet (expected before Task 4 deploy).`);
+if (preflight !== 200) console.log(`CORS: ${origin} not allowed — check the suite CORS allowlist (host deploy/.env LOS_CORS_ALLOWED_ORIGINS).`);
 process.exit(r.ok && me === 200 ? 0 : 1);

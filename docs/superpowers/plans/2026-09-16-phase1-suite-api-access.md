@@ -1,5 +1,7 @@
 # Phase 1 — Suite API Access Implementation Plan
 
+> **Status (2026-09-16):** Executed. Some task text is superseded by rulings — staff-group matching is case-sensitive and mirrors suite CognitoRolesConverter; checklist target is suite loan checklists; prod CORS override lives in `deploy/.env`. See `docs/superpowers/findings/2026-09-16-phase1-suite-access-findings.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Prove a dashboard.msfgco.com login can call the msfg-suite API from the browser, open the suite's CORS allowlist to the dashboard, and answer the spec's open questions (notes/tasks import, loan-number coverage, staff Cognito groups).
@@ -514,10 +516,10 @@ Tell the user: PR merged, deploy will restart the suite API container on 52.2.71
 - [ ] **Step 2: Check for an env override on the host**
 
 ```bash
-ssh -i "$EC2_KEY" "$EC2_HOST" "cd \$EC2_DIR && grep -n LOS_CORS_ALLOWED_ORIGINS .env docker-compose*.yml 2>/dev/null"
+ssh -i "$EC2_KEY" "$EC2_HOST" "cd \$EC2_DIR && grep -n LOS_CORS_ALLOWED_ORIGINS .env deploy/.env docker-compose*.yml 2>/dev/null"
 ```
 
-If set, it overrides the yml: append `,https://dashboard.msfgco.com,https://staging-dashboard.msfgco.com` to it (with user approval) before deploying.
+If set, it overrides the yml: append `,https://dashboard.msfgco.com,https://staging-dashboard.msfgco.com` to it (with user approval) before deploying. **Confirmed (findings §5):** the override lives in `deploy/.env`, not `.env`.
 
 - [ ] **Step 3: Deploy**
 

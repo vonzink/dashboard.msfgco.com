@@ -22,10 +22,12 @@ dashboard.msfgco.com is replacing its four Monday.com-backed sections (Pre-Appro
 ## msfg-suite (API)
 
 ### S1 — CORS allowlist (Phase 1, required first)
-Add `https://dashboard.msfgco.com`, `https://staging-dashboard.msfgco.com` to prod and `http://localhost:5190` to local. Move the prod list to a shared key `los.cors.prod-allowed-origins` in `application.yml`; `application-prod.yml` uses `${LOS_CORS_ALLOWED_ORIGINS:${los.cors.prod-allowed-origins}}`. Add `CorsDashboardOriginsIT` in `CorsIT.java` (dashboard origins → 200 + exact ACAO; lookalike `dashboard.msfgco.com.evil.example` → 403). Before deploy, check the EC2 host `.env` for a `LOS_CORS_ALLOWED_ORIGINS` override. Exact steps: phase 1 plan, Task 4 + Task 6.
+Add `https://dashboard.msfgco.com`, `https://staging-dashboard.msfgco.com` to prod and `http://localhost:5190` to local. Move the prod list to a shared key `los.cors.prod-allowed-origins` in `application.yml`; `application-prod.yml` uses `${LOS_CORS_ALLOWED_ORIGINS:${los.cors.prod-allowed-origins}}`. Add `CorsDashboardOriginsIT` in `CorsIT.java` (dashboard origins → 200 + exact ACAO; lookalike `dashboard.msfgco.com.evil.example` → 403). Before deploy, check `deploy/.env` on the suite host (52.2.71.106) for a `LOS_CORS_ALLOWED_ORIGINS` override — prod origins are effectively controlled by `deploy/.env` (dashboard findings §5); the yml list is only the fallback. Exact steps: phase 1 plan, Task 4 + Task 6.
 
-### S2 — Staff Cognito groups (Phase 1, audit)
-The pre-token Lambda defaults group-less users to `Borrower`. Any dashboard staff user without a staff group (per `CognitoRolesConverter`) will be a BORROWER in the suite and get 403s. Audit group membership vs. active dashboard staff; report counts; add missing users to the right groups only with owner approval.
+- **Follow-up:** either remove the `deploy/.env` override so `application-prod.yml` governs, or document (in the yml comment and a deploy env example) that prod's value actually lives in `deploy/.env` — the current split is a drift risk.
+
+### S2 — Staff Cognito groups (Phase 1, audit) — **Status: done**
+The pre-token Lambda defaults group-less users to `Borrower`. Any dashboard staff user without a staff group (per `CognitoRolesConverter`) will be a BORROWER in the suite and get 403s. Audit group membership vs. active dashboard staff; report counts; add missing users to the right groups only with owner approval. See dashboard findings §2–3: 26 users audited, 19 in a staff group; the 1 group-less user is not an active dashboard user; every active dashboard staff user with a `cognito_sub` already has a suite staff group. No group changes needed.
 
 ### S3 — Admin note import endpoint (Phase 5 migration)
 `POST /api/loans/{loanId}/notes` (`CreateNoteRequest(content, columnKey)`) cannot preserve original author or timestamp. Add an ADMIN-only import endpoint, e.g.:
@@ -39,13 +41,13 @@ POST /api/admin/import/loan-notes
 Idempotent on `sourceRef` (unique per org). Author resolved by email → `UserAccount`; unknown email → store as system author with "Originally by <email>" prefix. Notes tagged/marked as imported. Org-scoped, RLS-respecting. Tests: idempotency, unknown author, cross-org loanId rejected, non-admin 403.
 
 ### S4 — Checklist target (Phase 5 migration)
-Determine whether `/api/todo/tasks` can attach a task to a loan. If yes, add an ADMIN import variant for tasks (same `sourceRef` idempotency, preserving completed state/dates). If no, checklists import as notes via S3 — report which.
+Target suite loan checklists, not `/api/todo/tasks`: `GET/POST /api/loans/{loanId}/checklists` and `POST /api/loans/{loanId}/checklists/import` (see dashboard findings §4 — loan checklists are a closer fit than todo tasks). Determine whether `POST /import` preserves item completion state (`loan_checklist_items.completed`/dates), or whether an ADMIN import variant is needed to carry that state with `sourceRef` idempotency. Orphaned checklists — dashboard rows whose source `pipeline`/`pre_approval` row no longer exists — have no migration target; they are archive-only, not imported.
 
 ### S5 — Loan lookup for migration matching (Phase 5)
-Migration matches dashboard rows to suite loans by (1) loan number, (2) borrower last name + property address. Confirm `GET /api/loans/search` supports exact loan-number lookup and last-name + address; if not, add an ADMIN `POST /api/admin/import/loan-match` taking a batch of `{ sourceRef, loanNumber, lastName, address }` and returning `{ sourceRef, loanId | null, matchedBy }`. Never fuzzy-guess; ambiguous → null. Also report `COUNT(*)` of loans with `loan_number` populated.
+Migration matches dashboard rows to suite loans by (1) suite `internal_loan_number`, then `investor_loan_number` — dashboard `loan_number`/`lp_loan_number`/`investor_loan_number` values are checked against both, in that order; suite `loan_number` is its own 10-digit number and never matches (see dashboard findings §3) — then (2) borrower last name + property address. Confirm `GET /api/loans/search` supports lookup by `internal_loan_number`/`investor_loan_number` and last-name + address; if not, add an ADMIN `POST /api/admin/import/loan-match` taking a batch of `{ sourceRef, dashboardLoanNumber, lastName, address }` and returning `{ sourceRef, loanId | null, matchedBy }`. Never fuzzy-guess; ambiguous → null.
 
 ### S6 — Staging API (Phase 2)
-Stand up a staging container on the suite EC2 (port 8083) with its own Postgres DB (copy of prod) and `LOS_CORS_ALLOWED_ORIGINS` including `https://staging-dashboard.msfgco.com` and `http://localhost:5190`. Staging must never write to prod data. Document in `docs/`.
+Stand up a staging container on the suite EC2 (port 8083) with its own Postgres DB (copy of prod). Staging needs its own `LOS_CORS_ALLOWED_ORIGINS` in its own env file — separate from prod's `deploy/.env` (see S1 follow-up and dashboard findings §5 on override drift) — including `https://staging-dashboard.msfgco.com` and `http://localhost:5190`. Staging must never write to prod data. Document in `docs/`.
 
 ---
 

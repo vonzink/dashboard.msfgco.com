@@ -20,7 +20,7 @@ export function assessSuiteReadiness(payload, nowSec) {
   else if (!UUID_RE.test(String(orgId).trim())) problems.push('org_id not a UUID');
 
   if (!groups.some((g) => STAFF_GROUPS.includes(String(g)))) {
-    problems.push(`no staff group (groups=${JSON.stringify(groups)}); suite will treat user as Borrower`);
+    problems.push(`no staff group (groups=${JSON.stringify(groups)}); suite will grant no staff role`);
   }
   if (typeof payload.exp === 'number' && payload.exp <= nowSec) problems.push('token expired');
 

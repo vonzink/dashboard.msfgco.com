@@ -13,10 +13,10 @@
 | OPTIONS /api/board | https://dashboard.msfgco.com | 403, no ACAO |
 | GET /api/me | https://dashboard.msfgco.com | 403, no ACAO |
 
-- **Conclusion:** the suite accepts dashboard-issued id tokens (same pool, different app client; `org_id` present). The only blocker is CORS: Spring rejects any request carrying a non-allowlisted `Origin`, including simple GETs. Task 4 (msfg-suite PR #113) fixes this.
+- **Conclusion:** the suite accepts dashboard-issued id tokens (same pool, different app client; `org_id` present). The only blocker is CORS: Spring rejects any request carrying a non-allowlisted `Origin`, including simple GETs. Task 4 (msfg-suite PR #113) fixes this, plus the host `deploy/.env` override (§5).
 - LO token: not yet tested — admin token covers auth mechanics; an LO-only token matters for per-role visibility and is checked in the phase 4 staging click-through.
 - Probe note: `probe.mjs` sends the dashboard `Origin` on every call, so before the CORS deploy `/api/me` reads 403 even with a good token. Expected; after deploy it's the right end-to-end check.
-- **Result:** PASS (auth). ACTION: deploy CORS (Task 6).
+- **Result:** PASS (auth). DONE — see §5.
 
 ## 2. Staff Cognito groups
 
@@ -34,7 +34,7 @@ Pool `us-west-1_S6iE2uego`, read-only audit (counts only):
 | External | 1 |
 | RealEstateAgent | 0 |
 
-- 26 users total; 19 in at least one staff group; 7 without: 6 are Borrower/External, **1 user has no group at all** (the suite would treat them as BORROWER).
+- 26 users total; 19 in at least one staff group; 7 without: 6 are Borrower/External, **1 user has no group at all** (no staff role in the suite).
 - **Result:** PASS — cross-checked in §3: the group-less user is not an active dashboard user.
 
 ## 3. Loan-number coverage (read-only, 2026-09-16)
@@ -52,7 +52,7 @@ Suite (Postgres `loan` table via 52.2.71.106, `default_transaction_read_only=on`
 - **Match key is suite `internal_loan_number`, not `loan_number`.** Exact `loan_number` matches: 0. Dashboard numbers matched against suite `internal_loan_number` (114 hits) or `investor_loan_number` (59 hits).
 - Rows matched to a suite loan: pipeline 32/32, pre_approvals 26/108, funded_loans 47/2,731 (most funded/pre-approval rows predate or never entered the suite; they stay in the archive).
 - Active dashboard users: 20 (admin 3, manager 2, LO 12, processor 3). Every active dashboard user that has a `cognito_sub` is in a suite staff group. The one group-less Cognito user is **not** an active dashboard user → no action. 2 active dashboard users have no `cognito_sub` (not linked to Cognito); they can't use the embed until linked.
-- **Result:** PASS with change — migration matching order becomes (1) dashboard `loan_number`/`lp_loan_number`/`investor_loan_number` → suite `internal_loan_number`, then `investor_loan_number`; (2) last name + address; (3) unmatched report.
+- **Result:** PASS with change — migration matching order becomes (1) dashboard `loan_number`/`lp_loan_number` (all tables) and `investor_loan_number` (`pre_approvals` only) → suite `internal_loan_number`, then `investor_loan_number`; (2) last name + address; (3) unmatched report.
 
 ## 4. Notes & checklist import path
 
@@ -70,7 +70,7 @@ Volume is tiny:
 - Rows carrying notes or checklists: 11 (14 attached records); **6 match a suite loan today**, 5 don't.
 - **15 of 18 pipeline checklists are orphaned** (their `pipeline` row no longer exists) — they migrate nowhere; archive only.
 - Suite targets:
-  - Notes: `POST /api/loans/{loanId}/notes` takes only `content`, `columnKey` → no author/timestamp. Given 9 notes from 1 author, an admin import endpoint (handoff S3) is optional: prefixing content with `[Imported from dashboard — <author>, <date>]` is enough. **Ruling for phase 5 plan:** use the existing endpoint with a prefix unless the user wants true authorship.
+  - Notes: `POST /api/loans/{loanId}/notes` takes only `content`, `columnKey` → no author/timestamp. 8 pre-approval notes are by 1 author, plus 1 pipeline note (author not counted); an admin import endpoint (handoff S3) is optional: prefixing content with `[Imported from dashboard — <author>, <date>]` is enough. **Pending user decision:** true authorship via admin import endpoint (handoff S3, matches spec §7) vs. existing endpoint with a `[Imported from dashboard — <author>, <date>]` prefix.
   - Checklists: suite has loan checklists (`/api/loans/{loanId}/checklists`, incl. `POST /import`) — a closer fit than `/api/todo/tasks` (which also accepts `loanId`). Phase 5 targets loan checklists.
   - Inline `notes` column (45 rows, mostly funded) → import as one note per matched loan; unmatched stay archived.
 

@@ -5,8 +5,8 @@ Checks whether a dashboard login token will be accepted by the msfg-suite API. R
 ## Get a token
 1. Log in at https://dashboard.msfgco.com.
 2. DevTools → Console: `copy(localStorage.getItem('auth_token'))`
-3. In a terminal (token stays out of shell history with a leading space):
-   ` export SUITE_PROBE_TOKEN='<paste>'`
+3. In a terminal (paste, Enter; keeps it out of shell history and the screen):
+   `read -rs SUITE_PROBE_TOKEN && export SUITE_PROBE_TOKEN`
 
 ## Run
 ```bash
