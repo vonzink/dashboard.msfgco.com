@@ -1,7 +1,7 @@
 # Suite Pipeline Displays — Design
 
 **Date:** 2026-09-16
-**Status:** Draft — awaiting user review
+**Status:** Approved 2026-09-16 · Phase 1 complete
 **Repos:** dashboard.msfgco.com, msfg-suite (API), msfg-suite-web
 **Supersedes:** all earlier dashboard↔suite pipeline/pre-approval specs and plans (incl. `2026-07-25-suite-integrations-preapprovals-design.md` and its plans) — do not implement those.
 
