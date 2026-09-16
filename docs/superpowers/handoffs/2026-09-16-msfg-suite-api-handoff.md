@@ -45,7 +45,7 @@ Determine whether `/api/todo/tasks` can attach a task to a loan. If yes, add an 
 Migration matches dashboard rows to suite loans by (1) loan number, (2) borrower last name + property address. Confirm `GET /api/loans/search` supports exact loan-number lookup and last-name + address; if not, add an ADMIN `POST /api/admin/import/loan-match` taking a batch of `{ sourceRef, loanNumber, lastName, address }` and returning `{ sourceRef, loanId | null, matchedBy }`. Never fuzzy-guess; ambiguous → null. Also report `COUNT(*)` of loans with `loan_number` populated.
 
 ### S6 — Staging API (Phase 2)
-Stand up a staging container on the suite EC2 (port 8083) with its own Postgres DB (copy of prod) and `LOS_CORS_ALLOWED_ORIGINS` including `https://staging-dashboard.msfgco.com` and `https://staging.suite…` as applicable. Staging must never write to prod data. Document in `docs/`.
+Stand up a staging container on the suite EC2 (port 8083) with its own Postgres DB (copy of prod) and `LOS_CORS_ALLOWED_ORIGINS` including `https://staging-dashboard.msfgco.com` and `http://localhost:5190`. Staging must never write to prod data. Document in `docs/`.
 
 ---
 
