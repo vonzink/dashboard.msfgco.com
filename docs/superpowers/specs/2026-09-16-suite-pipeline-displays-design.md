@@ -86,11 +86,11 @@ All four slots default to **no filters** (`{}`), visible, named `Display A`–`D
 
 ## 7. Migration & Monday Cutover
 
-- **Matching** (dashboard row → suite loan), in order: (1) loan number; (2) borrower last name + property address. Unmatched rows → CSV report for manual review; never guessed.
-- **Notes** (`pre_approval_notes`, `pipeline_notes`, `funded_loan_notes`) → suite loan notes, preserving author and timestamp, tagged "Imported from dashboard".
-- **Checklists** (`loan_checklists`) → suite loan tasks if an equivalent exists; otherwise a single imported note per checklist.
+- **Matching** (dashboard row → suite loan), in order: (1) dashboard `loan_number` / `lp_loan_number` / `investor_loan_number` → suite `loan.internal_loan_number`, then `loan.investor_loan_number` (suite `loan_number` is its own 10-digit number and never matches); (2) borrower last name + property address. Unmatched rows → CSV report for manual review; never guessed.
+- **Notes** (`pre_approval_notes`, `pipeline_notes`, `funded_loan_notes`, plus non-empty inline `notes` columns) → suite loan notes, preserving author and timestamp, tagged "Imported from dashboard".
+- **Checklists** (`loan_checklists` + items/subitems/item notes) → suite loan checklists (`/api/loans/{loanId}/checklists`). Checklists whose source row no longer exists are archive-only.
 - Script is idempotent (tracks migrated source IDs), has `--dry-run`, and is run on staging first; user reviews counts + unmatched report before prod.
-- **Archive:** rename `pre_approvals`, `pre_approval_notes`, `pipeline`, `pipeline_notes`, `funded_loans`, `funded_loan_notes`, `monday_boards`, `monday_board_access`, `loan_checklists` → `archive_*`; revoke write grants from the app DB user.
+- **Archive:** rename `pre_approvals`, `pre_approval_notes`, `pipeline`, `pipeline_notes`, `funded_loans`, `funded_loan_notes`, `monday_boards`, `monday_board_access`, `loan_checklists`, `loan_checklist_items`, `loan_checklist_subitems`, `loan_checklist_item_notes` → `archive_*`; revoke write grants from the app DB user.
 - **Disconnect:** disable Monday sync scheduler and `/api/monday` routes in the dashboard backend.
 
 ## 8. Rollout
@@ -116,7 +116,10 @@ All four slots default to **no filters** (`{}`), visible, named `Display A`–`D
 - Migration: dry-run against staging with expected counts.
 - Manual sandbox click-through (local → staging) with an LO and an admin account before prod.
 
-## 11. Open Questions (resolve in Phase 1)
+## 11. Open Questions — resolved in Phase 1
 
-- Does suite expose note-create and task/checklist endpoints suitable for migration?
-- Is loan number reliably populated on both dashboard rows and suite loans?
+See `docs/superpowers/findings/2026-09-16-phase1-suite-access-findings.md`.
+
+- **Note/checklist endpoints:** suite has loan notes (content + columnKey only — no author/timestamp override) and loan checklists with an import endpoint. Preserving authorship needs an admin import endpoint (handoff S3); volume is 9 notes + 45 inline notes (§4).
+- **Loan numbers:** populated on both sides, but the match key is suite `internal_loan_number` (§3). Pipeline matches 32/32; most pre-approval and funded rows have no suite loan and stay archive-only.
+- **Suite CORS:** live for dashboard + staging-dashboard; prod origins are controlled by `deploy/.env` on the suite host (§5).
