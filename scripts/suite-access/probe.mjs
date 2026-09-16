@@ -13,19 +13,30 @@ if (!token) {
   process.exit(2);
 }
 
-const r = assessSuiteReadiness(decodeJwtPayload(token), Math.floor(Date.now() / 1000));
+let r;
+try {
+  r = assessSuiteReadiness(decodeJwtPayload(token), Math.floor(Date.now() / 1000));
+} catch (err) {
+  console.error('SUITE_PROBE_TOKEN is not a valid JWT (did you copy the whole auth_token?)');
+  process.exit(1);
+}
 console.log('Token summary:', { ...r.summary, orgId: r.summary.orgId ? 'present' : 'missing' });
 console.log(r.ok ? 'Readiness: OK' : `Readiness problems:\n - ${r.problems.join('\n - ')}`);
 
 async function call(method, path) {
-  const res = await fetch(api + path, {
-    method,
-    headers: method === 'OPTIONS'
-      ? { Origin: origin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization' }
-      : { Origin: origin, Authorization: `Bearer ${token}` },
-  });
-  console.log(`${method} ${path} -> ${res.status}  ACAO=${res.headers.get('access-control-allow-origin') ?? '(none)'}`);
-  return res.status;
+  try {
+    const res = await fetch(api + path, {
+      method,
+      headers: method === 'OPTIONS'
+        ? { Origin: origin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization' }
+        : { Origin: origin, Authorization: `Bearer ${token}` },
+    });
+    console.log(`${method} ${path} -> ${res.status}  ACAO=${res.headers.get('access-control-allow-origin') ?? '(none)'}`);
+    return res.status;
+  } catch (err) {
+    console.error(`${method} ${path} -> network error: ${err.cause?.code || err.message}`);
+    return null;
+  }
 }
 
 const preflight = await call('OPTIONS', '/api/board');
