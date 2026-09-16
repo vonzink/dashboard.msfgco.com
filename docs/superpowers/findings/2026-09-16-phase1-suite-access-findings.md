@@ -70,7 +70,7 @@ Volume is tiny:
 - Rows carrying notes or checklists: 11 (14 attached records); **6 match a suite loan today**, 5 don't.
 - **15 of 18 pipeline checklists are orphaned** (their `pipeline` row no longer exists) — they migrate nowhere; archive only.
 - Suite targets:
-  - Notes: `POST /api/loans/{loanId}/notes` takes only `content`, `columnKey` → no author/timestamp. 8 pre-approval notes are by 1 author, plus 1 pipeline note (author not counted); an admin import endpoint (handoff S3) is optional: prefixing content with `[Imported from dashboard — <author>, <date>]` is enough. **Pending user decision:** true authorship via admin import endpoint (handoff S3, matches spec §7) vs. existing endpoint with a `[Imported from dashboard — <author>, <date>]` prefix.
+  - Notes: `POST /api/loans/{loanId}/notes` takes only `content`, `columnKey` → no author/timestamp. 8 pre-approval notes are by 1 author, plus 1 pipeline note (author not counted). **Decided (user, 2026-09-16):** use the existing endpoint with a `[Imported from dashboard — <author>, <date>]` content prefix; no admin import endpoint (handoff S3 dropped).
   - Checklists: suite has loan checklists (`/api/loans/{loanId}/checklists`, incl. `POST /import`) — a closer fit than `/api/todo/tasks` (which also accepts `loanId`). Phase 5 targets loan checklists.
   - Inline `notes` column (45 rows, mostly funded) → import as one note per matched loan; unmatched stay archived.
 

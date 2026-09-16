@@ -27,18 +27,10 @@ Add `https://dashboard.msfgco.com`, `https://staging-dashboard.msfgco.com` to pr
 - **Follow-up:** either remove the `deploy/.env` override so `application-prod.yml` governs, or document (in the yml comment and a deploy env example) that prod's value actually lives in `deploy/.env` — the current split is a drift risk.
 
 ### S2 — Staff Cognito groups (Phase 1, audit) — **Status: done**
-The pre-token Lambda defaults group-less users to `Borrower`. Any dashboard staff user without a staff group (per `CognitoRolesConverter`) will be a BORROWER in the suite and get 403s. Audit group membership vs. active dashboard staff; report counts; add missing users to the right groups only with owner approval. See dashboard findings §2–3: 26 users audited, 19 in a staff group; the 1 group-less user is not an active dashboard user; every active dashboard staff user with a `cognito_sub` already has a suite staff group. No group changes needed.
+The pre-token Lambda defaults group-less users to `Borrower`. Any dashboard staff user without a staff group (per `CognitoRolesConverter`) gets no staff role in the suite and 403s on staff endpoints. Audit group membership vs. active dashboard staff; report counts; add missing users to the right groups only with owner approval. See dashboard findings §2–3: 26 users audited, 19 in a staff group; the 1 group-less user is not an active dashboard user; every active dashboard staff user with a `cognito_sub` already has a suite staff group. No group changes needed.
 
-### S3 — Admin note import endpoint (Phase 5 migration)
-`POST /api/loans/{loanId}/notes` (`CreateNoteRequest(content, columnKey)`) cannot preserve original author or timestamp. Add an ADMIN-only import endpoint, e.g.:
-
-```
-POST /api/admin/import/loan-notes
-[{ "loanId": UUID, "content": str, "authorEmail": str, "createdAt": ISO-8601, "sourceRef": "dashboard:pipeline_notes:1234" }]
-→ { created: n, skipped: n (sourceRef already imported), errors: [{ sourceRef, reason }] }
-```
-
-Idempotent on `sourceRef` (unique per org). Author resolved by email → `UserAccount`; unknown email → store as system author with "Originally by <email>" prefix. Notes tagged/marked as imported. Org-scoped, RLS-respecting. Tests: idempotency, unknown author, cross-org loanId rejected, non-admin 403.
+### S3 — Admin note import endpoint — **Dropped**
+Not needed. Owner decision 2026-09-16: dashboard notes (9, plus 45 inline) migrate through the existing `POST /api/loans/{loanId}/notes` with a `[Imported from dashboard — <author>, <date>]` content prefix. The migration script (dashboard phase 5) handles idempotency on its side.
 
 ### S4 — Checklist target (Phase 5 migration)
 Target suite loan checklists, not `/api/todo/tasks`: `GET/POST /api/loans/{loanId}/checklists` and `POST /api/loans/{loanId}/checklists/import` (see dashboard findings §4 — loan checklists are a closer fit than todo tasks). Determine whether `POST /import` preserves item completion state (`loan_checklist_items.completed`/dates), or whether an ADMIN import variant is needed to carry that state with `sourceRef` idempotency. Orphaned checklists — dashboard rows whose source `pipeline`/`pre_approval` row no longer exists — have no migration target; they are archive-only, not imported.
@@ -90,6 +82,6 @@ Today Kanban drag only sets a board cell (`KanbanView.tsx:36-40`). If grouping b
 1. S1, S2 (phase 1) → unblock everything.
 2. S6 (phase 2 sandbox).
 3. W1–W3 (phase 4), W4 if approved.
-4. S3–S5 (phase 5, before cutover).
+4. S4–S5 (phase 5, before cutover).
 
 Report back to the dashboard session: PR links, the published embed version URL, staging API URL, and S2/S4/S5 findings.

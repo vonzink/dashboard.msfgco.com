@@ -87,7 +87,7 @@ All four slots default to **no filters** (`{}`), visible, named `Display A`–`D
 ## 7. Migration & Monday Cutover
 
 - **Matching** (dashboard row → suite loan), in order: (1) dashboard `loan_number` / `lp_loan_number` / `investor_loan_number` → suite `loan.internal_loan_number`, then `loan.investor_loan_number` (suite `loan_number` is its own 10-digit number and never matches); (2) borrower last name + property address. Unmatched rows → CSV report for manual review; never guessed.
-- **Notes** (`pre_approval_notes`, `pipeline_notes`, `funded_loan_notes`, plus non-empty inline `notes` columns) → suite loan notes, preserving author and timestamp, tagged "Imported from dashboard".
+- **Notes** (`pre_approval_notes`, `pipeline_notes`, `funded_loan_notes`, plus non-empty inline `notes` columns) → suite loan notes via the existing `POST /api/loans/{loanId}/notes`; original author and date are recorded as a content prefix `[Imported from dashboard — <author>, <date>]` (user decision 2026-09-16; no admin import endpoint).
 - **Checklists** (`loan_checklists` + items/subitems/item notes) → suite loan checklists (`/api/loans/{loanId}/checklists`). Checklists whose source row no longer exists are archive-only.
 - Script is idempotent (tracks migrated source IDs), has `--dry-run`, and is run on staging first; user reviews counts + unmatched report before prod.
 - **Archive:** rename `pre_approvals`, `pre_approval_notes`, `pipeline`, `pipeline_notes`, `funded_loans`, `funded_loan_notes`, `monday_boards`, `monday_board_access`, `loan_checklists`, `loan_checklist_items`, `loan_checklist_subitems`, `loan_checklist_item_notes` → `archive_*`; revoke write grants from the app DB user.
@@ -120,6 +120,6 @@ All four slots default to **no filters** (`{}`), visible, named `Display A`–`D
 
 See `docs/superpowers/findings/2026-09-16-phase1-suite-access-findings.md`.
 
-- **Note/checklist endpoints:** suite has loan notes (content + columnKey only — no author/timestamp override) and loan checklists with an import endpoint. Preserving authorship needs an admin import endpoint (handoff S3); volume is 9 notes + 45 inline notes (§4).
+- **Note/checklist endpoints:** suite has loan notes (content + columnKey only — no author/timestamp override) and loan checklists with an import endpoint. Decided: import through the existing notes endpoint with an author/date content prefix — no admin import endpoint; volume is 9 notes + 45 inline notes (§4).
 - **Loan numbers:** populated on both sides, but the match key is suite `internal_loan_number` (§3). Pipeline matches 32/32; most pre-approval and funded rows have no suite loan and stay archive-only.
 - **Suite CORS:** live for dashboard + staging-dashboard; prod origins are controlled by `deploy/.env` on the suite host (§5).
