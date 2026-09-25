@@ -1,0 +1,19 @@
+[Unit]
+Description=MSFG incoming email text archive (preserves originals)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/msfg-backend/backend
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node scripts/info-email-cleaner.js
+TimeoutStartSec=25min
+MemoryMax=384M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+UMask=0077
+

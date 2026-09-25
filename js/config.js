@@ -166,7 +166,7 @@
       loan_calc_hub: "/calc/",
       docs_hub: "/docs/",
 
-      ratesheet: "https://email.msfginfo.com",
+      ratesheet: "/info-inbox.html",
 
       angelai: "https://www.swmc.com/angelai",
       chatgpt: "https://chatgpt.com",

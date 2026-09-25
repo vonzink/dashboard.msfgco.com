@@ -1,0 +1,8 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": "s3:ListBucket", "Resource": "arn:aws:s3:::msfginfo-emails", "Condition": { "StringLike": { "s3:prefix": ["info_emails/", "cleaned/info_emails/"] } } },
+    { "Effect": "Allow", "Action": "s3:GetObject", "Resource": ["arn:aws:s3:::msfginfo-emails/info_emails/*", "arn:aws:s3:::msfginfo-emails/cleaned/info_emails/*"] },
+    { "Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::msfginfo-emails/cleaned/info_emails/*" }
+  ]
+}

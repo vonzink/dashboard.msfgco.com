@@ -60,6 +60,7 @@ const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
 const { createWebinarsRouter } = require('./routes/webinars');
 const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
+const { createInfoInboxRouter } = require('./routes/infoInbox');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
@@ -73,6 +74,8 @@ function createApp({
   webinarOperationalLogger = null,
   webinarIpWriteLimit = 300,
   webinarWriteLimit = 300,
+  inboxAuthenticate = authenticate,
+  inboxService,
 } = {}) {
 const app = express();
 const webinarRecordOperationalEvent = webinarOperationalLogger
@@ -305,6 +308,7 @@ app.get('/api/me', authenticate, (req, res) => {
 // check is intentionally scoped here and does not change existing route access.
 app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarsRoutes);
 app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarWriteLimiter, webinarPresenterSettingsRoutes);
+app.use('/api/info-inbox', inboxAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, createInfoInboxRouter(inboxService));
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);
