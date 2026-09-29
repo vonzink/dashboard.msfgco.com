@@ -1,0 +1,10 @@
+[Unit]
+Description=Process MSFG incoming email every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00
+Persistent=true
+Unit=msfg-info-email-cleaner.service
+
+[Install]
+WantedBy=timers.target

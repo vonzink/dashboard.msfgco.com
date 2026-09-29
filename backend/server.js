@@ -68,6 +68,7 @@ const { createWebinarsRouter } = require('./routes/webinars');
 const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
 const { createWebinarAssetsRouter } = require('./routes/webinarAssets');
 const { createPublicWebinarsRouter } = require('./routes/publicWebinars');
+const { createInfoInboxRouter } = require('./routes/infoInbox');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
@@ -136,6 +137,8 @@ function createApp({
   webinarStudioAccessMiddleware = defaultWebinarStudioAccess,
   accessLogger = logger,
   errorLogger = logger,
+  inboxAuthenticate = authenticate,
+  inboxService,
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
@@ -497,6 +500,7 @@ app.get('/api/me', authenticate, (req, res) => {
 app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarsRoutes);
 app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarPresenterSettingsRoutes);
 app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarAssetWriteLimiter, webinarAssetsRoutes);
+app.use('/api/info-inbox', inboxAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, createInfoInboxRouter(inboxService));
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);
