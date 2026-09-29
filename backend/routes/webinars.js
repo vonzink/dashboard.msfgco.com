@@ -12,6 +12,7 @@ const {
   recordOperationalEvent: defaultRecordOperationalEvent,
 } = require('../services/webinars/observability');
 const schemas = require('../validation/schemas/webinars');
+const defaultLogger = require('../lib/logger');
 
 const webinarIdSchema = z.coerce.number().int().positive();
 const revisionIdSchema = z.coerce.number().int().positive();
@@ -30,6 +31,7 @@ function createWebinarsRouter({
   mutations = defaultMutations,
   notes = defaultNotes,
   recordOperationalEvent = defaultRecordOperationalEvent,
+  logger = defaultLogger,
 } = {}) {
   const router = express.Router();
   const trustedServiceErrorConstructors = [
@@ -41,6 +43,16 @@ function createWebinarsRouter({
 
   function isTrustedServiceError(error) {
     return trustedServiceErrorConstructors.some(ErrorType => error instanceof ErrorType);
+  }
+
+  /* The operational event is deliberately field-whitelisted, so the error
+     itself goes to the server log where an operator can read it. */
+  function logUnexpected(req, error) {
+    try {
+      logger.error({ err: error, requestId: req.id, method: req.method, path: req.originalUrl }, 'Webinar Studio request failed');
+    } catch {
+      // Logging must never change the response.
+    }
   }
 
   function recordDatabaseFailure(req) {
@@ -56,7 +68,8 @@ function createWebinarsRouter({
   }
 
   function asyncRoute(handler) {
-    return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(() => {
+    return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(error => {
+      logUnexpected(req, error);
       recordDatabaseFailure(req);
       res.status(500).json({ error: 'Internal server error' });
     });
@@ -164,6 +177,7 @@ function createWebinarsRouter({
       && definition.httpStatus === error.status
       && definition.eventName;
     if (!controlled) {
+      logUnexpected(req, error);
       recordDatabaseFailure(req);
       return res.status(500).json({ error: 'Internal server error' });
     }

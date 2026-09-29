@@ -28,6 +28,16 @@
     return value;
   }
 
+  /* The browser clipboard is the only sensible default. A missing API is a
+     failure the author must hear about, not a silent no-op. */
+  function defaultCopyText(value) {
+    const clipboard = globalThis.navigator?.clipboard;
+    if (!clipboard || typeof clipboard.writeText !== 'function') {
+      return Promise.reject(new Error('Clipboard is unavailable'));
+    }
+    return Promise.resolve(clipboard.writeText(value));
+  }
+
   function createNode(document, tagName, attributes = {}, text = null) {
     const node = document.createElement(tagName);
     for (const [name, value] of Object.entries(attributes)) {
@@ -83,7 +93,7 @@
     getAssets = () => ({}),
     getResourcePolicy,
     confirm = async () => true,
-    copyText = async () => undefined,
+    copyText = defaultCopyText,
     onReload = async () => undefined,
     setTimeoutImpl = globalThis.setTimeout,
     clearTimeoutImpl = globalThis.clearTimeout,
@@ -101,6 +111,7 @@
     let debounceTimer = null;
     let previewGeneration = 0;
     let editorError = '';
+    let conflictStatus = '';
     let destroyed = false;
     let insertionContext = {
       webinarId: Number(getState()?.webinar?.id) || null,
@@ -411,7 +422,10 @@
     }
 
     function renderConflict(fragment, current) {
-      if (!current.conflict) return;
+      if (!current.conflict) {
+        conflictStatus = '';
+        return;
+      }
       const updater = current.conflict.updatedBy.name || 'another editor';
       const banner = createNode(document, 'section', {
         class: 'ws-editor-conflict',
@@ -428,7 +442,8 @@
       append(actions,
         createNode(document, 'button', { type: 'button', 'data-reload-conflict': '' }, 'Reload live version'),
         createNode(document, 'button', { type: 'button', 'data-copy-conflict': '' }, 'Copy my changes'));
-      append(banner, message, actions);
+      const status = createNode(document, 'p', { class: 'ws-editor-conflict-status', 'data-conflict-status': '', role: 'status' }, conflictStatus);
+      append(banner, message, actions, status);
       fragment.append(banner);
     }
 
@@ -788,7 +803,21 @@
         slideOrder: current.slideOrder,
         slides: current.slideOrder.map(id => current.slidesById[id]),
       };
-      await copyText(JSON.stringify(payload, null, 2));
+      let copied = false;
+      try {
+        await copyText(JSON.stringify(payload, null, 2));
+        copied = true;
+      } catch {
+        copied = false;
+      }
+      // A reload that landed while the clipboard was busy has cleared the
+      // conflict; its banner is gone and must not inherit this result.
+      if (!state().conflict) return;
+      conflictStatus = copied
+        ? 'Your unsaved changes were copied as JSON. Keep them somewhere safe before you reload.'
+        : 'Could not copy to the clipboard. Select your code in the editor and copy it by hand before you reload.';
+      const statusNode = nodesFor('data-conflict-status')[0];
+      if (statusNode) statusNode.textContent = conflictStatus;
     }
 
     async function handleClick(event) {

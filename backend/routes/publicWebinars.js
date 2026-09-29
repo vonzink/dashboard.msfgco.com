@@ -3,6 +3,7 @@ const { z } = require('zod');
 const defaultPublicBundle = require('../services/webinars/publicBundle');
 const { recordOperationalEvent: defaultRecordOperationalEvent } = require('../services/webinars/observability');
 const { webinarSlug } = require('../validation/schemas/webinars');
+const defaultLogger = require('../lib/logger');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const STRONG_SHA256_ETAG = /^"[a-f0-9]{64}"$/;
@@ -49,6 +50,7 @@ function ifNoneMatchMatches(header, etag) {
 function createPublicWebinarsRouter({
   getLiveBundleBySlug = defaultPublicBundle.getLiveBundleBySlug,
   recordOperationalEvent = defaultRecordOperationalEvent,
+  logger = defaultLogger,
 } = {}) {
   const router = express.Router({ caseSensitive: true });
 
@@ -62,7 +64,14 @@ function createPublicWebinarsRouter({
     }
   }
 
-  function publicFailure(req, res) {
+  function publicFailure(req, res, error) {
+    try {
+      // The route path only; the query string is unvalidated caller input and
+      // the access log already redacts public webinar URLs.
+      logger.error({ err: error, requestId: req.id, method: req.method, path: `${req.baseUrl}${req.path}` }, 'Public webinar delivery failed');
+    } catch {
+      // Logging must never change the response.
+    }
     recordOnce(req, 'webinar.public_delivery_failure', {
       statusCode: 503,
       reasonCode: 'PUBLIC_DELIVERY_FAILURE',
@@ -100,12 +109,12 @@ function createPublicWebinarsRouter({
         return null;
       }
       if (!validCompiledBundle(compiled)) {
-        publicFailure(req, res);
+        publicFailure(req, res, new Error('Compiled public bundle failed validation'));
         return null;
       }
       return compiled;
-    } catch {
-      publicFailure(req, res);
+    } catch (error) {
+      publicFailure(req, res, error);
       return null;
     }
   }
@@ -143,7 +152,7 @@ function createPublicWebinarsRouter({
     if (!compiled) return;
     const webinarId = compiled.bundle?.webinar?.id;
     if (!Number.isSafeInteger(webinarId) || webinarId <= 0) {
-      publicFailure(req, res);
+      publicFailure(req, res, new Error('Compiled public bundle has no webinar id'));
       return;
     }
 

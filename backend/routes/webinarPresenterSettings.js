@@ -6,10 +6,12 @@ const {
   recordOperationalEvent: defaultRecordOperationalEvent,
 } = require('../services/webinars/observability');
 const { writeSettings } = require('../validation/schemas/webinars');
+const defaultLogger = require('../lib/logger');
 
 function createWebinarPresenterSettingsRouter({
   settings = defaultSettings,
   recordOperationalEvent = defaultRecordOperationalEvent,
+  logger = defaultLogger,
 } = {}) {
   const router = express.Router();
   const trustedSettingsErrorConstructors = [
@@ -41,6 +43,11 @@ function createWebinarPresenterSettingsRouter({
         error: error.message,
         code: error.code,
       });
+    }
+    try {
+      logger.error({ err: error, requestId: req.id, method: req.method, path: req.originalUrl }, 'Presenter settings request failed');
+    } catch {
+      // Logging must never change the response.
     }
     recordOperationalEvent('webinar.database_failure', {
       actorUserId,

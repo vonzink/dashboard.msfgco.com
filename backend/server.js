@@ -148,18 +148,22 @@ const webinarRecordOperationalEvent = webinarOperationalLogger
 const webinarsRoutes = createWebinarsRouter({
   ...webinarServices,
   recordOperationalEvent: webinarRecordOperationalEvent,
+  logger: errorLogger,
 });
 const webinarPresenterSettingsRoutes = createWebinarPresenterSettingsRouter({
   settings: webinarServices.settings,
   recordOperationalEvent: webinarRecordOperationalEvent,
+  logger: errorLogger,
 });
 const webinarAssetsRoutes = createWebinarAssetsRouter({
   catalog: webinarServices.assets,
   recordOperationalEvent: webinarRecordOperationalEvent,
+  logger: errorLogger,
 });
 const publicWebinarsRoutes = createPublicWebinarsRouter({
   getLiveBundleBySlug: webinarServices.publicBundle?.getLiveBundleBySlug,
   recordOperationalEvent: webinarRecordOperationalEvent,
+  logger: errorLogger,
 });
 
 // ======================

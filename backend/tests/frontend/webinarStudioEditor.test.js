@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -81,6 +81,7 @@ class FakeElement {
     }
   }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
+  hasAttribute(name) { return this.attributes.has(name); }
   addEventListener(type, listener) {
     const listeners = this.listeners.get(type) || [];
     listeners.push(listener);
@@ -120,7 +121,7 @@ class FakeDocument {
   createDocumentFragment() { return new FakeElement('fragment', this); }
 }
 
-function makeHarness({ previewResult = Promise.resolve({ type: 'ready' }), api = {}, confirm = vi.fn().mockResolvedValue(true) } = {}) {
+function makeHarness({ previewResult = Promise.resolve({ type: 'ready' }), api = {}, confirm = vi.fn().mockResolvedValue(true), copyText = vi.fn().mockResolvedValue(undefined) } = {}) {
   const document = new FakeDocument();
   const root = new FakeElement('main', document);
   let state = stateApi.createStudioState(privateDocument());
@@ -140,7 +141,7 @@ function makeHarness({ previewResult = Promise.resolve({ type: 'ready' }), api =
   const editor = createEditor({
     api: completeApi,
     confirm,
-    copyText: vi.fn().mockResolvedValue(undefined),
+    ...(copyText === null ? {} : { copyText }),
     document,
     getAssets: () => ({}),
     getResourcePolicy: () => privateDocument().resourcePolicy,
@@ -153,7 +154,7 @@ function makeHarness({ previewResult = Promise.resolve({ type: 'ready' }), api =
     setTimeoutImpl(callback, delay) { timers.push({ callback, delay }); return timers.length; },
     clearTimeoutImpl: vi.fn(),
   });
-  return { api: completeApi, confirm, editor, get state() { return state; }, setState(next) { state = next; }, preview, root, timers };
+  return { api: completeApi, confirm, copyText, editor, get state() { return state; }, setState(next) { state = next; }, preview, root, timers };
 }
 
 describe('Webinar Studio one-box editor', () => {
@@ -675,5 +676,73 @@ describe('Webinar Studio one-box editor', () => {
     expect(test.root.listeners.get('keydown')).toHaveLength(0);
     expect(test.root.listeners.get('click')).toHaveLength(0);
     expect(test.preview.destroy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Webinar Studio conflict copy', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  async function conflicted(options = {}) {
+    const pending = deferred();
+    const test = makeHarness({ ...options, api: { saveSlide: vi.fn(() => pending.promise) } });
+    test.editor.render(test.state);
+    await test.editor.previewSlide(FIRST);
+    const save = test.editor.saveSlide(FIRST);
+    const firstHtml = test.root.querySelectorAll('[data-code-field="html"]')[0];
+    firstHtml.value = '<section>Keep me</section>';
+    test.root.emit('input', { target: firstHtml });
+    pending.reject(Object.assign(new Error('stale private response'), {
+      status: 409,
+      code: 'VERSION_CONFLICT',
+      currentVersion: 8,
+      updatedAt: '2026-09-05T12:00:00.000Z',
+      updatedBy: { id: 9, name: 'Another Editor' },
+    }));
+    await expect(save).rejects.toThrow('stale');
+    test.editor.render(test.state);
+    expect(test.root.querySelector('[data-copy-conflict]')).toBeTruthy();
+    return test;
+  }
+
+  async function clickCopy(test) {
+    test.root.emit('click', { target: test.root.querySelector('[data-copy-conflict]') });
+    await flush();
+    return test.root.querySelector('[data-conflict-status]')?.textContent || '';
+  }
+
+  it('copies the unsaved work as JSON through the injected copy function and confirms it', async () => {
+    const test = await conflicted();
+    const status = await clickCopy(test);
+    expect(test.copyText).toHaveBeenCalledOnce();
+    const payload = JSON.parse(test.copyText.mock.calls[0][0]);
+    expect(payload.liveVersion).toBe(7);
+    expect(payload.slides.find(slide => slide.id === FIRST).html).toBe('<section>Keep me</section>');
+    expect(status).toMatch(/copied/i);
+  });
+
+  it('tells the author when the copy fails so they can copy by hand, keeping the edits', async () => {
+    const test = await conflicted({ copyText: vi.fn().mockRejectedValue(new Error('denied')) });
+    const status = await clickCopy(test);
+    expect(status).toMatch(/could not copy/i);
+    expect(test.state.slidesById[FIRST].html).toBe('<section>Keep me</section>');
+  });
+
+  it('uses the browser clipboard when no copy function is injected', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const test = await conflicted({ copyText: null });
+    const status = await clickCopy(test);
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0][0]).toContain('Keep me');
+    expect(status).toMatch(/copied/i);
+  });
+
+  it('reports a failure when the browser has no clipboard API', async () => {
+    vi.stubGlobal('navigator', {});
+    const test = await conflicted({ copyText: null });
+    const status = await clickCopy(test);
+    expect(status).toMatch(/could not copy/i);
   });
 });

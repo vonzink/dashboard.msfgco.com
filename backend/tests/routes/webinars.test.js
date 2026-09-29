@@ -96,6 +96,7 @@ function allServiceMocks(serviceModules) {
 
 let services;
 let operationalLogger;
+let errorLogger;
 let server;
 
 // This is the executable coverage manifest for the approved private API. The
@@ -221,12 +222,14 @@ function approvedRouteContracts() {
 beforeEach(async () => {
   services = makeServices();
   operationalLogger = { info: vi.fn() };
+  errorLogger = { error: vi.fn() };
   const app = createApp({
     webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: services,
     webinarOperationalLogger: operationalLogger,
     webinarWriteLimit: 1000,
+    errorLogger,
   });
   server = await new Promise(resolve => {
     const listener = app.listen(0, () => resolve(listener));
@@ -1110,4 +1113,33 @@ describe('production transport and limiter contract', () => {
     const oversized = { source: 'x'.repeat(2 * 1024 * 1024) };
     expect((await request('POST', '/api/unrelated', oversized)).status).toBe(404);
   }, 30000);
+});
+
+describe('unexpected failures are logged for operators', () => {
+  it('logs the underlying error with the request method and path when a route throws', async () => {
+    const failure = new Error('ER_ACCESS_DENIED password=secret');
+    services.repository.listForRequest.mockRejectedValueOnce(failure);
+    const response = await request('GET', '/api/webinars');
+    expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ err: failure, method: 'GET', path: '/api/webinars' });
+    expect(errorLogger.error.mock.calls[0][0].requestId).toBeDefined();
+    expect(typeof errorLogger.error.mock.calls[0][1]).toBe('string');
+  });
+
+  it('logs a service error that is not a controlled reason code before answering 500', async () => {
+    const forged = Object.assign(new Error('ER_DUP_ENTRY slug'), { code: 'VERSION_CONFLICT', status: 409 });
+    services.mutations.saveMaster.mockRejectedValueOnce(forged);
+    const response = await request('PUT', '/api/webinars/2/master', validMaster);
+    expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ err: forged, method: 'PUT', path: '/api/webinars/2/master' });
+  });
+
+  it('does not log controlled service errors', async () => {
+    services.mutations.saveMaster.mockRejectedValueOnce(new WebinarMutationError('VERSION_CONFLICT', 'Stale', { status: 409 }));
+    const response = await request('PUT', '/api/webinars/2/master', validMaster);
+    expect(response.status).toBe(409);
+    expect(errorLogger.error).not.toHaveBeenCalled();
+  });
 });

@@ -140,6 +140,7 @@ async function start(overrides = {}) {
     webinarAssetWriteLimit: 1000,
     webinarIpWriteLimit: 1000,
     webinarOperationalLogger: operationalLogger,
+    errorLogger: { error() {} },
     ...overrides,
   });
   server = await new Promise(resolve => {
@@ -543,5 +544,19 @@ describe('webinar asset API through the production application factory', () => {
     expect((await request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(7))).status).toBe(201);
     expect((await request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(7))).status).toBe(429);
     expect((await request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(8))).status).toBe(201);
+  });
+});
+
+describe('unexpected asset failures are logged for operators', () => {
+  it('logs the underlying error with the request method and path before the generic 500', async () => {
+    await new Promise(resolve => server.close(resolve));
+    const errorLogger = { error: vi.fn() };
+    await start({ errorLogger });
+    const failure = new Error('ER_BAD_DB_ERROR bucket=private-bucket');
+    catalog.listCatalog.mockRejectedValueOnce(failure);
+    const response = await request('GET', '/api/webinar-assets');
+    expect(response.status).toBe(500);
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ err: failure, method: 'GET', path: '/api/webinar-assets' });
   });
 });

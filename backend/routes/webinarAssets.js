@@ -3,6 +3,7 @@ const { getUserId, isAdmin } = require('../middleware/userContext');
 const defaultCatalog = require('../services/webinarAssets/catalog');
 const { recordOperationalEvent: defaultRecordOperationalEvent } = require('../services/webinars/observability');
 const schemas = require('../validation/schemas/webinarAssets');
+const defaultLogger = require('../lib/logger');
 
 const CONTROLLED_ERRORS = Object.freeze({
   ASSET_INPUT_INVALID: Object.freeze({ status: 400, message: 'Asset input is invalid' }),
@@ -79,6 +80,7 @@ function safeUsage(result) {
 function createWebinarAssetsRouter({
   catalog = defaultCatalog,
   recordOperationalEvent = defaultRecordOperationalEvent,
+  logger = defaultLogger,
 } = {}) {
   const router = express.Router();
   const trustedErrorConstructors = [defaultCatalog.AssetCatalogError, catalog.AssetCatalogError]
@@ -140,6 +142,11 @@ function createWebinarAssetsRouter({
         }
       }
       return res.status(definition.status).json({ error: definition.message, code: error.code });
+    }
+    try {
+      logger.error({ err: error, requestId: req.id, method: req.method, path: req.originalUrl }, 'Webinar asset request failed');
+    } catch {
+      // Logging must never change the response.
     }
     recordSafeEvent(req, 'webinar.database_failure', 500, 'DATABASE_FAILURE');
     return res.status(500).json({

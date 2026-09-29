@@ -998,3 +998,32 @@ describe('public runtime telemetry', () => {
     })).response.status).toBe(429);
   });
 });
+
+describe('public delivery failures are logged for operators', () => {
+  it('logs the underlying error when the bundle service throws, without changing the generic 503', async () => {
+    const failure = new Error('database password and internal query');
+    getLiveBundleBySlug.mockRejectedValueOnce(failure);
+    const { response } = await request(`/api/public/webinars/${slug}/live`);
+    expect(response.status).toBe(503);
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ err: failure, method: 'GET', path: `/api/public/webinars/${slug}/live` });
+  });
+
+  it('logs the route path without the caller-controlled query string', async () => {
+    getLiveBundleBySlug.mockRejectedValueOnce(new Error('boom'));
+    const { response } = await request(`/api/public/webinars/${slug}/live?token=canary-secret`);
+    expect(response.status).toBe(503);
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0].path).toBe(`/api/public/webinars/${slug}/live`);
+    expect(JSON.stringify(errorLogger.error.mock.calls[0][0])).not.toMatch(/canary-secret/);
+  });
+
+  it('logs a compiled bundle that fails validation', async () => {
+    getLiveBundleBySlug.mockResolvedValueOnce({ bundle: null, json: 'not-a-bundle', etag });
+    const { response } = await request(`/api/public/webinars/${slug}/live`);
+    expect(response.status).toBe(503);
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0].err).toBeInstanceOf(Error);
+    expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ method: 'GET', path: `/api/public/webinars/${slug}/live` });
+  });
+});
