@@ -417,6 +417,29 @@ describe('Webinar asset inspection', () => {
     expect(result.sha256).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it('keeps the inert presentation and naming attributes a wordmark depends on', async () => {
+    const svg = Buffer.from([
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 240" role="img" aria-label="Mountain State Financial Group, LLC">',
+      '<polygon points="18,210 150,18 174,53" fill="#FFFFFF" fill-opacity="0.55" stroke="#000000" stroke-opacity="0.4"/>',
+      '<text x="306" y="118" font-size="86" letter-spacing="-1" textLength="780" lengthAdjust="spacingAndGlyphs">MOUNTAIN STATE</text>',
+      '</svg>',
+    ].join(''));
+    const result = await inspection.inspectAsset(assetInput(svg, 'image/svg+xml', 'logo.svg'));
+    const approved = result.approvedBody.toString();
+
+    for (const attribute of [
+      'role="img"', 'aria-label="Mountain State Financial Group, LLC"', 'fill-opacity="0.55"',
+      'stroke-opacity="0.4"', 'letter-spacing="-1"', 'textLength="780"', 'lengthAdjust="spacingAndGlyphs"',
+    ]) expect(approved).toContain(attribute);
+  });
+
+  it('still strips a URL smuggled through a newly allowed SVG attribute', async () => {
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" aria-label="javascript:alert(1)" role="https://evil.example/x"><rect width="1" height="1"/></svg>');
+    const result = await inspection.inspectAsset(assetInput(svg, 'image/svg+xml', 'logo.svg'));
+
+    expect(result.approvedBody.toString()).not.toMatch(/javascript:|evil\.example/);
+  });
+
   it.each([
     ['trailing text', '<svg xmlns="http://www.w3.org/2000/svg"></svg>unsafe'],
     ['multiple roots', '<svg xmlns="http://www.w3.org/2000/svg"></svg><svg xmlns="http://www.w3.org/2000/svg"></svg>'],

@@ -46,6 +46,8 @@ const SVG_ATTRIBUTES = [
   'offset', 'stop-color', 'stop-opacity', 'clip-path', 'mask', 'id', 'class',
   'fill-rule', 'clip-rule', 'text-anchor', 'font-family', 'font-size', 'font-weight',
   'dominant-baseline', 'dx', 'dy', 'href',
+  'fill-opacity', 'stroke-opacity', 'letter-spacing', 'textLength', 'lengthAdjust',
+  'role', 'aria-label',
 ];
 const EXTENSIONS = Object.freeze({
   'audio/mpeg': '.mp3',
