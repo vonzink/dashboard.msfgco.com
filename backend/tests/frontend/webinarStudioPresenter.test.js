@@ -135,7 +135,7 @@ function slide(id, title, anchor, targetSeconds, speakerNotes = '') {
 
 function studioState(overrides = {}) {
   return {
-    webinar: { id: 12, slug: 'first-home', title: 'First Home', primaryOwnerUserId: 7, audienceEnabled: true },
+    webinar: { id: 12, slug: 'first-home', title: 'First Home', primaryOwnerUserId: 7, canEdit: true, audienceEnabled: true },
     liveVersion: 7,
     master: { html: '<main>{{SLIDE_CONTENT}}</main>', css: 'main{gap:8px}', dirtyFields: [] },
     slideOrder: [FIRST, SECOND, THIRD],
@@ -598,7 +598,7 @@ describe('Webinar Studio authenticated presenter', () => {
     expect(text(test.q('[data-position]'))).toBe('3 / 3');
     // Off the presenter tab, the coordinator switches decks and relaunches.
     test.controller.deactivate();
-    test.setState(studioState({ webinar: { id: 13, slug: 'second', title: 'Second', primaryOwnerUserId: 7, audienceEnabled: true } }));
+    test.setState(studioState({ webinar: { id: 13, slug: 'second', title: 'Second', primaryOwnerUserId: 7, canEdit: true, audienceEnabled: true } }));
     test.bridge.sendControl.mockClear();
     test.controller.applyAudienceState({ type: 'audience-ready', payload: { index: 0, total: 3 } });
     expect(test.bridge.sendControl).not.toHaveBeenCalledWith('goto', expect.anything());
@@ -823,7 +823,7 @@ describe('Webinar Studio authenticated presenter', () => {
     await test.settle();
     expect(test.root.children).toHaveLength(0);
 
-    test.setState(studioState({ webinar: { id: 13, slug: 'second', title: 'Second', primaryOwnerUserId: 7, audienceEnabled: false } }));
+    test.setState(studioState({ webinar: { id: 13, slug: 'second', title: 'Second', primaryOwnerUserId: 7, canEdit: true, audienceEnabled: false } }));
     await test.controller.renderPresenterPanel({ ...test.context, webinarId: 13 });
     await test.settle();
     expect(text(test.root)).not.toContain('stale');
@@ -883,7 +883,7 @@ describe('Webinar Studio presenter tab lifecycle', () => {
     const api = {
       listWebinars: vi.fn().mockResolvedValue([{ id: 12, slug: 'first-home', title: 'First Home', liveVersion: 7, audienceEnabled: false }]),
       getWebinar: vi.fn().mockResolvedValue({
-        id: 12, slug: 'first-home', title: 'First Home', primaryOwnerUserId: 7, audienceEnabled: false, liveVersion: 7,
+        id: 12, slug: 'first-home', title: 'First Home', primaryOwnerUserId: 7, canEdit: true, audienceEnabled: false, liveVersion: 7,
         masterHtml: '<main>{{SLIDE_CONTENT}}</main>', masterCss: '', resourcePolicy: { assetOrigin: 'https://assets.example', stylesheetOrigins: [], fontOrigins: [] }, assets: {},
         slides: [{ id: FIRST, title: 'Opening', anchor: 'opening', targetSeconds: 60, speakerNotes: '', html: '<section>Opening</section>', css: '', javascript: '' }],
       }),
@@ -927,5 +927,25 @@ describe('Webinar Studio presenter tab lifecycle', () => {
     expect(presenterController.deactivate).toHaveBeenCalled();
     studio.destroy();
     expect(presenterController.destroy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Webinar Studio presenter for a reader', () => {
+  it('rehearses the deck but offers no personal note composer and never posts a note', async () => {
+    const test = harness({ state: studioState({ webinar: { id: 12, slug: 'first-home', title: 'First Home', primaryOwnerUserId: 7, canEdit: false, audienceEnabled: true } }) });
+    await test.open();
+
+    expect(test.q('[data-notes]')).not.toBeNull();
+    expect(test.q('[data-notes-view-only]')).not.toBeNull();
+    expect(test.q('[data-note-input]')).toBeNull();
+    expect(test.q('[data-note-save]')).toBeNull();
+    expect(test.q('[data-controls]')).not.toBeNull();
+
+    await expect(test.controller.addNote('Remember the cash example')).resolves.toBe(false);
+    await expect(test.controller.editNote(5, 'Changed')).resolves.toBe(false);
+    await expect(test.controller.deleteNote(5)).resolves.toBe(false);
+    expect(test.api.addNote).not.toHaveBeenCalled();
+    expect(test.api.updateNote).not.toHaveBeenCalled();
+    expect(test.api.deleteNote).not.toHaveBeenCalled();
   });
 });

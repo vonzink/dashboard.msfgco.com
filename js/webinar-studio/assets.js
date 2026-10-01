@@ -24,6 +24,7 @@
   });
   const MEDIA_TYPES = new Set(['image', 'svg', 'font', 'audio', 'video']);
   const STATUSES = new Set(['processing', 'available', 'rejected', 'archived']);
+  const ASSETS_LOCKED_COPY = 'Only webinar owners and administrators can add or change assets.';
 
   function required(value, message) {
     if (!value) throw new TypeError(message);
@@ -216,11 +217,19 @@
       return context?.isAdmin === true;
     }
 
+    /* The library is shared, so adding to it belongs to editors: admins and
+       primary owners. The server enforces the same rule on every write. */
+    function canManageAssets() {
+      return isAdmin() || context?.canManageAssets === true;
+    }
+
     function canManageFamily(family) {
+      if (!canManageAssets()) return false;
       return isAdmin() || (currentUserId() && currentUserId() === family.createdByUserId);
     }
 
     function canArchiveVersion(version) {
+      if (!canManageAssets()) return false;
       return isAdmin() || (currentUserId() && currentUserId() === version.uploadedByUserId);
     }
 
@@ -347,6 +356,10 @@
     }
 
     function renderUpload(container) {
+      if (!canManageAssets()) {
+        container.append(createNode(document, 'p', { 'data-asset-upload-locked': '' }, ASSETS_LOCKED_COPY));
+        return;
+      }
       const form = createNode(document, 'form', { class: 'ws-asset-upload', 'data-asset-upload-form': '' });
       const heading = createNode(document, 'h4', {}, 'Add reusable asset');
       const name = createNode(document, 'input', {
@@ -685,6 +698,11 @@
     }
 
     async function uploadAsset(file, metadata = {}) {
+      if (!canManageAssets()) {
+        errorMessage = ASSETS_LOCKED_COPY;
+        render();
+        return { ok: false, error: errorMessage };
+      }
       retainedUpload = {
         displayName: String(metadata.displayName || retainedUpload.displayName || ''),
         description: String(metadata.description || retainedUpload.description || ''),

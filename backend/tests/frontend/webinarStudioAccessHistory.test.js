@@ -91,6 +91,7 @@ function privateState(overrides = {}) {
       slug: 'first-home',
       title: 'Your first home, without the mystery.',
       primaryOwnerUserId: 7,
+      canEdit: true,
       audienceEnabled: false,
     },
     liveVersion: 7,
@@ -154,6 +155,7 @@ function retargetContext(test, id = 99) {
       slug: 'other-webinar',
       title: 'Other webinar',
       primaryOwnerUserId: 8,
+      canEdit: true,
       audienceEnabled: false,
     },
     liveVersion: 3,
@@ -174,6 +176,7 @@ function privateDocumentFor(id, title, liveVersion = 7) {
     slug: `webinar-${id}`,
     title,
     primaryOwnerUserId: 7,
+    canEdit: true,
     audienceEnabled: false,
     liveVersion,
     masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -512,6 +515,7 @@ describe('Webinar Studio access and revision history', () => {
         slug: 'first-home',
         title: 'First Home',
         primaryOwnerUserId: 7,
+        canEdit: true,
         audienceEnabled: false,
         liveVersion: 7,
         masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -693,5 +697,37 @@ describe('Webinar Studio access and revision history', () => {
     expect(test.elements.wsWorkspace.innerHTML).toContain('Webinar B');
     expect(test.elements.wsWorkspace.innerHTML).not.toMatch(/PRIVATE_|unavailable/);
     expect(test.elements.wsStatus.textContent).toContain('Live version 3');
+  });
+});
+
+describe('Webinar Studio history for a reader', () => {
+  const revision = { id: 21, version: 6, changeType: 'slide_saved', changeSummary: 'Updated slide', createdAt: '2026-09-05T12:34:00.000Z', createdBy: { name: 'Avery Admin' } };
+
+  it('shows history to a reader without a restore control and refuses a restore call', async () => {
+    const test = harness({ admin: false, api: { getHistory: vi.fn().mockResolvedValue([revision]) } });
+    test.context.canEdit = false;
+    await test.controller.renderHistoryPanel(test.context);
+
+    expect(text(test.root)).toMatch(/Version 6/);
+    expect(test.root.querySelector('[data-restore-revision]')).toBeNull();
+    expect(test.root.querySelector('[data-history-view-only]')).not.toBeNull();
+
+    await expect(test.controller.restoreRevision(21)).resolves.toMatchObject({ ok: false });
+    expect(test.confirm).not.toHaveBeenCalled();
+    expect(test.api.restoreRevision).not.toHaveBeenCalled();
+    expect(test.reload).not.toHaveBeenCalled();
+  });
+
+  it('keeps restore for a non-admin the server marked as an editor and for every administrator', async () => {
+    const owner = harness({ admin: false, api: { getHistory: vi.fn().mockResolvedValue([revision]) } });
+    owner.context.canEdit = true;
+    await owner.controller.renderHistoryPanel(owner.context);
+    expect(owner.root.querySelector('[data-restore-revision]')).not.toBeNull();
+    expect(owner.root.querySelector('[data-history-view-only]')).toBeNull();
+
+    const admin = harness({ admin: true, api: { getHistory: vi.fn().mockResolvedValue([revision]) } });
+    admin.context.canEdit = false;
+    await admin.controller.renderHistoryPanel(admin.context);
+    expect(admin.root.querySelector('[data-restore-revision]')).not.toBeNull();
   });
 });

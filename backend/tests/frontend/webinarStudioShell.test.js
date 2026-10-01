@@ -16,6 +16,7 @@ function privateDocument(overrides = {}) {
     slug: 'first-home',
     title: 'Your first home, without the mystery.',
     primaryOwnerUserId: 7,
+    canEdit: true,
     audienceEnabled: false,
     liveVersion: 3,
     masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -215,7 +216,8 @@ describe('Webinar Studio shell contracts', () => {
 
     release([]);
     await opening;
-    expect(elements.wsWorkspace.innerHTML).toContain('No webinars are assigned to you');
+    expect(elements.wsWorkspace.innerHTML).toContain('No webinars yet');
+    expect(elements.wsWorkspace.innerHTML).toContain('An administrator can create the first webinar.');
     expect(elements.wsDeckList.innerHTML).not.toContain('undefined');
   });
 
@@ -1222,5 +1224,108 @@ describe('Webinar Studio audience bridge wiring', () => {
     expect(test.bridges[0].destroy).toHaveBeenCalled();
     expect(facade.status()).toBe('idle');
     expect(facade.sendControl('next', {})).toBe(false);
+  });
+});
+
+describe('Webinar Studio shell for readers and editors', () => {
+  function captureModules() {
+    const capture = { access: null, history: null, assets: null };
+    const accessHistoryApi = { createAccessHistory: () => ({
+      renderAccessPanel: vi.fn(context => { capture.access = context; }),
+      renderHistoryPanel: vi.fn(context => { capture.history = context; }),
+      deactivate: vi.fn(), destroy: vi.fn(),
+    }) };
+    const assetsApi = { createAssetLibrary: () => ({
+      renderAssetCatalog: vi.fn(context => { capture.assets = context; }),
+      deactivate: vi.fn(), destroy: vi.fn(),
+    }) };
+    return { capture, accessHistoryApi, assetsApi };
+  }
+
+  function readerStudio({ role = 'user', userId = 9, webinars, document } = {}) {
+    vi.resetModules();
+    const createWebinarStudio = require(studioPath);
+    const dom = makeDocument();
+    const modules = captureModules();
+    const api = {
+      listWebinars: vi.fn().mockResolvedValue(webinars || [
+        { id: 12, slug: 'first-home', title: 'First Home', liveVersion: 3, audienceEnabled: false, primaryOwnerUserId: 7 },
+      ]),
+      getWebinar: vi.fn().mockResolvedValue(document || privateDocument({ canEdit: false })),
+      listUsers: vi.fn().mockResolvedValue([]),
+    };
+    const studio = createWebinarStudio({
+      document: dom.document,
+      api,
+      stateApi,
+      accessHistoryApi: modules.accessHistoryApi,
+      assetsApi: modules.assetsApi,
+      confirm: vi.fn().mockResolvedValue(true),
+      currentUser: () => ({ id: userId, activeRole: role, role }),
+      openWindow: vi.fn(),
+      navigationTarget: new FakeEventTarget(),
+    });
+    return { studio, api, ...dom, ...modules };
+  }
+
+  it('tells a reader the webinar is view only and hands the server decision to the settings tabs', async () => {
+    const test = readerStudio();
+    await test.studio.init();
+    await test.studio.open();
+    await test.studio.selectWebinar(12);
+
+    expect(test.elements.wsWorkspace.innerHTML).toMatch(/View only/);
+    expect(test.elements.wsWorkspace.innerHTML).not.toMatch(/Save Live/);
+
+    test.elements.wsSettings.listeners.click({ target: test.tabs[1] });
+    expect(test.capture.access).toMatchObject({ isAdmin: false, canEdit: false });
+    test.elements.wsSettings.listeners.click({ target: test.tabs[4] });
+    expect(test.capture.history).toMatchObject({ isAdmin: false, canEdit: false });
+    test.elements.wsSettings.listeners.click({ target: test.tabs[3] });
+    expect(test.capture.assets).toMatchObject({ isAdmin: false, canManageAssets: false });
+  });
+
+  it('marks an owner as an editor of their own deck and of the shared asset library', async () => {
+    const test = readerStudio({ userId: 7, document: privateDocument({ canEdit: true }) });
+    await test.studio.init();
+    await test.studio.open();
+    await test.studio.selectWebinar(12);
+
+    expect(test.elements.wsWorkspace.innerHTML).toMatch(/Save Live/);
+    test.elements.wsSettings.listeners.click({ target: test.tabs[1] });
+    expect(test.capture.access).toMatchObject({ isAdmin: false, canEdit: true });
+    test.elements.wsSettings.listeners.click({ target: test.tabs[3] });
+    expect(test.capture.assets).toMatchObject({ isAdmin: false, canManageAssets: true });
+  });
+
+  it('keeps an owner as an asset editor after a reload rebuilds their list entry', async () => {
+    const test = readerStudio({ userId: 7, document: privateDocument({ canEdit: true }) });
+    await test.studio.init();
+    await test.studio.open();
+    await test.studio.selectWebinar(12);
+    test.elements.wsSettings.listeners.click({ target: test.tabs[1] });
+    test.api.getWebinar.mockResolvedValue(privateDocument({ canEdit: true, liveVersion: 4 }));
+    await test.capture.access.reload();
+
+    test.elements.wsSettings.listeners.click({ target: test.tabs[3] });
+    expect(test.capture.assets).toMatchObject({ isAdmin: false, canManageAssets: true });
+  });
+
+  it('lets an administrator manage assets even when they own nothing in the list', async () => {
+    const test = readerStudio({ role: 'admin', userId: 1, document: privateDocument({ canEdit: true }) });
+    await test.studio.init();
+    await test.studio.open();
+    await test.studio.selectWebinar(12);
+    test.elements.wsSettings.listeners.click({ target: test.tabs[3] });
+    expect(test.capture.assets).toMatchObject({ isAdmin: true, canManageAssets: true });
+  });
+
+  it('shows a reader an empty Studio with the administrator hint and no New webinar button', async () => {
+    const test = readerStudio({ webinars: [] });
+    await test.studio.init();
+    await test.studio.open();
+    expect(test.elements.wsWorkspace.innerHTML).toContain('No webinars yet');
+    expect(test.elements.wsWorkspace.innerHTML).toContain('An administrator can create the first webinar.');
+    expect(test.elements.wsNewWebinar.hidden).toBe(true);
   });
 });

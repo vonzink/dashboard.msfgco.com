@@ -134,6 +134,9 @@ let server;
 async function start(overrides = {}) {
   const app = createApp({
     webinarStudioAccessMiddleware: (_req, _res, next) => next(),
+    // The route contracts below are not about the editor gate; the gate has
+    // its own describe block that installs the real one.
+    webinarEditorWriteGate: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: { assets: catalog },
     webinarWriteLimit: 1000,
@@ -558,5 +561,51 @@ describe('unexpected asset failures are logged for operators', () => {
     expect(response.status).toBe(500);
     expect(errorLogger.error).toHaveBeenCalledTimes(1);
     expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ err: failure, method: 'GET', path: '/api/webinar-assets' });
+  });
+});
+
+describe('everyone mode editor write gate', () => {
+  const { createWebinarEditorWriteGate } = require('../../middleware/webinarStudioAccess');
+  let database;
+
+  beforeEach(async () => {
+    await new Promise(resolve => server.close(resolve));
+    database = { query: vi.fn().mockResolvedValue([[]]) };
+    await start({
+      webinarStudioAccessMiddleware(req, _res, next) {
+        req.webinarStudioAccess = Object.freeze({ mode: 'everyone', readAll: true });
+        next();
+      },
+      webinarEditorWriteGate: createWebinarEditorWriteGate({ database }),
+    });
+  });
+
+  it('fails closed with the default wiring when the feature gate never annotated the request', async () => {
+    await new Promise(resolve => server.close(resolve));
+    await start({ webinarEditorWriteGate: undefined });
+    await expect(request('GET', '/api/webinar-assets', undefined, identity(1, 'admin'))).resolves.toMatchObject({ status: 200 });
+    await expect(request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(1, 'admin'))).resolves.toEqual({
+      status: 403,
+      body: { error: 'Webinar editor access required' },
+    });
+    expect(catalog.createUploadIntent).not.toHaveBeenCalled();
+  });
+
+  it('lets a reader browse the library but not change it', async () => {
+    await expect(request('GET', '/api/webinar-assets', undefined, identity(9))).resolves.toMatchObject({ status: 200 });
+    await expect(request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(9))).resolves.toEqual({
+      status: 403,
+      body: { error: 'Webinar editor access required' },
+    });
+    expect(catalog.createUploadIntent).not.toHaveBeenCalled();
+    expect(database.query).toHaveBeenCalledWith(expect.stringContaining('primary_owner_user_id = ?'), [9]);
+  });
+
+  it('lets an active primary owner and an administrator change the library', async () => {
+    database.query.mockResolvedValueOnce([[{ assigned: 1 }]]);
+    await expect(request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(7))).resolves.toMatchObject({ status: 201 });
+    await expect(request('POST', '/api/webinar-assets/upload-intents', validUpload, identity(1, 'admin'))).resolves.toMatchObject({ status: 201 });
+    expect(catalog.createUploadIntent).toHaveBeenCalledTimes(2);
+    expect(database.query).toHaveBeenCalledTimes(1);
   });
 });

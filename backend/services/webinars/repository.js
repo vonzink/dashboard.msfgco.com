@@ -1,5 +1,6 @@
 const db = require('../../db/connection');
-const { getUserId, isAdmin } = require('../../middleware/userContext');
+const { getUserId } = require('../../middleware/userContext');
+const { canReadAllWebinars } = require('./authorization');
 const { loadResourcePolicy } = require('./contentPolicy');
 
 function numberValue(value) {
@@ -49,7 +50,7 @@ async function listForRequest(req) {
   ];
   const params = [];
 
-  if (!isAdmin(req)) {
+  if (!canReadAllWebinars(req)) {
     sql.push('AND primary_owner_user_id = ?');
     params.push(getUserId(req));
   }

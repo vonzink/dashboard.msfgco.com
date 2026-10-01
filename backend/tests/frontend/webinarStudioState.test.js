@@ -14,6 +14,7 @@ function privateDocument(overrides = {}) {
     slug: 'homebuyer-basics',
     title: 'Homebuyer Basics',
     primaryOwnerUserId: 7,
+    canEdit: true,
     audienceEnabled: false,
     liveVersion: 7,
     masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -69,6 +70,7 @@ describe('Webinar Studio normalized state', () => {
         slug: 'homebuyer-basics',
         title: 'Homebuyer Basics',
         primaryOwnerUserId: 7,
+        canEdit: true,
         audienceEnabled: false,
       },
       liveVersion: 7,
@@ -364,5 +366,21 @@ describe('Webinar Studio normalized state', () => {
       expect(clean.slidesById[firstSlideId].html).toBe('<h1>Unsaved and retained</h1>');
       expect(clean.slidesById[firstSlideId].dirtyFields).toEqual(['html']);
     }
+  });
+});
+
+describe('Webinar Studio edit permission in state', () => {
+  it('carries the server edit decision and treats a document that omits it as read only', () => {
+    expect(stateApi.createStudioState(privateDocument({ canEdit: true })).webinar.canEdit).toBe(true);
+    expect(stateApi.createStudioState(privateDocument({ canEdit: false })).webinar.canEdit).toBe(false);
+    expect(stateApi.createStudioState(privateDocument({ canEdit: undefined })).webinar.canEdit).toBe(false);
+  });
+
+  it('rejects a non-boolean edit decision and a state whose decision was tampered with', () => {
+    expect(() => stateApi.createStudioState(privateDocument({ canEdit: 'yes' }))).toThrow(/canEdit must be boolean/);
+    expect(() => stateApi.createStudioState(privateDocument({ canEdit: 1 }))).toThrow(/canEdit must be boolean/);
+    const state = stateApi.createStudioState(privateDocument());
+    const tampered = { ...state, webinar: { ...state.webinar, canEdit: 'true' } };
+    expect(() => stateApi.updateMaster(tampered, 'css', 'main{}')).toThrow(/canEdit must be boolean/);
   });
 });

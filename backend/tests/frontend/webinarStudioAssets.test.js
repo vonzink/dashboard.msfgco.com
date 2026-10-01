@@ -148,7 +148,7 @@ function deferred() {
   return { promise, resolve, reject };
 }
 
-function harness({ admin = true, api = {}, fetchImpl, copyText } = {}) {
+function harness({ admin = true, canManageAssets = true, api = {}, fetchImpl, copyText } = {}) {
   const document = new FakeDocument();
   const root = document.createElement('section');
   const completeApi = {
@@ -194,6 +194,7 @@ function harness({ admin = true, api = {}, fetchImpl, copyText } = {}) {
   const context = {
     root,
     isAdmin: admin,
+    canManageAssets,
     currentUser: { id: 7, name: 'Seth Angell' },
     getEditorTarget: () => document.activeElement,
   };
@@ -528,6 +529,7 @@ describe('Webinar Studio reusable asset library', () => {
         slug: 'first-home',
         title: 'First Home',
         primaryOwnerUserId: 7,
+        canEdit: true,
         audienceEnabled: false,
         liveVersion: 7,
         masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -586,6 +588,7 @@ describe('Webinar Studio reusable asset library', () => {
       slug: id === 12 ? 'first-home' : `deck-${id}`,
       title: id === 12 ? 'First Home' : `Deck ${id}`,
       primaryOwnerUserId: 7,
+      canEdit: true,
       audienceEnabled: false,
       liveVersion: 7,
       masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -927,5 +930,36 @@ describe('Webinar Studio reusable asset library', () => {
     expect(test.captured.getEditorTarget()).toBeNull();
     expect(test.timers.length).toBe(timersBefore);
     expect(test.preview.destroy).toHaveBeenCalledOnce();
+  });
+});
+
+describe('Webinar Studio asset library for a reader', () => {
+  it('shows the library without upload, edit, new-version, or archive controls and refuses an upload', async () => {
+    // The reader uploaded this version back when they owned a webinar.
+    const ownUpload = family({ createdByUserId: 7, versions: [{ ...family().versions[0], uploadedByUserId: 7 }] });
+    const reader = harness({ admin: false, canManageAssets: false, api: { listAssets: vi.fn().mockResolvedValue([ownUpload]) } });
+    await reader.library.renderAssetCatalog(reader.context);
+
+    expect(reader.root.querySelector('[data-asset-catalog]')).not.toBeNull();
+    expect(reader.root.querySelector('[data-asset-upload-form]')).toBeNull();
+    expect(reader.root.querySelector('[data-asset-upload-locked]')).not.toBeNull();
+    expect(reader.root.querySelector('[data-edit-asset]')).toBeNull();
+    expect(reader.root.querySelector('[data-new-asset-version]')).toBeNull();
+    expect(reader.root.querySelector('[data-archive-version]')).toBeNull();
+
+    const result = await reader.library.uploadAsset({ name: 'porch.png', type: 'image/png', size: 10 }, { displayName: 'Porch' });
+    expect(result).toMatchObject({ ok: false });
+    expect(reader.api.createUploadIntent).not.toHaveBeenCalled();
+    expect(reader.root.querySelector('[data-asset-error]').textContent).toMatch(/owners and administrators/i);
+  });
+
+  it('keeps the upload form for editors and for every administrator', async () => {
+    const editor = harness({ admin: false, canManageAssets: true });
+    await editor.library.renderAssetCatalog(editor.context);
+    expect(editor.root.querySelector('[data-asset-upload-form]')).not.toBeNull();
+
+    const admin = harness({ admin: true, canManageAssets: false });
+    await admin.library.renderAssetCatalog(admin.context);
+    expect(admin.root.querySelector('[data-asset-upload-form]')).not.toBeNull();
   });
 });

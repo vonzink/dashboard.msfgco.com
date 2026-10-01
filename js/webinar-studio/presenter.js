@@ -657,7 +657,7 @@
     async function addNote(bodyValue) {
       const started = operation();
       const slide = currentSlide();
-      if (!operationIsCurrent(started) || !slide) return false;
+      if (!operationIsCurrent(started) || !slide || !canEdit()) return false;
       const normalized = normalizeNoteBody(bodyValue);
       if (normalized.error) {
         errorMessage = normalized.error;
@@ -686,7 +686,7 @@
     async function editNote(noteId, bodyValue) {
       const started = operation();
       const id = positiveInteger(noteId);
-      if (!operationIsCurrent(started) || !id || !notes.some(note => note.id === id)) return false;
+      if (!operationIsCurrent(started) || !id || !canEdit() || !notes.some(note => note.id === id)) return false;
       const normalized = normalizeNoteBody(bodyValue);
       if (normalized.error) {
         errorMessage = normalized.error;
@@ -715,7 +715,7 @@
     async function deleteNote(noteId) {
       const started = operation();
       const id = positiveInteger(noteId);
-      if (!operationIsCurrent(started) || !id || !notes.some(note => note.id === id)) return false;
+      if (!operationIsCurrent(started) || !id || !canEdit() || !notes.some(note => note.id === id)) return false;
       const approved = await confirm('Delete this note?', {
         title: 'Delete note',
         confirmText: 'Delete note',
@@ -1001,11 +1001,21 @@
       status.textContent = `${animation.current} / ${animation.total}`;
     }
 
+    /* Personal notes are written against the webinar, so the server allows
+       them only for its editors. A reader sees why instead of a failing form. */
+    function canEdit() {
+      return state()?.webinar?.canEdit === true;
+    }
+
     function buildNotes() {
       const slide = currentSlide();
       const section = createNode(document, 'section', { class: 'ws-settings-section ws-presenter-notes', 'data-notes': '' });
       const heading = createNode(document, 'div', { class: 'ws-presenter-notes-heading' });
       append(heading, createNode(document, 'h4', {}, 'My notes — this slide'));
+      if (!canEdit()) {
+        append(section, heading, createNode(document, 'p', { class: 'ws-note-none', 'data-notes-view-only': '' }, 'Personal notes are available to the primary owner and administrators.'));
+        return section;
+      }
       const composer = createNode(document, 'div', { class: 'ws-note-add' });
       const input = createNode(document, 'textarea', {
         'data-note-input': '',
