@@ -216,6 +216,41 @@ async function findActiveOwner(connection, userId) {
   return rows[0];
 }
 
+const IMPORT_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const IMPORT_SLIDE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const MAX_IMPORT_SLIDES = 500;
+
+/* Shape checks for an imported deck. Content rules are the candidate
+   validator's job; this only refuses input the inserts could not represent. */
+function normalizeImportedDeck(input) {
+  const invalid = () => new WebinarMutationError('IMPORT_INPUT_INVALID', 'Imported webinar is invalid', { status: 400 });
+  const positive = value => Number.isSafeInteger(value) && value > 0;
+  const title = value => (typeof value === 'string' ? value.trim() : '');
+  if (!input || typeof input.slug !== 'string' || input.slug.length > 190 || !IMPORT_SLUG.test(input.slug)
+    || !title(input.title) || title(input.title).length > 255
+    || !positive(input.primaryOwnerUserId) || !positive(input.actorUserId)
+    || typeof input.masterHtml !== 'string' || typeof input.masterCss !== 'string'
+    || !Array.isArray(input.slides) || !input.slides.length || input.slides.length > MAX_IMPORT_SLIDES) throw invalid();
+
+  const slides = input.slides.map((slide, position) => {
+    if (!slide || typeof slide.id !== 'string' || !IMPORT_SLIDE_ID.test(slide.id)
+      || typeof slide.anchor !== 'string' || !title(slide.title) || title(slide.title).length > 255
+      || ['speakerNotes', 'html', 'css', 'javascript'].some(field => typeof slide[field] !== 'string')) throw invalid();
+    return {
+      id: slide.id, position, anchor: slide.anchor, title: title(slide.title), targetSeconds: slide.targetSeconds,
+      speakerNotes: slide.speakerNotes, html: slide.html, css: slide.css, javascript: slide.javascript,
+    };
+  });
+  if (new Set(slides.map(slide => slide.id)).size !== slides.length
+    || new Set(slides.map(slide => slide.anchor)).size !== slides.length) throw invalid();
+
+  return {
+    slug: input.slug, title: title(input.title),
+    primaryOwnerUserId: input.primaryOwnerUserId, actorUserId: input.actorUserId,
+    masterHtml: input.masterHtml, masterCss: input.masterCss, slides,
+  };
+}
+
 function createMutationService({
   db: connectionPool = db,
   validateCandidate: candidateValidator = validateCandidate,
@@ -454,6 +489,49 @@ function createMutationService({
     });
   }
 
+  /* A complete deck in one transaction: the webinar, every slide under its
+     supplied stable id, and revision one. It goes through the same candidate
+     validation, asset-reference checks and snapshot as a hand-built webinar, and
+     is always created with the audience switched off. */
+  async function importWebinar(input) {
+    const deck = normalizeImportedDeck(input);
+    return runTransaction(connectionPool, async connection => {
+      await findActiveOwner(connection, deck.primaryOwnerUserId);
+      const [existing] = await connection.query('SELECT id FROM webinar_presentations WHERE slug = ? LIMIT 1', [deck.slug]);
+      if (existing[0]) throw new WebinarMutationError('WEBINAR_SLUG_EXISTS', 'A webinar with this slug already exists', { status: 409 });
+      const candidate = { masterHtml: deck.masterHtml, masterCss: deck.masterCss, slides: deck.slides };
+      const resourcePolicy = validationPolicy();
+      await candidateValidator(candidate, resourcePolicy);
+      const admissionPolicy = captureAdmissionPolicy(resourcePolicy);
+      const [created] = await connection.query(
+        `INSERT INTO webinar_presentations
+           (slug, title, primary_owner_user_id, master_html, master_css, audience_enabled, created_by_user_id, updated_by_user_id)
+         VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+        [deck.slug, deck.title, deck.primaryOwnerUserId, candidate.masterHtml, candidate.masterCss, deck.actorUserId, deck.actorUserId],
+      );
+      const webinarId = Number(created.insertId);
+      candidate.webinarId = webinarId;
+      for (const slide of candidate.slides) {
+        await connection.query(
+          `INSERT INTO webinar_slides
+             (id, webinar_id, position, anchor, title, target_seconds, speaker_notes, html, css, javascript, created_by_user_id, updated_by_user_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [slide.id, webinarId, slide.position, slide.anchor, slide.title, slide.targetSeconds, slide.speakerNotes, slide.html, slide.css, slide.javascript, deck.actorUserId, deck.actorUserId],
+        );
+      }
+      const { assetVersionIds = [] } = await syncAssetReferences(connection, candidate);
+      const snapshot = await buildCompleteSnapshot(connection, webinarId, { admissionPolicy });
+      const snapshotAssetVersionIds = assetVersionIdsFromSnapshot(snapshot);
+      assertExactAssetDependencies(assetVersionIds, snapshotAssetVersionIds);
+      const revisionId = await insertRevision(connection, { webinarId, liveVersion: 1, snapshot, changeType: 'webinar_imported', changeSummary: 'Imported webinar', actorUserId: deck.actorUserId });
+      await recordRevisionAssetReferences(connection, revisionId, snapshotAssetVersionIds);
+      await connection.query('UPDATE webinar_presentations SET live_version = 1, updated_by_user_id = ? WHERE id = ?', [deck.actorUserId, webinarId]);
+      await recordAuditEvent(connection, { webinarId, actorUserId: deck.actorUserId, eventType: 'webinar_imported', targetType: 'webinar', targetId: webinarId, metadata: { liveVersion: 1 } });
+      const current = await readCurrentMetadata(connection, webinarId);
+      return resultFor(current);
+    });
+  }
+
   async function metadataMutation(input, action) {
     return runTransaction(connectionPool, async connection => {
       const webinar = await lockWebinar(connection, input.webinarId);
@@ -485,7 +563,7 @@ function createMutationService({
     });
   }
 
-  return { createWebinar, archiveWebinar, saveMaster, addSlide, duplicateSlide, saveSlide, reorderSlides, archiveSlide, restoreRevision, changeOwner, changeAudienceAccess };
+  return { createWebinar, importWebinar, archiveWebinar, saveMaster, addSlide, duplicateSlide, saveSlide, reorderSlides, archiveSlide, restoreRevision, changeOwner, changeAudienceAccess };
 }
 
 module.exports = {

@@ -107,6 +107,7 @@ function statefulMutationModel(initial) {
         return [db.slides.filter(slide => params.includes(slide.id)).map(slide => ({ id: slide.id, webinar_id: slide.webinar_id }))];
       }
       if (sql.includes('SELECT slug, title, master_html')) return [[presentation(params[0])].filter(Boolean)];
+      if (sql.includes('FROM webinar_presentations WHERE slug = ?')) return [db.presentations.filter(row => row.slug === params[0]).map(row => ({ id: row.id }))];
       if (sql.includes('SELECT id, live_version, updated_at')) return [[presentation(params[0])].filter(Boolean)];
       if (sql.includes('FROM webinar_presentations') && sql.includes('WHERE id = ?')) return [[presentation(params[0])].filter(Boolean)];
       if (sql.includes('FROM webinar_slides') && sql.includes('ORDER BY position')) {
@@ -878,5 +879,97 @@ describe('Webinar Studio live mutations', () => {
     await expect(api.changeAudienceAccess({ webinarId: 2, enabled: true, actorUserId: 1 })).resolves.toMatchObject({ liveVersion: 4, audienceEnabled: true, updatedAt: '2026-09-03T10:01:00.000Z' });
     expect(calls).not.toContain('revision:5');
     expect(audit).toHaveBeenCalledTimes(2);
+  });
+
+  describe('importWebinar', () => {
+    const importedDeck = (overrides = {}) => ({
+      slug: 'first-home-without-mystery',
+      title: 'Your first home, without the mystery.',
+      primaryOwnerUserId: 7,
+      actorUserId: 1,
+      masterHtml: '<div class="slide-scaler">{{SLIDE_CONTENT}}</div>',
+      masterCss: '.slide { color: navy; }',
+      slides: [
+        { id: stableId, anchor: 'opening', title: 'Opening', targetSeconds: 120, speakerNotes: 'Welcome.', html: '<section>One</section>', css: '', javascript: '' },
+        { id: secondId, anchor: 'wrap', title: 'Wrap', targetSeconds: 90, speakerNotes: 'Thank you.', html: '<section>Two</section>', css: '', javascript: 'window.done = true;' },
+      ],
+      ...overrides,
+    });
+    const emptyModel = () => statefulMutationModel({ users: [{ id: 7, name: 'Owner', is_active: 1 }], presentations: [], slides: [], revisions: [], audit: [], nextPresentationId: 20, nextRevisionId: 90 });
+
+    it('creates the whole deck, audience-disabled, as revision one in one transaction', async () => {
+      const model = emptyModel();
+      const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+      await expect(api.importWebinar(importedDeck()))
+        .resolves.toMatchObject({ webinarId: 20, liveVersion: 1, audienceEnabled: false, primaryOwnerUserId: 7 });
+
+      const state = model.committed();
+      expect(state.presentations).toEqual([expect.objectContaining({
+        id: 20, slug: 'first-home-without-mystery', audience_enabled: 0, live_version: 1,
+        master_html: '<div class="slide-scaler">{{SLIDE_CONTENT}}</div>', master_css: '.slide { color: navy; }',
+      })]);
+      expect(state.slides).toEqual([
+        expect.objectContaining({ id: stableId, webinar_id: 20, position: 0, anchor: 'opening', target_seconds: 120, speaker_notes: 'Welcome.' }),
+        expect.objectContaining({ id: secondId, webinar_id: 20, position: 1, anchor: 'wrap', javascript: 'window.done = true;' }),
+      ]);
+      expect(state.revisions).toHaveLength(1);
+      expect(state.revisions[0]).toMatchObject({ webinar_id: 20, version: 1, change_type: 'webinar_imported', created_by_user_id: 1 });
+      expect(JSON.parse(state.revisions[0].snapshot).slides.map(slide => slide.id)).toEqual([stableId, secondId]);
+      expect(state.audit).toEqual([expect.objectContaining({ eventType: 'webinar_imported', webinarId: 20, metadata: { liveVersion: 1 } })]);
+      expect(model.calls).toEqual(['begin', 'commit']);
+    });
+
+    it('refuses a slug that already exists and writes nothing', async () => {
+      const model = emptyModel();
+      const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+      await api.importWebinar(importedDeck());
+
+      await expect(api.importWebinar(importedDeck({ slides: [{ ...importedDeck().slides[0], id: assetVersionId }] })))
+        .rejects.toMatchObject({ code: 'WEBINAR_SLUG_EXISTS', status: 409 });
+      expect(model.committed().presentations).toHaveLength(1);
+      expect(model.committed().slides).toHaveLength(2);
+      expect(model.calls).toEqual(['begin', 'commit', 'begin', 'rollback']);
+    });
+
+    it('validates the whole candidate before any write', async () => {
+      const model = emptyModel();
+      const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+      await expect(api.importWebinar(importedDeck({ masterHtml: '<main>no mount</main>' })))
+        .rejects.toMatchObject({ code: 'CONTENT_VALIDATION_FAILED' });
+      expect(model.committed()).toMatchObject({ presentations: [], slides: [], revisions: [], audit: [] });
+    });
+
+    it.each([
+      ['no slides', { slides: [] }],
+      ['a repeated anchor', { slides: [importedDeck().slides[0], { ...importedDeck().slides[1], anchor: 'opening' }] }],
+      ['a repeated slide id', { slides: [importedDeck().slides[0], { ...importedDeck().slides[1], id: stableId }] }],
+      ['a slide id that is not a UUID', { slides: [{ ...importedDeck().slides[0], id: 'slide-one' }] }],
+      ['an empty title', { slides: [{ ...importedDeck().slides[0], title: '   ' }] }],
+      ['an invalid slug', { slug: 'First Home' }],
+    ])('rejects a deck with %s', async (_name, overrides) => {
+      const model = emptyModel();
+      const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+      await expect(api.importWebinar(importedDeck(overrides))).rejects.toMatchObject({ code: 'IMPORT_INPUT_INVALID', status: 400 });
+      expect(model.committed().presentations).toEqual([]);
+    });
+
+    it('requires an active owner', async () => {
+      const model = statefulMutationModel({ users: [{ id: 7, name: 'Owner', is_active: 0 }], presentations: [], slides: [], revisions: [], audit: [], nextPresentationId: 20, nextRevisionId: 90 });
+      const api = createMutationService({ db: model.db, recordAuditEvent: model.audit });
+
+      await expect(api.importWebinar(importedDeck())).rejects.toMatchObject({ code: 'OWNER_NOT_ACTIVE' });
+      expect(model.committed().presentations).toEqual([]);
+    });
+
+    it('rolls the whole deck back when the audit write fails', async () => {
+      const model = emptyModel();
+      const api = createMutationService({ db: model.db, recordAuditEvent: vi.fn().mockRejectedValue(new Error('audit failed')) });
+
+      await expect(api.importWebinar(importedDeck())).rejects.toThrow('audit failed');
+      expect(model.committed()).toMatchObject({ presentations: [], slides: [], revisions: [] });
+    });
   });
 });
