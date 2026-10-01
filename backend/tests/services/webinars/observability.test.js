@@ -17,13 +17,18 @@ const EXPECTED_CONTROLLED_REASON_CODES = [
   'ANCHOR_CONFLICT',
   'ANCHOR_FORMAT',
   'ASSET_AVAILABLE',
+  'ASSET_INSPECTION_BUSY',
   'ASSET_INSPECTION_REJECTED',
   'ASSET_LIBRARY_NOT_READY',
+  'ASSET_NOT_AVAILABLE',
+  'ASSET_NOT_FOUND',
   'ASSET_ORIGIN_NOT_CONFIGURED',
+  'ASSET_REFERENCE_INVALID',
   'ASSET_SCANNER_FAILURE',
   'ASSET_SCAN_PENDING',
   'ASSET_SCAN_REJECTED',
   'ASSET_TOKEN_INVALID',
+  'ASSET_TOKEN_FORMAT',
   'AUDIT_METADATA_FORBIDDEN',
   'AUDIT_METADATA_INVALID',
   'CONTENT_LIMIT_EXCEEDED',
@@ -36,6 +41,7 @@ const EXPECTED_CONTROLLED_REASON_CODES = [
   'FORBIDDEN_ATTRIBUTE',
   'FORBIDDEN_HTML',
   'JAVASCRIPT_SYNTAX',
+  'LAST_SLIDE_REQUIRED',
   'MALFORMED_JSON',
   'MASTER_TOKEN_COUNT',
   'NOTE_BODY_EMPTY',
@@ -60,6 +66,8 @@ const EXPECTED_CONTROLLED_REASON_CODES = [
   'SHORTCUT_BINDING_DUPLICATE',
   'SHORTCUT_BINDING_INVALID',
   'SHORTCUT_BINDING_RESERVED',
+  'SLIDE_RUNTIME_ERROR',
+  'SLIDE_STARTUP_TIMEOUT',
   'SLIDE_NOT_FOUND',
   'SLIDE_SET_MISMATCH',
   'TARGET_SECONDS_RANGE',
@@ -102,6 +110,10 @@ describe('Webinar Studio operational events', () => {
     expect(getControlledReasonCodeDefinition('ADMIN_ACCESS_REQUIRED')).toEqual({
       httpStatus: 403,
       eventName: 'webinar.authorization_denied',
+    });
+    expect(getControlledReasonCodeDefinition('LAST_SLIDE_REQUIRED')).toEqual({
+      httpStatus: 409,
+      eventName: 'webinar.version_conflict',
     });
     expect(getControlledReasonCodeDefinition('ANCHOR_CONFLICT')).toEqual({
       httpStatus: 409,

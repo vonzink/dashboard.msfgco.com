@@ -38,6 +38,7 @@ describe('GET /health', () => {
     expect(body.status).toBe('ok');
     expect(body.uptime).toBeGreaterThan(0);
     expect(body.timestamp).toBeTruthy();
+    expect(res.headers.get('set-cookie')).toBeNull();
   });
 
   it('returns 503 when DB is down', async () => {
@@ -71,7 +72,7 @@ function makeRequest(app, path) {
         .then(async (res) => {
           const body = await res.text();
           server.close();
-          resolve({ status: res.status, body });
+          resolve({ status: res.status, body, headers: res.headers });
         })
         .catch((err) => {
           server.close();

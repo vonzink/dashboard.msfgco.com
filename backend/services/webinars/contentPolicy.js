@@ -7,8 +7,24 @@ const ASSET_TOKEN = /^\{\{ASSET:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab]
 const ASSET_TOKEN_MARKER = /\{\{ASSET:/ig;
 const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
 const FORBIDDEN_ELEMENTS = new Set(['script', 'iframe', 'object', 'embed', 'form', 'base']);
+const RESERVED_ATTRIBUTES = new Set(['data-slide-mount']);
+const HTML_TEXT_ELEMENTS = new Set([
+  'iframe',
+  'noembed',
+  'noframes',
+  'plaintext',
+  'script',
+  'style',
+  'textarea',
+  'title',
+  'xmp',
+]);
+const SVG_HTML_INTEGRATION_POINTS = new Set(['desc', 'foreignobject', 'title']);
+const MATHML_TEXT_INTEGRATION_POINTS = new Set(['mi', 'mn', 'mo', 'ms', 'mtext']);
+const MATHML_TEXT_EXCEPTIONS = new Set(['malignmark', 'mglyph']);
 const URL_ATTRIBUTE = /(?:^|:)(?:href|src|action|formaction|poster|background|data|cite|longdesc|profile|codebase|manifest|ping)$/;
 const URL_CAPABLE_CSS_FUNCTION = /\b(url|image-set|-webkit-image-set|cross-fade|image|element)\s*\(/ig;
+const HTML_REPARSE_MULTIPLIER = 4;
 
 function freezeOrigins(value) {
   return Object.freeze(value);
@@ -79,46 +95,152 @@ function srcsetCandidates(value) {
   return value.split(',').map(candidate => candidate.trim().split(/\s+/)[0]).filter(Boolean);
 }
 
+function elementNamespace(context, name) {
+  if (context === 'svg' || context === 'mathml') return context;
+  if (context === 'mathml-text' && MATHML_TEXT_EXCEPTIONS.has(name)) return 'mathml';
+  if (name === 'svg') return 'svg';
+  if (name === 'math') return 'mathml';
+  return 'html';
+}
+
+function childParserContext(namespace, name, attributes) {
+  if (namespace === 'svg' && SVG_HTML_INTEGRATION_POINTS.has(name)) return 'html-data';
+  if (namespace === 'mathml' && MATHML_TEXT_INTEGRATION_POINTS.has(name)) return 'mathml-text';
+  if (namespace === 'mathml' && name === 'annotation-xml') {
+    const encoding = String(attributes.encoding || '').toLowerCase();
+    if (encoding === 'text/html' || encoding === 'application/xhtml+xml') return 'html-data';
+  }
+  if (namespace === 'html') return HTML_TEXT_ELEMENTS.has(name) ? 'html-text' : 'html-data';
+  return namespace;
+}
+
+// htmlparser2 consumes exact CDATA declarations in contexts where browsers use
+// a first-`>` bogus comment. Re-queue only the browser-exposed tail so the same
+// element, attribute, URL, and CSS policy is applied without executing markup.
+function browserExposedCdataTail(node, source, context) {
+  if (context !== 'html-data' && context !== 'mathml-text') return null;
+  if (!Number.isSafeInteger(node.startIndex) || !Number.isSafeInteger(node.endIndex)
+    || node.startIndex < 0 || node.endIndex < node.startIndex || node.endIndex >= source.length) {
+    return { unavailable: true };
+  }
+  const serialized = source.slice(node.startIndex, node.endIndex + 1);
+  if (serialized.startsWith('<!--')) return null;
+  const declarationStart = serialized.indexOf('<![CDATA[');
+  if (declarationStart < 0) return null;
+  if (declarationStart > 0) return { context, source: serialized };
+  const bogusCommentEnd = serialized.indexOf('>', declarationStart + '<![CDATA['.length);
+  if (bogusCommentEnd < 0 || bogusCommentEnd === serialized.length - 1) return null;
+  return { context, source: serialized.slice(bogusCommentEnd + 1) };
+}
+
+// htmlparser2 applies HTML RCDATA tokenization to every element named `title`,
+// regardless of namespace. Browsers instead treat an SVG `title` as an HTML
+// integration point, so its authored child source must be tokenized again in
+// HTML data state before the normal element/attribute/resource policy runs.
+function browserSvgTitleSource(node, source) {
+  const children = node.children;
+  if (!Array.isArray(children)) return { unavailable: true };
+  if (!children.length) return { source: '' };
+
+  let previousEnd = -1;
+  for (const child of children) {
+    if (!Number.isSafeInteger(child.startIndex) || !Number.isSafeInteger(child.endIndex)
+      || child.startIndex < 0 || child.endIndex < child.startIndex
+      || child.endIndex >= source.length || child.startIndex <= previousEnd) {
+      return { unavailable: true };
+    }
+    previousEnd = child.endIndex;
+  }
+  return {
+    source: source.slice(children[0].startIndex, children[children.length - 1].endIndex + 1),
+  };
+}
+
 function validateHtml(source, surface, resourcePolicy = loadResourcePolicy()) {
   const issues = [];
-  const document = parseDocument(source);
-  const stack = [...(document.children || [])].reverse();
-  while (stack.length) {
-    const node = stack.pop();
-    const children = node.children || [];
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      stack.push(children[index]);
-    }
-    if (node.type !== 'tag' && node.type !== 'script' && node.type !== 'style') continue;
+  const initialSource = String(source);
+  const pending = [{ context: 'html-data', source: initialSource }];
+  const parseBudget = Math.max(initialSource.length + 1_024, initialSource.length * HTML_REPARSE_MULTIPLIER);
+  let parsedCharacters = 0;
+  let pendingIndex = 0;
 
-    const name = String(node.name || '').toLowerCase();
-    const attributes = node.attribs || {};
-    if (FORBIDDEN_ELEMENTS.has(name) || (name === 'meta' && Object.prototype.hasOwnProperty.call(attributes, 'http-equiv'))) {
-      issues.push(issue('FORBIDDEN_HTML', surface, { element: name }));
+  while (pendingIndex < pending.length) {
+    const fragment = pending[pendingIndex];
+    pendingIndex += 1;
+    parsedCharacters += fragment.source.length;
+    if (parsedCharacters > parseBudget) {
+      issues.push(issue('FORBIDDEN_HTML', surface, { element: 'cdata' }));
+      break;
     }
-    for (const [attribute, rawValue] of Object.entries(attributes)) {
-      const attributeName = attribute.toLowerCase();
-      const value = String(rawValue || '');
-      if (attributeName.startsWith('on') || attributeName === 'srcdoc') {
-        issues.push(issue('FORBIDDEN_ATTRIBUTE', surface, { attribute: attributeName }));
+    const document = parseDocument(fragment.source, {
+      withEndIndices: true,
+      withStartIndices: true,
+    });
+    const stack = [...(document.children || [])]
+      .reverse()
+      .map(node => ({ context: fragment.context, node }));
+    while (stack.length) {
+      const current = stack.pop();
+      const { context, node } = current;
+      const isElement = node.type === 'tag' || node.type === 'script' || node.type === 'style';
+      if (!isElement) {
+        const exposed = browserExposedCdataTail(node, fragment.source, context);
+        if (exposed?.unavailable) {
+          issues.push(issue('FORBIDDEN_HTML', surface, { element: 'cdata' }));
+        } else if (exposed?.source) {
+          pending.push(exposed);
+        }
         continue;
       }
-      if (attributeName === 'style') {
-        issues.push(...validateCss(`x{${value}}`, surface, resourcePolicy).issues);
-        continue;
+
+      const name = String(node.name || '').toLowerCase();
+      const attributes = node.attribs || {};
+      const namespace = elementNamespace(context, name);
+      const childContext = childParserContext(namespace, name, attributes);
+      const children = node.children || [];
+      if (namespace === 'svg' && name === 'title') {
+        const exposed = browserSvgTitleSource(node, fragment.source);
+        if (exposed.unavailable) {
+          issues.push(issue('FORBIDDEN_HTML', surface, { element: 'title' }));
+        } else if (exposed.source) {
+          pending.push({ context: 'html-data', source: exposed.source });
+        }
+      } else {
+        for (let index = children.length - 1; index >= 0; index -= 1) {
+          stack.push({ context: childContext, node: children[index] });
+        }
       }
-      const allowedOrigins = allowedOriginsForElement(name, attributes, resourcePolicy);
-      const values = attributeName === 'srcset'
-        ? srcsetCandidates(value)
-        : URL_ATTRIBUTE.test(attributeName) ? [value] : [];
-      for (const candidate of values) {
-        const resource = resourceIssue(candidate, surface, resourcePolicy, allowedOrigins);
-        if (resource) issues.push(resource);
+      if (FORBIDDEN_ELEMENTS.has(name) || (name === 'meta' && Object.prototype.hasOwnProperty.call(attributes, 'http-equiv'))) {
+        issues.push(issue('FORBIDDEN_HTML', surface, { element: name }));
       }
-    }
-    if (name === 'style') {
-      const css = children.map(child => child.data || '').join('');
-      issues.push(...validateCss(css, surface, resourcePolicy).issues);
+      for (const [attribute, rawValue] of Object.entries(attributes)) {
+        const attributeName = attribute.toLowerCase();
+        const value = String(rawValue || '');
+        if (RESERVED_ATTRIBUTES.has(attributeName)) {
+          issues.push(issue('RESERVED_ATTRIBUTE', surface, { attribute: attributeName }));
+          continue;
+        }
+        if (attributeName.startsWith('on') || attributeName === 'srcdoc') {
+          issues.push(issue('FORBIDDEN_ATTRIBUTE', surface, { attribute: attributeName }));
+          continue;
+        }
+        if (attributeName === 'style') {
+          issues.push(...validateCss(`x{${value}}`, surface, resourcePolicy).issues);
+          continue;
+        }
+        const allowedOrigins = allowedOriginsForElement(name, attributes, resourcePolicy);
+        const values = attributeName === 'srcset'
+          ? srcsetCandidates(value)
+          : URL_ATTRIBUTE.test(attributeName) ? [value] : [];
+        for (const candidate of values) {
+          const resource = resourceIssue(candidate, surface, resourcePolicy, allowedOrigins);
+          if (resource) issues.push(resource);
+        }
+      }
+      if (name === 'style') {
+        const css = children.map(child => child.data || '').join('');
+        issues.push(...validateCss(css, surface, resourcePolicy).issues);
+      }
     }
   }
   return { issues };

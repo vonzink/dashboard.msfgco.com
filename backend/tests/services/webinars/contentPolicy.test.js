@@ -35,6 +35,158 @@ describe('webinar executable-content policy', () => {
     expect(validateSlideHtml('<script>go()</script>', policy).issues[0].code).toBe('FORBIDDEN_HTML');
   });
 
+  it('reserves the renderer mount attribute on Master and slide elements only', () => {
+    for (const html of [
+      '<main data-slide-mount>{{SLIDE_CONTENT}}</main>',
+      '<main DATA-SLIDE-MOUNT="owned">{{SLIDE_CONTENT}}</main>',
+    ]) {
+      expect(validateMasterHtml(html, policy).issues).toContainEqual(expect.objectContaining({
+        code: 'RESERVED_ATTRIBUTE',
+        surface: 'master_html',
+        attribute: 'data-slide-mount',
+      }));
+    }
+    for (const html of [
+      '<section data-slide-mount=owned></section>',
+      "<svg><g DaTa-SlIdE-MoUnT='owned'></g></svg>",
+    ]) {
+      expect(validateSlideHtml(html, policy).issues).toContainEqual(expect.objectContaining({
+        code: 'RESERVED_ATTRIBUTE',
+        surface: 'slide_html',
+        attribute: 'data-slide-mount',
+      }));
+    }
+
+    expect(validateSlideHtml([
+      '<p>data-slide-mount is documentation.</p>',
+      '<p title="data-slide-mount" data-slide-mountish>Safe values</p>',
+      '<!-- <div data-slide-mount>commented example</div> -->',
+      '<textarea><div data-slide-mount>raw text</div></textarea>',
+    ].join(''), policy).issues).toEqual([]);
+  });
+
+  it('matches browser CDATA handling across foreign-content integration boundaries', () => {
+    const hasReservedAttribute = result => result.issues.some(issue => (
+      issue.code === 'RESERVED_ATTRIBUTE' && issue.attribute === 'data-slide-mount'
+    ));
+    const safeForeignCdata = [
+      '<svg><![CDATA[marker > <g data-slide-mount>text</g>]]></svg>',
+      '<math><![CDATA[marker > <mrow data-slide-mount>text</mrow>]]></math>',
+      '<math><annotation-xml encoding="application/xml"><![CDATA[marker > <span data-slide-mount>text</span>]]></annotation-xml></math>',
+      '<title><![CDATA[marker > <span data-slide-mount>text</span>]]></title>',
+      '<!--[CDATA[marker > <span data-slide-mount>text</span>]]-->',
+      '<svg><title>prefix<!-- safe <![CDATA[marker > <div data-slide-mount></div>]]> --></title></svg>',
+    ];
+    const browserExposedMounts = [
+      '<div><![CDATA[marker > <span data-slide-mount></span>]]></div>',
+      '<svg><foreignObject><![CDATA[marker > <div data-slide-mount></div>]]></foreignObject></svg>',
+      '<svg><desc><![CDATA[marker > <div data-slide-mount></div>]]></desc></svg>',
+      '<svg><title><![CDATA[marker > <div data-slide-mount></div>]]></title></svg>',
+      '<svg><title>prefix<![CDATA[marker > <div data-slide-mount></div>]]></title></svg>',
+      ...['mi', 'mo', 'mn', 'ms', 'mtext'].map(tag => (
+        `<math><${tag}><![CDATA[marker > <span data-slide-mount></span>]]></${tag}></math>`
+      )),
+      '<math><annotation-xml encoding="text/html"><![CDATA[marker > <span data-slide-mount></span>]]></annotation-xml></math>',
+      '<math><annotation-xml encoding="APPLICATION/XHTML+XML"><![CDATA[marker > <span data-slide-mount></span>]]></annotation-xml></math>',
+      '<math><annotation-xml encoding="text/html">prefix<![CDATA[marker > <span data-slide-mount></span>]]></annotation-xml></math>',
+    ];
+
+    for (const fragment of safeForeignCdata) {
+      expect(hasReservedAttribute(validateMasterHtml(
+        `<main>${fragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ))).toBe(false);
+      expect(hasReservedAttribute(validateSlideHtml(fragment, policy))).toBe(false);
+    }
+    for (const fragment of browserExposedMounts) {
+      expect(hasReservedAttribute(validateMasterHtml(
+        `<main>${fragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ))).toBe(true);
+      expect(hasReservedAttribute(validateSlideHtml(fragment, policy))).toBe(true);
+    }
+
+    expect(validateSlideHtml(
+      '<svg><foreignObject><![CDATA[marker > <img src="#" onerror="go()">]]></foreignObject></svg>',
+      policy,
+    ).issues).toContainEqual(expect.objectContaining({
+      code: 'FORBIDDEN_ATTRIBUTE',
+      attribute: 'onerror',
+    }));
+  });
+
+  it('reprocesses SVG title source as HTML data before applying every HTML policy', () => {
+    const dangerousTitleMarkup = [
+      [
+        '<svg><title><!--safe--><![CDATA[x > <span data-slide-mount></span>]]></title></svg>',
+        { code: 'RESERVED_ATTRIBUTE', attribute: 'data-slide-mount' },
+      ],
+      [
+        '<svg><title><img src="#" onerror="go()"></title></svg>',
+        { code: 'FORBIDDEN_ATTRIBUTE', attribute: 'onerror' },
+      ],
+      [
+        '<svg><title><img src="https://network-canary.invalid/title.png"></title></svg>',
+        { code: 'RESOURCE_ORIGIN_FORBIDDEN' },
+      ],
+      [
+        '<svg><title><meta http-equiv="refresh" content="0;url=https://evil.example"></title></svg>',
+        { code: 'FORBIDDEN_HTML', element: 'meta' },
+      ],
+      [
+        '<svg><title><base href="https://evil.example/"></title></svg>',
+        { code: 'FORBIDDEN_HTML', element: 'base' },
+      ],
+      [
+        '<svg><title><script src="https://evil.example/runtime.js"></script></title></svg>',
+        { code: 'FORBIDDEN_HTML', element: 'script' },
+      ],
+      [
+        '<svg><title><style>@import "https://evil.example/title.css";</style></title></svg>',
+        { code: 'RESOURCE_ORIGIN_FORBIDDEN' },
+      ],
+      [
+        '<svg><title><link rel="stylesheet" href="https://evil.example/title.css"></title></svg>',
+        { code: 'RESOURCE_ORIGIN_FORBIDDEN' },
+      ],
+      [
+        '<svg><title><svg><title><img src="#" onerror="nested()"></title></svg></title></svg>',
+        { code: 'FORBIDDEN_ATTRIBUTE', attribute: 'onerror' },
+      ],
+      [
+        '<svg><title><math><mtext><img src="#" onerror="nested()"></mtext></math></title></svg>',
+        { code: 'FORBIDDEN_ATTRIBUTE', attribute: 'onerror' },
+      ],
+    ];
+
+    for (const [fragment, expectedIssue] of dangerousTitleMarkup) {
+      expect(validateMasterHtml(
+        `<main>${fragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ).issues).toContainEqual(expect.objectContaining({
+        surface: 'master_html',
+        ...expectedIssue,
+      }));
+      expect(validateSlideHtml(fragment, policy).issues).toContainEqual(expect.objectContaining({
+        surface: 'slide_html',
+        ...expectedIssue,
+      }));
+    }
+
+    for (const safeFragment of [
+      '<title><img src="#" onerror="text-only"></title>',
+      '<svg><g><![CDATA[<img src="https://evil.example/x" onerror="text-only">]]></g></svg>',
+      '<svg><title><!-- <img src="https://evil.example/x" onerror="text-only"> --><svg><g><![CDATA[<span data-slide-mount>text only</span>]]></g></svg></title></svg>',
+      '<p data-msfg-studio-parser-root>Author attribute is not reserved</p>',
+    ]) {
+      expect(validateMasterHtml(
+        `<main>${safeFragment}{{SLIDE_CONTENT}}</main>`,
+        policy,
+      ).issues).toEqual([]);
+      expect(validateSlideHtml(safeFragment, policy).issues).toEqual([]);
+    }
+  });
+
   it('parses CSS and JavaScript without executing them', () => {
     expect(validateCss('.slide { color: red;', 'slide_css').issues[0].surface).toBe('slide_css');
     expect(validateJavascript('const = 1').issues[0].code).toBe('JAVASCRIPT_SYNTAX');

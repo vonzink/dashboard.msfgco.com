@@ -107,6 +107,21 @@ describe('Webinar Studio revisions', () => {
     });
   });
 
+  it('derives the sorted immutable dependency set from snapshot tokens without rewriting source', () => {
+    vi.stubEnv('WEBINAR_ASSET_CDN_BASE_URL', 'https://assets.example');
+    const firstVersion = '33333333-3333-4333-8333-333333333333';
+    const secondVersion = '44444444-4444-4444-8444-444444444444';
+    const snapshot = versionedSnapshot();
+    snapshot.admissionPolicy.resourcePolicy.assetOrigin = 'https://assets.example';
+    snapshot.webinar.masterCss = `:root { --brand: url({{ASSET:${secondVersion}}}); }`;
+    snapshot.slides[0].html = `<img src="{{ASSET:${firstVersion}}}"><img src="{{ASSET:${firstVersion}}}">`;
+    const original = JSON.parse(JSON.stringify(snapshot));
+
+    const { assetVersionIdsFromSnapshot } = load();
+    expect(assetVersionIdsFromSnapshot(snapshot)).toEqual([firstVersion, secondVersion]);
+    expect(snapshot).toEqual(original);
+  });
+
   it('restores a versioned snapshot under its captured resource policy after routine configuration evolution', async () => {
     const snapshot = versionedSnapshot({ stylesheetOrigins: ['https://styles.old.example'] });
     snapshot.webinar.masterHtml = '<link rel="stylesheet" href="https://styles.old.example/theme.css"><main>{{SLIDE_CONTENT}}</main>';

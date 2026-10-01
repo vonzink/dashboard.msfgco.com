@@ -166,6 +166,56 @@ const ServerAPI = {
     // ========================================
     // REQUEST CORE
     // ========================================
+    _httpError(status, statusText, payload) {
+        var body = payload && typeof payload === "object" && !Array.isArray(payload)
+            ? payload
+            : {};
+        var message = typeof body.error === "string" && body.error
+            ? body.error
+            : statusText;
+        var error = new Error(message || "Request failed");
+        if (Number.isSafeInteger(status) && status >= 400 && status <= 599) {
+            error.status = status;
+        }
+
+        var code = body.code;
+        if (typeof code !== "string" || !/^[A-Z][A-Z0-9_]{0,63}$/.test(code)) {
+            return error;
+        }
+        error.code = code;
+
+        if (Number.isSafeInteger(body.currentVersion) && body.currentVersion > 0) {
+            error.currentVersion = body.currentVersion;
+        }
+        if (typeof body.updatedAt === "string"
+            && body.updatedAt.length > 0
+            && body.updatedAt.length <= 64) {
+            error.updatedAt = body.updatedAt;
+        }
+        var updater = body.updatedBy;
+        var updaterKeys = updater && typeof updater === "object" && !Array.isArray(updater)
+            ? Object.keys(updater)
+            : [];
+        var updaterDescriptors = updaterKeys.length === 2
+            ? Object.getOwnPropertyDescriptors(updater)
+            : {};
+        if (updater && typeof updater === "object" && !Array.isArray(updater)
+            && updaterKeys.length === 2
+            && updaterKeys.includes("id") && updaterKeys.includes("name")
+            && updaterDescriptors.id && Object.prototype.hasOwnProperty.call(updaterDescriptors.id, "value")
+            && updaterDescriptors.name && Object.prototype.hasOwnProperty.call(updaterDescriptors.name, "value")
+            && Number.isSafeInteger(updaterDescriptors.id.value) && updaterDescriptors.id.value > 0
+            && (updaterDescriptors.name.value === null
+                || (typeof updaterDescriptors.name.value === "string"
+                    && updaterDescriptors.name.value.length <= 255))) {
+            error.updatedBy = {
+                id: updaterDescriptors.id.value,
+                name: updaterDescriptors.name.value,
+            };
+        }
+        return error;
+    },
+
     async request(endpoint, options = {}) {
         // Proactive refresh: check expiry before sending to avoid 401 round-trip
         await this._ensureFreshToken();
@@ -215,13 +265,14 @@ const ServerAPI = {
                     });
                     clearTimeout(retryTimeoutId);
                     if (retryResponse.ok) {
+                        if (retryResponse.status === 204) return null;
                         return retryResponse.json();
                     }
                     // Retry also got non-200 — but it might be 403 (forbidden, not auth).
                     // Only clear auth if it's still 401.
                     if (retryResponse.status !== 401) {
                         var retryErr = await retryResponse.json().catch(() => ({}));
-                        throw new Error(retryErr.error || retryResponse.statusText);
+                        throw this._httpError(retryResponse.status, retryResponse.statusText, retryErr);
                     }
                 }
                 // Refresh failed or retry still 401 — redirect to login once
@@ -236,9 +287,10 @@ const ServerAPI = {
 
             if (!response.ok) {
                 const err = await response.json().catch(() => ({}));
-                throw new Error(err.error || response.statusText);
+                throw this._httpError(response.status, response.statusText, err);
             }
 
+            if (response.status === 204) return null;
             return response.json();
         } catch (err) {
             console.error(`API Error (${endpoint})`, err);
@@ -270,7 +322,22 @@ const ServerAPI = {
         });
     },
 
-    delete(endpoint) {
+    patch(endpoint, data) {
+        return this.request(endpoint, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+        });
+    },
+
+    delete(endpoint, data) {
+        if (data !== undefined) {
+            return this.request(endpoint, {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            });
+        }
         return this.request(endpoint, { method: "DELETE" });
     },
 

@@ -16,6 +16,7 @@ function authenticateFromHeader(req, _res, next) {
 
 let settings;
 let operationalLogger;
+let errorLogger;
 let server;
 
 beforeEach(async () => {
@@ -25,11 +26,14 @@ beforeEach(async () => {
     upsertSettings: vi.fn().mockResolvedValue({ shortcuts: {}, preferences: { theme: 'dark' } }),
   };
   operationalLogger = { info: vi.fn() };
+  errorLogger = { error: vi.fn() };
   const app = createApp({
+    webinarStudioAccessMiddleware: (_req, _res, next) => next(),
     webinarAuthenticate: authenticateFromHeader,
     webinarServices: { settings },
     webinarOperationalLogger: operationalLogger,
     webinarWriteLimit: 100,
+    errorLogger,
   });
   server = await new Promise(resolve => {
     const listener = app.listen(0, () => resolve(listener));
@@ -155,6 +159,7 @@ describe('presenter settings API through the production application factory', ()
       upsertSettings: vi.fn(),
     };
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: { settings: constructorlessSettings },
       webinarOperationalLogger: operationalLogger,
@@ -189,6 +194,7 @@ describe('presenter settings API through the production application factory', ()
       upsertSettings: vi.fn(),
     };
     const app = createApp({
+      webinarStudioAccessMiddleware: (_req, _res, next) => next(),
       webinarAuthenticate: authenticateFromHeader,
       webinarServices: { settings: constructorlessSettings },
       webinarOperationalLogger: operationalLogger,
@@ -208,5 +214,16 @@ describe('presenter settings API through the production application factory', ()
     });
     expect(JSON.stringify(operationalLogger.info.mock.calls))
       .not.toMatch(/SHORTCUT_ACTION_UNKNOWN|password|script/);
+  });
+});
+
+describe('unexpected presenter settings failures are logged for operators', () => {
+  it('logs the underlying error with the request method and path before answering 500', async () => {
+    const failure = new Error('ER_LOCK_WAIT_TIMEOUT');
+    settings.getSettings.mockRejectedValueOnce(failure);
+    const response = await request('GET', '/api/webinar-presenter-settings/me');
+    expect(response).toEqual({ status: 500, body: { error: 'Internal server error' } });
+    expect(errorLogger.error).toHaveBeenCalledTimes(1);
+    expect(errorLogger.error.mock.calls[0][0]).toMatchObject({ err: failure, method: 'GET', path: '/api/webinar-presenter-settings/me' });
   });
 });

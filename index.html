@@ -39,6 +39,7 @@
   <link rel="stylesheet" href="css/programs.css?v=20260410" />
   <link rel="stylesheet" href="css/animations.css?v=20260410" />
   <link rel="stylesheet" href="css/checklists.css?v=20260601b" />
+  <link rel="stylesheet" href="css/webinar-studio.css?v=20260905" />
 </head>
 
 <body>
@@ -302,6 +303,9 @@
               <div class="dropdown-header">Operations</div>
               <button type="button" class="dropdown-item" data-action="open-processing" data-type="title"><i class="fas fa-clipboard-check"></i> Processing</button>
               <button type="button" class="dropdown-item" data-action="open-notifications"><i class="fas fa-bell"></i> Notifications</button>
+              <button type="button" class="dropdown-item" id="webinarStudioLauncher" data-action="open-webinar-studio" hidden disabled>
+                <i class="fas fa-chalkboard-teacher"></i> Webinar Studio
+              </button>
             </div>
             <div class="dropdown-group">
               <div class="dropdown-header">More Tools</div>
@@ -1508,6 +1512,70 @@
 
   </main>
 
+  <section id="webinarStudioModal" class="investor-modal" role="dialog" aria-modal="true" aria-labelledby="wsTitle" aria-hidden="true" hidden>
+    <div class="ws-shell">
+      <header class="ws-header">
+        <div class="ws-heading">
+          <span class="ws-brand-mark" aria-hidden="true"></span>
+          <div>
+            <h2 id="wsTitle">Webinar Studio</h2>
+            <p id="wsStatus" role="status" aria-live="polite">Checking access</p>
+          </div>
+        </div>
+        <button type="button" id="wsClose" class="ws-icon-button" aria-label="Close Webinar Studio">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </header>
+
+      <div class="ws-mobile-picker">
+        <label for="wsDeckSelect">Webinar</label>
+        <select id="wsDeckSelect" aria-label="Choose a webinar"></select>
+      </div>
+
+      <div class="ws-layout">
+        <aside class="ws-decks" aria-label="Webinars">
+          <div class="ws-decks-heading">
+            <h3>Your webinars</h3>
+            <button type="button" id="wsNewWebinar" class="ws-new-button" hidden>
+              <i class="fas fa-plus" aria-hidden="true"></i> New webinar
+            </button>
+          </div>
+          <nav id="wsDeckList" aria-label="Webinar decks"></nav>
+        </aside>
+
+        <main id="wsWorkspace" class="ws-workspace" tabindex="-1">
+          <div id="wsWorkspaceContent">
+            <div class="ws-state"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i><p>Checking your Studio access...</p></div>
+          </div>
+          <section id="wsPreviewHost" class="ws-preview-host" aria-label="Slide preview" hidden>
+            <p class="ws-preview-caption" data-ws-preview-caption>Live preview of the slide you are editing or presenting, rendered in the same sandbox the audience sees.</p>
+          </section>
+        </main>
+
+        <aside id="wsSettings" class="ws-settings" aria-label="Webinar settings">
+          <div class="ws-launch-actions">
+            <button type="button" id="wsLaunchPresenter" class="ws-action-button" disabled>
+              <i class="fas fa-display" aria-hidden="true"></i> Presenter
+            </button>
+            <button type="button" id="wsLaunchAudience" class="ws-action-button ws-action-button-secondary" disabled>
+              <i class="fas fa-arrow-up-right-from-square" aria-hidden="true"></i> Launch audience
+            </button>
+          </div>
+          <div class="ws-settings-tabs" role="tablist" aria-label="Studio settings">
+            <button type="button" role="tab" aria-selected="true" aria-controls="wsSettingsPanel" data-ws-tab="presenter">Presenter</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="wsSettingsPanel" tabindex="-1" data-ws-tab="access">Users &amp; Access</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="wsSettingsPanel" tabindex="-1" data-ws-tab="code">Code</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="wsSettingsPanel" tabindex="-1" data-ws-tab="assets">Assets</button>
+            <button type="button" role="tab" aria-selected="false" aria-controls="wsSettingsPanel" tabindex="-1" data-ws-tab="history">History</button>
+          </div>
+          <div id="wsSettingsPanel" class="ws-settings-panel" role="tabpanel">
+            <p>Select a webinar to manage presenter settings.</p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
   <footer class="footer">
     <p>
       &copy; <span id="footerYear">2026</span> Mountain State Financial Group. All rights reserved.
@@ -1528,6 +1596,15 @@
   <script src="js/action-dispatcher.js?v=20260410"></script>
 
   <script src="js/api-server.js?v=20260410"></script>
+  <script src="js/webinar-studio/api.js?v=20260904"></script>
+  <script src="js/webinar-studio/state.js?v=20260904"></script>
+  <script src="js/webinar-studio/access-history.js?v=20260905"></script>
+  <script src="js/webinar-studio/assets.js?v=20260905"></script>
+  <script src="js/webinar-studio/preview.js?v=20260905"></script>
+  <script src="js/webinar-studio/editor.js?v=20260905"></script>
+  <script src="js/webinar-studio/presenter.js?v=20260905"></script>
+  <script src="js/webinar-studio/bridge.js?v=20260905"></script>
+  <script src="js/webinar-studio.js?v=20260905"></script>
   <script src="js/utils.js?v=20260410"></script>
   <script src="js/theme.js?v=20260410"></script>
   <script src="js/tables.js?v=20260410"></script>

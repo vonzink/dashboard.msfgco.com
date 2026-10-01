@@ -6,16 +6,24 @@ const defaultRepository = require('../services/webinars/repository');
 const defaultRevisions = require('../services/webinars/revisions');
 const defaultMutations = require('../services/webinars/mutations');
 const defaultNotes = require('../services/webinars/notes');
+const defaultAssetReferences = require('../services/webinarAssets/references');
 const {
   getControlledReasonCodeDefinition,
   recordOperationalEvent: defaultRecordOperationalEvent,
 } = require('../services/webinars/observability');
 const schemas = require('../validation/schemas/webinars');
+const defaultLogger = require('../lib/logger');
 
 const webinarIdSchema = z.coerce.number().int().positive();
 const revisionIdSchema = z.coerce.number().int().positive();
 const noteIdSchema = z.coerce.number().int().positive();
 const uuidSchema = z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+const CONTROLLED_ASSET_REFERENCE_ERRORS = Object.freeze({
+  ASSET_NOT_FOUND: Object.freeze({ status: 422, message: 'Asset version not found' }),
+  ASSET_NOT_AVAILABLE: Object.freeze({ status: 422, message: 'Asset version is not available' }),
+  ASSET_TOKEN_FORMAT: Object.freeze({ status: 422, message: 'Asset token is invalid' }),
+  ASSET_REFERENCE_INVALID: Object.freeze({ status: 400, message: 'Webinar asset reference is invalid' }),
+});
 
 function createWebinarsRouter({
   repository = defaultRepository,
@@ -23,6 +31,7 @@ function createWebinarsRouter({
   mutations = defaultMutations,
   notes = defaultNotes,
   recordOperationalEvent = defaultRecordOperationalEvent,
+  logger = defaultLogger,
 } = {}) {
   const router = express.Router();
   const trustedServiceErrorConstructors = [
@@ -34,6 +43,16 @@ function createWebinarsRouter({
 
   function isTrustedServiceError(error) {
     return trustedServiceErrorConstructors.some(ErrorType => error instanceof ErrorType);
+  }
+
+  /* The operational event is deliberately field-whitelisted, so the error
+     itself goes to the server log where an operator can read it. */
+  function logUnexpected(req, error) {
+    try {
+      logger.error({ err: error, requestId: req.id, method: req.method, path: req.originalUrl }, 'Webinar Studio request failed');
+    } catch {
+      // Logging must never change the response.
+    }
   }
 
   function recordDatabaseFailure(req) {
@@ -49,7 +68,8 @@ function createWebinarsRouter({
   }
 
   function asyncRoute(handler) {
-    return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(() => {
+    return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(error => {
+      logUnexpected(req, error);
       recordDatabaseFailure(req);
       res.status(500).json({ error: 'Internal server error' });
     });
@@ -131,6 +151,25 @@ function createWebinarsRouter({
   }
 
   function respondWithServiceError(req, res, error) {
+    const assetReferenceDefinition = error instanceof defaultAssetReferences.AssetReferenceError
+      ? CONTROLLED_ASSET_REFERENCE_ERRORS[error.code]
+      : null;
+    if (assetReferenceDefinition && error.status === assetReferenceDefinition.status) {
+      const fields = {
+        actorUserId: getUserId(req),
+        statusCode: assetReferenceDefinition.status,
+        reasonCode: error.code,
+      };
+      if (req.params.id && Number.isSafeInteger(Number(req.params.id)) && Number(req.params.id) > 0) {
+        fields.webinarId = Number(req.params.id);
+      }
+      recordOperationalEvent('webinar.validation_rejected', fields);
+      return res.status(assetReferenceDefinition.status).json({
+        error: assetReferenceDefinition.message,
+        code: error.code,
+      });
+    }
+
     const definition = getControlledReasonCodeDefinition(error.code);
     const controlled = isTrustedServiceError(error)
       && definition
@@ -138,6 +177,7 @@ function createWebinarsRouter({
       && definition.httpStatus === error.status
       && definition.eventName;
     if (!controlled) {
+      logUnexpected(req, error);
       recordDatabaseFailure(req);
       return res.status(500).json({ error: 'Internal server error' });
     }

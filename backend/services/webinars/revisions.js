@@ -9,6 +9,7 @@ const {
   validateMasterHtml,
   validateSlideHtml,
 } = require('./contentPolicy');
+const { collectSurfaceTokens } = require('../webinarAssets/tokens');
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ANCHOR = /^[a-z][a-z0-9-]{0,189}$/;
@@ -269,6 +270,18 @@ function assertCompleteSnapshot(snapshot, options) {
   return snapshot;
 }
 
+function assetVersionIdsFromSnapshot(snapshot, options) {
+  assertCompleteSnapshot(snapshot, options);
+  const candidate = {
+    masterHtml: snapshot.webinar.masterHtml,
+    masterCss: snapshot.webinar.masterCss,
+    slides: snapshot.slides,
+  };
+  return [...new Set(
+    collectSurfaceTokens(candidate).map(reference => reference.assetVersionId),
+  )].sort();
+}
+
 async function insertRevision(connection, { webinarId, liveVersion, snapshot, changeType, changeSummary, actorUserId }) {
   assertCompleteSnapshot(snapshot);
   const [result] = await connection.query(
@@ -328,6 +341,7 @@ module.exports = {
   CURRENT_ADMISSION_POLICY_VERSION,
   CURRENT_SCHEMA_VERSION,
   RevisionError,
+  assetVersionIdsFromSnapshot,
   assertCompleteSnapshot,
   buildCompleteSnapshot,
   captureAdmissionPolicy,

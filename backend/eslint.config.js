@@ -42,6 +42,12 @@ export default [
     },
   },
   {
+    files: ["eslint.config.js", "vitest*.config.js", "tests/**/*.test.js"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
+  {
     ignores: ["node_modules/", "*.bak", "*.bak.*"],
   },
 ];
