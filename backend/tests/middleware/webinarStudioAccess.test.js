@@ -2,7 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { createWebinarStudioAccess } = require('../../middleware/webinarStudioAccess');
+const {
+  createWebinarEditorWriteGate,
+  createWebinarStudioAccess,
+} = require('../../middleware/webinarStudioAccess');
 const { createApp } = require('../../server');
 
 function requestFor(dbUser) {
@@ -107,6 +110,94 @@ describe('Webinar Studio feature access', () => {
       'Invalid Webinar Studio access configuration',
     );
     expect(JSON.stringify(configurationLogger.error.mock.calls)).not.toMatch(/82|private@example\.com|owners-and-guests/);
+  });
+
+  it('allows every mapped user in everyone mode without querying assignments', async () => {
+    const database = { query: vi.fn().mockRejectedValue(new Error('must not query')) };
+    const gate = accessGate('everyone', { database });
+
+    await expect(runGate(gate, requestFor({ id: 1, role: 'admin' }))).resolves.toBe('next');
+    await expect(runGate(gate, requestFor({ id: 7, role: 'user' }))).resolves.toBe('next');
+    await expect(runGate(gate, requestFor({ id: '7', role: 'user' }))).resolves.toMatchObject({ status: 403 });
+    await expect(runGate(gate, requestFor(null))).resolves.toMatchObject({ status: 403 });
+    expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['admins', { id: 1, role: 'admin' }, false],
+    ['assigned', { id: 73, role: 'user' }, false],
+    ['everyone', { id: 7, role: 'user' }, true],
+  ])('annotates a granted request with the %s mode and whether reads are open', async (mode, user, readAll) => {
+    const gate = accessGate(mode, { database: { query: vi.fn().mockResolvedValue([[{ assigned: 1 }]]) } });
+    const request = requestFor(user);
+
+    await expect(runGate(gate, request)).resolves.toBe('next');
+    expect(request.webinarStudioAccess).toEqual({ mode, readAll });
+    expect(Object.isFrozen(request.webinarStudioAccess)).toBe(true);
+  });
+
+  it('never annotates a denied request', async () => {
+    const request = requestFor({ id: 7, role: 'user' });
+    await expect(runGate(accessGate('admins'), request)).resolves.toMatchObject({ status: 403 });
+    expect(request.webinarStudioAccess).toBeUndefined();
+  });
+});
+
+describe('Webinar Studio editor write gate', () => {
+  function writeGate(overrides = {}) {
+    return createWebinarEditorWriteGate({
+      database: { query: vi.fn().mockResolvedValue([[]]) },
+      ...overrides,
+    });
+  }
+
+  function granted(user, mode, method = 'POST') {
+    return { ...requestFor(user), method, webinarStudioAccess: Object.freeze({ mode, readAll: mode === 'everyone' }) };
+  }
+
+  it('lets reads through untouched in every mode', async () => {
+    const database = { query: vi.fn().mockRejectedValue(new Error('must not query')) };
+    const gate = writeGate({ database });
+    for (const method of ['GET', 'HEAD', 'OPTIONS']) {
+      await expect(runGate(gate, granted({ id: 7, role: 'user' }, 'everyone', method))).resolves.toBe('next');
+    }
+    expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('does not add work outside everyone mode because the feature gate already proved editorship', async () => {
+    const database = { query: vi.fn().mockRejectedValue(new Error('must not query')) };
+    const gate = writeGate({ database });
+    await expect(runGate(gate, granted({ id: 7, role: 'user' }, 'assigned'))).resolves.toBe('next');
+    await expect(runGate(gate, granted({ id: 7, role: 'user' }, 'admins'))).resolves.toBe('next');
+    expect(database.query).not.toHaveBeenCalled();
+  });
+
+  it('allows administrators and active primary owners to write in everyone mode', async () => {
+    const database = { query: vi.fn().mockResolvedValue([[{ assigned: 1 }]]) };
+    const gate = writeGate({ database });
+
+    await expect(runGate(gate, granted({ id: 1, role: 'admin' }, 'everyone'))).resolves.toBe('next');
+    expect(database.query).not.toHaveBeenCalled();
+    await expect(runGate(gate, granted({ id: 73, role: 'user' }, 'everyone', 'PATCH'))).resolves.toBe('next');
+    expect(database.query).toHaveBeenCalledWith(
+      'SELECT 1 FROM webinar_presentations WHERE primary_owner_user_id = ? AND archived_at IS NULL LIMIT 1',
+      [73],
+    );
+  });
+
+  it('refuses writes from readers, invalid identities, and requests the feature gate never saw', async () => {
+    const gate = writeGate();
+    const denied = { status: 403, body: { error: 'Webinar editor access required' } };
+
+    await expect(runGate(gate, granted({ id: 9, role: 'user' }, 'everyone'))).resolves.toEqual(denied);
+    await expect(runGate(gate, granted({ id: '9', role: 'user' }, 'everyone'))).resolves.toEqual(denied);
+    await expect(runGate(gate, { ...requestFor({ id: 1, role: 'admin' }), method: 'POST' })).resolves.toEqual(denied);
+  });
+
+  it('forwards assignment database failures to the shared error handler', async () => {
+    const error = new Error('database unavailable');
+    const gate = writeGate({ database: { query: vi.fn().mockRejectedValue(error) } });
+    await expect(runGate(gate, granted({ id: 7, role: 'user' }, 'everyone'))).resolves.toBe(error);
   });
 });
 

@@ -29,7 +29,7 @@
     'selectedSlideId',
     'conflict',
   ]);
-  const WEBINAR_KEYS = new Set(['id', 'slug', 'title', 'primaryOwnerUserId', 'audienceEnabled']);
+  const WEBINAR_KEYS = new Set(['id', 'slug', 'title', 'primaryOwnerUserId', 'audienceEnabled', 'canEdit']);
   const MASTER_KEYS = new Set(['html', 'css', 'dirtyFields']);
   const SLIDE_KEYS = new Set([...SLIDE_FIELDS, 'id', 'dirtyFields']);
   const CONFLICT_KEYS = new Set(['currentVersion', 'updatedAt', 'updatedBy']);
@@ -101,6 +101,7 @@
     assertString(state.webinar.title, 'Webinar title');
     assertPositiveInteger(state.webinar.primaryOwnerUserId, 'Primary owner user id');
     invariant(typeof state.webinar.audienceEnabled === 'boolean', 'audienceEnabled must be boolean');
+    invariant(typeof state.webinar.canEdit === 'boolean', 'canEdit must be boolean');
     assertLiveVersion(state.liveVersion);
     invariant(isPlainObject(state.master), 'Master state is required');
     assertExactKeys(state.master, MASTER_KEYS, 'Master state');
@@ -173,6 +174,8 @@
     assertString(document.title, 'Webinar title');
     assertPositiveInteger(document.primaryOwnerUserId, 'Primary owner user id');
     invariant(typeof document.audienceEnabled === 'boolean', 'audienceEnabled must be boolean');
+    // The server decides this; a document that does not say so is read only.
+    invariant(document.canEdit === undefined || typeof document.canEdit === 'boolean', 'canEdit must be boolean');
     assertLiveVersion(document.liveVersion);
     assertString(document.masterHtml, 'Master html');
     assertString(document.masterCss, 'Master css');
@@ -194,6 +197,7 @@
         title: document.title,
         primaryOwnerUserId: document.primaryOwnerUserId,
         audienceEnabled: document.audienceEnabled,
+        canEdit: document.canEdit === true,
       },
       liveVersion: document.liveVersion,
       master: {

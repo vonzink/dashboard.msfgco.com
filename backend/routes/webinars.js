@@ -1,7 +1,12 @@
 const express = require('express');
 const { z } = require('zod');
 const { getUserId, isAdmin } = require('../middleware/userContext');
-const { assertCanEdit, WebinarAccessError } = require('../services/webinars/authorization');
+const {
+  assertCanEdit,
+  assertCanRead,
+  canEditWebinar,
+  WebinarAccessError,
+} = require('../services/webinars/authorization');
 const defaultRepository = require('../services/webinars/repository');
 const defaultRevisions = require('../services/webinars/revisions');
 const defaultMutations = require('../services/webinars/mutations');
@@ -111,7 +116,9 @@ function createWebinarsRouter({
     return null;
   }
 
-  async function loadAuthorizedWebinar(req, res, { adminOnly = false } = {}) {
+  /* Every route needs edit rights unless it says otherwise: a read-only
+     route must opt in with access: 'read', so a new route fails closed. */
+  async function loadAuthorizedWebinar(req, res, { adminOnly = false, access = 'edit' } = {}) {
     const id = parseOrRespond(req, res, webinarIdSchema, req.params.id);
     if (id === null) return null;
     const webinar = await repository.getPrivateDocument(id);
@@ -129,9 +136,11 @@ function createWebinarsRouter({
       if (adminOnly && !isAdmin(req)) {
         throw new WebinarAccessError(403, 'ADMIN_ACCESS_REQUIRED', 'Admin access required');
       }
-      assertCanEdit(req, {
+      const ownership = {
         primary_owner_user_id: webinar.primaryOwnerUserId ?? webinar.primary_owner_user_id,
-      });
+      };
+      if (access === 'read') assertCanRead(req, ownership);
+      else assertCanEdit(req, ownership);
     } catch (error) {
       const definition = getControlledReasonCodeDefinition(error.code);
       const reasonCode = definition?.eventName === 'webinar.authorization_denied'
@@ -260,7 +269,7 @@ function createWebinarsRouter({
   }));
 
   router.get('/:id/history', asyncRoute(async (req, res) => {
-    const access = await loadAuthorizedWebinar(req, res);
+    const access = await loadAuthorizedWebinar(req, res, { access: 'read' });
     if (!access) return;
     try {
       res.json(await revisions.listHistory(access.id));
@@ -348,7 +357,7 @@ function createWebinarsRouter({
   }));
 
   router.get('/:id/notes', asyncRoute(async (req, res) => {
-    const access = await loadAuthorizedWebinar(req, res);
+    const access = await loadAuthorizedWebinar(req, res, { access: 'read' });
     if (!access) return;
     try {
       res.json(await notes.listNotes({
@@ -430,8 +439,13 @@ function createWebinarsRouter({
   }));
 
   router.get('/:id', asyncRoute(async (req, res) => {
-    const access = await loadAuthorizedWebinar(req, res);
-    if (access) res.json(access.webinar);
+    const access = await loadAuthorizedWebinar(req, res, { access: 'read' });
+    if (!access) return;
+    // The server decides who may edit; the client only uses this to render.
+    const canEdit = canEditWebinar(req, {
+      primary_owner_user_id: access.webinar.primaryOwnerUserId ?? access.webinar.primary_owner_user_id,
+    });
+    res.json({ ...access.webinar, canEdit });
   }));
 
   return router;

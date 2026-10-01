@@ -332,6 +332,19 @@
   font-size: var(--font-sm);
 }
 
+/* Read-only notices: the server said this user may look but not change. */
+#webinarStudioModal .ws-view-only,
+#webinarStudioModal [data-history-view-only],
+#webinarStudioModal [data-asset-upload-locked] {
+  margin: 0;
+  padding: 0.45rem 0.7rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+}
+
 #webinarStudioModal .ws-form-actions {
   display: flex;
   justify-content: flex-end;

@@ -12,6 +12,7 @@
   const FORBIDDEN_CSS = /@\s*import\b|(?:^|[^-\w])expression\s*\(|javascript\s*:/i;
   const MASTER_TOKEN = '{{SLIDE_CONTENT}}';
   const PREVIEW_DELAY_MS = 300;
+  const VIEW_ONLY_COPY = 'View only: the primary owner or an administrator can edit this webinar.';
   const MASTER_EDIT_FIELDS = Object.freeze(['html', 'css']);
   const SLIDE_EDIT_FIELDS = Object.freeze([
     'title',
@@ -128,6 +129,23 @@
       return getState();
     }
 
+    /* The server says whether this user may edit; the editor only renders
+       accordingly and refuses locally so a stale screen cannot post edits. */
+    function canEdit() {
+      return state()?.webinar?.canEdit === true;
+    }
+
+    function refuseEdit() {
+      editorError = VIEW_ONLY_COPY;
+      const errorNode = nodesFor('data-editor-error')[0];
+      if (errorNode) errorNode.textContent = editorError;
+      return false;
+    }
+
+    function readOnlyAttributes() {
+      return canEdit() ? {} : { readonly: '' };
+    }
+
     function invalidateInsertionTarget() {
       insertionBookmark = null;
       restoreInsertionOnRender = false;
@@ -193,7 +211,7 @@
     function captureInsertionTarget(target) {
       const descriptor = insertionDescriptor(target);
       const current = state();
-      if (!descriptor || !current || Number(current.webinar?.id) !== insertionContext.webinarId) return false;
+      if (!descriptor || !current || !canEdit() || Number(current.webinar?.id) !== insertionContext.webinarId) return false;
       const value = String(target.value ?? '');
       const start = Math.max(0, Math.min(value.length, Number(target.selectionStart) || 0));
       const end = Math.max(start, Math.min(value.length, Number(target.selectionEnd) || start));
@@ -230,7 +248,7 @@
 
     function getAssetInsertionTarget(expectedContext = insertionContext) {
       const bookmark = insertionBookmark;
-      if (!bookmarkIsCurrent(bookmark, expectedContext)) return null;
+      if (!canEdit() || !bookmarkIsCurrent(bookmark, expectedContext)) return null;
       return Object.freeze({
         webinarId: bookmark.webinarId,
         generation: bookmark.generation,
@@ -371,6 +389,7 @@
     }
 
     function updateInput(target) {
+      if (!canEdit()) return false;
       const current = state();
       const masterField = target.dataset?.masterField;
       const slideField = target.dataset?.slideField;
@@ -455,18 +474,23 @@
         createNode(document, 'span', { 'data-dirty-surface': 'master' }, current.master.dirtyFields.length ? 'Unsaved' : 'Live'));
       box.append(summary);
       const body = createNode(document, 'div', { class: 'ws-editor-box-body' });
+      const editable = canEdit();
       const html = textArea(document, {
         id: 'ws-master-html',
         'data-master-field': 'html',
         'aria-label': 'Master HTML',
+        ...readOnlyAttributes(),
       }, current.master.html);
       const css = textArea(document, {
         id: 'ws-master-css',
         'data-master-field': 'css',
         'aria-label': 'Master CSS',
+        ...readOnlyAttributes(),
       }, current.master.css);
-      const status = createNode(document, 'p', { 'data-preview-status': '', 'data-surface': 'master', role: 'status' }, 'Preview required before saving.');
-      const save = createNode(document, 'button', { type: 'button', 'data-save-master': '', disabled: true }, 'Save Live');
+      const status = createNode(document, 'p', { 'data-preview-status': '', 'data-surface': 'master', role: 'status' }, editable ? 'Preview required before saving.' : 'Live layout.');
+      const save = editable
+        ? createNode(document, 'button', { type: 'button', 'data-save-master': '', disabled: true }, 'Save Live')
+        : null;
       append(body, fieldLabel(document, 'Master HTML', html), fieldLabel(document, 'Master CSS', css), status, save);
       box.append(body);
       fragment.append(box);
@@ -480,6 +504,7 @@
           'data-slide-id': slide.id,
           'data-slide-field': field,
           'aria-label': label,
+          ...readOnlyAttributes(),
         }, slide[field])
         : createNode(document, 'input', {
           id: `ws-${slide.id}-${field}`,
@@ -488,6 +513,7 @@
           'data-slide-field': field,
           'aria-label': label,
           ...(field === 'targetSeconds' ? { min: 0, max: 7200, step: 1 } : {}),
+          ...readOnlyAttributes(),
         });
       if (field !== 'speakerNotes') input.value = String(slide[field]);
       return fieldLabel(document, label, input);
@@ -551,23 +577,27 @@
           'data-code-field': field,
           'data-slide-id': slide.id,
           'aria-label': `${slide.title} ${label}`,
+          ...readOnlyAttributes(),
         }, slide[field]));
         panels.append(panel);
       }
 
+      const editable = canEdit();
       const status = createNode(document, 'p', {
         'data-preview-status': '',
         'data-surface': slide.id,
         role: 'status',
-      }, 'Preview required before saving.');
+      }, editable ? 'Preview required before saving.' : 'Live slide.');
       const actions = createNode(document, 'div', { class: 'ws-slide-actions' });
-      append(actions,
-        createNode(document, 'button', { type: 'button', 'data-slide-up': '', 'data-slide-id': slide.id, disabled: position === 0 }, 'Move up'),
-        createNode(document, 'button', { type: 'button', 'data-slide-down': '', 'data-slide-id': slide.id, disabled: position === current.slideOrder.length - 1 }, 'Move down'),
-        createNode(document, 'button', { type: 'button', 'data-duplicate-slide': '', 'data-slide-id': slide.id }, 'Duplicate'),
-        createNode(document, 'button', { type: 'button', 'data-delete-slide': '', 'data-slide-id': slide.id, disabled: current.slideOrder.length === 1 }, 'Delete'),
-        createNode(document, 'button', { type: 'button', 'data-save-slide': '', 'data-slide-id': slide.id, disabled: true }, 'Save Live'));
-      append(body, metadata, tabList, panels, status, actions);
+      if (editable) {
+        append(actions,
+          createNode(document, 'button', { type: 'button', 'data-slide-up': '', 'data-slide-id': slide.id, disabled: position === 0 }, 'Move up'),
+          createNode(document, 'button', { type: 'button', 'data-slide-down': '', 'data-slide-id': slide.id, disabled: position === current.slideOrder.length - 1 }, 'Move down'),
+          createNode(document, 'button', { type: 'button', 'data-duplicate-slide': '', 'data-slide-id': slide.id }, 'Duplicate'),
+          createNode(document, 'button', { type: 'button', 'data-delete-slide': '', 'data-slide-id': slide.id, disabled: current.slideOrder.length === 1 }, 'Delete'),
+          createNode(document, 'button', { type: 'button', 'data-save-slide': '', 'data-slide-id': slide.id, disabled: true }, 'Save Live'));
+      }
+      append(body, metadata, tabList, panels, status, editable ? actions : null);
       box.append(body);
       fragment.append(box);
     }
@@ -577,10 +607,13 @@
       required(nextState, 'A Studio state is required');
       stateApi.hasUnsavedChanges(nextState);
       const fragment = document.createDocumentFragment();
+      const editable = nextState.webinar?.canEdit === true;
       const header = createNode(document, 'header', { class: 'ws-editor-header' });
       append(header,
         createNode(document, 'div', { 'data-live-version': '' }, `Live version ${nextState.liveVersion}`),
-        createNode(document, 'button', { type: 'button', 'data-add-slide': '' }, 'Add slide'));
+        editable
+          ? createNode(document, 'button', { type: 'button', 'data-add-slide': '' }, 'Add slide')
+          : createNode(document, 'p', { class: 'ws-view-only', 'data-view-only': '' }, VIEW_ONLY_COPY));
       fragment.append(header);
       const error = createNode(document, 'p', { 'data-editor-error': '', role: 'alert' }, editorError);
       fragment.append(error);
@@ -591,6 +624,10 @@
       updateSaveAvailability('master');
       nextState.slideOrder.forEach(updateSaveAvailability);
       restoreInsertionTarget();
+      // A reader never types, so the live slide is previewed for them once.
+      if (!editable && previewStates.get(surfaceKey(nextState.selectedSlideId)) === undefined) {
+        schedulePreview(nextState.selectedSlideId);
+      }
       return true;
     }
 
@@ -642,6 +679,7 @@
     }
 
     async function saveMaster() {
+      if (!canEdit()) return refuseEdit();
       const current = state();
       if (validationFor('master') || previewStates.get('master') !== 'ready') return false;
       try {
@@ -661,6 +699,7 @@
     }
 
     async function saveSlide(id) {
+      if (!canEdit()) return refuseEdit();
       const current = state();
       const slide = current.slidesById[id];
       if (!slide || validationFor(id) || previewStates.get(surfaceKey(id)) !== 'ready') return false;
@@ -694,6 +733,7 @@
     }
 
     async function addSlide() {
+      if (!canEdit()) return refuseEdit();
       const current = state();
       try {
         const response = await api.addSlide(current.webinar.id, {
@@ -717,6 +757,7 @@
     }
 
     async function duplicateSlide(id) {
+      if (!canEdit()) return refuseEdit();
       const current = state();
       if (!current.slidesById[id]) return false;
       try {
@@ -735,6 +776,7 @@
     }
 
     async function reorderSlides(ids) {
+      if (!canEdit()) return refuseEdit();
       const current = state();
       try {
         const response = await api.reorderSlides(current.webinar.id, {
@@ -752,6 +794,7 @@
     }
 
     async function deleteSlide(id) {
+      if (!canEdit()) return refuseEdit();
       const current = state();
       const slide = current.slidesById[id];
       if (!slide) return false;
@@ -865,7 +908,7 @@
       // Two-space Tab insertion belongs to Code textareas only. Every other
       // textarea sharing this root (speaker notes, asset forms) keeps native Tab.
       if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
-        || !insertionDescriptor(event.target)) return;
+        || !canEdit() || !insertionDescriptor(event.target)) return;
       event.preventDefault();
       const target = event.target;
       target.setRangeText('  ', target.selectionStart, target.selectionEnd, 'end');

@@ -385,13 +385,7 @@
     const summary = model.webinars.find(webinar => webinar.id === webinarId);
     if (summary && summary.liveVersion === current.liveVersion && summary.title === current.webinar.title
       && summary.audienceEnabled === current.webinar.audienceEnabled) return;
-    model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
-      id: webinarId,
-      slug: current.webinar.slug,
-      title: current.webinar.title,
-      liveVersion: current.liveVersion,
-      audienceEnabled: current.webinar.audienceEnabled,
-    } : webinar);
+    model.webinars = model.webinars.map(webinar => (webinar.id === webinarId ? summaryFromState(webinarId, current) : webinar));
     renderDecks();
     renderStatusLine();
   }
@@ -531,7 +525,32 @@
         title: String(item.title || 'Untitled webinar'),
         liveVersion: Number(item.liveVersion || 1),
         audienceEnabled: item.audienceEnabled === true,
+        primaryOwnerUserId: Number.isSafeInteger(Number(item.primaryOwnerUserId)) && Number(item.primaryOwnerUserId) > 0
+          ? Number(item.primaryOwnerUserId)
+          : null,
       }));
+  }
+
+  /* Every place that rebuilds a list entry from loaded state goes through
+     here, so a summary field (like the owner) cannot be dropped by one site. */
+  function summaryFromState(webinarId, studioState) {
+    return {
+      id: webinarId,
+      slug: studioState.webinar.slug,
+      title: studioState.webinar.title,
+      liveVersion: studioState.liveVersion,
+      audienceEnabled: studioState.webinar.audienceEnabled,
+      primaryOwnerUserId: studioState.webinar.primaryOwnerUserId,
+    };
+  }
+
+  /* Editors may add to the shared asset library: administrators and anyone
+     who owns a webinar in the list. The server enforces the same rule. */
+  function canManageAssets() {
+    if (isAdmin()) return true;
+    const userId = Number(currentUser()?.id);
+    return Number.isSafeInteger(userId) && userId > 0
+      && model.webinars.some(webinar => webinar.primaryOwnerUserId === userId);
   }
 
   function bindElements() {
@@ -818,13 +837,7 @@
       if (nextState.webinar.audienceEnabled !== true) dropAudienceBridge();
       model.resourcePolicy = documentResponse.resourcePolicy || {};
       model.resolvedAssets = documentResponse.assets || {};
-      model.webinars = model.webinars.map(webinar => webinar.id === webinarId ? {
-        id: webinarId,
-        slug: nextState.webinar.slug,
-        title: nextState.webinar.title,
-        liveVersion: nextState.liveVersion,
-        audienceEnabled: nextState.webinar.audienceEnabled,
-      } : webinar);
+      model.webinars = model.webinars.map(webinar => (webinar.id === webinarId ? summaryFromState(webinarId, nextState) : webinar));
       model.mode = 'deck';
       render();
       return true;
@@ -922,15 +935,17 @@
       workspaceContent().innerHTML = `
         <section class="ws-workspace-intro">
           <h3>${escapeHtml(webinar.title)}</h3>
-          <p>Edit in the Code tab; the live preview renders below as you type and stays private until you Save Live.</p>
+          <p>${webinar.canEdit
+    ? 'Edit in the Code tab; the live preview renders below as you type and stays private until you Save Live.'
+    : 'View only. The primary owner or an administrator can edit this webinar; the Code tab shows the live deck.'}</p>
           <div class="ws-version-line"><span class="ws-live-dot" aria-hidden="true"></span><strong>Live version ${model.studioState.liveVersion}</strong><span>${webinar.audienceEnabled ? 'Audience enabled' : 'Audience off'}</span></div>
         </section>`;
       return;
     }
     if (!model.webinars.length) {
       renderState(
-        isAdmin() ? 'No webinars yet' : 'No webinars are assigned to you',
-        isAdmin() ? 'Create the first webinar to begin.' : 'An administrator can assign you as the primary owner.',
+        'No webinars yet',
+        isAdmin() ? 'Create the first webinar to begin.' : 'An administrator can create the first webinar.',
         'fa-chalkboard',
       );
       return;
@@ -1040,13 +1055,7 @@
       if (!requestIsCurrent(request) || model.mode !== 'new') return { ok: false, cancelled: true };
       if (Number(documentResponse?.id) !== webinarId) throw new TypeError('The created webinar could not be verified');
       const nextState = stateApi.createStudioState(documentResponse);
-      model.webinars = [{
-        id: webinarId,
-        slug: nextState.webinar.slug,
-        title: nextState.webinar.title,
-        liveVersion: nextState.liveVersion,
-        audienceEnabled: nextState.webinar.audienceEnabled,
-      }, ...model.webinars];
+      model.webinars = [summaryFromState(webinarId, nextState), ...model.webinars];
       model.studioState = nextState;
       model.resourcePolicy = documentResponse.resourcePolicy || {};
       model.resolvedAssets = documentResponse.assets || {};
@@ -1118,6 +1127,7 @@
         state: model.studioState,
         getState: () => model.studioState,
         isAdmin: isAdmin(),
+        canEdit: model.studioState.webinar.canEdit === true,
         currentUser: currentUser() || {},
         hasUnsavedChanges: () => Boolean(model.studioState && stateApi.hasUnsavedChanges(model.studioState)),
         reload: () => reloadSelectedWebinar(webinarId),
@@ -1145,6 +1155,7 @@
       void assetController.renderAssetCatalog({
         root: elements.settingsPanel,
         isAdmin: isAdmin(),
+        canManageAssets: canManageAssets(),
         currentUser: currentUser() || {},
         getEditorTarget: () => editorController?.getAssetInsertionTarget?.({
           webinarId,

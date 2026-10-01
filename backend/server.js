@@ -10,7 +10,10 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
 const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
-const { requireWebinarStudioAccess: defaultWebinarStudioAccess } = require('./middleware/webinarStudioAccess');
+const {
+  requireWebinarEditorForWrites: defaultWebinarEditorWriteGate,
+  requireWebinarStudioAccess: defaultWebinarStudioAccess,
+} = require('./middleware/webinarStudioAccess');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
 const {
@@ -135,6 +138,7 @@ function createApp({
   publicWebinarRuntimeLimit = 60,
   generalWriteLimit = 200,
   webinarStudioAccessMiddleware = defaultWebinarStudioAccess,
+  webinarEditorWriteGate = defaultWebinarEditorWriteGate,
   accessLogger = logger,
   errorLogger = logger,
   inboxAuthenticate = authenticate,
@@ -503,7 +507,9 @@ app.get('/api/me', authenticate, (req, res) => {
 // check is intentionally scoped here and does not change existing route access.
 app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarsRoutes);
 app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarPresenterSettingsRoutes);
-app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarAssetWriteLimiter, webinarAssetsRoutes);
+// The write limiter counts a denied editor write against its caller before
+// the gate spends a database query on it.
+app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarAssetWriteLimiter, webinarEditorWriteGate, webinarAssetsRoutes);
 app.use('/api/info-inbox', inboxAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, createInfoInboxRouter(inboxService));
 
 // Routes accessible to ALL authenticated users (including External)

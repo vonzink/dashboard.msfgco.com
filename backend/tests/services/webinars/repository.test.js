@@ -64,6 +64,24 @@ describe('Webinar Studio repository', () => {
     expect(db.query).toHaveBeenLastCalledWith(expect.not.stringContaining('primary_owner_user_id = ?'), []);
   });
 
+  it('lists every active webinar for a user the feature gate marked as a reader of everything', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const { listForRequest } = loadRepository();
+    const reader = { ...requestFor({ id: 7, role: 'user' }), webinarStudioAccess: Object.freeze({ mode: 'everyone', readAll: true }) };
+    await expect(listForRequest(reader)).resolves.toEqual([]);
+    expect(db.query).toHaveBeenLastCalledWith(expect.not.stringContaining('primary_owner_user_id = ?'), []);
+  });
+
+  it('keeps the owner predicate when the annotation does not open reads', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+
+    const { listForRequest } = loadRepository();
+    const assigned = { ...requestFor({ id: 7, role: 'user' }), webinarStudioAccess: Object.freeze({ mode: 'assigned', readAll: false }) };
+    await expect(listForRequest(assigned)).resolves.toEqual([]);
+    expect(db.query).toHaveBeenLastCalledWith(expect.stringContaining('primary_owner_user_id = ?'), [7]);
+  });
+
   it('maps a private document with ordered active slides and no private side-table reads', async () => {
     db.query
       .mockResolvedValueOnce([[

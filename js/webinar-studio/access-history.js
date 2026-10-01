@@ -110,6 +110,12 @@
       return context?.isAdmin === true;
     }
 
+    /* Restoring rewrites the live deck, so it follows the server's edit
+       decision for this webinar rather than Studio access alone. */
+    function canEdit() {
+      return isAdmin() || context?.canEdit === true;
+    }
+
     function currentState() {
       return (typeof context?.getState === 'function' ? context.getState() : null) || context?.state;
     }
@@ -277,6 +283,9 @@
         createNode(document, 'h3', {}, 'History'),
         createNode(document, 'p', {}, 'Restore a saved live version. History shows change details only; private source and presenter data stay out of this list.'),
       );
+      if (!canEdit()) {
+        append(container, createNode(document, 'p', { 'data-history-view-only': '' }, 'Only the primary owner or an administrator can restore a version.'));
+      }
       if (!history.length) {
         append(container, createNode(document, 'p', {}, 'No saved revisions are available.'));
       } else {
@@ -286,8 +295,10 @@
           const time = revision.createdAt.toLocaleString('en-US', {
             year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
           });
-          const restore = createNode(document, 'button', { type: 'button', 'data-restore-revision': revision.id }, `Restore version ${revision.version}`);
-          restore.addEventListener('click', () => { void restoreRevision(revision.id); });
+          const restore = canEdit()
+            ? createNode(document, 'button', { type: 'button', 'data-restore-revision': revision.id }, `Restore version ${revision.version}`)
+            : null;
+          restore?.addEventListener('click', () => { void restoreRevision(revision.id); });
           append(
             item,
             createNode(document, 'strong', {}, `Version ${revision.version}`),
@@ -447,6 +458,11 @@
 
     async function restoreRevision(revisionId) {
       if (!context) return { ok: false, error: 'Select a webinar first.' };
+      if (!canEdit()) {
+        errorMessage = 'Only the primary owner or an administrator can restore a version.';
+        rerender();
+        return { ok: false, error: errorMessage };
+      }
       const targetId = positiveInteger(revisionId);
       const revision = history.find(item => item.id === targetId);
       if (!revision) {

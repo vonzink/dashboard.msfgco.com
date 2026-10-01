@@ -1143,3 +1143,73 @@ describe('unexpected failures are logged for operators', () => {
     expect(errorLogger.error).not.toHaveBeenCalled();
   });
 });
+
+describe('everyone mode readers', () => {
+  const reader = identity(8);
+
+  function readAllAccess(req, _res, next) {
+    req.webinarStudioAccess = Object.freeze({ mode: 'everyone', readAll: true });
+    next();
+  }
+
+  beforeEach(async () => {
+    await new Promise(resolve => server.close(resolve));
+    const app = createApp({
+      webinarStudioAccessMiddleware: readAllAccess,
+      webinarAuthenticate: authenticateFromHeader,
+      webinarServices: services,
+      webinarOperationalLogger: operationalLogger,
+      webinarWriteLimit: 1000,
+      errorLogger,
+    });
+    server = await new Promise(resolve => {
+      const listener = app.listen(0, () => resolve(listener));
+    });
+  });
+
+  it.each(approvedRouteContracts())('lets a reader use only the read routes for $label', async (contract) => {
+    const { method, path, body, status, access, label } = contract;
+    const readRoute = ['list', 'get', 'history', 'list notes'].includes(label);
+    const expectedStatus = access === 'active-internal' || readRoute ? status : 403;
+    const response = await request(method, path, body, reader);
+    expect(response.status).toBe(expectedStatus);
+    if (expectedStatus === 403) {
+      const protectedActions = [
+        ...Object.values(services.mutations),
+        ...Object.values(services.notes),
+        ...Object.values(services.revisions),
+      ];
+      expect(protectedActions.every(mock => mock.mock.calls.length === 0)).toBe(true);
+      expect(response.body).toEqual(access === 'admin'
+        ? { error: 'Admin access required', code: 'ADMIN_ACCESS_REQUIRED' }
+        : { error: 'Webinar access denied', code: 'WEBINAR_ACCESS_DENIED' });
+    }
+  });
+
+  it('tells the client whether it may edit the document it just read', async () => {
+    await expect(request('GET', '/api/webinars/2', undefined, reader)).resolves.toMatchObject({
+      status: 200,
+      body: { id: 2, primaryOwnerUserId: 7, canEdit: false },
+    });
+    await expect(request('GET', '/api/webinars/2', undefined, identity(7))).resolves.toMatchObject({
+      status: 200,
+      body: { id: 2, canEdit: true },
+    });
+    await expect(request('GET', '/api/webinars/2', undefined, identity(1, 'admin'))).resolves.toMatchObject({
+      status: 200,
+      body: { id: 2, canEdit: true },
+    });
+  });
+
+  it('records a reader denial on a write route with the exact owner denial code', async () => {
+    const response = await request('PUT', '/api/webinars/2/master', validMaster, reader);
+    expect(response.status).toBe(403);
+    expectOneOperationalRecord(expect.objectContaining({
+      event: 'webinar.authorization_denied',
+      webinarId: 2,
+      actorUserId: 8,
+      statusCode: 403,
+      reasonCode: 'WEBINAR_ACCESS_DENIED',
+    }));
+  });
+});

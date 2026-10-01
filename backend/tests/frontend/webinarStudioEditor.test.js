@@ -17,6 +17,7 @@ function privateDocument() {
     slug: 'first-home',
     title: 'First Home',
     primaryOwnerUserId: 7,
+    canEdit: true,
     audienceEnabled: false,
     liveVersion: 7,
     masterHtml: '<main>{{SLIDE_CONTENT}}</main>',
@@ -744,5 +745,100 @@ describe('Webinar Studio conflict copy', () => {
     const test = await conflicted({ copyText: null });
     const status = await clickCopy(test);
     expect(status).toMatch(/could not copy/i);
+  });
+});
+
+describe('Webinar Studio editor for a reader', () => {
+  function readerHarness(options = {}) {
+    const test = makeHarness(options);
+    test.setState(stateApi.createStudioState({ ...privateDocument(), canEdit: false }));
+    return test;
+  }
+
+  it('renders the live deck without any way to change it', () => {
+    const test = readerHarness();
+    test.editor.render(test.state);
+
+    expect(test.root.querySelector('[data-view-only]')).not.toBeNull();
+    expect(test.root.querySelector('[data-view-only]').textContent).toMatch(/view only/i);
+    expect(test.root.querySelector('[data-add-slide]')).toBeNull();
+    expect(test.root.querySelector('[data-save-master]')).toBeNull();
+    expect(test.root.querySelectorAll('[data-save-slide]')).toHaveLength(0);
+    expect(test.root.querySelectorAll('[data-delete-slide]')).toHaveLength(0);
+    expect(test.root.querySelectorAll('[data-duplicate-slide]')).toHaveLength(0);
+    expect(test.root.querySelectorAll('[data-slide-up]')).toHaveLength(0);
+    const fields = [
+      ...test.root.querySelectorAll('[data-master-field]'),
+      ...test.root.querySelectorAll('[data-code-field]'),
+      ...test.root.querySelectorAll('[data-slide-field]'),
+    ];
+    expect(fields.length).toBeGreaterThan(0);
+    expect(fields.every(field => field.hasAttribute('readonly'))).toBe(true);
+    expect(test.root.querySelectorAll('.ws-slide-box')).toHaveLength(2);
+    expect(test.root.querySelectorAll('[role="tab"]')).toHaveLength(6);
+  });
+
+  it('previews the selected live slide once so a reader can see it, without preview on re-render', async () => {
+    const test = readerHarness();
+    test.editor.render(test.state);
+    expect(test.timers).toHaveLength(1);
+    expect(test.timers[0].delay).toBe(300);
+    test.timers[0].callback();
+    await Promise.resolve();
+    expect(test.preview.boot).toHaveBeenCalledTimes(1);
+    expect(test.preview.boot.mock.calls[0][0].slide.id).toBe(FIRST);
+
+    test.editor.render(test.state);
+    expect(test.timers).toHaveLength(1);
+  });
+
+  it('ignores typing and Tab insertion and never exposes an asset insertion target', () => {
+    const test = readerHarness();
+    test.editor.setContext({ webinarId: 12, generation: 0 });
+    test.editor.render(test.state);
+    const before = test.state;
+    const html = test.root.querySelector('[data-code-field="html"]');
+    html.value = '<h1>Changed</h1>';
+    html.emit('input');
+    expect(test.state).toBe(before);
+
+    html.focus();
+    html.emit('focusin');
+    expect(test.editor.getAssetInsertionTarget({ webinarId: 12, generation: 0 })).toBeNull();
+
+    const event = { key: 'Tab', target: html, preventDefault: vi.fn() };
+    test.root.emit('keydown', event);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(test.state).toBe(before);
+  });
+
+  it('refuses every mutation locally before any API call and says why', async () => {
+    const test = readerHarness();
+    test.editor.render(test.state);
+
+    await expect(test.editor.saveMaster()).resolves.toBe(false);
+    await expect(test.editor.saveSlide(FIRST)).resolves.toBe(false);
+    await expect(test.editor.addSlide()).resolves.toBe(false);
+    await expect(test.editor.duplicateSlide(FIRST)).resolves.toBe(false);
+    await expect(test.editor.reorderSlides([SECOND, FIRST])).resolves.toBe(false);
+    await expect(test.editor.deleteSlide(FIRST)).resolves.toBe(false);
+
+    for (const method of ['saveMaster', 'saveSlide', 'addSlide', 'reorderSlides', 'archiveSlide']) {
+      expect(test.api[method]).not.toHaveBeenCalled();
+    }
+    expect(test.confirm).not.toHaveBeenCalled();
+    expect(test.root.querySelector('[data-editor-error]').textContent).toMatch(/view only/i);
+  });
+
+  it('turns back into an editor when a reload says the user may now edit', () => {
+    const test = readerHarness();
+    test.editor.render(test.state);
+    expect(test.root.querySelector('[data-add-slide]')).toBeNull();
+
+    test.setState(stateApi.createStudioState({ ...privateDocument(), canEdit: true }));
+    test.editor.render(test.state);
+    expect(test.root.querySelector('[data-add-slide]')).not.toBeNull();
+    expect(test.root.querySelector('[data-view-only]')).toBeNull();
+    expect(test.root.querySelector('[data-master-field="html"]').hasAttribute('readonly')).toBe(false);
   });
 });
