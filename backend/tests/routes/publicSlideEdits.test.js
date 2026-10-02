@@ -157,6 +157,37 @@ describe('public slide edits', () => {
     expect((await put(`${base}/reverse-mortgages/_other`, body)).response.status).toBe(404);
   });
 
+  it('saves the deck\'s slide list (added and removed slides) under its reserved name', async () => {
+    await listen();
+    const body = { html: JSON.stringify({ order: ['opening', 'added-k3x9'], added: { 'added-k3x9': { from: 'opening', title: 'New' } }, removed: [] }), css: '', js: '' };
+    expect((await put(`${base}/reverse-mortgages/_slides`, body)).response.status).toBe(200);
+    expect(service.save).toHaveBeenCalledWith('reverse-mortgages', '_slides', body);
+    expect((await put(`${base}/reverse-mortgages/_slides`, body, 'nope')).response.status).toBe(401);
+  });
+
+  it('lists the webinars created in Webinar Studio, and creates one under its reserved name', async () => {
+    const created = [{ slug: 'first-time-buyers', title: 'First-time buyers', createdAt: '2026-10-01T12:00:00.000Z', updatedAt: '2026-10-01T12:00:00.000Z' }];
+    await listen({
+      service: {
+        listWebinars: vi.fn().mockResolvedValue(created),
+        listBySlug: vi.fn(),
+        save: vi.fn().mockResolvedValue(saved),
+        remove: vi.fn(),
+      },
+    });
+    for (const path of [base, `${base}/`]) {
+      const { response, json } = await request(path);
+      expect(response.status).toBe(200);
+      expect(json).toEqual({ webinars: created });
+      expect(response.headers.get('access-control-allow-origin')).toBe(publicOrigin);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+    }
+    const body = { html: JSON.stringify({ title: 'First-time buyers' }), css: '', js: '' };
+    expect((await put(`${base}/first-time-buyers/_webinar`, body)).response.status).toBe(200);
+    expect(service.save).toHaveBeenCalledWith('first-time-buyers', '_webinar', body);
+    expect((await put(`${base}/first-time-buyers/_webinar`, body, 'nope')).response.status).toBe(401);
+  });
+
   it('resets a slide with the right password', async () => {
     await listen();
     const { response } = await request(`${base}/reverse-mortgages/opening`, {

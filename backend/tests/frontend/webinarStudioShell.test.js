@@ -155,7 +155,13 @@ describe('Webinar Studio shell contracts', () => {
       ? readFileSync(resolve(root, 'css/webinar-studio.css'), 'utf8')
       : '';
 
-    expect(html).toContain('data-action="open-webinar-studio"');
+    // The Tools menu no longer offers the in-Dashboard studio; Marketing links
+    // to Webinar Studio on the webinar site instead. The shell itself stays.
+    expect(html).not.toContain('data-action="open-webinar-studio"');
+    expect(html).not.toContain('id="webinarStudioLauncher"');
+    expect(html).toContain('data-link-key="webinar_studio"');
+    expect(html).not.toContain('data-link-key="msfg_website"');
+    expect(readFileSync(resolve(root, 'js/config.js'), 'utf8')).toContain('webinar_studio: "https://msfgmortgage.com/webinars/studio/home.html"');
     expect(html).toContain('id="webinarStudioModal"');
     expect(html).toContain('id="wsDeckList"');
     expect(html).toContain('id="wsWorkspace"');
