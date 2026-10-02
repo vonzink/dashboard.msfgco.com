@@ -181,7 +181,9 @@
       linkedin: "https://www.linkedin.com/company/msfg-home-loans",
 
       keyword_explorer: "https://keywords.msfgco.com",
-      msfg_website: "https://msfgmortgage.com/",
+      // Webinar Studio on the webinar site: present, edit and create webinars.
+      // (Marketing menu. It replaced the in-Dashboard Webinar Studio launcher.)
+      webinar_studio: "https://msfgmortgage.com/webinars/studio/home.html",
 
       loan_calc_hub: "/calc/",
       docs_hub: "/docs/",

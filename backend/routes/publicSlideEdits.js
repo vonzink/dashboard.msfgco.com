@@ -78,6 +78,14 @@ function createPublicSlideEditsRouter({
     return next();
   });
 
+  router.get('/', async (req, res) => {
+    try {
+      res.json({ webinars: await edits.listWebinars() });
+    } catch (error) {
+      fail(req, res, error);
+    }
+  });
+
   router.get('/:slug', async (req, res) => {
     try {
       res.json({ slug: req.slideEditSlug, edits: await edits.listBySlug(req.slideEditSlug) });

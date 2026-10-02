@@ -62,6 +62,21 @@ describe('slide edits service', () => {
     expect(db.query).not.toHaveBeenCalled();
   });
 
+  it('lists created webinars with their titles, falling back to the slug', async () => {
+    const at = new Date('2026-10-01T12:00:00.000Z');
+    db.query.mockResolvedValueOnce([[
+      { slug: 'first-time-buyers', html: '{"title":"  First-time buyers "}', created_at: at, updated_at: at },
+      { slug: 'no-title', html: 'not json', created_at: at, updated_at: at },
+      { slug: 'odd-title', html: '{"title":7}', created_at: at, updated_at: at },
+    ]]);
+    const webinars = await edits.listWebinars();
+    expect(webinars.map(w => [w.slug, w.title])).toEqual([
+      ['first-time-buyers', 'First-time buyers'], ['no-title', 'no-title'], ['odd-title', 'odd-title'],
+    ]);
+    expect(webinars[0].createdAt).toBe('2026-10-01T12:00:00.000Z');
+    expect(db.query.mock.calls[0][1]).toEqual(['_webinar']);
+  });
+
   it('removes an edit and reports whether one existed', async () => {
     db.query.mockResolvedValueOnce([{ affectedRows: 1 }]).mockResolvedValueOnce([{ affectedRows: 0 }]);
     await expect(edits.remove('reverse-mortgages', 'opening')).resolves.toBe(true);
