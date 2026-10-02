@@ -157,6 +157,14 @@ describe('public slide edits', () => {
     expect((await put(`${base}/reverse-mortgages/_other`, body)).response.status).toBe(404);
   });
 
+  it('saves the deck\'s slide list (added and removed slides) under its reserved name', async () => {
+    await listen();
+    const body = { html: JSON.stringify({ order: ['opening', 'added-k3x9'], added: { 'added-k3x9': { from: 'opening', title: 'New' } }, removed: [] }), css: '', js: '' };
+    expect((await put(`${base}/reverse-mortgages/_slides`, body)).response.status).toBe(200);
+    expect(service.save).toHaveBeenCalledWith('reverse-mortgages', '_slides', body);
+    expect((await put(`${base}/reverse-mortgages/_slides`, body, 'nope')).response.status).toBe(401);
+  });
+
   it('resets a slide with the right password', async () => {
     await listen();
     const { response } = await request(`${base}/reverse-mortgages/opening`, {

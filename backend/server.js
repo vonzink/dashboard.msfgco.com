@@ -143,7 +143,7 @@ function createApp({
   publicWebinarOrigins,
   publicWebinarRuntimeLimit = 60,
   slideEditServices = {},
-  slideEditWriteLimit = 120,
+  slideEditWriteLimit = 300,
   generalWriteLimit = 200,
   webinarStudioAccessMiddleware = defaultWebinarStudioAccess,
   webinarEditorWriteGate = defaultWebinarEditorWriteGate,
@@ -278,7 +278,8 @@ const writeLimiter = rateLimit({
 app.use('/api/', writeLimiter);
 
 // Slide-edit saves are guarded only by a shared password, so they get their
-// own small per-IP budget: enough for an editing session, too few to guess.
+// own per-IP budget: enough for an editing session (adding a whole set of
+// slides is one write each, and every reorder is one more), too few to guess.
 const slideEditWriteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: slideEditWriteLimit,

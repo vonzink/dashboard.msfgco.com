@@ -1,13 +1,14 @@
 const crypto = require('crypto');
 const express = require('express');
-const { createSlideEditsService, MASTER_ID, SlideEditError } = require('../services/webinars/slideEdits');
+const { createSlideEditsService, RESERVED_IDS, SlideEditError } = require('../services/webinars/slideEdits');
 const { webinarSlug } = require('../validation/schemas/webinars');
 const defaultLogger = require('../lib/logger');
 
 // Saved slide edits for the static decks on msfgmortgage.com: per-slide HTML,
-// CSS and JS, plus one deck-wide Master CSS. Anyone may read them (the deck
-// applies them on load); saving and resetting need the shared presenter
-// password, which lives only in the server environment.
+// CSS and JS, plus one deck-wide Master CSS and the deck's slide list (added
+// and removed slides). Anyone may read them (the deck applies them on load);
+// saving and resetting need the shared presenter password, which lives only in
+// the server environment.
 
 const PASSWORD_HEADER = 'x-webinar-edit-password';
 
@@ -72,7 +73,7 @@ function createPublicSlideEditsRouter({
   });
 
   router.param('slideId', (req, res, next, value) => {
-    req.slideEditSlideId = value === MASTER_ID ? MASTER_ID : slugOf(value);
+    req.slideEditSlideId = RESERVED_IDS.includes(value) ? value : slugOf(value);
     if (!req.slideEditSlideId) return res.status(404).json({ error: 'Slide not found' });
     return next();
   });

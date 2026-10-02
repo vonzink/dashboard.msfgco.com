@@ -2,10 +2,14 @@ const db = require('../../db/connection');
 
 // Saved edits for the static webinar decks. A row holds one slide's HTML, its
 // own CSS and its own JS, for everyone; removing it restores the deck's
-// original. An empty html means "keep the deck's own markup". The row with
-// slide id MASTER_ID carries the deck-wide Master CSS.
+// original. An empty html means "keep the deck's own markup". Two reserved
+// rows belong to the deck rather than a slide: MASTER_ID carries the deck-wide
+// Master CSS, and SLIDE_LIST_ID carries the deck's slide list (which slides were
+// added or removed, and their order) as JSON text in its html column.
 
 const MASTER_ID = '_master';
+const SLIDE_LIST_ID = '_slides';
+const RESERVED_IDS = Object.freeze([MASTER_ID, SLIDE_LIST_ID]);
 const MAX_HTML_BYTES = 200 * 1024;
 const MAX_CSS_BYTES = 100 * 1024;
 const MAX_JS_BYTES = 100 * 1024;
@@ -87,6 +91,8 @@ module.exports = {
   MAX_CSS_BYTES,
   MAX_HTML_BYTES,
   MAX_JS_BYTES,
+  RESERVED_IDS,
+  SLIDE_LIST_ID,
   SlideEditError,
   createSlideEditsService,
 };
