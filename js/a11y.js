@@ -74,7 +74,25 @@
         button.setAttribute('aria-expanded', 'false');
         menu.setAttribute('hidden', '');
         item.classList.remove('is-open');
+        menu.style.left = '';
+        menu.style.right = '';
+        menu.classList.remove('is-shifted');
       });
+    };
+
+    // Open each menu from its button's left edge, then pull it back only as
+    // far as needed to stay inside the window. A wide menu near the end of
+    // the nav (Investors) otherwise runs off one edge or pins to the other.
+    const VIEWPORT_GUTTER = 16;
+    const placeMenu = (item, menu) => {
+      menu.style.left = '0px';
+      menu.style.right = 'auto';
+      const viewportRight = document.documentElement.clientWidth - VIEWPORT_GUTTER;
+      const overflow = menu.getBoundingClientRect().right - viewportRight;
+      const room = Math.max(0, item.getBoundingClientRect().left - VIEWPORT_GUTTER);
+      const shift = Math.max(0, Math.min(overflow, room));
+      menu.style.left = `${-shift}px`;
+      menu.classList.toggle('is-shifted', shift > 0);
     };
 
     const openMenu = (item) => {
@@ -87,6 +105,7 @@
       item.classList.add('is-open');
       button.setAttribute('aria-expanded', 'true');
       menu.removeAttribute('hidden');
+      placeMenu(item, menu);
 
       // Focus first menu item
       const first = menu.querySelector('a.dropdown-item, button.dropdown-item');
@@ -123,6 +142,14 @@
     // Close on outside click
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.nav-container')) closeAll();
+    });
+
+    // Keep an open menu inside the window when it is resized
+    window.addEventListener('resize', () => {
+      if (isMobile()) return;
+      const item = navItems.find((candidate) => candidate.classList.contains('is-open'));
+      const menu = item && item.querySelector('.dropdown-menu');
+      if (menu) placeMenu(item, menu);
     });
 
     // Keyboard support
