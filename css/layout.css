@@ -503,11 +503,11 @@
     white-space: nowrap;
 }
 
-/* The menus at the right edge open inward instead of leaving the viewport. */
-.main-nav > .nav-item:nth-last-child(-n + 2) > .dropdown-menu {
-    left: auto;
-    right: 0;
-    border-radius: var(--radius-lg) 0 var(--radius-lg) var(--radius-lg);
+/* A menu opens from its button's left edge; js/a11y.js pulls it back just far
+   enough to stay inside the viewport. Once shifted, its top-left corner no
+   longer meets the button, so it is rounded like the others. */
+.dropdown-menu.is-shifted {
+    border-radius: var(--radius-lg);
 }
 
 .nav-item.is-open .dropdown-menu {
