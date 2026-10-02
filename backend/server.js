@@ -19,6 +19,7 @@ const logger = require('./lib/logger');
 const {
   createSafeHttpLogger,
   hasInvalidPublicWebinarPathCasing,
+  isPublicSlideEditRequest,
   isPublicWebinarRequest,
   isPublicWebinarRuntimeRequest,
 } = require('./lib/httpLogging');
@@ -71,6 +72,7 @@ const { createWebinarsRouter } = require('./routes/webinars');
 const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
 const { createWebinarAssetsRouter } = require('./routes/webinarAssets');
 const { createPublicWebinarsRouter } = require('./routes/publicWebinars');
+const { createPublicSlideEditsRouter, PASSWORD_HEADER: SLIDE_EDIT_PASSWORD_HEADER } = require('./routes/publicSlideEdits');
 const { createInfoInboxRouter } = require('./routes/infoInbox');
 
 const PORT = process.env.PORT || 8080;
@@ -80,6 +82,10 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
 const PUBLIC_WEBINAR_ORIGIN = 'https://msfgmortgage.com';
 const PUBLIC_RUNTIME_EVENT_BYTES = 2 * 1024;
+const PUBLIC_SLIDE_EDIT_BYTES = 512 * 1024;
+// The webinar site answers on both hostnames, and a deck loads its saved slide
+// edits from whichever one the visitor used.
+const PUBLIC_SLIDE_EDIT_EXTRA_ORIGINS = Object.freeze(['https://www.msfgmortgage.com']);
 
 function exactOrigin(value) {
   if (typeof value !== 'string' || !value) return null;
@@ -136,6 +142,8 @@ function createApp({
   webinarAssetWriteLimit = 300,
   publicWebinarOrigins,
   publicWebinarRuntimeLimit = 60,
+  slideEditServices = {},
+  slideEditWriteLimit = 120,
   generalWriteLimit = 200,
   webinarStudioAccessMiddleware = defaultWebinarStudioAccess,
   webinarEditorWriteGate = defaultWebinarEditorWriteGate,
@@ -146,6 +154,7 @@ function createApp({
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
+const slideEditOrigins = [...new Set([...resolvedPublicWebinarOrigins, ...PUBLIC_SLIDE_EDIT_EXTRA_ORIGINS])];
 const webinarRecordOperationalEvent = webinarOperationalLogger
   ? createOperationalEventRecorder(webinarOperationalLogger)
   : recordOperationalEvent;
@@ -167,6 +176,10 @@ const webinarAssetsRoutes = createWebinarAssetsRouter({
 const publicWebinarsRoutes = createPublicWebinarsRouter({
   getLiveBundleBySlug: webinarServices.publicBundle?.getLiveBundleBySlug,
   recordOperationalEvent: webinarRecordOperationalEvent,
+  logger: errorLogger,
+});
+const publicSlideEditsRoutes = createPublicSlideEditsRouter({
+  ...slideEditServices,
   logger: errorLogger,
 });
 
@@ -199,7 +212,7 @@ app.use(helmet({
 // Public webinar reads have a separate, non-credentialed browser boundary.
 // Adding an audience origin here must never add it to private Dashboard routes.
 app.use((req, res, next) => {
-  if (isPublicWebinarRequest(req)) {
+  if (isPublicWebinarRequest(req) || isPublicSlideEditRequest(req)) {
     res.vary('Origin');
     if (req.method === 'OPTIONS') res.vary('Access-Control-Request-Headers');
   }
@@ -213,6 +226,17 @@ app.use(cors((req, callback) => {
       methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
       allowedHeaders: ['Content-Type'],
       preflightContinue: hasInvalidPublicWebinarPathCasing(req),
+    });
+    return;
+  }
+  // Saved slide edits for the static decks: the webinar site's origins, plus
+  // the write methods and the shared-password header the Presenter view sends.
+  if (isPublicSlideEditRequest(req)) {
+    callback(null, {
+      origin: corsOriginPolicy(slideEditOrigins, 'Public webinar origin not allowed'),
+      credentials: false,
+      methods: ['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', SLIDE_EDIT_PASSWORD_HEADER],
     });
     return;
   }
@@ -248,9 +272,23 @@ const writeLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || req.originalUrl.startsWith('/api/my-files')
     || isPublicWebinarRuntimeRequest(req)
+    || isPublicSlideEditRequest(req)
     || isWebinarStudioMutation(req),
 });
 app.use('/api/', writeLimiter);
+
+// Slide-edit saves are guarded only by a shared password, so they get their
+// own small per-IP budget: enough for an editing session, too few to guess.
+const slideEditWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: slideEditWriteLimit,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many slide edit requests, please slow down' },
+  skip: (req) => !isPublicSlideEditRequest(req)
+    || req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
+});
+app.use(slideEditWriteLimiter);
 
 // Protect private Studio mutation endpoints before parsing bodies or doing
 // authentication work. A second limiter below isolates accepted employees by
@@ -460,6 +498,24 @@ app.use(rejectInvalidPublicWebinarPathCasing);
 app.use(rejectInvalidPublicRuntimeTransport);
 app.post('/api/public/webinars/:slug/runtime-events', publicRuntimeEventParser, handlePublicRuntimeParserError);
 app.use('/api/public/webinars', publicWebinarsRoutes);
+
+// Saved slide edits for the static decks. Mounted here, ahead of the
+// Dashboard-wide parser and every authenticated route, with its own body cap.
+app.use(
+  '/api/public/webinar-slide-edits',
+  (req, res, next) => (isPublicSlideEditRequest(req) ? next() : res.status(404).json({ error: 'Not found' })),
+  express.json({ limit: PUBLIC_SLIDE_EDIT_BYTES }),
+  (error, req, res, next) => {
+    if (error.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'Slide edit exceeds 512 KB', code: 'CONTENT_LIMIT_EXCEEDED' });
+    }
+    if (error.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: 'Invalid JSON', code: 'MALFORMED_JSON' });
+    }
+    return next(error);
+  },
+  publicSlideEditsRoutes,
+);
 
 // Body parsing
 app.use(rejectOversizedWebinarRequest);

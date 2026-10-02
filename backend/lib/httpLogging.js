@@ -13,6 +13,7 @@ const SAFE_RESPONSE_HEADERS = Object.freeze([
 ]);
 const PUBLIC_WEBINAR_PATH_ROOT = '/api/public/webinars';
 const PUBLIC_WEBINAR_PATH_PREFIX = `${PUBLIC_WEBINAR_PATH_ROOT}/`;
+const PUBLIC_SLIDE_EDIT_PATH_ROOT = '/api/public/webinar-slide-edits';
 
 function serializeHeaders(headers, allowlist) {
   const safe = {};
@@ -74,6 +75,14 @@ function isPublicWebinarRuntimeRequest(req) {
     && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/i.test(requestPathname(req) || '');
 }
 
+// Saved slide edits for the static decks: public reads plus password-guarded
+// writes, on their own path so none of the Studio delivery rules apply.
+function isPublicSlideEditRequest(req) {
+  const pathname = requestPathname(req);
+  return pathname === PUBLIC_SLIDE_EDIT_PATH_ROOT
+    || (typeof pathname === 'string' && pathname.startsWith(`${PUBLIC_SLIDE_EDIT_PATH_ROOT}/`));
+}
+
 function requestLogPathname(req) {
   const pathname = requestPathname(req);
   return isPublicWebinarRequest(req)
@@ -125,6 +134,7 @@ module.exports = {
   SAFE_RESPONSE_HEADERS,
   createSafeHttpLogger,
   hasInvalidPublicWebinarPathCasing,
+  isPublicSlideEditRequest,
   isPublicWebinarRequest,
   isPublicWebinarRuntimeRequest,
   requestPathname,
