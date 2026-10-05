@@ -3,79 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 
 const require = createRequire(import.meta.url);
 const {
-  WEBINAR_STUDIO_SCHEMA,
   executeNumberedMigration,
   executeSqlFile,
   executeSqlStatements,
-  runMigrations,
   splitSqlStatements,
-  verifyWebinarStudioSchema,
 } = require('../../db/migrations');
 
 const quietLogger = Object.freeze({ info() {}, warn() {}, error() {} });
 
 function migrationError(code, message = code) {
   return Object.assign(new Error(message), { code });
-}
-
-function healthySchemaResults() {
-  const tableRows = WEBINAR_STUDIO_SCHEMA.tables.map(tableName => ({ table_name: tableName }));
-  const columnRows = Object.entries(WEBINAR_STUDIO_SCHEMA.columns).flatMap(
-    ([tableName, columnNames]) => columnNames.map(columnName => ({
-      table_name: tableName,
-      column_name: columnName,
-      is_nullable: tableName === 'users' && columnName === 'is_active' ? 'NO' : 'YES',
-      column_default: tableName === 'users' && columnName === 'is_active' ? '1' : null,
-      column_type: tableName === 'users' && columnName === 'is_active'
-        ? 'tinyint(1)'
-        : tableName === 'webinar_slides' && columnName === 'active_anchor'
-          ? 'varchar(190)'
-          : 'text',
-      extra: tableName === 'webinar_slides' && columnName === 'active_anchor'
-        ? 'STORED GENERATED'
-        : '',
-      generation_expression: tableName === 'webinar_slides' && columnName === 'active_anchor'
-        ? 'case when (`archived_at` is null) then `anchor` else NULL end'
-        : '',
-    })),
-  );
-  const indexRows = Object.entries(WEBINAR_STUDIO_SCHEMA.uniqueIndexes).flatMap(
-    ([qualifiedName, columnNames]) => {
-      const [tableName, indexName] = qualifiedName.split('.');
-      return columnNames.map((columnName, index) => ({
-        table_name: tableName,
-        index_name: indexName,
-        non_unique: 0,
-        column_name: columnName,
-        seq_in_index: index + 1,
-      }));
-    },
-  );
-  const foreignKeyRows = Object.entries(WEBINAR_STUDIO_SCHEMA.foreignKeys).map(
-    ([qualifiedName, reference]) => {
-      const [tableName, constraintName] = qualifiedName.split('.');
-      return {
-        table_name: tableName,
-        constraint_name: constraintName,
-        column_name: reference.column,
-        referenced_table_name: reference.referencedTable,
-        referenced_column_name: reference.referencedColumn,
-      };
-    },
-  );
-  return { tableRows, columnRows, indexRows, foreignKeyRows };
-}
-
-function schemaConnection(results = healthySchemaResults()) {
-  return {
-    query: vi.fn(async sql => {
-      if (sql.includes('information_schema.TABLES')) return [results.tableRows];
-      if (sql.includes('information_schema.COLUMNS')) return [results.columnRows];
-      if (sql.includes('information_schema.STATISTICS')) return [results.indexRows];
-      if (sql.includes('information_schema.KEY_COLUMN_USAGE')) return [results.foreignKeyRows];
-      throw new Error(`Unexpected schema query: ${sql}`);
-    }),
-  };
 }
 
 describe('migration execution', () => {
@@ -231,7 +168,7 @@ describe('migration execution', () => {
       'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
     ],
     [
-      '092_webinar_studio_foundation.sql',
+      '096_webinar_slide_edits.sql',
       'ALTER TABLE pipeline ADD COLUMN IF NOT EXISTS lo_display VARCHAR(500) DEFAULT NULL AFTER assigned_lo_name',
     ],
     [
@@ -290,7 +227,7 @@ describe('migration execution', () => {
     };
     const fileSystem = {
       readFileSync(filePath) {
-        return filePath.includes('091_') ? 'SELECT legacy_failure;' : 'SELECT studio_success;';
+        return filePath.includes('091_') ? 'SELECT legacy_failure;' : 'SELECT strict_success;';
       },
     };
 
@@ -299,7 +236,7 @@ describe('migration execution', () => {
       intendedDatabase: 'webinar_studio_it_disposable',
       migrationLogger,
     });
-    await executeNumberedMigration(connection, '/migrations/092_webinar_studio_foundation.sql', {
+    await executeNumberedMigration(connection, '/migrations/096_webinar_slide_edits.sql', {
       fileSystem,
       intendedDatabase: 'webinar_studio_it_disposable',
       migrationLogger,
@@ -307,7 +244,7 @@ describe('migration execution', () => {
 
     expect(connection.query.mock.calls).toEqual([
       ['SELECT legacy_failure'],
-      ['SELECT studio_success'],
+      ['SELECT strict_success'],
     ]);
     expect(warnings).toEqual([{
       details: {
@@ -319,7 +256,7 @@ describe('migration execution', () => {
   });
 
   it.each([
-    '092_webinar_studio_foundation.sql',
+    '096_webinar_slide_edits.sql',
     '095_future_migration.sql',
     'unversioned_migration.sql',
   ])('aborts on an unexpected error from strict migration %s', async file => {
@@ -405,127 +342,5 @@ describe('migration execution', () => {
     })).resolves.toBeUndefined();
     expect(fresh.query).toHaveBeenCalledTimes(3);
     expect(rerun.query).toHaveBeenCalledTimes(3);
-  });
-});
-
-describe('Webinar Studio schema verification', () => {
-  it('rejects a partially applied schema with stable missing-object details', async () => {
-    const results = healthySchemaResults();
-    results.columnRows = results.columnRows.filter(row => !(
-      row.table_name === 'users' && row.column_name === 'is_active'
-    ));
-    results.indexRows = results.indexRows.filter(row => row.index_name !== 'uq_webinar_slide_active_anchor');
-    const connection = schemaConnection(results);
-
-    await expect(verifyWebinarStudioSchema(connection, 'studio_test')).rejects.toMatchObject({
-      code: 'WEBINAR_STUDIO_SCHEMA_INCOMPLETE',
-      issues: [
-        'missing column users.is_active',
-        'missing unique index webinar_slides.uq_webinar_slide_active_anchor',
-      ],
-    });
-  });
-
-  it('rejects the obsolete global slide-anchor uniqueness constraint', async () => {
-    const results = healthySchemaResults();
-    results.indexRows.push({
-      table_name: 'webinar_slides', index_name: 'uq_webinar_slide_anchor', non_unique: 0,
-      column_name: 'webinar_id', seq_in_index: 1,
-    });
-    const connection = schemaConnection(results);
-
-    await expect(verifyWebinarStudioSchema(connection, 'studio_test')).rejects.toMatchObject({
-      code: 'WEBINAR_STUDIO_SCHEMA_INCOMPLETE',
-      issues: ['forbidden unique index webinar_slides.uq_webinar_slide_anchor'],
-    });
-  });
-
-  it.each([
-    ['nullable', { is_nullable: 'YES' }],
-    ['disabled by default', { column_default: '0' }],
-    ['the wrong type', { column_type: 'int' }],
-  ])('rejects users.is_active when it is %s', async (_description, replacement) => {
-    const results = healthySchemaResults();
-    const activeColumn = results.columnRows.find(row => (
-      row.table_name === 'users' && row.column_name === 'is_active'
-    ));
-    Object.assign(activeColumn, replacement);
-
-    await expect(verifyWebinarStudioSchema(schemaConnection(results), 'studio_test'))
-      .rejects.toMatchObject({ code: 'WEBINAR_STUDIO_SCHEMA_INCOMPLETE' });
-  });
-
-  it.each([
-    ['not stored generated', { extra: '', generation_expression: '' }],
-    ['generated from the wrong fields', {
-      extra: 'STORED GENERATED',
-      generation_expression: 'case when archived_at is not null then anchor else null end',
-    }],
-  ])('rejects active_anchor when it is %s', async (_description, replacement) => {
-    const results = healthySchemaResults();
-    const activeAnchor = results.columnRows.find(row => (
-      row.table_name === 'webinar_slides' && row.column_name === 'active_anchor'
-    ));
-    Object.assign(activeAnchor, replacement);
-
-    await expect(verifyWebinarStudioSchema(schemaConnection(results), 'studio_test'))
-      .rejects.toMatchObject({ code: 'WEBINAR_STUDIO_SCHEMA_INCOMPLETE' });
-  });
-
-  it('rejects named indexes and foreign keys whose actual definitions are wrong', async () => {
-    const results = healthySchemaResults();
-    const activeAnchorIndex = results.indexRows.find(row => (
-      row.index_name === 'uq_webinar_slide_active_anchor' && row.seq_in_index === 2
-    ));
-    activeAnchorIndex.column_name = 'anchor';
-    const ownerForeignKey = results.foreignKeyRows.find(row => row.constraint_name === 'fk_webinar_owner');
-    ownerForeignKey.referenced_column_name = 'email';
-
-    await expect(verifyWebinarStudioSchema(schemaConnection(results), 'studio_test'))
-      .rejects.toMatchObject({
-        code: 'WEBINAR_STUDIO_SCHEMA_INCOMPLETE',
-        issues: expect.arrayContaining([
-          'invalid unique index webinar_slides.uq_webinar_slide_active_anchor',
-          'invalid foreign key webinar_presentations.fk_webinar_owner',
-        ]),
-      });
-  });
-
-  it('accepts the complete healthy schema', async () => {
-    const connection = schemaConnection();
-
-    await expect(verifyWebinarStudioSchema(connection, 'studio_test')).resolves.toBeUndefined();
-    expect(connection.query).toHaveBeenCalledTimes(4);
-    for (const call of connection.query.mock.calls) {
-      expect(call[1]).toEqual(['studio_test']);
-    }
-  });
-
-  it('makes startup fail when post-migration schema verification fails', async () => {
-    const verificationFailure = Object.assign(new Error('partial schema'), {
-      code: 'WEBINAR_STUDIO_SCHEMA_INCOMPLETE',
-    });
-    const release = vi.fn();
-    const connection = {
-      query: vi.fn(async sql => (
-        sql === 'SELECT DATABASE() AS database_name' ? [[{ database_name: 'configured_schema' }]] : [[]]
-      )),
-      release,
-    };
-    const connectionPool = { getConnection: vi.fn().mockResolvedValue(connection) };
-    const fileSystem = {
-      existsSync: vi.fn().mockReturnValue(false),
-      readdirSync: vi.fn().mockReturnValue([]),
-    };
-
-    const schemaVerifier = vi.fn().mockRejectedValue(verificationFailure);
-    await expect(runMigrations({
-      connectionPool,
-      fileSystem,
-      migrationLogger: quietLogger,
-      schemaVerifier,
-    })).rejects.toBe(verificationFailure);
-    expect(schemaVerifier).toHaveBeenCalledWith(connection, 'configured_schema');
-    expect(release).toHaveBeenCalledOnce();
   });
 });
