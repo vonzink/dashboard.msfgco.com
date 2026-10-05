@@ -8,8 +8,7 @@ import pino from 'pino';
 const require = createRequire(import.meta.url);
 const {
   createSafeHttpLogger,
-  isPublicWebinarRequest,
-  isPublicWebinarRuntimeRequest,
+  isPublicSlideEditRequest,
   requestPathname,
   serializeRequest,
 } = require('../../lib/httpLogging');
@@ -23,106 +22,35 @@ afterEach(async () => {
 });
 
 describe('credential-safe HTTP request logging', () => {
-  it('classifies only exact raw origin-form public paths without URL normalization', () => {
-    const lookalikes = [
-      '/api/public/webinars\\x\\runtime-events',
-      '/api/else/../public/webinars/x/runtime-events',
-      '/api//public/webinars/x/runtime-events',
-      '/api/else/%2e%2e/public/webinars/x/runtime-events',
-      '/api/public/webinars%5Cx%5Cruntime-events',
-    ];
-
-    for (const originalUrl of lookalikes) {
-      const req = { method: 'POST', originalUrl };
-      expect(requestPathname(req), originalUrl).toBe(originalUrl);
-      expect(isPublicWebinarRequest(req), originalUrl).toBe(false);
-      expect(isPublicWebinarRuntimeRequest(req), originalUrl).toBe(false);
-
-      const serialized = serializeRequest({
-        ...req,
-        id: 1,
-        headers: {
-          'content-type': 'application/json; charset=RAW_LOOKALIKE_CANARY',
-          'content-encoding': 'RAW_LOOKALIKE_ENCODING_CANARY',
-        },
-        socket: { remoteAddress: '127.0.0.1', remotePort: 1234 },
-      });
-      expect(serialized.url, originalUrl).toBe(originalUrl);
-      expect(serialized.headers['content-type'], originalUrl)
-        .toBe('application/json; charset=RAW_LOOKALIKE_CANARY');
+  it('classifies only exact raw origin-form slide-edit paths without URL normalization', () => {
+    for (const originalUrl of [
+      '/api/public/webinar-slide-edits',
+      '/api/public/webinar-slide-edits/reverse-mortgages',
+      '/api/public/webinar-slide-edits/reverse-mortgages/opening?trace=secret',
+    ]) {
+      expect(isPublicSlideEditRequest({ method: 'PUT', originalUrl }), originalUrl).toBe(true);
     }
 
-    for (const unsupported of [
-      'http://example.test/api/public/webinars/x/runtime-events',
-      '/api/public/webinars/x/runtime-events#fragment',
+    for (const originalUrl of [
+      '/api/public/webinar-slide-edits-nearby',
+      '/API/PUBLIC/WEBINAR-SLIDE-EDITS/x',
+      '/api/else/../public/webinar-slide-edits/x',
+      '/api//public/webinar-slide-edits/x',
+      '/api/else/%2e%2e/public/webinar-slide-edits/x',
+      'http://example.test/api/public/webinar-slide-edits/x',
+      '/api/public/webinar-slide-edits/x#fragment',
       '*',
     ]) {
-      const req = { method: 'POST', originalUrl: unsupported };
-      expect(requestPathname(req), unsupported).toBeUndefined();
-      expect(isPublicWebinarRequest(req), unsupported).toBe(false);
-      expect(isPublicWebinarRuntimeRequest(req), unsupported).toBe(false);
+      expect(isPublicSlideEditRequest({ method: 'PUT', originalUrl }), originalUrl).toBe(false);
     }
 
-    expect(requestPathname('/api/public/webinars/x/runtime-events/?trace=secret'))
-      .toBe('/api/public/webinars/x/runtime-events/');
-  });
-
-  it('omits attacker-controlled transport headers only for exact public runtime POST paths', () => {
-    const request = (url, method = 'POST') => serializeRequest({
-      id: 1,
-      method,
-      originalUrl: url,
-      headers: {
-        accept: '*/*',
-        'content-length': '95',
-        'content-type': 'application/json; charset=LOG_RUNTIME_CHARSET_SECRET',
-        'content-encoding': 'LOG_RUNTIME_ENCODING_SECRET',
-        'user-agent': 'test',
-      },
+    expect(requestPathname('/api/public/webinar-slide-edits/x/?trace=secret'))
+      .toBe('/api/public/webinar-slide-edits/x/');
+    expect(requestPathname('/api/public/webinar-slide-edits/x#fragment')).toBeUndefined();
+    expect(serializeRequest({
+      id: 1, method: 'GET', originalUrl: '/api/announcements/CANARY?token=QUERY_CANARY', headers: {},
       socket: { remoteAddress: '127.0.0.1', remotePort: 1234 },
-    });
-
-    for (const url of [
-      '/api/public/webinars/first-home/runtime-events',
-      '/api/public/webinars/first-home/runtime-events/',
-      '/api/public/webinars/first-home/runtime-events/?trace=LOG_QUERY_SECRET',
-      '/API/PUBLIC/WEBINARS/first-home/RUNTIME-EVENTS',
-      '/Api/Public/Webinars/first-home/Runtime-Events/?trace=LOG_MIXED_QUERY_SECRET',
-    ]) {
-      expect(request(url).headers).toEqual({
-        accept: '*/*', 'content-length': '95', 'user-agent': 'test',
-      });
-    }
-
-    expect(request('/api/announcements').headers['content-type'])
-      .toContain('LOG_RUNTIME_CHARSET_SECRET');
-    expect(request('/api/public/webinars/first-home/runtime-events-nearby').headers['content-type'])
-      .toContain('LOG_RUNTIME_CHARSET_SECRET');
-    expect(request('/api/public/webinars/first-home/runtime-events', 'GET').headers['content-type'])
-      .toContain('LOG_RUNTIME_CHARSET_SECRET');
-  });
-
-  it('redacts every path segment below the public webinar prefix without changing other URLs', () => {
-    const request = url => serializeRequest({
-      id: 1,
-      method: 'GET',
-      originalUrl: url,
-      headers: {},
-      socket: { remoteAddress: '127.0.0.1', remotePort: 1234 },
-    });
-
-    expect(request('/api/public/webinars/PUBLIC_URI_CANARY_%ZZ/live').url)
-      .toBe('/api/public/webinars/[redacted]');
-    expect(request('/api/public/webinars/PUBLIC_URI_CANARY_%C3%28/live?query=QUERY_URI_CANARY').url)
-      .toBe('/api/public/webinars/[redacted]');
-    expect(request('/API/PUBLIC/WEBINARS/MIXED_CASE_CANARY/live').url)
-      .toBe('/api/public/webinars/[redacted]');
-    expect(request('/Api/Public/Webinars/MIXED_URI_CANARY_%ZZ/LiVe?query=MIXED_QUERY_CANARY').url)
-      .toBe('/api/public/webinars/[redacted]');
-    expect(request('/API/PUBLIC/WEBINARS').url).toBe('/api/public/webinars/[redacted]');
-    expect(request('/api/public/webinars').url).toBe('/api/public/webinars');
-    expect(request('/api/announcements/PUBLIC_URI_CANARY_%ZZ').url)
-      .toBe('/api/announcements/PUBLIC_URI_CANARY_%ZZ');
+    }).url).toBe('/api/announcements/CANARY');
   });
 
   it('never serializes authorization, cookie, or set-cookie canaries', async () => {

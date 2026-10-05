@@ -11,8 +11,6 @@ const SAFE_RESPONSE_HEADERS = Object.freeze([
   'content-length',
   'content-type',
 ]);
-const PUBLIC_WEBINAR_PATH_ROOT = '/api/public/webinars';
-const PUBLIC_WEBINAR_PATH_PREFIX = `${PUBLIC_WEBINAR_PATH_ROOT}/`;
 const PUBLIC_SLIDE_EDIT_PATH_ROOT = '/api/public/webinar-slide-edits';
 
 function serializeHeaders(headers, allowlist) {
@@ -55,52 +53,20 @@ function requestPathname(requestOrUrl) {
   return queryIndex === -1 ? requestTarget : requestTarget.slice(0, queryIndex);
 }
 
-function isPublicWebinarRequest(req) {
-  const pathname = requestPathname(req);
-  if (typeof pathname !== 'string') return false;
-  const normalized = pathname.toLowerCase();
-  return normalized === PUBLIC_WEBINAR_PATH_ROOT
-    || normalized.startsWith(PUBLIC_WEBINAR_PATH_PREFIX);
-}
-
-function hasInvalidPublicWebinarPathCasing(req) {
-  const pathname = requestPathname(req);
-  return isPublicWebinarRequest(req) && pathname !== pathname.toLowerCase();
-}
-
-// One raw-target predicate covers the canonical runtime route plus its
-// intentionally supported casing, single-trailing-slash, and query aliases.
-function isPublicWebinarRuntimeRequest(req) {
-  return req?.method === 'POST'
-    && /^\/api\/public\/webinars\/[^/]+\/runtime-events\/?$/i.test(requestPathname(req) || '');
-}
-
-// Saved slide edits for the static decks: public reads plus password-guarded
-// writes, on their own path so none of the Studio delivery rules apply.
+// Saved slide edits for the static decks on the webinar site: public reads
+// plus password-guarded writes, on their own path with their own CORS policy.
 function isPublicSlideEditRequest(req) {
   const pathname = requestPathname(req);
   return pathname === PUBLIC_SLIDE_EDIT_PATH_ROOT
     || (typeof pathname === 'string' && pathname.startsWith(`${PUBLIC_SLIDE_EDIT_PATH_ROOT}/`));
 }
 
-function requestLogPathname(req) {
-  const pathname = requestPathname(req);
-  return isPublicWebinarRequest(req)
-    && (hasInvalidPublicWebinarPathCasing(req) || pathname?.toLowerCase() !== PUBLIC_WEBINAR_PATH_ROOT)
-    ? `${PUBLIC_WEBINAR_PATH_PREFIX}[redacted]`
-    : pathname;
-}
-
 function serializeRequest(req) {
   const headers = serializeHeaders(req.headers, SAFE_REQUEST_HEADERS);
-  if (isPublicWebinarRuntimeRequest(req)) {
-    delete headers['content-type'];
-    delete headers['content-encoding'];
-  }
   return {
     id: req.id,
     method: req.method,
-    url: requestLogPathname(req),
+    url: requestPathname(req),
     remoteAddress: req.socket?.remoteAddress,
     remotePort: req.socket?.remotePort,
     headers,
@@ -133,10 +99,7 @@ module.exports = {
   SAFE_REQUEST_HEADERS,
   SAFE_RESPONSE_HEADERS,
   createSafeHttpLogger,
-  hasInvalidPublicWebinarPathCasing,
   isPublicSlideEditRequest,
-  isPublicWebinarRequest,
-  isPublicWebinarRuntimeRequest,
   requestPathname,
   serializeRequest,
   serializeResponse,

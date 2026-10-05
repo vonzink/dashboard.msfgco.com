@@ -10,25 +10,10 @@ const rateLimit = require('express-rate-limit');
 const db = require('./db/connection');
 const { authenticate } = require('./middleware/auth');
 const { requireActiveDbUser, requireDbUser, requireNonExternal } = require('./middleware/userContext');
-const {
-  requireWebinarEditorForWrites: defaultWebinarEditorWriteGate,
-  requireWebinarStudioAccess: defaultWebinarStudioAccess,
-} = require('./middleware/webinarStudioAccess');
 const { startCalendarSyncScheduler } = require('./services/calendarSync/scheduler');
 const logger = require('./lib/logger');
-const {
-  createSafeHttpLogger,
-  hasInvalidPublicWebinarPathCasing,
-  isPublicSlideEditRequest,
-  isPublicWebinarRequest,
-  isPublicWebinarRuntimeRequest,
-} = require('./lib/httpLogging');
+const { createSafeHttpLogger, isPublicSlideEditRequest } = require('./lib/httpLogging');
 const websocket = require('./lib/websocket');
-const { LIMITS } = require('./services/webinars/limits');
-const {
-  createOperationalEventRecorder,
-  recordOperationalEvent,
-} = require('./services/webinars/observability');
 
 // Route imports
 const investorsRoutes = require('./routes/investors');
@@ -68,10 +53,6 @@ const programsRoutes = require('./routes/programs');
 const hrResourcesRoutes = require('./routes/hrResources');
 const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
-const { createWebinarsRouter } = require('./routes/webinars');
-const { createWebinarPresenterSettingsRouter } = require('./routes/webinarPresenterSettings');
-const { createWebinarAssetsRouter } = require('./routes/webinarAssets');
-const { createPublicWebinarsRouter } = require('./routes/publicWebinars');
 const { createPublicSlideEditsRouter, PASSWORD_HEADER: SLIDE_EDIT_PASSWORD_HEADER } = require('./routes/publicSlideEdits');
 const { createInfoInboxRouter } = require('./routes/infoInbox');
 
@@ -81,7 +62,6 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
   : ['https://dashboard.msfgco.com', 'http://localhost:3000', 'http://localhost:3001'];
 const PUBLIC_WEBINAR_ORIGIN = 'https://msfgmortgage.com';
-const PUBLIC_RUNTIME_EVENT_BYTES = 2 * 1024;
 const PUBLIC_SLIDE_EDIT_BYTES = 512 * 1024;
 // The webinar site answers on both hostnames, and a deck loads its saved slide
 // edits from whichever one the visitor used.
@@ -134,19 +114,10 @@ function corsOriginPolicy(origins, message) {
 }
 
 function createApp({
-  webinarAuthenticate = authenticate,
-  webinarServices = {},
-  webinarOperationalLogger = null,
-  webinarIpWriteLimit = 300,
-  webinarWriteLimit = 300,
-  webinarAssetWriteLimit = 300,
   publicWebinarOrigins,
-  publicWebinarRuntimeLimit = 60,
   slideEditServices = {},
   slideEditWriteLimit = 300,
   generalWriteLimit = 200,
-  webinarStudioAccessMiddleware = defaultWebinarStudioAccess,
-  webinarEditorWriteGate = defaultWebinarEditorWriteGate,
   accessLogger = logger,
   errorLogger = logger,
   inboxAuthenticate = authenticate,
@@ -155,29 +126,6 @@ function createApp({
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
 const slideEditOrigins = [...new Set([...resolvedPublicWebinarOrigins, ...PUBLIC_SLIDE_EDIT_EXTRA_ORIGINS])];
-const webinarRecordOperationalEvent = webinarOperationalLogger
-  ? createOperationalEventRecorder(webinarOperationalLogger)
-  : recordOperationalEvent;
-const webinarsRoutes = createWebinarsRouter({
-  ...webinarServices,
-  recordOperationalEvent: webinarRecordOperationalEvent,
-  logger: errorLogger,
-});
-const webinarPresenterSettingsRoutes = createWebinarPresenterSettingsRouter({
-  settings: webinarServices.settings,
-  recordOperationalEvent: webinarRecordOperationalEvent,
-  logger: errorLogger,
-});
-const webinarAssetsRoutes = createWebinarAssetsRouter({
-  catalog: webinarServices.assets,
-  recordOperationalEvent: webinarRecordOperationalEvent,
-  logger: errorLogger,
-});
-const publicWebinarsRoutes = createPublicWebinarsRouter({
-  getLiveBundleBySlug: webinarServices.publicBundle?.getLiveBundleBySlug,
-  recordOperationalEvent: webinarRecordOperationalEvent,
-  logger: errorLogger,
-});
 const publicSlideEditsRoutes = createPublicSlideEditsRouter({
   ...slideEditServices,
   logger: errorLogger,
@@ -209,26 +157,16 @@ app.use(helmet({
   permittedCrossDomainPolicies: { permittedPolicies: 'none' },
 }));
 
-// Public webinar reads have a separate, non-credentialed browser boundary.
-// Adding an audience origin here must never add it to private Dashboard routes.
+// Saved slide edits have a separate, non-credentialed browser boundary.
+// Adding a webinar-site origin here must never add it to private Dashboard routes.
 app.use((req, res, next) => {
-  if (isPublicWebinarRequest(req) || isPublicSlideEditRequest(req)) {
+  if (isPublicSlideEditRequest(req)) {
     res.vary('Origin');
     if (req.method === 'OPTIONS') res.vary('Access-Control-Request-Headers');
   }
   next();
 });
 app.use(cors((req, callback) => {
-  if (isPublicWebinarRequest(req)) {
-    callback(null, {
-      origin: corsOriginPolicy(resolvedPublicWebinarOrigins, 'Public webinar origin not allowed'),
-      credentials: false,
-      methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type'],
-      preflightContinue: hasInvalidPublicWebinarPathCasing(req),
-    });
-    return;
-  }
   // Saved slide edits for the static decks: the webinar site's origins, plus
   // the write methods and the shared-password header the Presenter view sends.
   if (isPublicSlideEditRequest(req)) {
@@ -256,7 +194,6 @@ const limiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
-  skip: isWebinarStudioMutation,
 });
 app.use('/api/', limiter);
 
@@ -271,9 +208,7 @@ const writeLimiter = rateLimit({
   // separately — see myFilesWriteLimiter below.
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     || req.originalUrl.startsWith('/api/my-files')
-    || isPublicWebinarRuntimeRequest(req)
-    || isPublicSlideEditRequest(req)
-    || isWebinarStudioMutation(req),
+    || isPublicSlideEditRequest(req),
 });
 app.use('/api/', writeLimiter);
 
@@ -291,19 +226,6 @@ const slideEditWriteLimiter = rateLimit({
 });
 app.use(slideEditWriteLimiter);
 
-// Protect private Studio mutation endpoints before parsing bodies or doing
-// authentication work. A second limiter below isolates accepted employees by
-// the positive database ID derived by the server.
-const webinarIpWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: webinarIpWriteLimit,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many webinar requests, please slow down' },
-  skip: (req) => !isWebinarStudioMutation(req),
-});
-app.use('/api/', webinarIpWriteLimiter);
-
 // Each uploaded file costs two write requests (presign, then confirm), so
 // dropping a folder of 100 files would exhaust the 200-request budget above.
 // That limiter is keyed by IP, so one person bulk-uploading would lock every
@@ -319,186 +241,8 @@ const myFilesWriteLimiter = rateLimit({
   skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
 });
 
-// Private Webinar Studio writes are deliberately keyed to the authenticated
-// employee, rather than the office IP address used by the general limiter.
-const webinarWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: webinarWriteLimit,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => String(req.user?.db?.id),
-  message: { error: 'Too many webinar write requests, please slow down' },
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
-});
-
-const webinarAssetWriteLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: webinarAssetWriteLimit,
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => String(req.user?.db?.id),
-  message: { error: 'Too many webinar asset requests, please slow down' },
-  skip: (req) => req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS',
-});
-
-const publicWebinarRuntimeLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: publicWebinarRuntimeLimit,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many runtime events, please slow down' },
-  skip: (req) => !isPublicWebinarRuntimeRequest(req),
-});
-app.use(publicWebinarRuntimeLimiter);
-
-const WEBINAR_REQUEST_PREFIXES = ['/api/webinars', '/api/webinar-presenter-settings', '/api/webinar-assets'];
-const WEBINAR_MAX_REQUEST_BYTES = LIMITS.request;
-function isWebinarStudioMutation(req) {
-  return !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
-    && WEBINAR_REQUEST_PREFIXES.some(prefix => {
-      const pathname = (req.originalUrl || req.url || '').split('?')[0];
-      return pathname === prefix || pathname.startsWith(`${prefix}/`);
-    });
-}
-
-function isPublicWebinarDecodeError(error, req) {
-  return error instanceof URIError
-    && (error.status === 400 || error.statusCode === 400)
-    && isPublicWebinarRequest(req);
-}
-
-function rejectOversizedWebinarRequest(req, res, next) {
-  if (!isWebinarStudioMutation(req)) {
-    return next();
-  }
-  const contentLength = Number(req.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > WEBINAR_MAX_REQUEST_BYTES) {
-    recordWebinarTransportRejection(req, 413, 'CONTENT_LIMIT_EXCEEDED');
-    return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
-  }
-  return next();
-}
-
-function recordWebinarTransportRejection(req, statusCode, reasonCode = 'VALIDATION_FAILED') {
-  if (req.webinarTransportEventRecorded) return;
-  req.webinarTransportEventRecorded = true;
-  webinarRecordOperationalEvent('webinar.validation_rejected', { statusCode, reasonCode });
-}
-
-function verifyWebinarRawRequestSize(req, _res, buffer) {
-  if (isWebinarStudioMutation(req) && buffer.length > WEBINAR_MAX_REQUEST_BYTES) {
-    const error = new Error('Webinar request exceeds 2 MB limit');
-    error.status = 413;
-    error.code = 'CONTENT_LIMIT_EXCEEDED';
-    throw error;
-  }
-}
-
-const webinarRawBodyParser = express.raw({
-  type: isWebinarStudioMutation,
-  limit: WEBINAR_MAX_REQUEST_BYTES,
-  verify: verifyWebinarRawRequestSize,
-});
-
-function parseWebinarRawJson(req, res, next) {
-  if (!isWebinarStudioMutation(req) || !Buffer.isBuffer(req.body)) return next();
-  const contentType = (req.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  if (contentType !== 'application/json') {
-    recordWebinarTransportRejection(req, 400, 'UNSUPPORTED_MEDIA_TYPE');
-    return res.status(400).json({ error: 'Unsupported media type', code: 'UNSUPPORTED_MEDIA_TYPE' });
-  }
-  try {
-    req.body = JSON.parse(req.body.toString('utf8'));
-    return next();
-  } catch {
-    recordWebinarTransportRejection(req, 400, 'MALFORMED_JSON');
-    return res.status(400).json({ error: 'Invalid JSON', code: 'MALFORMED_JSON' });
-  }
-}
-
 // Closed header allowlists keep credentials and cookies out of request logs.
 app.use(createSafeHttpLogger(accessLogger));
-
-// Express 4's legacy URL parser can route unsupported absolute-form or
-// fragment-bearing request targets as though they were ordinary paths. Keep
-// those targets on the non-public boundary before any public body parser or
-// handler runs. Public classification itself always uses the raw origin-form
-// representation above.
-app.use('/api/public/webinars', (req, res, next) => {
-  if (isPublicWebinarRequest(req)) return next();
-  return res.status(404).json({ error: 'Not found' });
-});
-
-function recordPublicRuntimeRejection(req, statusCode, reasonCode) {
-  if (req.publicWebinarOperationalEventRecorded) return;
-  req.publicWebinarOperationalEventRecorded = true;
-  try {
-    webinarRecordOperationalEvent('webinar.validation_rejected', { statusCode, reasonCode });
-  } catch {
-    // A failed log sink must not expose or change a transport response.
-  }
-}
-
-function rejectPublicRuntimeEvent(req, res, statusCode, reasonCode, message) {
-  recordPublicRuntimeRejection(req, statusCode, reasonCode);
-  return res.status(statusCode).json({ error: message, code: reasonCode });
-}
-
-function rejectInvalidPublicWebinarPathCasing(req, res, next) {
-  if (!hasInvalidPublicWebinarPathCasing(req)) return next();
-  recordPublicRuntimeRejection(req, 404, 'WEBINAR_NOT_FOUND');
-  return res.status(404).json({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
-}
-
-function rejectInvalidPublicRuntimeTransport(req, res, next) {
-  if (!isPublicWebinarRuntimeRequest(req)) return next();
-  const contentLength = Number(req.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > PUBLIC_RUNTIME_EVENT_BYTES) {
-    return rejectPublicRuntimeEvent(
-      req, res, 413, 'CONTENT_LIMIT_EXCEEDED', 'Runtime event exceeds 2 KiB limit',
-    );
-  }
-
-  const contentEncoding = (req.get('content-encoding') || 'identity').trim().toLowerCase();
-  const contentType = (req.get('content-type') || '').trim();
-  const supportedContentType = /^application\/json(?:\s*;\s*charset\s*=\s*(?:utf-8|"utf-8"))?\s*$/i;
-  if (contentEncoding !== 'identity' || !supportedContentType.test(contentType)) {
-    return rejectPublicRuntimeEvent(
-      req, res, 400, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported runtime event transport',
-    );
-  }
-  return next();
-}
-
-const publicRuntimeEventParser = express.json({
-  type: 'application/json',
-  limit: PUBLIC_RUNTIME_EVENT_BYTES,
-  strict: true,
-  inflate: false,
-});
-
-function handlePublicRuntimeParserError(error, req, res, next) {
-  if (!isPublicWebinarRuntimeRequest(req)) return next(error);
-  if (error.type === 'entity.too.large' || error.status === 413) {
-    return rejectPublicRuntimeEvent(
-      req, res, 413, 'CONTENT_LIMIT_EXCEEDED', 'Runtime event exceeds 2 KiB limit',
-    );
-  }
-  if (error.type === 'entity.parse.failed') {
-    return rejectPublicRuntimeEvent(
-      req, res, 400, 'MALFORMED_JSON', 'Invalid runtime event JSON',
-    );
-  }
-  return rejectPublicRuntimeEvent(
-    req, res, 400, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported runtime event transport',
-  );
-}
-
-// This parser is deliberately mounted before the Dashboard-wide 10 MiB parser.
-app.use(rejectInvalidPublicWebinarPathCasing);
-app.use(rejectInvalidPublicRuntimeTransport);
-app.post('/api/public/webinars/:slug/runtime-events', publicRuntimeEventParser, handlePublicRuntimeParserError);
-app.use('/api/public/webinars', publicWebinarsRoutes);
 
 // Saved slide edits for the static decks. Mounted here, ahead of the
 // Dashboard-wide parser and every authenticated route, with its own body cap.
@@ -519,9 +263,6 @@ app.use(
 );
 
 // Body parsing
-app.use(rejectOversizedWebinarRequest);
-app.use(webinarRawBodyParser);
-app.use(parseWebinarRawJson);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -560,13 +301,7 @@ app.get('/api/me', authenticate, (req, res) => {
   });
 });
 
-// Webinar Studio remains private to active internal employees. The active-user
-// check is intentionally scoped here and does not change existing route access.
-app.use('/api/webinars', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarsRoutes);
-app.use('/api/webinar-presenter-settings', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarWriteLimiter, webinarPresenterSettingsRoutes);
-// The write limiter counts a denied editor write against its caller before
-// the gate spends a database query on it.
-app.use('/api/webinar-assets', webinarAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, webinarStudioAccessMiddleware, webinarAssetWriteLimiter, webinarEditorWriteGate, webinarAssetsRoutes);
+// Private to active internal employees.
 app.use('/api/info-inbox', inboxAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, createInfoInboxRouter(inboxService));
 
 // Routes accessible to ALL authenticated users (including External)
@@ -625,21 +360,8 @@ app.use((err, req, res, next) => {
   if (err.code === 'CORS_ORIGIN_DENIED' && err.status === 403) {
     return res.status(403).json({ error: 'Origin not allowed' });
   }
-  if (isPublicWebinarDecodeError(err, req)) {
-    recordPublicRuntimeRejection(req, 404, 'WEBINAR_NOT_FOUND');
-    return res.status(404).json({ error: 'Webinar not found', code: 'WEBINAR_NOT_FOUND' });
-  }
   errorLogger.error({ err }, 'Unhandled error');
 
-  if (isWebinarStudioMutation(req) && (err.code === 'CONTENT_LIMIT_EXCEEDED' || err.type === 'entity.too.large' || err.status === 413)) {
-    recordWebinarTransportRejection(req, 413, 'CONTENT_LIMIT_EXCEEDED');
-    return res.status(413).json({ error: 'Webinar request exceeds 2 MB limit', code: 'CONTENT_LIMIT_EXCEEDED' });
-  }
-  if (err.type === 'entity.parse.failed' && isWebinarStudioMutation(req)) {
-    recordWebinarTransportRejection(req, 400, 'MALFORMED_JSON');
-    return res.status(400).json({ error: 'Invalid JSON', code: 'MALFORMED_JSON' });
-  }
-  
   // Don't leak error details in production
   const message = process.env.NODE_ENV === 'production' 
     ? 'Internal server error' 
@@ -656,21 +378,6 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-app.locals.webinarStudio = {
-  isWebinarStudioMutation,
-  rejectOversizedWebinarRequest,
-  verifyWebinarRawRequestSize,
-  webinarRawBodyParser,
-  parseWebinarRawJson,
-  writeLimiter,
-  webinarIpWriteLimiter,
-  webinarWriteLimiter,
-  webinarAssetWriteLimiter,
-  publicWebinarRuntimeLimiter,
-  rejectInvalidPublicRuntimeTransport,
-  publicRuntimeEventParser,
-  handlePublicRuntimeParserError,
-};
 return app;
 }
 
@@ -750,5 +457,4 @@ module.exports = {
   app,
   createApp,
   loadPublicWebinarOrigins,
-  ...app.locals.webinarStudio,
 };

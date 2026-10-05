@@ -97,9 +97,6 @@
       if (typeof ContentStudio !== 'undefined') ContentStudio.open();
     },
 
-    'open-webinar-studio': () =>
-      window.WebinarStudio?.open(),
-
     'open-time-calculator': () =>
       Utils.openPopup('Calculators/Time Calculator/time-calculator.html', 'MSFGTimeCalc', 1000, 800),
 
