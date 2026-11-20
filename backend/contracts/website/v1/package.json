@@ -1,0 +1,15 @@
+{
+  "name": "@msfg/website-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "validate.cjs",
+  "types": "types.d.ts",
+  "dependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
