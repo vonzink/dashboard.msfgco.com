@@ -1,5 +1,10 @@
 # Local website publication slice
 
+> **2026-11-24:** `server.js` now composes the CMS when `WEBSITE_CMS_ENABLED=1`
+> (`compose.js`: MySQL repository + directory publication store + catalog bundle).
+> Grants and initialization use `scripts/website-cms-admin.js`. See `DEPLOYMENT.md`
+> for production requirements. The checkpoint notes below are historical.
+
 This is an explicitly injected, pages-only implementation checkpoint. It is **not mounted** in `backend/server.js` and does not load dashboard authentication, database configuration, migrations, AWS clients or credentials. MySQL/S3 adapters, production grants, revision-specific compliance approval, media upload, authenticated draft preview, and adoption acknowledgement remain B1–B4 work.
 
 ```js
