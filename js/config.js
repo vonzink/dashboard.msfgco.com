@@ -6,6 +6,12 @@
 (() => {
   'use strict';
 
+  // Public website origin per dashboard hostname (see CONFIG.website).
+  const WEBSITE_ORIGINS = {
+    'staging-dashboard.msfgco.com': 'https://staging.msfg.us',
+    'dashboard.msfgco.com': '',
+  };
+
   const CONFIG = {
     // ========================================
     // API SETTINGS
@@ -20,10 +26,11 @@
 
     // ========================================
     // PUBLIC WEBSITE (website editor media + "open published" links)
-    // Empty until the production website origin is chosen; links stay hidden.
+    // Chosen by dashboard hostname. Production stays empty (links hidden) until the
+    // production release sets https://msfg.us. Move into js/env.js when it lands.
     // ========================================
     website: {
-      origin: '',
+      origin: WEBSITE_ORIGINS[(window.location && window.location.hostname) || ''] || '',
     },
 
     // ========================================
