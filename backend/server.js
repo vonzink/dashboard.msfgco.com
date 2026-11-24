@@ -388,7 +388,9 @@ app.use((req, res) => {
 return app;
 }
 
-const app = createApp();
+// Website CMS is off unless WEBSITE_CMS_ENABLED=1 (see services/websiteCms/compose.js).
+const websiteCms = require('./services/websiteCms/compose').createDeferredWebsiteCmsService();
+const app = createApp({ websiteCmsService: websiteCms?.service });
 
 // ======================
 // START SERVER
@@ -401,6 +403,16 @@ async function startServer() {
     const migrations = require('./db/migrations');
     await migrations.runMigrations();
     logger.info('Database migrations completed');
+
+    // Non-fatal: a CMS failure leaves /api/website-cms returning 503 (Website tab hidden).
+    if (websiteCms) {
+      try {
+        await websiteCms.start();
+        logger.info('Website CMS ready');
+      } catch (err) {
+        logger.error({ err: err.message }, 'Website CMS failed to start; /api/website-cms returns 503');
+      }
+    }
 
     // Seed bundled "general" checklist templates as is_global=TRUE.
     // No-op if templates already present, safe on every boot.
@@ -447,6 +459,7 @@ if (require.main === module) {
     logger.info('SIGTERM received, shutting down gracefully');
     if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
     websocket.close();
+    await websiteCms?.close().catch(() => {});
     await db.close();
     process.exit(0);
   });
@@ -454,6 +467,7 @@ if (require.main === module) {
     logger.info('SIGINT received, shutting down gracefully');
     if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
     websocket.close();
+    await websiteCms?.close().catch(() => {});
     await db.close();
     process.exit(0);
   });
@@ -464,4 +478,5 @@ module.exports = {
   app,
   createApp,
   loadPublicWebinarOrigins,
+  websiteCms,
 };
