@@ -218,28 +218,47 @@
     if (!selected) { state.detail = null; state.selected = null; message('No editable website pages are available.'); return; }
     await loadPage(selected, selectedId);
   }
+  // Dashboard mode: CONFIG.website.origin is the public website, which serves hero media
+  // and the published pages. The local review harness sets WEBSITE_CMS_PREVIEW_URL instead.
+  function websiteOrigin() {
+    try {
+      const origin = new URL(window.CONFIG?.website?.origin);
+      return ['http:', 'https:'].includes(origin.protocol) ? origin : null;
+    } catch { return null; }
+  }
+  function mediaUrl(path) {
+    const origin = websiteOrigin();
+    return path && origin ? new URL(path, origin).href : path;
+  }
   function renderPublishedLink() {
     const link = byId('open-published-content'); link.hidden = true;
+    if (!state.detail) return;
+    const content = state.detail.latest.content; const kind = state.detail.entity.kind;
+    const path = kind === 'page' ? content.path : kind === 'officer' ? `/loan-officers/${content.slug}` : '/contact';
     try {
-      const origin = new URL(window.WEBSITE_CMS_PREVIEW_URL);
-      if (!['http:', 'https:'].includes(origin.protocol) || !state.detail) return;
-      const content = state.detail.latest.content; const kind = state.detail.entity.kind;
-      const path = kind === 'page' ? content.path : kind === 'officer' ? `/loan-officers/${content.slug}` : '/contact';
-      link.href = new URL(`/preview/content${path === '/' ? '' : path}`, origin).href;
+      if (window.WEBSITE_CMS_PREVIEW_URL) {
+        const origin = new URL(window.WEBSITE_CMS_PREVIEW_URL);
+        if (!['http:', 'https:'].includes(origin.protocol)) return;
+        link.href = new URL(`/preview/content${path === '/' ? '' : path}`, origin).href;
+      } else {
+        const origin = websiteOrigin();
+        if (!origin) return;
+        link.href = new URL(path, origin).href;
+      }
       link.hidden = false;
-    } catch { /* An explicit review origin is required. */ }
+    } catch { /* An explicit website origin is required. */ }
   }
   function mayDiscard() { return !state.dirty || window.confirm('Discard the unsaved form changes and load the latest saved version?'); }
 
   function assetPath(path) {
-    return typeof path === 'string' && /^\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp|avif|svg|mp4)$/.test(path) ? path : '';
+    return typeof path === 'string' && /^\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+\.(?:jpg|jpeg|png|webp|avif|svg|mp4)$/.test(path) ? mediaUrl(path) : '';
   }
   function posterFor(hero) {
     return hero.media.kind === 'video' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(hero.media.name)
-      ? `/heroes/${hero.media.name}/poster.jpg` : assetPath(hero.media.desktopAsset);
+      ? mediaUrl(`/heroes/${hero.media.name}/poster.jpg`) : assetPath(hero.media.desktopAsset);
   }
   function artworkFor(hero) {
-    return assetPath(hero.artworkAsset) || (!hero.artworkAsset && hero.media.kind === 'video' && hero.media.name === 'christmas-gifts' ? '/brand/msfg-holiday-triangle.svg' : '');
+    return assetPath(hero.artworkAsset) || (!hero.artworkAsset && hero.media.kind === 'video' && hero.media.name === 'christmas-gifts' ? mediaUrl('/brand/msfg-holiday-triangle.svg') : '');
   }
   function libraryRevisions(detail) {
     const revisions = [...(detail.revisions || [])];
@@ -449,7 +468,7 @@
     function preference() {
       if (!allowsMotion()) { removeVideo(); return; }
       if (video || hero.media.kind !== 'video' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(hero.media.name)) return;
-      const base = `/heroes/${hero.media.name}`;
+      const base = mediaUrl(`/heroes/${hero.media.name}`);
       video = node('video', undefined, 'hero-preview-video'); video.muted = true; video.loop = true; video.playsInline = true; video.poster = `${base}/poster.jpg`; video.preload = 'auto'; video.setAttribute('aria-hidden', 'true'); video.tabIndex = -1;
       for (const [file, type, media] of [['720p.mp4', 'video/mp4', '(max-width: 768px)'], ['1080p-av1.mp4', 'video/mp4; codecs="av01.0.08M.08"'], ['1080p.mp4', 'video/mp4']]) { const source = node('source'); source.src = `${base}/${file}`; source.type = type; if (media) source.media = media; video.append(source); }
       control = node('button', 'Play background video', 'hero-preview-pause'); control.type = 'button';
@@ -547,7 +566,7 @@
     });
   });
   try {
-    const configuredUrl = window.WEBSITE_CMS_PREVIEW_URL;
+    const configuredUrl = window.WEBSITE_CMS_PREVIEW_URL || websiteOrigin()?.href;
     if (!configuredUrl) throw new Error('No published homepage URL configured');
     const destination = new URL(configuredUrl);
     if (['http:', 'https:'].includes(destination.protocol)) { byId('open-homepage').href = destination.href; byId('open-homepage').hidden = false; }

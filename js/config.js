@@ -19,6 +19,14 @@
     },
 
     // ========================================
+    // PUBLIC WEBSITE (website editor media + "open published" links)
+    // Empty until the production website origin is chosen; links stay hidden.
+    // ========================================
+    website: {
+      origin: '',
+    },
+
+    // ========================================
     // LOAN FOLDER CREATOR (msfg-dbfolder popout)
     // TODO: replace with production URL once deployed
     // ========================================
@@ -177,6 +185,7 @@
 
   // Freeze everything (deep enough for this structure)
   Object.freeze(CONFIG.api);
+  Object.freeze(CONFIG.website);
   Object.freeze(CONFIG.loanFolderCreator);
   Object.freeze(CONFIG.cognito);
   Object.freeze(CONFIG.refresh);
