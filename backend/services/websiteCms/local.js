@@ -27,18 +27,21 @@ async function atomic(path, bytes) {
   } finally { await rm(temporary, { force: true }); }
 }
 function within(root, child) { return child.startsWith(root + sep); }
-async function createLocalCmsAdapters({ editorialDirectory, publicationDirectory, seed, grants } = {}) {
-  if (![editorialDirectory, publicationDirectory].every(value => typeof value === 'string' && isAbsolute(value))) fail(400, 'website_local_directories_required');
-  const paths = [editorialDirectory, publicationDirectory].map(value => resolve(value));
-  if (paths[0] === paths[1] || within(paths[0], paths[1]) || within(paths[1], paths[0])) fail(400, 'website_local_directories_overlap');
-  for (const path of paths) await mkdir(path, { recursive: true, mode: 0o700 });
-  const [editorial, published] = await Promise.all(paths.map(path => realpath(path)));
-  if (editorial === published || within(editorial, published) || within(published, editorial)) fail(400, 'website_local_directories_overlap');
-  const statePath = join(editorial, 'editorial.json');
-  async function readJson(path, maxBytes = 16 * 1024 * 1024) {
-    if ((await lstat(path)).isSymbolicLink() || (await stat(path)).size > maxBytes) fail(503, 'website_storage_invalid');
-    return JSON.parse(await readFile(path, 'utf8'));
-  }
+async function readJson(path, maxBytes = 16 * 1024 * 1024) {
+  if ((await lstat(path)).isSymbolicLink() || (await stat(path)).size > maxBytes) fail(503, 'website_storage_invalid');
+  return JSON.parse(await readFile(path, 'utf8'));
+}
+
+/**
+ * Directory-backed publication store (release manifests, assets, active pointer).
+ * `owner` binds the directory to exactly one editorial authority; a different
+ * owner fails closed with website_local_writer_conflict.
+ */
+async function createLocalPublicationStore({ publicationDirectory, owner } = {}) {
+  if (typeof publicationDirectory !== 'string' || !isAbsolute(publicationDirectory)) fail(400, 'website_local_directories_required');
+  if (typeof owner !== 'string' || !owner) fail(400, 'website_local_owner_required');
+  await mkdir(resolve(publicationDirectory), { recursive: true, mode: 0o700 });
+  const published = await realpath(resolve(publicationDirectory));
   function objectPath(key) {
     const clean = key.replace(/^\//, '');
     // Reject control bytes and encoded/path traversal characters before filesystem access.
@@ -94,11 +97,33 @@ async function createLocalCmsAdapters({ editorialDirectory, publicationDirectory
         await atomic(join(published, 'current.json'), JSON.stringify(pointer));
       });
     },
+    /** Write a verified initial release; only activates it when no pointer exists yet. */
+    async seedRelease(seed) {
+      const bundle = validateBundle(seed);
+      await publicationStore.writeCandidate(bundle);
+      try {
+        const existing = await readPointer();
+        if (JSON.stringify(existing) !== JSON.stringify(bundle.pointer)) fail(409, 'website_local_seed_conflict');
+      } catch (error) { if (error.code !== 'ENOENT') throw error; await atomic(join(published, 'current.json'), JSON.stringify(bundle.pointer)); }
+      return bundle;
+    },
   };
   // One editorial authority per local publication directory, independent of processes.
   const marker = join(published, '.website-cms-owner');
-  try { await writeFile(marker, editorial, { flag: 'wx', mode: 0o600 }); }
-  catch (error) { if (error.code !== 'EEXIST') throw error; if ((await lstat(marker)).isSymbolicLink() || await readFile(marker, 'utf8') !== editorial) fail(409, 'website_local_writer_conflict'); }
+  try { await writeFile(marker, owner, { flag: 'wx', mode: 0o600 }); }
+  catch (error) { if (error.code !== 'EEXIST') throw error; if ((await lstat(marker)).isSymbolicLink() || await readFile(marker, 'utf8') !== owner) fail(409, 'website_local_writer_conflict'); }
+  return { directory: published, publicationStore };
+}
+
+async function createLocalCmsAdapters({ editorialDirectory, publicationDirectory, seed, grants } = {}) {
+  if (![editorialDirectory, publicationDirectory].every(value => typeof value === 'string' && isAbsolute(value))) fail(400, 'website_local_directories_required');
+  const paths = [editorialDirectory, publicationDirectory].map(value => resolve(value));
+  if (paths[0] === paths[1] || within(paths[0], paths[1]) || within(paths[1], paths[0])) fail(400, 'website_local_directories_overlap');
+  for (const path of paths) await mkdir(path, { recursive: true, mode: 0o700 });
+  const [editorial, published] = await Promise.all(paths.map(path => realpath(path)));
+  if (editorial === published || within(editorial, published) || within(published, editorial)) fail(400, 'website_local_directories_overlap');
+  const statePath = join(editorial, 'editorial.json');
+  const { publicationStore } = await createLocalPublicationStore({ publicationDirectory: published, owner: editorial });
   await locked(join(editorial, '.editorial-lock'), async () => {
     try { await readJson(statePath); return; } catch (error) { if (error.code !== 'ENOENT') throw error; }
     if (!seed || !grants || typeof grants !== 'object' || Array.isArray(grants)) fail(400, 'website_local_seed_required');
@@ -106,11 +131,7 @@ async function createLocalCmsAdapters({ editorialDirectory, publicationDirectory
     const state = { version: 1, grants: Object.entries(grants).map(([userId, capabilities]) => ({ userId, capabilities })), revisions: [], latest: [], heroRevisions: [], heroLatest: [], requests: [], audit: [] };
     if (state.grants.some(item => !Array.isArray(item.capabilities) || item.capabilities.some(value => !['website.edit', 'website.publish', 'website.profile.self'].includes(value)))) fail(400, 'website_local_grants_invalid');
     seedPublished(state, bundle.snapshot);
-    await publicationStore.writeCandidate(bundle);
-    try {
-      const existing = await readPointer();
-      if (JSON.stringify(existing) !== JSON.stringify(bundle.pointer)) fail(409, 'website_local_seed_conflict');
-    } catch (error) { if (error.code !== 'ENOENT') throw error; await atomic(join(published, 'current.json'), JSON.stringify(bundle.pointer)); }
+    await publicationStore.seedRelease(bundle);
     await atomic(statePath, JSON.stringify(state));
   });
   const repository = {
@@ -126,4 +147,4 @@ async function createLocalCmsAdapters({ editorialDirectory, publicationDirectory
   };
   return { repository, publicationStore };
 }
-module.exports = { createLocalCmsAdapters };
+module.exports = { createLocalCmsAdapters, createLocalPublicationStore };
