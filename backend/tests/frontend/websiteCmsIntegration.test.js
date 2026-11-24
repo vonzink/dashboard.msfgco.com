@@ -34,4 +34,17 @@ describe('website editor dashboard integration', () => {
     expect(dashboard).toMatch(/id="website-cms-link"[^>]*hidden/);
     expect(dashboard.indexOf('js/website-cms/navigation.js')).toBeGreaterThan(dashboard.indexOf('js/api-server.js'));
   });
+  it('places the Website tab immediately after Tools and not inside the Tools menu', () => {
+    const dashboard = read('index.html');
+    const navItems = [...dashboard.matchAll(/<li class="nav-item"[^>]*>[\s\S]*?<\/li>/g)].map(match => match[0]);
+    const labels = navItems.map(item => /class="nav-button">[\s\S]*?<\/i>\s*([^<]+?)\s*</.exec(item)?.[1]);
+    const toolsIndex = labels.indexOf('Tools');
+    expect(toolsIndex).toBeGreaterThanOrEqual(0);
+    expect(labels[toolsIndex + 1]).toBe('Website');
+    const website = navItems[toolsIndex + 1];
+    expect(website).toMatch(/^<li class="nav-item" id="website-cms-link" hidden>/);
+    expect(website).toContain('href="/website-cms.html"');
+    expect(navItems[toolsIndex]).not.toContain('website-cms');
+    expect(dashboard.match(/href="\/website-cms\.html"/g)).toHaveLength(1);
+  });
 });
