@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "contractVersion": "1.0.0",
+  "contractVersion": "1.1.0",
   "algorithm": "sha256",
   "files": {
-    "README.md": "6eaf9ee04264e2c43d29234ae66fb7b78e919ad449703ab731984d0065d4877e",
+    "README.md": "7f1466a9168bf69c38f627a7a857519fca143e1fba431b478073ff87487d7701",
     "fixtures/approved-templates.json": "c53bf3ea5e94486cc446703a3be7f693f72034d4edad5ef0cb6565ef847e6b7a",
     "fixtures/invalid-private-field.json": "65badb6ba5747eca5520267a18742ad808f694f95a797e876ddf32cbc9e0e691",
     "fixtures/publish-request.json": "eebc1dbb370c22c7df3abeceaa733b93f3c28d4d3311df43e89d857de626c6c2",
@@ -11,11 +11,11 @@
     "fixtures/revoked-officer.json": "a47a7ea17a900b1ed3d623d7cf402dddbe0f01880eae2ffaeeb07910dc7f5069",
     "fixtures/rollback.json": "b65f24d7d1559fbfc92c38f12d8827847182b372ca49360fb169f2763ece36b6",
     "fixtures/selected-draft.json": "592fb8939a127aaaea896bb22252489268391613c205c085c8b266483c6f1c66",
-    "package.json": "941d7c3f80fbed9d4ca8abe458210cf6b8200563dae47407c2f0d2a342e5bb6d",
-    "site.schema.json": "513d86dd99792995d0701b811263186646893abc67b31955e360c4e663ece99b",
+    "package.json": "4855bbaf4e07f157a8bb019f45e876b9c48e50078d66672880f235a623b61790",
+    "site.schema.json": "96969f211b903f0ec1b96a276a4b7a6a0841e1b6f84ee6b22891255e6d4aa9d9",
     "typegen.cjs": "87d07238941bf2766c5cdf1f43d48e6b0851d9d49c8cb35d692458e21bb1b33c",
-    "types.d.ts": "f5da9aef68ab15b18a09ab5fb85da6c0c869bc12e0922db24b758146f3f3119f",
-    "validate.cjs": "3dec11fa3fff30e3b200012522849fd251bf583c44889e7fc7ea05e84297cf60"
+    "types.d.ts": "54fff8cd0d56ddfcdcc73b799cf1c8a033bd8819070691b43e4cc955ae6c68ec",
+    "validate.cjs": "fbbc3fb8c512e606792a4cfca75c600b02aa6b2cc795a33a40928cca74c86da8"
   },
-  "sha256": "7fc9177fe0f1b44537e45a46bbcb1fd4616a0020511bbc9b9fe288177e03f342"
+  "sha256": "07017d45a123354fac53770b5ad93ccb7e6534c056c83c1eb7f8800113ea0336"
 }

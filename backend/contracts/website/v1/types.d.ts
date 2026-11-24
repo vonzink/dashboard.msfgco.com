@@ -124,6 +124,9 @@ export type HeroVariant = {
   "mobileAlign": "left" | "center" | "right";
   "overlayOpacity": number;
   "media": HeroMedia;
+  "artworkAsset"?: AssetPath;
+  "primary"?: PublicLink;
+  "secondary"?: PublicLink;
 };
 
 export type MediaFile = {

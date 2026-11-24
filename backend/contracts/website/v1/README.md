@@ -44,3 +44,7 @@ function toTenantConfig(publicConfig: PublicTenantConfig): TenantConfig {
 The example imports types from their respective public/source-compatible modules in C1; those modules are not created here. No live service settings or secrets enter this projection. C1 still verifies actual imported type assignability, source fallback/default behavior and metadata merge precedence against its frozen dependency inventory. Public validation rejects malformed snapshots instead of substituting source defaults. Do not silently drop fields from a raw private config: construct the public allowlist explicitly before validation.
 
 Synthetic fixtures use example.com, reserved example phone numbers, fictitious identities and all-zero asset hashes. They are contract tests, not bootstrap production data. Syntactic validation does not prove licensing, content approval, asset availability, or legal compliance.
+
+Version 1.0.1 permits an empty testimonialIds list so a reserved placement does not require an invented endorsement. Existing 1.0.0 snapshots remain valid.
+
+Version 1.1.0 adds optional hero artworkAsset, primary and secondary public links. Artwork must resolve to a declared image file; link safety rules apply. Older snapshots remain valid. Private library IDs, revisions and audit data do not enter the public hero. Publishing a page copies an exact library revision; later library edits never mutate that page.

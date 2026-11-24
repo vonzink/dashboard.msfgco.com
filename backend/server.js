@@ -55,6 +55,7 @@ const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
 const { createPublicSlideEditsRouter, PASSWORD_HEADER: SLIDE_EDIT_PASSWORD_HEADER } = require('./routes/publicSlideEdits');
 const { createInfoInboxRouter } = require('./routes/infoInbox');
+const { createDashboardWebsiteCmsRouter } = require('./routes/websiteCms/dashboard');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
@@ -122,6 +123,7 @@ function createApp({
   errorLogger = logger,
   inboxAuthenticate = authenticate,
   inboxService,
+  websiteCmsService,
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
@@ -262,6 +264,10 @@ app.use(
   publicSlideEditsRoutes,
 );
 
+// Default-disabled until durable CMS service/grants are explicitly configured.
+const websiteCmsRoutes = createDashboardWebsiteCmsRouter({ service: websiteCmsService });
+if (websiteCmsRoutes) app.use('/api/website-cms', websiteCmsRoutes);
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -303,6 +309,7 @@ app.get('/api/me', authenticate, (req, res) => {
 
 // Private to active internal employees.
 app.use('/api/info-inbox', inboxAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, createInfoInboxRouter(inboxService));
+
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);

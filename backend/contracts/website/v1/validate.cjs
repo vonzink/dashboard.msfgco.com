@@ -78,7 +78,7 @@ function safeLink(value) {
 // only when the caller supplies a publication inventory. External SEO images are URLs.
 function references(value, image, key = '') {
   if (typeof value === 'string') {
-    if (['photoAsset', 'imageAsset', 'equalHousingAsset', 'horizontal', 'white', 'mark', 'desktopAsset', 'mobileAsset'].includes(key)) image?.(value);
+    if (['photoAsset', 'imageAsset', 'equalHousingAsset', 'horizontal', 'white', 'mark', 'desktopAsset', 'mobileAsset', 'artworkAsset'].includes(key)) image?.(value);
     if (key === 'ogImage' && !value.startsWith('https://')) image?.(value);
     if (['href', 'sourceUrl', 'canonical', 'ogImage', 'nmlsConsumerAccessUrl', 'url', 'logo', 'item'].includes(key)) safeLink(value);
     return;

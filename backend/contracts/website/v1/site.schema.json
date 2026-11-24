@@ -592,6 +592,15 @@
         },
         "media": {
           "$ref": "#/definitions/HeroMedia"
+        },
+        "artworkAsset": {
+          "$ref": "#/definitions/AssetPath"
+        },
+        "primary": {
+          "$ref": "#/definitions/PublicLink"
+        },
+        "secondary": {
+          "$ref": "#/definitions/PublicLink"
         }
       },
       "required": [
@@ -1028,7 +1037,7 @@
             "$ref": "#/definitions/Id"
           },
           "maxItems": 30,
-          "minItems": 1,
+          "minItems": 0,
           "uniqueItems": true
         }
       },
