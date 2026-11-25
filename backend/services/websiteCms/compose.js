@@ -4,8 +4,9 @@
  * Disabled unless WEBSITE_CMS_ENABLED=1. When enabled it builds:
  *   - a dedicated mysql2 pool on the dashboard database (DB_* settings), used by the
  *     durable MySQL editorial repository (migrations 097-099);
- *   - the directory publication store at WEBSITE_CMS_PUBLICATION_DIR, which the public
- *     website reads (release manifests, assets, active pointer);
+ *   - the publication store the public website reads (release manifests, assets, active
+ *     pointer): WEBSITE_CMS_PUBLICATION_STORE=directory (WEBSITE_CMS_PUBLICATION_DIR) or
+ *     s3 (WEBSITE_CMS_PUBLICATION_BUCKET, WEBSITE_CMS_PUBLICATION_REGION, default us-east-1);
  *   - the website-owned hero/content catalogs from the bundle at WEBSITE_CMS_CATALOG_DIR.
  *
  * Grants are never configured here. They are managed with scripts/website-cms-admin.js.
@@ -14,6 +15,7 @@
 const { isAbsolute } = require('node:path');
 const { createMysqlCmsRepository } = require('./mysql');
 const { createLocalPublicationStore } = require('./local');
+const { createS3PublicationStore } = require('./s3Store');
 const { createWebsiteCmsService } = require('./service');
 const { readCatalogBundle } = require('./catalogBundle');
 
@@ -39,8 +41,17 @@ function readConfig(env) {
     if (!Number.isInteger(value) || value < min || value > max) throw configError(`${name} must be an integer ${min}-${max}`);
     return value;
   };
+  const storeKind = env.WEBSITE_CMS_PUBLICATION_STORE || 'directory';
+  if (!['directory', 's3'].includes(storeKind)) throw configError('WEBSITE_CMS_PUBLICATION_STORE must be directory or s3');
+  let publication;
+  if (storeKind === 's3') {
+    if (!env.WEBSITE_CMS_PUBLICATION_BUCKET) throw configError('WEBSITE_CMS_PUBLICATION_BUCKET is required for s3');
+    publication = { kind: 's3', bucket: env.WEBSITE_CMS_PUBLICATION_BUCKET, region: env.WEBSITE_CMS_PUBLICATION_REGION || 'us-east-1' };
+  } else {
+    publication = { kind: 'directory', directory: absolute('WEBSITE_CMS_PUBLICATION_DIR') };
+  }
   return {
-    publicationDirectory: absolute('WEBSITE_CMS_PUBLICATION_DIR'),
+    publication,
     catalogDirectory: absolute('WEBSITE_CMS_CATALOG_DIR'),
     database: {
       host: env.DB_HOST,
@@ -58,8 +69,21 @@ function websiteCmsEnabled(env = process.env) {
   return env.WEBSITE_CMS_ENABLED === '1';
 }
 
+async function createPublicationStore(publication, owner, createS3Client) {
+  if (publication.kind === 'directory') {
+    return (await createLocalPublicationStore({ publicationDirectory: publication.directory, owner })).publicationStore;
+  }
+  const store = createS3PublicationStore({ client: createS3Client({ region: publication.region }), bucket: publication.bucket });
+  await store.claimOwner(owner);
+  return store.publicationStore;
+}
+
 /** Build repository + publication store (no catalogs). Used by the server and the admin script. */
-async function createWebsiteCmsAdapters({ env = process.env, createPool = options => require('mysql2/promise').createPool(options) } = {}) {
+async function createWebsiteCmsAdapters({
+  env = process.env,
+  createPool = options => require('mysql2/promise').createPool(options),
+  createS3Client = options => new (require('@aws-sdk/client-s3').S3Client)(options),
+} = {}) {
   const config = readConfig(env);
   const pool = createPool({
     ...config.database,
@@ -70,8 +94,13 @@ async function createWebsiteCmsAdapters({ env = process.env, createPool = option
   });
   const repository = createMysqlCmsRepository({ pool, lockTimeoutSeconds: config.lockTimeoutSeconds });
   const owner = `mysql:${config.database.host}:${config.database.port}/${config.database.database}`;
-  const { publicationStore } = await createLocalPublicationStore({ publicationDirectory: config.publicationDirectory, owner });
-  return { config, pool, repository, publicationStore };
+  try {
+    const publicationStore = await createPublicationStore(config.publication, owner, createS3Client);
+    return { config, pool, repository, publicationStore };
+  } catch (error) {
+    await pool.end?.().catch(() => {});
+    throw error;
+  }
 }
 
 /** Full service: adapters + catalogs, then add any missing catalog IDs (never overwrites saved heads). */

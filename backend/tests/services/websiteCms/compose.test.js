@@ -50,6 +50,24 @@ describe('website CMS composition', () => {
     await expect(createWebsiteCmsAdapters({ env: { ...baseEnv(dirs), DB_NAME: 'other' }, createPool: () => ({ getConnection() {} }) })).rejects.toMatchObject({ status: 409 });
   });
 
+  it('selects the S3 store, claims the bucket owner, and needs a bucket name', async () => {
+    const dirs = { publication: await tempDir(), catalog: await tempDir() };
+    const s3Env = { ...baseEnv(dirs), WEBSITE_CMS_PUBLICATION_DIR: undefined, WEBSITE_CMS_PUBLICATION_STORE: 's3', WEBSITE_CMS_PUBLICATION_BUCKET: 'msfg-website-publications-staging' };
+    await expect(createWebsiteCmsAdapters({ env: { ...s3Env, WEBSITE_CMS_PUBLICATION_BUCKET: '' }, createPool: () => ({ getConnection() {} }) })).rejects.toMatchObject({ code: 'website_cms_config_invalid' });
+    await expect(createWebsiteCmsAdapters({ env: { ...s3Env, WEBSITE_CMS_PUBLICATION_STORE: 'ftp' }, createPool: () => ({ getConnection() {} }) })).rejects.toMatchObject({ code: 'website_cms_config_invalid' });
+    const sent = [];
+    let clientOptions;
+    const adapters = await createWebsiteCmsAdapters({
+      env: s3Env,
+      createPool: () => ({ getConnection() {} }),
+      createS3Client: options => { clientOptions = options; return { send: async command => { sent.push(command.input); return {}; } }; },
+    });
+    expect(clientOptions).toEqual({ region: 'us-east-1' });
+    expect(sent[0]).toMatchObject({ Bucket: 'msfg-website-publications-staging', Key: '.website-cms-owner', IfNoneMatch: '*' });
+    expect(Buffer.from(sent[0].Body).toString()).toBe('mysql:127.0.0.1:3306/d');
+    expect(typeof adapters.publicationStore.activate).toBe('function');
+  });
+
   it('deferred service answers 503 until started, then delegates', async () => {
     let built = 0;
     const real = Object.fromEntries(ROUTER_METHODS.map(name => [name, async args => ({ name, args })]));
