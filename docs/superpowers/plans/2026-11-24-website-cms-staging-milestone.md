@@ -74,6 +74,15 @@ commands for approval before they run.
   block on, SSE (KMS or AES256), TLS-only policy, lifecycle for `previews/` (1 day) and
   noncurrent versions. Writer policy for the dashboard backend; read-only policy for the
   website instance role. No public access; the website serves media from the release.
+- **Done 2026-11-24 (owner-approved):** bucket `msfg-website-publications-staging`
+  created in us-east-1: versioning on, all four public-access blocks, AES256 + bucket
+  key, tags Env=Staging/Purpose=WebsitePublications, lifecycle (previews 1 day,
+  noncurrent 30 days, multipart 1 day), TLS-only bucket policy (not public).
+- **Verified on the real bucket (aws-cli 2.33.12):** `If-None-Match: *` refuses an
+  existing key (412); `If-Match: <etag>` succeeds when current and fails when stale (412);
+  five concurrent writers with the same ETag → exactly one winner, the others got
+  `PreconditionFailed` (412) or `ConditionalRequestConflict` (409). The store must treat
+  both 412 and 409 as "activation lost". Test objects and all their versions deleted.
 - Key layout (matches the contract): `current.json`, `revocations.json`,
   `publications/<id>/snapshot.json`, `publications/<id>/pointer.json`, assets at their
   contract paths, private `previews/<id>/…`.
