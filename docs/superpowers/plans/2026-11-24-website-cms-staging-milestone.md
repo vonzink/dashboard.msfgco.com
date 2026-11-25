@@ -83,6 +83,15 @@ commands for approval before they run.
   five concurrent writers with the same ETag → exactly one winner, the others got
   `PreconditionFailed` (412) or `ConditionalRequestConflict` (409). The store must treat
   both 412 and 409 as "activation lost". Test objects and all their versions deleted.
+- **Done 2026-11-24:** dashboard `s3Store.js` (c7175b4) and website `createS3Store`
+  (msfg-website `feat/website-s3-publication`, 4e22a13).
+- **Live run 2026-11-24 (owner-approved: synthetic data, then wipe):** local backend
+  (fresh MySQL schema) + local website (`MSFG_PUBLICATION_SOURCE=s3`) against the staging
+  bucket with profile `default`. Full flow passed: draft private, survives restart, editor
+  preview, publish (website updated in 8 s), rollback to generation 3 (website restored in
+  30 s), permission denials as before. Assets uploaded once (immutable skip worked).
+  Afterwards all 19 object versions and the owner marker were deleted (0 remaining) and
+  the test schema dropped. The bucket is empty with its settings intact.
 - Key layout (matches the contract): `current.json`, `revocations.json`,
   `publications/<id>/snapshot.json`, `publications/<id>/pointer.json`, assets at their
   contract paths, private `previews/<id>/…`.
