@@ -1,0 +1,947 @@
+{
+  "schemaVersion": 1,
+  "publicationId": "publication-synthetic-2",
+  "createdAt": "2026-11-20T01:00:00Z",
+  "revisions": [
+    {
+      "entity": {
+        "kind": "site",
+        "id": "site"
+      },
+      "revisionId": "revision-site-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-0"
+      },
+      "revisionId": "revision-page-0-2"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-1"
+      },
+      "revisionId": "revision-page-1-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-2"
+      },
+      "revisionId": "revision-page-2-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-3"
+      },
+      "revisionId": "revision-page-3-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-4"
+      },
+      "revisionId": "revision-page-4-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-5"
+      },
+      "revisionId": "revision-page-5-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-6"
+      },
+      "revisionId": "revision-page-6-1"
+    },
+    {
+      "entity": {
+        "kind": "page",
+        "id": "page-7"
+      },
+      "revisionId": "revision-page-7-1"
+    },
+    {
+      "entity": {
+        "kind": "officer",
+        "id": "officer-synthetic"
+      },
+      "revisionId": "revision-officer-1"
+    },
+    {
+      "entity": {
+        "kind": "testimonial",
+        "id": "testimonial-synthetic"
+      },
+      "revisionId": "revision-testimonial-1"
+    }
+  ],
+  "site": {
+    "company": {
+      "shortName": "Synthetic",
+      "legalName": "Synthetic Example Company",
+      "foundedYear": 2015,
+      "logos": {
+        "horizontal": "/media/synthetic/image.jpg",
+        "white": "/media/synthetic/image.jpg",
+        "mark": "/media/synthetic/image.jpg"
+      }
+    },
+    "contact": {
+      "phoneDisplay": "(202) 555-0100",
+      "phoneHref": "tel:+12025550100",
+      "email": "contact@example.com",
+      "nmls": "000000",
+      "nmlsConsumerAccessUrl": "https://example.com/registry"
+    },
+    "navigation": {
+      "primary": [
+        {
+          "label": "Example contact",
+          "href": "/contact"
+        }
+      ],
+      "footer": [
+        {
+          "label": "Example contact",
+          "href": "/contact"
+        }
+      ],
+      "application": {
+        "label": "Example contact",
+        "href": "/contact"
+      },
+      "signIn": {
+        "label": "Example sign in",
+        "href": "https://example.com/sign-in"
+      }
+    },
+    "legal": {
+      "states": [
+        {
+          "code": "CO",
+          "name": "Colorado",
+          "licenseNumber": "SYNTHETIC"
+        }
+      ],
+      "address": "100 Example Street",
+      "privacyEmail": "privacy@example.com",
+      "equalHousingText": "Synthetic housing disclosure",
+      "equalHousingAsset": "/media/synthetic/image.jpg",
+      "disclosure": "Synthetic legal disclosure",
+      "links": [
+        {
+          "label": "Example contact",
+          "href": "/contact"
+        }
+      ]
+    },
+    "origin": "https://example.com"
+  },
+  "pages": [
+    {
+      "id": "page-0",
+      "path": "/",
+      "template": "home",
+      "title": "Selected synthetic draft",
+      "description": "Synthetic description 0",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        },
+        {
+          "id": "hero-1",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-2",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-3",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-4",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [
+        {
+          "id": "services",
+          "type": "service-cards",
+          "heading": "Example services",
+          "cards": [
+            {
+              "title": "Example 0",
+              "description": "Synthetic description",
+              "link": {
+                "label": "Example contact",
+                "href": "/contact"
+              }
+            },
+            {
+              "title": "Example 1",
+              "description": "Synthetic description",
+              "link": {
+                "label": "Example contact",
+                "href": "/contact"
+              }
+            },
+            {
+              "title": "Example 2",
+              "description": "Synthetic description",
+              "link": {
+                "label": "Example contact",
+                "href": "/contact"
+              }
+            },
+            {
+              "title": "Example 3",
+              "description": "Synthetic description",
+              "link": {
+                "label": "Example contact",
+                "href": "/contact"
+              }
+            },
+            {
+              "title": "Example 4",
+              "description": "Synthetic description",
+              "link": {
+                "label": "Example contact",
+                "href": "/contact"
+              }
+            }
+          ]
+        },
+        {
+          "id": "benefits",
+          "type": "benefits",
+          "heading": "Example benefits",
+          "items": [
+            {
+              "title": "Guidance",
+              "description": "Synthetic description"
+            }
+          ]
+        },
+        {
+          "id": "officers",
+          "type": "officer-introduction",
+          "heading": "Example team",
+          "description": "Synthetic team",
+          "officerIds": [
+            "officer-synthetic"
+          ],
+          "link": {
+            "label": "Example contact",
+            "href": "/contact"
+          }
+        },
+        {
+          "id": "testimonials",
+          "type": "testimonials",
+          "heading": "Synthetic testimonial",
+          "testimonialIds": [
+            "testimonial-synthetic"
+          ]
+        },
+        {
+          "id": "faq",
+          "type": "faq",
+          "heading": "Example questions",
+          "items": [
+            {
+              "question": "Synthetic question?",
+              "answer": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Synthetic answer."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "question": "Synthetic question?",
+              "answer": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Synthetic answer."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "question": "Synthetic question?",
+              "answer": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Synthetic answer."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "question": "Synthetic question?",
+              "answer": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Synthetic answer."
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "question": "Synthetic question?",
+              "answer": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Synthetic answer."
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "cta",
+          "type": "cta",
+          "heading": "Example contact",
+          "description": "Synthetic description",
+          "primary": {
+            "label": "Example contact",
+            "href": "/contact"
+          }
+        }
+      ],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 0",
+        "description": "Synthetic description 0",
+        "canonical": "https://example.com/",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-1",
+      "path": "/veterans",
+      "template": "division",
+      "title": "Synthetic page 1",
+      "description": "Synthetic description 1",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        },
+        {
+          "id": "hero-1",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-2",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 1",
+        "description": "Synthetic description 1",
+        "canonical": "https://example.com/veterans",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-2",
+      "path": "/reverse",
+      "template": "division",
+      "title": "Synthetic page 2",
+      "description": "Synthetic description 2",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        },
+        {
+          "id": "hero-1",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-2",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 2",
+        "description": "Synthetic description 2",
+        "canonical": "https://example.com/reverse",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-3",
+      "path": "/investment",
+      "template": "division",
+      "title": "Synthetic page 3",
+      "description": "Synthetic description 3",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        },
+        {
+          "id": "hero-1",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-2",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 3",
+        "description": "Synthetic description 3",
+        "canonical": "https://example.com/investment",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-4",
+      "path": "/home-equity",
+      "template": "division",
+      "title": "Synthetic page 4",
+      "description": "Synthetic description 4",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        },
+        {
+          "id": "hero-1",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        },
+        {
+          "id": "hero-2",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "image",
+            "desktopAsset": "/media/synthetic/image.jpg",
+            "mobileAsset": "/media/synthetic/image.jpg"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 4",
+        "description": "Synthetic description 4",
+        "canonical": "https://example.com/home-equity",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-5",
+      "path": "/buy",
+      "template": "product",
+      "title": "Synthetic page 5",
+      "description": "Synthetic description 5",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 5",
+        "description": "Synthetic description 5",
+        "canonical": "https://example.com/buy",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-6",
+      "path": "/refinance",
+      "template": "product",
+      "title": "Synthetic page 6",
+      "description": "Synthetic description 6",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 6",
+        "description": "Synthetic description 6",
+        "canonical": "https://example.com/refinance",
+        "robots": "noindex,nofollow"
+      }
+    },
+    {
+      "id": "page-7",
+      "path": "/contact",
+      "template": "standard",
+      "title": "Synthetic page 7",
+      "description": "Synthetic description 7",
+      "heroVariants": [
+        {
+          "id": "hero-0",
+          "active": true,
+          "headline": "Synthetic headline",
+          "description": "Synthetic description",
+          "desktopAlign": "left",
+          "mobileAlign": "center",
+          "overlayOpacity": 0.5,
+          "media": {
+            "kind": "video",
+            "name": "synthetic-v1"
+          }
+        }
+      ],
+      "fallbackImage": {
+        "kind": "image",
+        "desktopAsset": "/media/synthetic/image.jpg",
+        "mobileAsset": "/media/synthetic/image.jpg"
+      },
+      "sections": [],
+      "seo": {
+        "include": true,
+        "title": "Synthetic page 7",
+        "description": "Synthetic description 7",
+        "canonical": "https://example.com/contact",
+        "robots": "noindex,nofollow"
+      }
+    }
+  ],
+  "officers": [
+    {
+      "id": "officer-synthetic",
+      "slug": "synthetic-officer",
+      "name": "Synthetic Example Officer",
+      "nmls": "000001",
+      "phone": "(202) 555-0101",
+      "email": "officer@example.com",
+      "photoAsset": "/media/synthetic/image.jpg",
+      "biography": "Synthetic identity for contract tests only.",
+      "specialties": [
+        "Example"
+      ],
+      "licensedStates": [
+        "CO"
+      ]
+    }
+  ],
+  "testimonials": [
+    {
+      "id": "testimonial-synthetic",
+      "text": "Synthetic fixture testimonial, never publish.",
+      "displayName": "Example Person",
+      "sourceUrl": "https://example.com/review"
+    }
+  ],
+  "media": [
+    {
+      "name": "synthetic-image-v1",
+      "kind": "image",
+      "files": [
+        {
+          "path": "/media/synthetic/image.jpg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "bytes": 100,
+          "contentType": "image/jpeg"
+        }
+      ]
+    },
+    {
+      "name": "synthetic-v1",
+      "kind": "hero-video",
+      "files": [
+        {
+          "path": "/heroes/synthetic-v1/poster.jpg",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "bytes": 100,
+          "contentType": "image/jpeg"
+        },
+        {
+          "path": "/heroes/synthetic-v1/720p.mp4",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "bytes": 100,
+          "contentType": "video/mp4"
+        },
+        {
+          "path": "/heroes/synthetic-v1/1080p-av1.mp4",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "bytes": 100,
+          "contentType": "video/mp4"
+        },
+        {
+          "path": "/heroes/synthetic-v1/1080p.mp4",
+          "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "bytes": 100,
+          "contentType": "video/mp4"
+        }
+      ]
+    }
+  ],
+  "calculatorCompatibility": {
+    "config": {
+      "brand": {
+        "shortName": "Synthetic",
+        "legalName": "Synthetic Example Company",
+        "foundedYear": 2015,
+        "assistantName": "",
+        "logos": {
+          "horizontal": "/media/synthetic/image.jpg",
+          "white": "/media/synthetic/image.jpg",
+          "mark": "/media/synthetic/image.jpg"
+        }
+      },
+      "theme": {
+        "green900": "#104547",
+        "green850": "#104547",
+        "green800": "#104547",
+        "green700": "#104547",
+        "green600": "#104547",
+        "greenGlow": "#104547",
+        "spring": "#104547",
+        "spring2": "#104547",
+        "spring3": "#104547",
+        "springSoft": "#104547",
+        "mint": "#104547",
+        "ink": "#104547",
+        "paper": "#104547",
+        "paper2": "#104547",
+        "muted": "#104547",
+        "line": "#104547",
+        "onDark": "#104547",
+        "onDark2": "#104547",
+        "onDark3": "#104547",
+        "hairDark": "#104547",
+        "lip": "#104547",
+        "radiusSm": "6px",
+        "radiusMd": "6px",
+        "radiusLg": "6px",
+        "radiusXl": "6px",
+        "fontFamily": "var(--font-hanken), system-ui, -apple-system, \"Segoe UI\", sans-serif"
+      },
+      "contact": {
+        "phoneDisplay": "(202) 555-0100",
+        "phoneHref": "tel:+12025550100",
+        "email": "contact@example.com",
+        "nmls": "000000",
+        "nmlsConsumerAccessUrl": "https://example.com/registry"
+      },
+      "legal": {
+        "states": [
+          {
+            "code": "CO",
+            "name": "Colorado",
+            "licenseNumber": "SYNTHETIC"
+          }
+        ],
+        "texasNotice": "Synthetic notice for testing only.",
+        "ratesDisclaimer": "Synthetic illustrative disclosure.",
+        "address": "100 Example Street",
+        "privacyEmail": "privacy@example.com",
+        "effectiveDates": {
+          "terms": "2026-11-20"
+        },
+        "calculatorDisclaimer": "Illustration only; not an offer.",
+        "exampleRateNote": "Illustrative rate, not an offer."
+      },
+      "seo": {
+        "titleDefault": "Synthetic example",
+        "titleTemplate": "Synthetic example",
+        "description": "Synthetic example",
+        "ogTitle": "Synthetic example",
+        "ogDescription": "Synthetic example",
+        "siteName": "Synthetic example",
+        "orgDescription": "Synthetic example",
+        "knowsLanguage": [
+          "English"
+        ],
+        "ogImage": "/media/synthetic/image.jpg"
+      },
+      "marketing": {
+        "tagline": "Synthetic example",
+        "stats": [],
+        "familyOfCompanies": [],
+        "footerFamily": [],
+        "testimonials": []
+      },
+      "features": {
+        "showFamily": true,
+        "ghlChat": false,
+        "aiAssistant": false,
+        "heroAiMode": false,
+        "askAiChat": false,
+        "ratesNavigation": false
+      },
+      "applyOffRamp": {
+        "channels": [
+          "call",
+          "email"
+        ],
+        "slaCopy": "Contact our example team.",
+        "finishScreen": "rendered"
+      },
+      "calculators": {
+        "disabled": [],
+        "exampleRatePct": 7
+      }
+    },
+    "origin": "https://example.com",
+    "pageSeo": {
+      "/calculators": {
+        "include": true
+      }
+    }
+  }
+}

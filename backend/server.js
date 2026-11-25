@@ -55,6 +55,7 @@ const checklistsRoutes = require('./routes/checklists');
 const askAiRoutes = require('./routes/askAi');
 const { createPublicSlideEditsRouter, PASSWORD_HEADER: SLIDE_EDIT_PASSWORD_HEADER } = require('./routes/publicSlideEdits');
 const { createInfoInboxRouter } = require('./routes/infoInbox');
+const { createDashboardWebsiteCmsRouter } = require('./routes/websiteCms/dashboard');
 
 const PORT = process.env.PORT || 8080;
 let calendarSyncScheduler = null;
@@ -122,6 +123,7 @@ function createApp({
   errorLogger = logger,
   inboxAuthenticate = authenticate,
   inboxService,
+  websiteCmsService,
 } = {}) {
 const app = express();
 const resolvedPublicWebinarOrigins = loadPublicWebinarOrigins(process.env, publicWebinarOrigins);
@@ -262,6 +264,10 @@ app.use(
   publicSlideEditsRoutes,
 );
 
+// Default-disabled until durable CMS service/grants are explicitly configured.
+const websiteCmsRoutes = createDashboardWebsiteCmsRouter({ service: websiteCmsService });
+if (websiteCmsRoutes) app.use('/api/website-cms', websiteCmsRoutes);
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -303,6 +309,7 @@ app.get('/api/me', authenticate, (req, res) => {
 
 // Private to active internal employees.
 app.use('/api/info-inbox', inboxAuthenticate, requireDbUser, requireActiveDbUser, requireNonExternal, createInfoInboxRouter(inboxService));
+
 
 // Routes accessible to ALL authenticated users (including External)
 app.use('/api/announcements', authenticate, announcementsRoutes);
@@ -381,7 +388,9 @@ app.use((req, res) => {
 return app;
 }
 
-const app = createApp();
+// Website CMS is off unless WEBSITE_CMS_ENABLED=1 (see services/websiteCms/compose.js).
+const websiteCms = require('./services/websiteCms/compose').createDeferredWebsiteCmsService();
+const app = createApp({ websiteCmsService: websiteCms?.service });
 
 // ======================
 // START SERVER
@@ -394,6 +403,16 @@ async function startServer() {
     const migrations = require('./db/migrations');
     await migrations.runMigrations();
     logger.info('Database migrations completed');
+
+    // Non-fatal: a CMS failure leaves /api/website-cms returning 503 (Website tab hidden).
+    if (websiteCms) {
+      try {
+        await websiteCms.start();
+        logger.info('Website CMS ready');
+      } catch (err) {
+        logger.error({ err: err.message }, 'Website CMS failed to start; /api/website-cms returns 503');
+      }
+    }
 
     // Seed bundled "general" checklist templates as is_global=TRUE.
     // No-op if templates already present, safe on every boot.
@@ -440,6 +459,7 @@ if (require.main === module) {
     logger.info('SIGTERM received, shutting down gracefully');
     if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
     websocket.close();
+    await websiteCms?.close().catch(() => {});
     await db.close();
     process.exit(0);
   });
@@ -447,6 +467,7 @@ if (require.main === module) {
     logger.info('SIGINT received, shutting down gracefully');
     if (calendarSyncScheduler) clearInterval(calendarSyncScheduler);
     websocket.close();
+    await websiteCms?.close().catch(() => {});
     await db.close();
     process.exit(0);
   });
@@ -457,4 +478,5 @@ module.exports = {
   app,
   createApp,
   loadPublicWebinarOrigins,
+  websiteCms,
 };

@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="website-cms-csrf" content="">
+  <script data-dashboard-auth src="/js/auth-gate.js"></script>
+  <title>Website publishing | MSFG</title>
+  <link rel="stylesheet" href="/css/variables.css">
+  <link rel="stylesheet" href="/css/website-cms.css">
+  <script data-dashboard-auth defer src="/js/config.js"></script>
+  <script data-dashboard-auth defer src="/js/api-server.js"></script>
+  <script defer src="/js/website-cms/content-fields.js"></script>
+  <script defer src="/js/website-cms/editor.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#editor">Skip to editor</a>
+  <div class="review-banner">Website editor preview — production integration pending</div>
+  <header class="cms-header">
+    <div><a id="back-dashboard" href="/">Back to dashboard</a><p class="brand">MSFG <span>Website</span></p><h1>Website publishing</h1><p>Save a draft. Review a version. Publish when it is ready.</p></div>
+    <a id="open-homepage" class="button secondary" href="#" hidden target="_blank" rel="noopener noreferrer">Open published homepage <span aria-hidden="true">↗</span></a>
+  </header>
+  <main class="cms-shell">
+    <div id="status" class="status" role="status" aria-live="polite">Loading website content…</div>
+    <div id="error" class="error" role="alert" hidden></div>
+    <nav class="editor-sections" aria-label="Website editor sections"><a href="#hero-library">Hero library</a><a href="#page-workspace">Content &amp; publishing</a></nav>
+    <section id="hero-library" class="panel library-panel" aria-labelledby="library-title">
+      <div class="panel-heading"><div><h2 id="library-title">Hero library</h2><p class="muted">Shared designs, saved as server revisions. Assign a saved version to a page when it is ready.</p></div><span id="library-count" class="badge">Loading</span></div>
+      <div id="library-unavailable" class="muted" hidden>The hero library is not configured in this workspace.</div>
+      <div id="library-workspace" class="library-workspace">
+        <div>
+          <div class="library-filters"><div><label for="library-search">Search hero library</label><input id="library-search" type="search" placeholder="Search by name or theme"></div><div><label for="library-category">Theme</label><select id="library-category"><option value="">All themes</option></select></div></div>
+          <div id="library-cards" class="library-cards" aria-label="Hero designs"></div>
+          <p id="library-empty" class="muted" hidden>No designs match your search. Try another name or theme.</p>
+        </div>
+        <aside id="library-editor" class="library-editor" tabindex="-1" aria-labelledby="library-editor-title">
+          <div class="panel-heading"><h3 id="library-editor-title">Choose a hero</h3><span id="library-draft-state" class="badge">Not loaded</span></div>
+          <form id="library-form"><fieldset id="library-fields" disabled><legend class="visually-hidden">Shared hero design</legend><div id="library-inputs"></div></fieldset><p id="library-base-revision" class="muted"></p><div class="library-actions"><button id="save-library-hero" class="button" type="submit" disabled>Save library revision</button><button id="reload-library-hero" class="button secondary" type="button" disabled>Load latest</button></div></form>
+          <p id="library-status" class="muted" role="status" aria-live="polite">Library saves do not change page assignments or the published website.</p>
+          <div class="library-saved-review"><label for="library-revision-picker">Saved library revision</label><select id="library-revision-picker" disabled></select><button id="preview-library-hero" class="button secondary" type="button" disabled>Preview saved hero</button><p class="muted">The editor loads the latest version. This picker previews an exact saved version.</p></div>
+        </aside>
+      </div>
+    </section>
+    <div id="page-workspace" class="workspace-heading"><h2>Content &amp; publishing</h2><p class="muted">Edit page sections, FAQs, loan officer profiles, or company contact details. Save and publish each item separately.</p></div>
+    <div class="workspace-toolbar">
+      <label for="page-picker">Website content <select id="page-picker" disabled><option>Loading…</option></select></label>
+      <button id="refresh" type="button" class="button secondary">Refresh revisions</button>
+      <a id="open-published-content" class="button secondary" href="#" target="_blank" rel="noopener noreferrer" hidden>Open published content ↗</a>
+    </div>
+    <div class="workspace">
+      <section id="editor" class="panel" aria-labelledby="editor-title">
+        <div class="panel-heading"><div><p class="eyebrow">1 · Edit</p><h2 id="editor-title">Homepage draft</h2></div><span id="draft-state" class="badge">Loading</span></div>
+        <p class="muted">Saving creates a new version. It does not change the published website.</p>
+        <form id="draft-form">
+          <fieldset id="draft-fields" disabled>
+            <legend class="visually-hidden">Website content</legend>
+            <div id="page-only-fields">
+            <label for="page-title">Page title <input id="page-title" name="title" required maxlength="10000"></label>
+            <label for="page-description">Page description <textarea id="page-description" name="description" required maxlength="10000" rows="3"></textarea></label>
+            <div class="subheading"><h3>Hero variants</h3><p>Several can be active. Each visitor sees one active hero for the day.</p></div>
+            <div id="hero-fields"></div>
+            </div>
+            <div class="subheading"><h3 id="content-fields-title">Page sections</h3><p id="content-fields-note">Edit content within the approved layout. Page URLs and section types stay fixed.</p></div>
+            <div id="section-fields"></div>
+          </fieldset>
+          <div id="content-import" class="content-import" hidden><button id="load-website-copy" type="button" class="button secondary" hidden>Load website copy</button><p class="muted">Load the reviewed page text and sections into a new draft. Your heroes stay in place. Nothing is published.</p></div>
+          <div class="form-footer"><p id="base-revision" class="muted"></p><button id="save-draft" type="submit" class="button" disabled>Save draft</button></div>
+        </form>
+      </section>
+      <aside class="panel publish-panel" aria-labelledby="publish-title">
+        <p class="eyebrow">2 · Review & publish</p><h2 id="publish-title">Choose a saved version</h2>
+        <p class="muted">Only the version selected below will be published. Other saved drafts stay private.</p>
+        <label for="revision-picker">Saved revision <select id="revision-picker" disabled><option>No revisions loaded</option></select></label>
+        <div id="revision-preview" class="revision-preview" aria-live="polite"><p class="muted">Select a saved revision to inspect its content.</p></div>
+        <button id="preview-page-revision" type="button" class="button secondary" disabled>Preview saved content</button>
+        <button id="review-publish" type="button" class="button" disabled>Review publication</button>
+        <div class="publication-state"><h3>Current publication</h3><p id="publication-id">Not loaded</p><p id="adoption-status" class="muted">Website adoption is checked separately.</p></div>
+      </aside>
+    </div>
+    <p class="local-note">This isolated review does not publish to the live MSFG website. Staff authentication, media uploads, and production dashboard navigation are connected in later integration steps.</p>
+  </main>
+  <dialog id="publish-confirmation" aria-labelledby="confirmation-title" aria-describedby="confirmation-note">
+    <form method="dialog"><button class="close-dialog" aria-label="Close publication review">×</button></form>
+    <p class="eyebrow">Publication review</p><h2 id="confirmation-title">Publish this saved version?</h2>
+    <p id="confirmation-note">This publishes the complete selected content revision. Other saved drafts remain private. Unsaved form changes are not included.</p>
+    <div id="confirmation-summary" class="revision-preview"></div>
+    <div class="dialog-actions"><button id="cancel-publish" type="button" class="button secondary">Keep as draft</button><button id="confirm-publish" type="button" class="button">Publish selected revision</button></div>
+  </dialog>
+  <dialog id="content-visual-preview" aria-labelledby="content-preview-title" class="content-preview-dialog">
+    <form method="dialog"><button class="close-dialog" aria-label="Close content preview">×</button></form>
+    <h2 id="content-preview-title">Saved content preview</h2><p id="content-preview-note" class="muted"></p>
+    <div id="content-preview-body"></div>
+    <p class="muted">Private content review of this saved version. Links are displayed without opening their destinations.</p>
+  </dialog>
+  <dialog id="hero-visual-preview" class="hero-preview-dialog" aria-labelledby="hero-preview-title" aria-describedby="hero-preview-note">
+    <form method="dialog"><button class="close-dialog" aria-label="Close hero preview">×</button></form>
+    <h2 id="hero-preview-title">Saved hero preview</h2><p id="hero-preview-note" class="muted"></p>
+    <div id="hero-preview-slot-field"><label for="hero-preview-slot">Preview hero slot</label><select id="hero-preview-slot"></select></div>
+    <div id="hero-preview-stage" class="hero-preview-stage"></div>
+    <div id="hero-preview-sections" class="content-preview-body"></div>
+    <p id="hero-preview-default-note" class="muted" hidden></p>
+    <p id="hero-preview-action" class="muted" role="status"></p>
+    <p class="muted">Private visual review of this saved revision. Preview buttons do not open applications or publish changes.</p>
+  </dialog>
+</body>
+</html>

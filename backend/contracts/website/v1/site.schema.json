@@ -1,0 +1,2514 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://msfg.us/contracts/v1/site.schema.json",
+  "$ref": "#/definitions/SiteSnapshot",
+  "definitions": {
+    "PlainText": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 10000,
+      "pattern": "^[^<>\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f]*$"
+    },
+    "Id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"
+    },
+    "Slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "RoutePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 250,
+      "pattern": "^/(?:[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*)?$"
+    },
+    "AssetPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^/(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+\\.(?:jpg|jpeg|png|webp|avif|svg|mp4)$"
+    },
+    "HttpsUrl": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^https://[^\\s<>\\\\]+$",
+      "format": "uri"
+    },
+    "LinkHref": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^(?:/(?!/)[a-zA-Z0-9/_?=&%#.+~-]*|#[a-zA-Z0-9_-]+|https://[^\\s<>\\\\]+|mailto:[a-zA-Z0-9.!#$%&\\x27*+/=?^_`{|}~-]+@[a-zA-Z0-9.-]+|tel:\\+?[0-9()-]+|sms:\\+?[0-9]+)$"
+    },
+    "Email": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 254,
+      "format": "email",
+      "pattern": "^[^\\s<>]+$"
+    },
+    "Phone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 40,
+      "pattern": "^\\+?[0-9() .-]+$"
+    },
+    "UtcTimestamp": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 30,
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?Z$"
+    },
+    "Sha256": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "StateCode": {
+      "type": "string",
+      "enum": [
+        "AL",
+        "AK",
+        "AZ",
+        "AR",
+        "CA",
+        "CO",
+        "CT",
+        "DE",
+        "DC",
+        "FL",
+        "GA",
+        "HI",
+        "ID",
+        "IL",
+        "IN",
+        "IA",
+        "KS",
+        "KY",
+        "LA",
+        "ME",
+        "MD",
+        "MA",
+        "MI",
+        "MN",
+        "MS",
+        "MO",
+        "MT",
+        "NE",
+        "NV",
+        "NH",
+        "NJ",
+        "NM",
+        "NY",
+        "NC",
+        "ND",
+        "OH",
+        "OK",
+        "OR",
+        "PA",
+        "RI",
+        "SC",
+        "SD",
+        "TN",
+        "TX",
+        "UT",
+        "VT",
+        "VA",
+        "WA",
+        "WV",
+        "WI",
+        "WY",
+        "AS",
+        "GU",
+        "MP",
+        "PR",
+        "VI"
+      ]
+    },
+    "PublicLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "href": {
+          "$ref": "#/definitions/LinkHref"
+        }
+      },
+      "required": [
+        "label",
+        "href"
+      ]
+    },
+    "InlineText": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "$ref": "#/definitions/PlainText"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "strong",
+                "emphasis"
+              ]
+            },
+            "text": {
+              "$ref": "#/definitions/PlainText"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "link"
+            },
+            "text": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "href": {
+              "$ref": "#/definitions/LinkHref"
+            }
+          },
+          "required": [
+            "type",
+            "text",
+            "href"
+          ]
+        }
+      ]
+    },
+    "ProseBlock": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "paragraph",
+                "heading"
+              ]
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/InlineText"
+              },
+              "maxItems": 100,
+              "minItems": 1
+            }
+          },
+          "required": [
+            "type",
+            "content"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "list"
+            },
+            "ordered": {
+              "type": "boolean"
+            },
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/InlineText"
+                },
+                "maxItems": 100,
+                "minItems": 1
+              },
+              "maxItems": 100,
+              "minItems": 1
+            }
+          },
+          "required": [
+            "type",
+            "ordered",
+            "items"
+          ]
+        }
+      ]
+    },
+    "PostalAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "@type": {
+          "const": "PostalAddress"
+        },
+        "streetAddress": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "addressLocality": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "addressRegion": {
+          "$ref": "#/definitions/StateCode"
+        },
+        "postalCode": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20
+        },
+        "addressCountry": {
+          "const": "US"
+        }
+      },
+      "required": [
+        "@type",
+        "streetAddress",
+        "addressLocality",
+        "addressRegion",
+        "postalCode",
+        "addressCountry"
+      ]
+    },
+    "StructuredData": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "@context": {
+              "const": "https://schema.org"
+            },
+            "@type": {
+              "type": "string",
+              "enum": [
+                "Organization",
+                "FinancialService",
+                "MortgageBroker"
+              ]
+            },
+            "name": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "url": {
+              "$ref": "#/definitions/HttpsUrl"
+            },
+            "logo": {
+              "$ref": "#/definitions/HttpsUrl"
+            },
+            "description": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "telephone": {
+              "$ref": "#/definitions/Phone"
+            },
+            "email": {
+              "$ref": "#/definitions/Email"
+            },
+            "address": {
+              "$ref": "#/definitions/PostalAddress"
+            }
+          },
+          "required": [
+            "@context",
+            "@type",
+            "name",
+            "url"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "@context": {
+              "const": "https://schema.org"
+            },
+            "@type": {
+              "const": "FAQPage"
+            },
+            "mainEntity": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "@type": {
+                    "const": "Question"
+                  },
+                  "name": {
+                    "$ref": "#/definitions/PlainText"
+                  },
+                  "acceptedAnswer": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "@type": {
+                        "const": "Answer"
+                      },
+                      "text": {
+                        "$ref": "#/definitions/PlainText"
+                      }
+                    },
+                    "required": [
+                      "@type",
+                      "text"
+                    ]
+                  }
+                },
+                "required": [
+                  "@type",
+                  "name",
+                  "acceptedAnswer"
+                ]
+              },
+              "maxItems": 50,
+              "minItems": 1
+            }
+          },
+          "required": [
+            "@context",
+            "@type",
+            "mainEntity"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "@context": {
+              "const": "https://schema.org"
+            },
+            "@type": {
+              "const": "BreadcrumbList"
+            },
+            "itemListElement": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "@type": {
+                    "const": "ListItem"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "name": {
+                    "$ref": "#/definitions/PlainText"
+                  },
+                  "item": {
+                    "$ref": "#/definitions/HttpsUrl"
+                  }
+                },
+                "required": [
+                  "@type",
+                  "position",
+                  "name",
+                  "item"
+                ]
+              },
+              "maxItems": 100,
+              "minItems": 1
+            }
+          },
+          "required": [
+            "@context",
+            "@type",
+            "itemListElement"
+          ]
+        }
+      ]
+    },
+    "PageSeo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "description": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "canonical": {
+          "$ref": "#/definitions/CanonicalReference"
+        },
+        "ogTitle": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "ogDescription": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "ogImage": {
+          "$ref": "#/definitions/SeoImageReference"
+        },
+        "robots": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 500,
+          "pattern": "^[A-Za-z0-9 ,:;._/+*\\t-]*$"
+        },
+        "jsonLd": {
+          "$ref": "#/definitions/StructuredData"
+        },
+        "include": {
+          "type": "boolean",
+          "default": true
+        },
+        "priority": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "changefreq": {
+          "type": "string",
+          "enum": [
+            "always",
+            "hourly",
+            "daily",
+            "weekly",
+            "monthly",
+            "yearly",
+            "never"
+          ]
+        }
+      },
+      "required": [
+        "include"
+      ]
+    },
+    "ImageReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "image"
+        },
+        "desktopAsset": {
+          "$ref": "#/definitions/AssetPath"
+        },
+        "mobileAsset": {
+          "$ref": "#/definitions/AssetPath"
+        }
+      },
+      "required": [
+        "kind",
+        "desktopAsset",
+        "mobileAsset"
+      ]
+    },
+    "HeroMedia": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/ImageReference"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "video"
+            },
+            "name": {
+              "$ref": "#/definitions/Slug"
+            }
+          },
+          "required": [
+            "kind",
+            "name"
+          ]
+        }
+      ]
+    },
+    "HeroVariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "headline": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "description": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "desktopAlign": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "mobileAlign": {
+          "type": "string",
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "overlayOpacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "media": {
+          "$ref": "#/definitions/HeroMedia"
+        },
+        "artworkAsset": {
+          "$ref": "#/definitions/AssetPath"
+        },
+        "primary": {
+          "$ref": "#/definitions/PublicLink"
+        },
+        "secondary": {
+          "$ref": "#/definitions/PublicLink"
+        }
+      },
+      "required": [
+        "id",
+        "active",
+        "headline",
+        "description",
+        "desktopAlign",
+        "mobileAlign",
+        "overlayOpacity",
+        "media"
+      ]
+    },
+    "MediaFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/definitions/AssetPath"
+        },
+        "sha256": {
+          "$ref": "#/definitions/Sha256"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 52428800
+        },
+        "contentType": {
+          "type": "string",
+          "enum": [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/avif",
+            "image/svg+xml",
+            "video/mp4"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "bytes",
+        "contentType"
+      ]
+    },
+    "MediaSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/Slug"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "image",
+            "hero-video"
+          ]
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MediaFile"
+          },
+          "maxItems": 20,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "files"
+      ]
+    },
+    "PublicOfficer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "slug": {
+          "$ref": "#/definitions/Slug"
+        },
+        "name": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "nmls": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[0-9]+$"
+        },
+        "phone": {
+          "$ref": "#/definitions/Phone"
+        },
+        "email": {
+          "$ref": "#/definitions/Email"
+        },
+        "photoAsset": {
+          "$ref": "#/definitions/AssetPath"
+        },
+        "biography": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "specialties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PlainText"
+          },
+          "maxItems": 30,
+          "minItems": 0
+        },
+        "licensedStates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StateCode"
+          },
+          "maxItems": 60,
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "slug",
+        "name",
+        "nmls",
+        "phone",
+        "email",
+        "photoAsset",
+        "biography",
+        "specialties",
+        "licensedStates"
+      ]
+    },
+    "PublicTestimonial": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "text": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "displayName": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "sourceUrl": {
+          "$ref": "#/definitions/HttpsUrl"
+        }
+      },
+      "required": [
+        "id",
+        "text",
+        "displayName",
+        "sourceUrl"
+      ]
+    },
+    "IntroSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "intro"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProseBlock"
+          },
+          "maxItems": 50,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "body"
+      ]
+    },
+    "ServiceCardsSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "service-cards"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "description": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "link": {
+                "$ref": "#/definitions/PublicLink"
+              },
+              "subtitle": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "imageAsset": {
+                "$ref": "#/definitions/AssetPath"
+              }
+            },
+            "required": [
+              "title",
+              "description",
+              "link"
+            ]
+          },
+          "maxItems": 5,
+          "minItems": 5
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "cards"
+      ]
+    },
+    "ProgramCardsSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "program-cards"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "description": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "link": {
+                "$ref": "#/definitions/PublicLink"
+              },
+              "subtitle": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "imageAsset": {
+                "$ref": "#/definitions/AssetPath"
+              }
+            },
+            "required": [
+              "title",
+              "description",
+              "link"
+            ]
+          },
+          "maxItems": 30,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "cards"
+      ]
+    },
+    "BenefitsSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "benefits"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "description": {
+                "$ref": "#/definitions/PlainText"
+              }
+            },
+            "required": [
+              "title",
+              "description"
+            ]
+          },
+          "maxItems": 20,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "items"
+      ]
+    },
+    "ProcessSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "process"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "title": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "description": {
+                "$ref": "#/definitions/PlainText"
+              }
+            },
+            "required": [
+              "title",
+              "description"
+            ]
+          },
+          "maxItems": 20,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "steps"
+      ]
+    },
+    "OfficerIntroductionSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "officer-introduction"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "description": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "officerIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Id"
+          },
+          "maxItems": 100,
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "link": {
+          "$ref": "#/definitions/PublicLink"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "description",
+        "officerIds",
+        "link"
+      ]
+    },
+    "TestimonialsSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "testimonials"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "testimonialIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Id"
+          },
+          "maxItems": 30,
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "testimonialIds"
+      ]
+    },
+    "FaqSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "faq"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "answer": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/ProseBlock"
+                },
+                "maxItems": 30,
+                "minItems": 1
+              }
+            },
+            "required": [
+              "question",
+              "answer"
+            ]
+          },
+          "maxItems": 50,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "items"
+      ]
+    },
+    "DisclosureSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "disclosure"
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProseBlock"
+          },
+          "maxItems": 30,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "body"
+      ]
+    },
+    "EstimatorSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "estimator-reference"
+        },
+        "estimator": {
+          "type": "string",
+          "enum": [
+            "purchase",
+            "refinance",
+            "va",
+            "investment",
+            "equity"
+          ]
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "disclosure": {
+          "$ref": "#/definitions/PlainText"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "estimator",
+        "heading",
+        "disclosure"
+      ]
+    },
+    "CtaSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "cta"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "description": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "primary": {
+          "$ref": "#/definitions/PublicLink"
+        },
+        "secondary": {
+          "$ref": "#/definitions/PublicLink"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "description",
+        "primary"
+      ]
+    },
+    "LegalProseSection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "type": {
+          "const": "legal-prose"
+        },
+        "heading": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "effectiveDate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10,
+          "format": "date"
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProseBlock"
+          },
+          "maxItems": 200,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "heading",
+        "effectiveDate",
+        "body"
+      ]
+    },
+    "PublicSection": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/IntroSection"
+        },
+        {
+          "$ref": "#/definitions/ServiceCardsSection"
+        },
+        {
+          "$ref": "#/definitions/ProgramCardsSection"
+        },
+        {
+          "$ref": "#/definitions/BenefitsSection"
+        },
+        {
+          "$ref": "#/definitions/ProcessSection"
+        },
+        {
+          "$ref": "#/definitions/OfficerIntroductionSection"
+        },
+        {
+          "$ref": "#/definitions/TestimonialsSection"
+        },
+        {
+          "$ref": "#/definitions/FaqSection"
+        },
+        {
+          "$ref": "#/definitions/DisclosureSection"
+        },
+        {
+          "$ref": "#/definitions/EstimatorSection"
+        },
+        {
+          "$ref": "#/definitions/CtaSection"
+        },
+        {
+          "$ref": "#/definitions/LegalProseSection"
+        }
+      ]
+    },
+    "PublicPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "path": {
+          "$ref": "#/definitions/RoutePath"
+        },
+        "template": {
+          "type": "string",
+          "enum": [
+            "home",
+            "division",
+            "product",
+            "standard",
+            "legal",
+            "officer-directory",
+            "officer-profile",
+            "faq",
+            "glossary",
+            "program",
+            "rates",
+            "sitemap"
+          ]
+        },
+        "title": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "description": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "heroVariants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HeroVariant"
+          },
+          "maxItems": 5,
+          "minItems": 0
+        },
+        "fallbackImage": {
+          "$ref": "#/definitions/ImageReference"
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicSection"
+          },
+          "maxItems": 50,
+          "minItems": 0
+        },
+        "seo": {
+          "$ref": "#/definitions/PageSeo"
+        },
+        "officerId": {
+          "$ref": "#/definitions/Id"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "template",
+        "title",
+        "description",
+        "heroVariants",
+        "fallbackImage",
+        "sections",
+        "seo"
+      ]
+    },
+    "PublicBrand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shortName": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "legalName": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "foundedYear": {
+          "type": "integer",
+          "minimum": 1800,
+          "maximum": 2200
+        },
+        "assistantName": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 100
+        },
+        "logos": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "horizontal": {
+              "$ref": "#/definitions/AssetPath"
+            },
+            "white": {
+              "$ref": "#/definitions/AssetPath"
+            },
+            "mark": {
+              "$ref": "#/definitions/AssetPath"
+            }
+          },
+          "required": [
+            "horizontal",
+            "white",
+            "mark"
+          ]
+        }
+      },
+      "required": [
+        "shortName",
+        "legalName",
+        "foundedYear",
+        "assistantName",
+        "logos"
+      ]
+    },
+    "PublicContact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "phoneDisplay": {
+          "$ref": "#/definitions/Phone"
+        },
+        "phoneHref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "pattern": "^tel:\\+?[0-9]+$"
+        },
+        "email": {
+          "$ref": "#/definitions/Email"
+        },
+        "nmls": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "pattern": "^[0-9]+$"
+        },
+        "nmlsConsumerAccessUrl": {
+          "$ref": "#/definitions/HttpsUrl"
+        }
+      },
+      "required": [
+        "phoneDisplay",
+        "phoneHref",
+        "email",
+        "nmls",
+        "nmlsConsumerAccessUrl"
+      ]
+    },
+    "StateLicense": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/definitions/StateCode"
+        },
+        "name": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "licenseNumber": {
+          "$ref": "#/definitions/PlainText"
+        }
+      },
+      "required": [
+        "code",
+        "name"
+      ]
+    },
+    "TenantLegal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/StateLicense"
+          },
+          "maxItems": 60,
+          "minItems": 0
+        },
+        "texasNotice": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "ratesDisclaimer": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "address": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "privacyEmail": {
+          "$ref": "#/definitions/Email"
+        },
+        "effectiveDates": {
+          "type": "object",
+          "properties": {
+            "licensing": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            },
+            "privacy-notice": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            },
+            "privacy-policy": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            },
+            "terms": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            },
+            "accessibility": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            },
+            "texas-required-notice": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            },
+            "nmls-consumer-access": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "^[^<>]+$"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "calculatorDisclaimer": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "exampleRateNote": {
+          "$ref": "#/definitions/PlainText"
+        }
+      },
+      "required": [
+        "states",
+        "texasNotice",
+        "ratesDisclaimer",
+        "calculatorDisclaimer",
+        "exampleRateNote"
+      ]
+    },
+    "PublicTheme": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "green900": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "green850": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "green800": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "green700": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "green600": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "greenGlow": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "spring": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "spring2": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "spring3": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "springSoft": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "mint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "ink": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "paper": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "paper2": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "muted": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "line": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "onDark": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "onDark2": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "onDark3": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "hairDark": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "lip": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^(?:#[a-fA-F0-9]{3}|#[a-fA-F0-9]{6}|rgba\\((?:[0-9]{1,3}, ){3}(?:0(?:\\.[0-9]+)?|1)\\))$"
+        },
+        "radiusSm": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10,
+          "pattern": "^[0-9]{1,2}px$"
+        },
+        "radiusMd": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10,
+          "pattern": "^[0-9]{1,2}px$"
+        },
+        "radiusLg": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10,
+          "pattern": "^[0-9]{1,2}px$"
+        },
+        "radiusXl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 10,
+          "pattern": "^[0-9]{1,2}px$"
+        },
+        "fontFamily": {
+          "const": "var(--font-hanken), system-ui, -apple-system, \"Segoe UI\", sans-serif"
+        }
+      },
+      "required": [
+        "green900",
+        "green850",
+        "green800",
+        "green700",
+        "green600",
+        "greenGlow",
+        "spring",
+        "spring2",
+        "spring3",
+        "springSoft",
+        "mint",
+        "ink",
+        "paper",
+        "paper2",
+        "muted",
+        "line",
+        "onDark",
+        "onDark2",
+        "onDark3",
+        "hairDark",
+        "lip",
+        "radiusSm",
+        "radiusMd",
+        "radiusLg",
+        "radiusXl",
+        "fontFamily"
+      ]
+    },
+    "TenantSeo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "titleDefault": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "titleTemplate": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "description": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "ogTitle": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "ogDescription": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "siteName": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "orgDescription": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "knowsLanguage": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PlainText"
+          },
+          "maxItems": 10,
+          "minItems": 1
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PlainText"
+          },
+          "maxItems": 30,
+          "minItems": 0
+        },
+        "ogImage": {
+          "$ref": "#/definitions/SeoImageReference"
+        }
+      },
+      "required": [
+        "titleDefault",
+        "titleTemplate",
+        "description",
+        "ogTitle",
+        "ogDescription",
+        "siteName",
+        "orgDescription",
+        "knowsLanguage"
+      ]
+    },
+    "TenantMarketing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tagline": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "stats": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "num": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "label": {
+                "$ref": "#/definitions/PlainText"
+              }
+            },
+            "required": [
+              "num",
+              "label"
+            ]
+          },
+          "maxItems": 20,
+          "minItems": 0
+        },
+        "familyOfCompanies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rest": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "href": {
+                "$ref": "#/definitions/LinkHref"
+              },
+              "desc": {
+                "$ref": "#/definitions/PlainText"
+              }
+            },
+            "required": [
+              "rest",
+              "href",
+              "desc"
+            ]
+          },
+          "maxItems": 5,
+          "minItems": 0
+        },
+        "footerFamily": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "rest": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "desc": {
+                "$ref": "#/definitions/PlainText"
+              }
+            },
+            "required": [
+              "rest",
+              "desc"
+            ]
+          },
+          "maxItems": 5,
+          "minItems": 0
+        },
+        "testimonials": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "names": {
+                "$ref": "#/definitions/PlainText"
+              },
+              "rating": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 5
+              }
+            },
+            "required": [
+              "names",
+              "rating"
+            ]
+          },
+          "maxItems": 30,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "tagline",
+        "stats",
+        "familyOfCompanies",
+        "footerFamily",
+        "testimonials"
+      ]
+    },
+    "TenantFeatures": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "showFamily": {
+          "type": "boolean"
+        },
+        "ghlChat": {
+          "const": false
+        },
+        "aiAssistant": {
+          "const": false
+        },
+        "heroAiMode": {
+          "const": false
+        },
+        "askAiChat": {
+          "const": false
+        },
+        "ratesNavigation": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "showFamily",
+        "ghlChat",
+        "aiAssistant",
+        "heroAiMode",
+        "askAiChat",
+        "ratesNavigation"
+      ]
+    },
+    "ApplyOffRamp": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "call",
+              "text",
+              "email"
+            ]
+          },
+          "maxItems": 3,
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "slaCopy": {
+          "$ref": "#/definitions/PlainText"
+        },
+        "finishScreen": {
+          "type": "string",
+          "enum": [
+            "rendered",
+            "autoRedirect"
+          ]
+        }
+      },
+      "required": [
+        "channels",
+        "slaCopy",
+        "finishScreen"
+      ]
+    },
+    "CalculatorSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "mortgage",
+              "buydown",
+              "blended-rate",
+              "refinance-breakeven",
+              "rent-vs-buy",
+              "budget",
+              "apr",
+              "investment"
+            ]
+          },
+          "maxItems": 8,
+          "minItems": 0,
+          "uniqueItems": true
+        },
+        "exampleRatePct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 25
+        }
+      },
+      "required": [
+        "disabled",
+        "exampleRatePct"
+      ]
+    },
+    "PublicTenantConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brand": {
+          "$ref": "#/definitions/PublicBrand"
+        },
+        "theme": {
+          "$ref": "#/definitions/PublicTheme"
+        },
+        "contact": {
+          "$ref": "#/definitions/PublicContact"
+        },
+        "legal": {
+          "$ref": "#/definitions/TenantLegal"
+        },
+        "seo": {
+          "$ref": "#/definitions/TenantSeo"
+        },
+        "marketing": {
+          "$ref": "#/definitions/TenantMarketing"
+        },
+        "features": {
+          "$ref": "#/definitions/TenantFeatures"
+        },
+        "applyOffRamp": {
+          "$ref": "#/definitions/ApplyOffRamp"
+        },
+        "calculators": {
+          "$ref": "#/definitions/CalculatorSettings"
+        }
+      },
+      "required": [
+        "brand",
+        "theme",
+        "contact",
+        "legal",
+        "seo",
+        "features",
+        "applyOffRamp",
+        "calculators"
+      ]
+    },
+    "CalculatorCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "$ref": "#/definitions/PublicTenantConfig"
+        },
+        "origin": {
+          "$ref": "#/definitions/HttpsUrl"
+        },
+        "pageSeo": {
+          "type": "object",
+          "maxProperties": 200,
+          "patternProperties": {
+            "^/calculators(?:/(?:mortgage|buydown|blended-rate|refinance-breakeven|rent-vs-buy|budget|apr|investment|mbs))?$": {
+              "$ref": "#/definitions/PageSeo"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "config",
+        "origin",
+        "pageSeo"
+      ]
+    },
+    "NavigationItem": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/PublicLink"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "label": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "children": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/PublicLink"
+              },
+              "maxItems": 20,
+              "minItems": 1
+            }
+          },
+          "required": [
+            "label",
+            "children"
+          ]
+        }
+      ]
+    },
+    "SiteSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "company": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "shortName": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "legalName": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "foundedYear": {
+              "type": "integer",
+              "minimum": 1800,
+              "maximum": 2200
+            },
+            "logos": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "horizontal": {
+                  "$ref": "#/definitions/AssetPath"
+                },
+                "white": {
+                  "$ref": "#/definitions/AssetPath"
+                },
+                "mark": {
+                  "$ref": "#/definitions/AssetPath"
+                }
+              },
+              "required": [
+                "horizontal",
+                "white",
+                "mark"
+              ]
+            }
+          },
+          "required": [
+            "shortName",
+            "legalName",
+            "foundedYear",
+            "logos"
+          ]
+        },
+        "contact": {
+          "$ref": "#/definitions/PublicContact"
+        },
+        "navigation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "primary": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/NavigationItem"
+              },
+              "maxItems": 20,
+              "minItems": 0
+            },
+            "footer": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/PublicLink"
+              },
+              "maxItems": 30,
+              "minItems": 0
+            },
+            "application": {
+              "$ref": "#/definitions/PublicLink"
+            },
+            "signIn": {
+              "$ref": "#/definitions/PublicLink"
+            }
+          },
+          "required": [
+            "primary",
+            "footer",
+            "application",
+            "signIn"
+          ]
+        },
+        "legal": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "states": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/StateLicense"
+              },
+              "maxItems": 60,
+              "minItems": 0
+            },
+            "address": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "privacyEmail": {
+              "$ref": "#/definitions/Email"
+            },
+            "equalHousingText": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "equalHousingAsset": {
+              "$ref": "#/definitions/AssetPath"
+            },
+            "disclosure": {
+              "$ref": "#/definitions/PlainText"
+            },
+            "links": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/PublicLink"
+              },
+              "maxItems": 20,
+              "minItems": 0
+            }
+          },
+          "required": [
+            "states",
+            "address",
+            "privacyEmail",
+            "equalHousingText",
+            "equalHousingAsset",
+            "disclosure",
+            "links"
+          ]
+        },
+        "origin": {
+          "$ref": "#/definitions/HttpsUrl"
+        }
+      },
+      "required": [
+        "company",
+        "contact",
+        "navigation",
+        "legal",
+        "origin"
+      ]
+    },
+    "PublicationId": {
+      "$ref": "#/definitions/Id"
+    },
+    "RevisionId": {
+      "$ref": "#/definitions/Id"
+    },
+    "PublicOfficerId": {
+      "$ref": "#/definitions/Id"
+    },
+    "EntityRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "page",
+            "site",
+            "officer",
+            "testimonial"
+          ]
+        },
+        "id": {
+          "$ref": "#/definitions/Id"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ]
+    },
+    "SelectedRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "page",
+            "site",
+            "officer",
+            "testimonial"
+          ]
+        },
+        "id": {
+          "$ref": "#/definitions/Id"
+        },
+        "revisionId": {
+          "$ref": "#/definitions/Id"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "replace",
+            "remove"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "revisionId",
+        "action"
+      ]
+    },
+    "PublishRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requestId": {
+          "$ref": "#/definitions/Id"
+        },
+        "basePublicationId": {
+          "$ref": "#/definitions/Id"
+        },
+        "selections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SelectedRevision"
+          },
+          "maxItems": 500,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "requestId",
+        "basePublicationId",
+        "selections"
+      ]
+    },
+    "PublicationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "publicationId": {
+          "$ref": "#/definitions/Id"
+        },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "candidate",
+            "active",
+            "adopted",
+            "failed"
+          ]
+        }
+      },
+      "required": [
+        "publicationId",
+        "generation",
+        "status"
+      ]
+    },
+    "ActivePointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "publicationId": {
+          "$ref": "#/definitions/Id"
+        },
+        "manifestKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "pattern": "^publications/[a-zA-Z0-9._:-]+/snapshot\\.json$"
+        },
+        "sha256": {
+          "$ref": "#/definitions/Sha256"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "activatedAt": {
+          "$ref": "#/definitions/UtcTimestamp"
+        }
+      },
+      "required": [
+        "generation",
+        "publicationId",
+        "manifestKey",
+        "sha256",
+        "schemaVersion",
+        "activatedAt"
+      ]
+    },
+    "OfficerRevocations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "$ref": "#/definitions/UtcTimestamp"
+        },
+        "revokedOfficerIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Id"
+          },
+          "maxItems": 10000,
+          "minItems": 0,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "version",
+        "updatedAt",
+        "revokedOfficerIds"
+      ]
+    },
+    "SiteSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "publicationId": {
+          "$ref": "#/definitions/Id"
+        },
+        "createdAt": {
+          "$ref": "#/definitions/UtcTimestamp"
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "entity": {
+                "$ref": "#/definitions/EntityRef"
+              },
+              "revisionId": {
+                "$ref": "#/definitions/Id"
+              }
+            },
+            "required": [
+              "entity",
+              "revisionId"
+            ]
+          },
+          "maxItems": 2000,
+          "minItems": 1
+        },
+        "site": {
+          "$ref": "#/definitions/SiteSettings"
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicPage"
+          },
+          "maxItems": 500,
+          "minItems": 1
+        },
+        "officers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicOfficer"
+          },
+          "maxItems": 1000,
+          "minItems": 0
+        },
+        "testimonials": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicTestimonial"
+          },
+          "maxItems": 500,
+          "minItems": 0
+        },
+        "media": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MediaSet"
+          },
+          "maxItems": 2000,
+          "minItems": 0
+        },
+        "calculatorCompatibility": {
+          "$ref": "#/definitions/CalculatorCompatibility"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "publicationId",
+        "createdAt",
+        "revisions",
+        "site",
+        "pages",
+        "officers",
+        "testimonials",
+        "media",
+        "calculatorCompatibility"
+      ]
+    },
+    "CanonicalReference": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/HttpsUrl"
+        },
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "format": "uri-reference",
+          "pattern": "^(?!//)(?![A-Za-z][A-Za-z0-9+.-]*:)[^\\s<>\\\\]+$"
+        }
+      ]
+    },
+    "SeoImageReference": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/AssetPath"
+        },
+        {
+          "$ref": "#/definitions/HttpsUrl"
+        }
+      ]
+    }
+  }
+}

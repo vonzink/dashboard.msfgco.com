@@ -6,6 +6,12 @@
 (() => {
   'use strict';
 
+  // Public website origin per dashboard hostname (see CONFIG.website).
+  const WEBSITE_ORIGINS = {
+    'staging-dashboard.msfgco.com': 'https://staging.msfg.us',
+    'dashboard.msfgco.com': '',
+  };
+
   const CONFIG = {
     // ========================================
     // API SETTINGS
@@ -16,6 +22,15 @@
       timeout: 30000,
       retryAttempts: 3,
       retryDelay: 1000,
+    },
+
+    // ========================================
+    // PUBLIC WEBSITE (website editor media + "open published" links)
+    // Chosen by dashboard hostname. Production stays empty (links hidden) until the
+    // production release sets https://msfg.us. Move into js/env.js when it lands.
+    // ========================================
+    website: {
+      origin: WEBSITE_ORIGINS[(window.location && window.location.hostname) || ''] || '',
     },
 
     // ========================================
@@ -177,6 +192,7 @@
 
   // Freeze everything (deep enough for this structure)
   Object.freeze(CONFIG.api);
+  Object.freeze(CONFIG.website);
   Object.freeze(CONFIG.loanFolderCreator);
   Object.freeze(CONFIG.cognito);
   Object.freeze(CONFIG.refresh);

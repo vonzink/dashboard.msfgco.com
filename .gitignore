@@ -35,3 +35,6 @@ tools/
 .planning/
 .superpowers/
 .understand-anything/
+
+# Synthetic negative fixture required by the public website contract tests.
+!backend/contracts/website/v1/fixtures/invalid-private-field.json

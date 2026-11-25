@@ -313,6 +313,19 @@
           </div>
         </li>
 
+        <!-- Website: hidden until the website CMS navigation script confirms access -->
+        <li class="nav-item" id="website-cms-link" hidden>
+          <button type="button" class="nav-button">
+            <i class="fas fa-globe"></i>
+            Website
+            <i class="fas fa-chevron-down"></i>
+          </button>
+          <div class="dropdown-menu">
+            <div class="dropdown-header">Public Website</div>
+            <a href="/website-cms.html" class="dropdown-item"><i class="fas fa-pen-to-square"></i> Website publishing</a>
+          </div>
+        </li>
+
       </ul>
     </nav>
   </header>
@@ -1528,6 +1541,7 @@
   <script src="js/action-dispatcher.js?v=20260410"></script>
 
   <script src="js/api-server.js?v=20260410"></script>
+  <script src="js/website-cms/navigation.js"></script>
   <script src="js/utils.js?v=20260410"></script>
   <script src="js/theme.js?v=20260410"></script>
   <script src="js/tables.js?v=20260410"></script>

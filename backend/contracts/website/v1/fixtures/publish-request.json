@@ -1,0 +1,12 @@
+{
+  "requestId": "request-synthetic",
+  "basePublicationId": "publication-synthetic-1",
+  "selections": [
+    {
+      "kind": "page",
+      "id": "page-0",
+      "revisionId": "revision-page-0-2",
+      "action": "replace"
+    }
+  ]
+}
